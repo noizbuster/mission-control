@@ -21,7 +21,7 @@ import type {
     NativeAstReplaceChange,
     NativeAstRewriteOptions,
     NativesClient,
-} from '../native/natives-client.js';
+} from '../native/natives-client';
 import { execFile } from 'node:child_process';
 import { statSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';

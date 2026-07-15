@@ -9,7 +9,7 @@ import type {
     MessageDeltaEvent,
     MessageStartEvent,
     ToolUseContentBlockData,
-} from './anthropic-messages-event-schemas.js';
+} from './anthropic-messages-event-schemas';
 import {
     ContentBlockDeltaEventBaseSchema,
     ContentBlockStartEventBaseSchema,
@@ -23,12 +23,12 @@ import {
     TextContentBlockSchema,
     TextDeltaSchema,
     ToolUseContentBlockSchema,
-} from './anthropic-messages-event-schemas.js';
+} from './anthropic-messages-event-schemas';
 
 export type {
     AnthropicMessagesStreamEvent,
     AnthropicToolUseContentBlock,
-} from './anthropic-messages-event-schemas.js';
+} from './anthropic-messages-event-schemas';
 
 export function parseAnthropicMessagesStreamEvent(value: unknown): AnthropicMessagesStreamEvent {
     const header = EventHeaderSchema.safeParse(value);

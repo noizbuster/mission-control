@@ -1,9 +1,9 @@
 import type { ProtocolError } from '@mission-control/protocol';
 import { ZodError } from 'zod';
-import type { ProviderCredentialResolver } from '../credential-resolver.js';
-import { ProviderTurnError } from '../provider-turn-types.js';
-import { AnthropicMessagesEventParseError } from './anthropic-messages-events.js';
-import { AnthropicMessagesTransportError } from './anthropic-messages-transport.js';
+import type { ProviderCredentialResolver } from '../credential-resolver';
+import { ProviderTurnError } from '../provider-turn-types';
+import { AnthropicMessagesEventParseError } from './anthropic-messages-events';
+import { AnthropicMessagesTransportError } from './anthropic-messages-transport';
 
 export type AnthropicMessagesErrorRedactor = (text: string) => string;
 

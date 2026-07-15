@@ -22,8 +22,8 @@
  * this tool, keeping the surface dependency-free.
  */
 import { z } from 'zod';
-import type { AsyncJobManager, BackgroundJobHandle } from '../agents/async-job-manager.js';
-import { ToolExecutionError, type ToolRegistration } from './tool-registry-types.js';
+import type { AsyncJobManager, BackgroundJobHandle } from '../agents/async-job-manager';
+import { ToolExecutionError, type ToolRegistration } from './tool-registry-types';
 
 export const JOB_TOOL_NAME = 'job';
 

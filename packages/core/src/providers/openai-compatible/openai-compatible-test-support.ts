@@ -1,6 +1,6 @@
 import type { AgentMessage, ProviderStreamChunk, ToolDefinition } from '@mission-control/protocol';
-import type { ProviderTurnRequest } from '../provider-turn-types.js';
-import type { OpenAICompatibleTransport, OpenAICompatibleTransportRequest } from './openai-compatible-provider.js';
+import type { ProviderTurnRequest } from '../provider-turn-types';
+import type { OpenAICompatibleTransport, OpenAICompatibleTransportRequest } from './openai-compatible-provider';
 
 export function createProviderContext(): { readonly attempt: number; readonly signal: AbortSignal } {
     return { attempt: 1, signal: new AbortController().signal };

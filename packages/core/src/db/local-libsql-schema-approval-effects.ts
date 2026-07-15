@@ -1,7 +1,7 @@
 import type { Client } from '@libsql/client';
 import { z } from 'zod';
-import { desktopApprovalEffectsTableSql } from './local-libsql-schema-projections.js';
-import { runLocalLibsqlClientTransaction } from './local-libsql-transaction.js';
+import { desktopApprovalEffectsTableSql } from './local-libsql-schema-projections';
+import { runLocalLibsqlClientTransaction } from './local-libsql-transaction';
 
 const legacyColumns = [
     'session_id',

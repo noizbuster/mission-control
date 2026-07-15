@@ -1,10 +1,10 @@
-import type { SessionControlEpoch } from '../runtime/session-control-cancellation.js';
-import type { SessionControlHost } from '../runtime/session-control-host.js';
-import type { ChildSpawnResult } from '../tools/task/task-tool.js';
-import { ToolExecutionError } from '../tools/tool-registry-types.js';
-import { LifecycleCleanupError } from './lifecycle-cleanup-error.js';
-import type { RuntimeAgentRegistry } from './runtime-registry.js';
-import type { TaskToolRuntimeServices } from './task-tool-runtime-contract.js';
+import type { SessionControlEpoch } from '../runtime/session-control-cancellation';
+import type { SessionControlHost } from '../runtime/session-control-host';
+import type { ChildSpawnResult } from '../tools/task/task-tool';
+import { ToolExecutionError } from '../tools/tool-registry-types';
+import { LifecycleCleanupError } from './lifecycle-cleanup-error';
+import type { RuntimeAgentRegistry } from './runtime-registry';
+import type { TaskToolRuntimeServices } from './task-tool-runtime-contract';
 
 export type ChildControl = {
     readonly signal: AbortSignal;

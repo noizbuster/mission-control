@@ -1,13 +1,13 @@
 import type { AbgNodeSpec, AbgSignal } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { createBlackboard } from '../../memory/blackboard.js';
+import { createBlackboard } from '../../memory/blackboard';
 import {
     aggregateVerificationVerdict,
     createVerificationNodeRunner,
     executeVerificationPhase,
     type VerificationPhaseResult,
     type VerificationVerdict,
-} from './verification-node.js';
+} from './verification-node';
 
 const NOW = '2026-06-22T00:00:00.000Z';
 const runner = createVerificationNodeRunner();

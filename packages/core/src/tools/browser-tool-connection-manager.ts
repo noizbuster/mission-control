@@ -1,13 +1,13 @@
-import type { ObservabilityRedactor } from '../providers/observability-redactor.js';
-import { BrowserActionLane } from './browser-tool-action-lane.js';
-import type { ResolvedBrowserToolOptions } from './browser-tool-contract.js';
-import { createBrowserAbortScope, raceBrowserOperation } from './browser-tool-deadline.js';
-import { redactBrowserToolError } from './browser-tool-error-redaction.js';
-import { browserFailure } from './browser-tool-output.js';
-import type { BrowserConnectionSeam, BrowserPageSeam } from './browser-tool-puppeteer.js';
-import { BrowserResourceCleanup } from './browser-tool-resource-cleanup.js';
-import { observableBrowserEndpoint } from './browser-tool-url.js';
-import { ToolExecutionError } from './tool-registry-types.js';
+import type { ObservabilityRedactor } from '../providers/observability-redactor';
+import { BrowserActionLane } from './browser-tool-action-lane';
+import type { ResolvedBrowserToolOptions } from './browser-tool-contract';
+import { createBrowserAbortScope, raceBrowserOperation } from './browser-tool-deadline';
+import { redactBrowserToolError } from './browser-tool-error-redaction';
+import { browserFailure } from './browser-tool-output';
+import type { BrowserConnectionSeam, BrowserPageSeam } from './browser-tool-puppeteer';
+import { BrowserResourceCleanup } from './browser-tool-resource-cleanup';
+import { observableBrowserEndpoint } from './browser-tool-url';
+import { ToolExecutionError } from './tool-registry-types';
 
 type ActiveBrowserPage = {
     readonly connection: BrowserConnectionSeam;

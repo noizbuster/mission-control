@@ -1,24 +1,24 @@
 import type { AgentDefinition } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import { expireSessionControlLease } from '../runtime/session-control-lease.js';
+import { expireSessionControlLease } from '../runtime/session-control-lease';
 import {
     createSessionControlCallbackFence,
     createSessionControlOperation,
-} from '../runtime/session-control-operation.js';
+} from '../runtime/session-control-operation';
 import {
     acquireOperationTestLease,
     cleanupOperationTestRuntimes,
     createOperationTestRuntime,
-} from '../runtime/session-control-operation-test-support.js';
-import type { ChildSpawnRequest } from '../tools/task/task-tool.js';
-import { ToolRegistry } from '../tools/tool-registry.js';
-import { SqlAgentJobMirror } from './agent-job-sql-mirror.js';
-import { AgentIndex } from './agent-registry.js';
-import { AsyncJobManager } from './async-job-manager.js';
-import { AgentLifecycleManager } from './lifecycle-manager.js';
-import { RuntimeAgentRegistry } from './runtime-registry.js';
-import { ConcreteTaskToolRuntime } from './task-tool-runtime.js';
-import { QuarantinedChildSettlementError } from './task-tool-runtime-control.js';
+} from '../runtime/session-control-operation-test-support';
+import type { ChildSpawnRequest } from '../tools/task/task-tool';
+import { ToolRegistry } from '../tools/tool-registry';
+import { SqlAgentJobMirror } from './agent-job-sql-mirror';
+import { AgentIndex } from './agent-registry';
+import { AsyncJobManager } from './async-job-manager';
+import { AgentLifecycleManager } from './lifecycle-manager';
+import { RuntimeAgentRegistry } from './runtime-registry';
+import { ConcreteTaskToolRuntime } from './task-tool-runtime';
+import { QuarantinedChildSettlementError } from './task-tool-runtime-control';
 
 afterEach(cleanupOperationTestRuntimes);
 

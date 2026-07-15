@@ -1,15 +1,15 @@
 import { type AgentEventEnvelope, AgentEventEnvelopeSchema, type AgentEventType } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { projectJsonlSessionReplayPrefix, projectSessionReplay } from '../session-replay.js';
+import { projectJsonlSessionReplayPrefix, projectSessionReplay } from '../session-replay';
 import {
     createJsonlSessionEventRecord,
     createJsonlSessionLogHeader,
     serializeJsonlRecord,
-} from './jsonl-session-records.js';
+} from './jsonl-session-records';
 import {
     SessionArchiveValidationError,
     validateSessionArchiveManifestForImport,
-} from './session-archive-validation.js';
+} from './session-archive-validation';
 
 const SESSION_ID = 'session_tree_projection';
 const CREATED_AT = '2026-06-13T01:00:00.000Z';

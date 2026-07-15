@@ -1,25 +1,25 @@
 import type { Client } from '@libsql/client';
 import type { SessionStopBarrierKind } from '@mission-control/protocol';
-import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db.js';
-import type { SessionControlLease } from './session-control-lease.js';
+import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db';
+import type { SessionControlLease } from './session-control-lease';
 import {
     insertSessionControlOperation,
     isLiveOperationLease,
     operationFromRow,
     runSessionControlOperationImmediate,
     selectSessionControlOperation,
-} from './session-control-operation-sql.js';
+} from './session-control-operation-sql';
 import {
     assertOperationWallTime,
     SESSION_CONTROL_DEAD_LEASE_RETENTION_MS,
     SESSION_CONTROL_SETTLED_RETENTION_MS,
     type SessionControlOperation,
-} from './session-control-operation-types.js';
+} from './session-control-operation-types';
 
-export * from './session-control-operation-failure.js';
-export * from './session-control-operation-gc.js';
-export * from './session-control-operation-settlement.js';
-export * from './session-control-operation-types.js';
+export * from './session-control-operation-failure';
+export * from './session-control-operation-gc';
+export * from './session-control-operation-settlement';
+export * from './session-control-operation-types';
 
 type OperationIdentity = {
     readonly runtime: LocalLibsqlWriteTarget;

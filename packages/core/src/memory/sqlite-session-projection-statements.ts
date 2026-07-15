@@ -8,22 +8,22 @@ import type {
     SessionProjectionRunRecord,
     SessionProjectionSessionRecord,
     SessionProjectionToolRecord,
-} from './session-projection-types.js';
-import { inputProjectionStatements } from './sqlite-session-projection-input-statements.js';
+} from './session-projection-types';
+import { inputProjectionStatements } from './sqlite-session-projection-input-statements';
 import {
     messageProjectionStatements,
     toolArgumentsById,
     toolNamesById,
-} from './sqlite-session-projection-message-statements.js';
+} from './sqlite-session-projection-message-statements';
 import {
     insertApprovalStatement,
     insertDiagnosticStatement,
     insertProviderFailureStatement,
     insertRunStatement,
     insertToolStatement,
-} from './sqlite-session-projection-record-statements.js';
-import { insertAwaitingStatement, insertSessionStatement } from './sqlite-session-projection-session-statements.js';
-import { cancelledWaitProjectionStatements } from './sqlite-session-projection-wait-statements.js';
+} from './sqlite-session-projection-record-statements';
+import { insertAwaitingStatement, insertSessionStatement } from './sqlite-session-projection-session-statements';
+import { cancelledWaitProjectionStatements } from './sqlite-session-projection-wait-statements';
 
 export function replaceStatements(input: {
     readonly sessionId: string;

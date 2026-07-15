@@ -1,7 +1,7 @@
 import type { AgentEvent, NativeSidecarStatus, SidecarCapability, SidecarTaskInput } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { runTaskWithSidecarFallback } from './agent-runtime-sidecar.js';
-import type { SidecarClient } from './native/sidecar-client.js';
+import { runTaskWithSidecarFallback } from './agent-runtime-sidecar';
+import type { SidecarClient } from './native/sidecar-client';
 
 describe('runTaskWithSidecarFallback sidecar status', () => {
     it('emits native status and negotiated capabilities when a native sidecar task succeeds', async () => {

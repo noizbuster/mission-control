@@ -3,7 +3,7 @@ import {
     createJsonlSessionEventRecord,
     createJsonlSessionLogHeader,
     serializeJsonlRecord,
-} from './memory/jsonl-session-records.js';
+} from './memory/jsonl-session-records';
 
 export const sessionCompactionTestSessionId = 'session_compaction_test';
 

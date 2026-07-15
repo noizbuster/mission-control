@@ -3,18 +3,18 @@ import type {
     GeminiFunctionCallPartData,
     GeminiGenerateContentEvent,
     GeminiUsageMetadata,
-} from './gemini-generate-content-event-schemas.js';
+} from './gemini-generate-content-event-schemas';
 import {
     GeminiFunctionCallPartSchema,
     GeminiGenerateContentEventSchema,
     GeminiTextPartSchema,
-} from './gemini-generate-content-event-schemas.js';
+} from './gemini-generate-content-event-schemas';
 
 export type {
     GeminiCandidate,
     GeminiGenerateContentEvent,
     GeminiUsageMetadata,
-} from './gemini-generate-content-event-schemas.js';
+} from './gemini-generate-content-event-schemas';
 
 export type GeminiParsedFunctionCall = {
     readonly name: string;

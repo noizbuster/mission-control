@@ -1,7 +1,7 @@
 import { type AbgGraphSpec, AbgGraphSpecSchema, type AbgNodeSpec, type Mode } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { autopilotMode } from './autopilot-mode.js';
-import { applyMode } from './mode-application.js';
+import { autopilotMode } from './autopilot-mode';
+import { applyMode } from './mode-application';
 
 /** Read a string config value from a node, narrowing `unknown` from the Record. */
 function configString(node: AbgNodeSpec | undefined, key: string): string | undefined {

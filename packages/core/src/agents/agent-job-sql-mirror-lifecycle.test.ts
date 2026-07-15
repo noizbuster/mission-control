@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { deriveSessionLifecycle } from '../memory/session-status-derivation.js';
-import { cleanupAgentJobMirrorTests, withAgentJobMirror } from './agent-job-sql-mirror-test-support.js';
+import { deriveSessionLifecycle } from '../memory/session-status-derivation';
+import { cleanupAgentJobMirrorTests, withAgentJobMirror } from './agent-job-sql-mirror-test-support';
 
 afterEach(cleanupAgentJobMirrorTests);
 

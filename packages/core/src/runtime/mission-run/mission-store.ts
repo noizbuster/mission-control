@@ -12,11 +12,11 @@ import {
     JsonCompatibilityFileError,
     listCompatibilityJsonRecordIds,
     readCompatibilityJsonFile,
-} from '../../persistence/json-compatibility-file.js';
-import { OmoPersistenceError } from '../../persistence/paths.js';
-import type { ObservabilityRedactor } from '../../providers/observability-redactor.js';
-import { listMissionsFromDb, readMissionFromDb, writeMissionToDb } from './mission-run-db.js';
-import { type MissionRunStoreLocation, normalizeMissionRunStoreLocation } from './mission-run-store-location.js';
+} from '../../persistence/json-compatibility-file';
+import { OmoPersistenceError } from '../../persistence/paths';
+import type { ObservabilityRedactor } from '../../providers/observability-redactor';
+import { listMissionsFromDb, readMissionFromDb, writeMissionToDb } from './mission-run-db';
+import { type MissionRunStoreLocation, normalizeMissionRunStoreLocation } from './mission-run-store-location';
 
 const MISSIONS_DIR = 'missions';
 

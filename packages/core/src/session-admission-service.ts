@@ -1,5 +1,5 @@
 import type { AgentEvent } from '@mission-control/protocol';
-import { projectSessionAdmission } from './session-admission-projection.js';
+import { projectSessionAdmission } from './session-admission-projection';
 import type {
     AdmitPromptInput,
     PromptAdmissionReceipt,
@@ -7,7 +7,7 @@ import type {
     PromptPromotionResult,
     PromptPromotionTrigger,
     SessionAdmissionEventStore,
-} from './session-admission-types.js';
+} from './session-admission-types';
 
 export type SessionAdmissionServiceOptions = {
     readonly sessionId: string;

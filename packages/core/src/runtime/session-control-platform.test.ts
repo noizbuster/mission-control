@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
     sessionControlTransportForPlatform,
     windowsSessionControlProxyInvocation,
-} from './session-control-platform.js';
+} from './session-control-platform';
 
 describe('session control platform transport', () => {
     it('routes Windows production ownership through the native named-pipe proxy', () => {

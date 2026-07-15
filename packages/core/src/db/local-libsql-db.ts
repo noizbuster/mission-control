@@ -3,14 +3,14 @@ import { createClient } from '@libsql/client';
 import type { LibSQLDatabase } from 'drizzle-orm/libsql';
 import { drizzle } from 'drizzle-orm/libsql';
 import { z } from 'zod';
-import { type LocalLibsqlWriteKey, resolveLocalLibsqlIdentity } from './local-libsql-identity.js';
+import { type LocalLibsqlWriteKey, resolveLocalLibsqlIdentity } from './local-libsql-identity';
 import {
     initializeLocalLibsqlFilePragmas,
     initializeLocalLibsqlForeignKeys,
     LOCAL_DB_BUSY_TIMEOUT_MS,
-} from './local-libsql-pragmas.js';
-import { acquireLocalLibsqlFileLease } from './local-libsql-registry.js';
-import { ensureLocalDbSchema } from './local-libsql-schema.js';
+} from './local-libsql-pragmas';
+import { acquireLocalLibsqlFileLease } from './local-libsql-registry';
+import { ensureLocalDbSchema } from './local-libsql-schema';
 import {
     bindLocalLibsqlWriteLane,
     closeLocalLibsqlAfterWrites,
@@ -19,13 +19,13 @@ import {
     type LocalDbWriteErrorCode,
     localDbWriteErrorCodes,
     runInLocalLibsqlWriteLane,
-} from './local-libsql-write-lane.js';
+} from './local-libsql-write-lane';
 import { createHash } from 'node:crypto';
 
-export type { LocalDbConfigErrorCode, LocalLibsqlWriteKey } from './local-libsql-identity.js';
-export { LocalDbConfigError, localDbConfigErrorCodes } from './local-libsql-identity.js';
-export type { LocalDbInitializationErrorCode } from './local-libsql-pragmas.js';
-export { LocalDbInitializationError, localDbInitializationErrorCodes } from './local-libsql-pragmas.js';
+export type { LocalDbConfigErrorCode, LocalLibsqlWriteKey } from './local-libsql-identity';
+export { LocalDbConfigError, localDbConfigErrorCodes } from './local-libsql-identity';
+export type { LocalDbInitializationErrorCode } from './local-libsql-pragmas';
+export { LocalDbInitializationError, localDbInitializationErrorCodes } from './local-libsql-pragmas';
 export type { LocalDbWriteErrorCode };
 export { LocalDbWriteError, localDbWriteErrorCodes };
 

@@ -1,9 +1,9 @@
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import type { TaskSpawnFn } from './task-tool.js';
-import { createTaskSpawnFn, registerTaskTool, type TaskToolSpawnContext } from './task-tool-factory.js';
-import { ToolRegistry } from './tool-registry.js';
+import type { TaskSpawnFn } from './task-tool';
+import { createTaskSpawnFn, registerTaskTool, type TaskToolSpawnContext } from './task-tool-factory';
+import { ToolRegistry } from './tool-registry';
 
 const okSchema = z.object({ ok: z.boolean() });
 

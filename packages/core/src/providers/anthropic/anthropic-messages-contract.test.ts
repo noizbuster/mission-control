@@ -1,15 +1,15 @@
 import { expect, it } from 'vitest';
-import { createStaticProviderCredentialResolver } from '../credential-resolver.js';
-import { anthropicMessagesProviderContract } from '../provider-adapter-contract-registrations.js';
-import { describeProviderAdapterContract } from '../provider-adapter-contract-test-support.js';
-import { AnthropicMessagesTransportError, createAnthropicMessagesProvider } from './anthropic-messages-provider.js';
+import { createStaticProviderCredentialResolver } from '../credential-resolver';
+import { anthropicMessagesProviderContract } from '../provider-adapter-contract-registrations';
+import { describeProviderAdapterContract } from '../provider-adapter-contract-test-support';
+import { AnthropicMessagesTransportError, createAnthropicMessagesProvider } from './anthropic-messages-provider';
 import {
     anthropicCredential,
     anthropicTurnRequest,
     captureError,
     collectChunks,
     throwingStream,
-} from './anthropic-messages-test-support.js';
+} from './anthropic-messages-test-support';
 
 describeProviderAdapterContract(anthropicMessagesProviderContract);
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseOpenAIResponsesSseEvents } from './openai-responses-http-transport.js';
+import { parseOpenAIResponsesSseEvents } from './openai-responses-http-transport';
 
 describe('OpenAI Responses SSE transport parsing', () => {
     it('parses complete SSE data frames and preserves partial remainders', () => {

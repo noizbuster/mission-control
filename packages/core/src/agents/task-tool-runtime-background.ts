@@ -1,8 +1,8 @@
-import type { SessionControlEpoch } from '../runtime/session-control-cancellation.js';
-import type { ChildSpawnRequest, ChildSpawnResult, TaskToolBackgroundHandle } from '../tools/task/task-tool.js';
-import type { JobExecuteFn } from './async-job-manager.js';
-import { childDisplayName } from './task-tool-runtime-authority.js';
-import type { TaskToolRuntimeServices } from './task-tool-runtime-contract.js';
+import type { SessionControlEpoch } from '../runtime/session-control-cancellation';
+import type { ChildSpawnRequest, ChildSpawnResult, TaskToolBackgroundHandle } from '../tools/task/task-tool';
+import type { JobExecuteFn } from './async-job-manager';
+import { childDisplayName } from './task-tool-runtime-authority';
+import type { TaskToolRuntimeServices } from './task-tool-runtime-contract';
 import {
     attachChildControl,
     type ChildControlPrimaryFailure,
@@ -10,7 +10,7 @@ import {
     disposeChildControl,
     rethrowAfterChildCleanup,
     settleChildCompletion,
-} from './task-tool-runtime-control.js';
+} from './task-tool-runtime-control';
 
 export function startBackgroundChildSession(input: {
     readonly request: ChildSpawnRequest;

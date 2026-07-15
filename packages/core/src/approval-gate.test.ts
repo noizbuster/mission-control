@@ -1,6 +1,6 @@
 import type { AgentEvent, PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { PermissionGate } from './approval-gate.js';
+import { PermissionGate } from './approval-gate';
 
 describe('PermissionGate', () => {
     it('blocks requires-approval decisions immediately in headless mode', async () => {

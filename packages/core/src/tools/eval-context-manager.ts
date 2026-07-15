@@ -17,11 +17,11 @@
  */
 // allow: SIZE_OK -- HEAD 366 -> current 366 pure LOC; worker lifecycle remains one tightly coupled state machine (init, execution, timeout, recovery, teardown); splitting further would sever state transitions that must stay atomic.
 
-import { EvalPythonKernel, type PythonSpawnFn } from './eval-python-kernel.js';
-import { type EvalLanguage } from './eval-schemas.js';
-import type { EvalToolBridge } from './eval-tool-bridge.js';
-import { type EvalWorkerInbound, type EvalWorkerOutbound, parseEvalWorkerOutbound } from './eval-worker-protocol.js';
-import { EVAL_WORKER_SOURCE } from './eval-worker-source.js';
+import { EvalPythonKernel, type PythonSpawnFn } from './eval-python-kernel';
+import { type EvalLanguage } from './eval-schemas';
+import type { EvalToolBridge } from './eval-tool-bridge';
+import { type EvalWorkerInbound, type EvalWorkerOutbound, parseEvalWorkerOutbound } from './eval-worker-protocol';
+import { EVAL_WORKER_SOURCE } from './eval-worker-source';
 import { randomUUID } from 'node:crypto';
 import { Worker } from 'node:worker_threads';
 

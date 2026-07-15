@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createMcpToolRegistration } from '../mcp-tool.js';
-import { ToolExecutionError } from '../tool-registry-types.js';
-import { buildRemoteMcpTestClient as buildClient, FakeAuthError } from './http-client-test-support.js';
+import { createMcpToolRegistration } from '../mcp-tool';
+import { ToolExecutionError } from '../tool-registry-types';
+import { buildRemoteMcpTestClient as buildClient, FakeAuthError } from './http-client-test-support';
 
 /**
  * Mocked-transport tests for `RemoteMcpClient`. No real network: transport + client handles are

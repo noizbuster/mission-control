@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { type ToolExecutionContext, ToolExecutionError } from '../tool-registry-types.js';
+import { type ToolExecutionContext, ToolExecutionError } from '../tool-registry-types';
 import {
     type CreateYieldToolOptions,
     createYieldToolRegistration,
     YIELD_TOOL_NAME,
     yieldInputSchema,
-} from './yield-tool.js';
+} from './yield-tool';
 
 // --- Fixtures ---------------------------------------------------------------
 

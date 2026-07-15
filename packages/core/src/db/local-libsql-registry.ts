@@ -5,7 +5,7 @@ import {
     createLocalLibsqlWriteLane,
     type LocalLibsqlWriteLane,
     quarantineLocalLibsqlWriteLane,
-} from './local-libsql-write-lane.js';
+} from './local-libsql-write-lane';
 
 export type LocalLibsqlRegistryResource = {
     readonly client: Client;

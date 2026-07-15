@@ -1,10 +1,10 @@
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import { registerFileEditTool } from './file-edit.js';
-import { prepareExactEdit, throwForFuzzyFailure } from './file-edit-operation.js';
-import type { FileEditInput } from './file-edit-schemas.js';
-import { ToolRegistry } from './tool-registry.js';
-import { ToolExecutionError } from './tool-registry-types.js';
+import { registerFileEditTool } from './file-edit';
+import { prepareExactEdit, throwForFuzzyFailure } from './file-edit-operation';
+import type { FileEditInput } from './file-edit-schemas';
+import { ToolRegistry } from './tool-registry';
+import { ToolExecutionError } from './tool-registry-types';
 import { execFile } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

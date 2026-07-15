@@ -1,9 +1,9 @@
 import type { AbgNodeSpec } from '@mission-control/protocol';
-import type { AuthorableAbgGraph } from './authorable-graph.js';
-import type { CoordinatorState } from './graph-coordinator-helpers.js';
-import { findNode } from './graph-coordinator-helpers.js';
-import type { AbgGraphRunnerInput } from './graph-runner.js';
-import { nodeWaitingEvent } from './graph-runner-events.js';
+import type { AuthorableAbgGraph } from './authorable-graph';
+import type { CoordinatorState } from './graph-coordinator-helpers';
+import { findNode } from './graph-coordinator-helpers';
+import type { AbgGraphRunnerInput } from './graph-runner';
+import { nodeWaitingEvent } from './graph-runner-events';
 
 type ResourceLimit = {
     readonly key: 'graph' | 'provider-tool' | 'shell';

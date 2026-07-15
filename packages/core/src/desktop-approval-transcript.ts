@@ -1,11 +1,11 @@
 import type { AgentEvent, AgentMessage } from '@mission-control/protocol';
-import { prepareSessionCompaction, type SessionCompactionPreparation } from './session-compaction-preparation.js';
+import { prepareSessionCompaction, type SessionCompactionPreparation } from './session-compaction-preparation';
 import {
     hasPendingDesktopApprovals,
     projectApprovalContinuationMessages,
     projectApprovalContinuationTranscript,
     type SequencedAgentMessage,
-} from './session-continuation-projection.js';
+} from './session-continuation-projection';
 
 export {
     hasPendingDesktopApprovals,

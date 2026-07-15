@@ -1,5 +1,5 @@
 import type { LocalMcpConfigEntry, McpConfig, McpConfigEntry, RemoteMcpConfigEntry } from '@mission-control/protocol';
-import type { McpConfigScope, ResolvedMcpServer, ScopedMcpEntry } from './config-types.js';
+import type { McpConfigScope, ResolvedMcpServer, ScopedMcpEntry } from './config-types';
 
 const ENV_VAR_PATTERN = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g;
 

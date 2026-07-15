@@ -1,6 +1,6 @@
 import type { AgentEvent, AgentEventEnvelope, ApprovalRecord } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { projectSessionReplay } from './session-replay.js';
+import { projectSessionReplay } from './session-replay';
 
 describe('session replay approval lifecycle projection', () => {
     it('reconstructs blocked and resumed approval states from durable events', () => {

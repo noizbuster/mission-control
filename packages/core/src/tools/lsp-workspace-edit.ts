@@ -5,7 +5,7 @@
 // DiffFile/DiffHunk protocol types, not the oh-my-openagent formatters.
 
 import type { DiffFile, DiffHunk, DiffLine } from '@mission-control/protocol';
-import type { LspPosition, LspRange, LspTextEdit, LspWorkspaceEdit } from './lsp-tool.js';
+import type { LspPosition, LspRange, LspTextEdit, LspWorkspaceEdit } from './lsp-tool';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 

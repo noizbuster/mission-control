@@ -1,6 +1,6 @@
 import { createChildToolRegistry, TASK_TOOL_NAME, ToolRegistry } from '@mission-control/core';
 import { describe, expect, it } from 'vitest';
-import { createChildToolRegistry as createChildToolRegistryFromBarrel } from './tools/public-orchestration-exports.js';
+import { createChildToolRegistry as createChildToolRegistryFromBarrel } from './tools/public-orchestration-exports';
 
 describe('simple task child registry public exports', () => {
     it('exports the compatibility helper and task name from the package root', () => {

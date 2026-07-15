@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createMcpToolRegistration } from '../mcp-tool.js';
-import { ToolExecutionError } from '../tool-registry-types.js';
-import { StdioMcpClient } from './stdio-client.js';
+import { createMcpToolRegistration } from '../mcp-tool';
+import { ToolExecutionError } from '../tool-registry-types';
+import { StdioMcpClient } from './stdio-client';
 
 const fixturePath = new URL('./fixtures/stdio-fixture-server.mjs', import.meta.url).pathname;
 const ctx = { toolCallId: 'c1', toolName: 'mcp', signal: new AbortController().signal };

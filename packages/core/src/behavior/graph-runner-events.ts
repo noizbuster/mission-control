@@ -8,8 +8,8 @@ import type {
     ApprovalRecord,
     PermissionDecision,
 } from '@mission-control/protocol';
-import { createObservabilityRedactor } from '../providers/observability-redactor.js';
-import type { AbgGraphRunnerInput } from './graph-runner.js';
+import { createObservabilityRedactor } from '../providers/observability-redactor';
+import type { AbgGraphRunnerInput } from './graph-runner';
 
 export function graphEvent(
     type: 'graph.started' | 'graph.completed' | 'graph.failed',

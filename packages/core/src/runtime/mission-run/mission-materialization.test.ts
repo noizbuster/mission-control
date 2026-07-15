@@ -1,7 +1,7 @@
 import { MissionSchema } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { materializeMission } from './mission-run-service.js';
-import { makeCategorizedWorkflowSpec, makeTestWorkflowSpec } from './mission-run-test-support.js';
+import { materializeMission } from './mission-run-service';
+import { makeCategorizedWorkflowSpec, makeTestWorkflowSpec } from './mission-run-test-support';
 
 describe('materializeMission', () => {
     it('creates a valid draft Mission from a WorkflowSpec', () => {

@@ -1,18 +1,18 @@
-import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db.js';
+import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db';
 import {
     acquireSessionControlLease,
     expireSessionControlLease,
     renewSessionControlLease,
     type SessionControlLease,
-} from './session-control-lease.js';
-import { SessionControlOwnerError } from './session-control-owner-error.js';
-import type { PosixSessionControlOwner } from './session-control-owner-posix.js';
+} from './session-control-lease';
+import { SessionControlOwnerError } from './session-control-owner-error';
+import type { PosixSessionControlOwner } from './session-control-owner-posix';
 import {
     assertSessionControlRegistryMatchesLease,
     sessionControlRegistryForLease,
-} from './session-control-owner-posix.js';
-import { releaseSessionControlOwnerLease } from './session-control-owner-posix-release.js';
-import { currentSessionControlProcessIdentity, probeSessionControlProcess } from './session-control-process.js';
+} from './session-control-owner-posix';
+import { releaseSessionControlOwnerLease } from './session-control-owner-posix-release';
+import { currentSessionControlProcessIdentity, probeSessionControlProcess } from './session-control-process';
 import {
     launchWindowsSessionControlProxy,
     resolveWindowsSessionControlPaths,
@@ -20,18 +20,18 @@ import {
     type WindowsSessionControlProxy,
     type WindowsSessionControlProxyBootstrap,
     type WindowsSessionControlProxyLaunchInput,
-} from './session-control-proxy-windows.js';
+} from './session-control-proxy-windows';
 import {
     authenticateIncomingSessionControlConnection,
     deferAuthenticatedSessionControlConnectionClose,
     generateSessionControlNonce,
     sessionControlNonceHash,
-} from './session-control-registry-auth.js';
+} from './session-control-registry-auth';
 import {
     publishSessionControlRegistry,
     readSessionControlRegistry,
     type SessionControlRegistry,
-} from './session-control-registry-file.js';
+} from './session-control-registry-file';
 import { randomBytes } from 'node:crypto';
 import { lstat, rm } from 'node:fs/promises';
 import type { Duplex } from 'node:stream';

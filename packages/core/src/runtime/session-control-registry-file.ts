@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { SessionControlRegistryError } from './session-control-registry-paths.js';
+import { SessionControlRegistryError } from './session-control-registry-paths';
 import { randomBytes } from 'node:crypto';
 import { lstat, open, readFile, rename, rm } from 'node:fs/promises';
 import { basename, dirname } from 'node:path';

@@ -1,7 +1,7 @@
 import type { Client } from '@libsql/client';
-import { deriveSessionLifecycleFromSql } from './session-lifecycle-sql-authorities.js';
+import { deriveSessionLifecycleFromSql } from './session-lifecycle-sql-authorities';
 
-export { loadSessionActiveRuns, loadSessionTerminalEvent } from './session-lifecycle-sql-authorities.js';
+export { loadSessionActiveRuns, loadSessionTerminalEvent } from './session-lifecycle-sql-authorities';
 
 type SessionAwaitingReason = 'approval' | 'user_input' | 'subagent';
 

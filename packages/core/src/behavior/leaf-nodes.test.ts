@@ -5,7 +5,7 @@ import {
     createAbgNodeRegistry,
     createDefaultAbgNodeRegistry,
     runAbgNode,
-} from './node-registry.js';
+} from './node-registry';
 
 async function collectSignals(signals: AsyncIterable<AbgSignal>): Promise<readonly AbgSignal[]> {
     const collected: AbgSignal[] = [];

@@ -12,8 +12,8 @@ import {
     providerToolCallEvent,
     runBlockedEvent,
     runFailedEvent,
-} from './desktop-tool-approval-test-support.js';
-import { ensurePendingToolApprovalForCurrentBlockedRun, settleDesktopApproval } from './desktop-tool-approvals.js';
+} from './desktop-tool-approval-test-support';
+import { ensurePendingToolApprovalForCurrentBlockedRun, settleDesktopApproval } from './desktop-tool-approvals';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

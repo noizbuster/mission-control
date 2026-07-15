@@ -4,7 +4,7 @@ import {
     AgentEventEnvelopeSchema,
     AgentEventSchema,
 } from '@mission-control/protocol';
-import { OBSERVABILITY_UNAVAILABLE, type ObservabilityRedactor } from './observability-value-redactor.js';
+import { OBSERVABILITY_UNAVAILABLE, type ObservabilityRedactor } from './observability-value-redactor';
 
 export function redactAgentEventForObservability(event: AgentEvent, redactor: ObservabilityRedactor): AgentEvent {
     const parsed = AgentEventSchema.safeParse(redactor.redactValue(event));

@@ -8,7 +8,7 @@ import {
     extractTokenUsage,
     type PricingTable,
     resolvePricing,
-} from './cost-ledger.js';
+} from './cost-ledger';
 
 const pricing: PricingTable = [
     // $3 / $15 per million tokens = 300 / 1500 cents.

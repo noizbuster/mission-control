@@ -1,18 +1,18 @@
 import { expect, it } from 'vitest';
-import { createStaticProviderCredentialResolver } from '../credential-resolver.js';
-import { googleGeminiProviderContract } from '../provider-adapter-contract-registrations.js';
-import { describeProviderAdapterContract } from '../provider-adapter-contract-test-support.js';
+import { createStaticProviderCredentialResolver } from '../credential-resolver';
+import { googleGeminiProviderContract } from '../provider-adapter-contract-registrations';
+import { describeProviderAdapterContract } from '../provider-adapter-contract-test-support';
 import {
     createGeminiGenerateContentProvider,
     GeminiGenerateContentTransportError,
-} from './gemini-generate-content-provider.js';
+} from './gemini-generate-content-provider';
 import {
     captureError,
     collectChunks,
     geminiCredential,
     geminiTurnRequest,
     throwingStream,
-} from './gemini-generate-content-test-support.js';
+} from './gemini-generate-content-test-support';
 
 describeProviderAdapterContract(googleGeminiProviderContract);
 

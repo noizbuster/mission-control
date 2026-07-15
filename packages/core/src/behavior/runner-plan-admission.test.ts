@@ -16,20 +16,20 @@ import { type AbgNodeSpec, WorkflowSpecSchema } from '@mission-control/protocol'
 import type { ModelMessage } from 'ai';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createBlackboard } from '../memory/blackboard.js';
-import { collectSignals, createCompositeNodeTestContext } from './composite-node-test-helpers.js';
-import type { AbgNodeRunContext } from './node-registry.js';
-import { runLlmActorNode } from './nodes/llm-actor/llm-actor-node-runner.js';
+import { createBlackboard } from '../memory/blackboard';
+import { collectSignals, createCompositeNodeTestContext } from './composite-node-test-helpers';
+import type { AbgNodeRunContext } from './node-registry';
+import { runLlmActorNode } from './nodes/llm-actor/llm-actor-node-runner';
 import {
     evaluatePlanAdmission,
     RUNNER_APPROVED_STATUS_PATTERN,
     RUNNER_REQUIRED_SCAFFOLD_SECTIONS,
-} from './runner-plan-admission.js';
+} from './runner-plan-admission';
 import {
     createRunnerWorkflowGraph,
     RUNNER_PLAN_ADMISSION_PROMPT,
     RUNNER_PLAN_REJECTED_PROMPT,
-} from './runner-workflow-graph.js';
+} from './runner-workflow-graph';
 import { readFile } from 'node:fs/promises';
 
 const WORKFLOW_FIXTURE_PATH = `${process.cwd()}/examples/abg/runner.workflow.json`;

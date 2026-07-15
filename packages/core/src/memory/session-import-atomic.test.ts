@@ -1,20 +1,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { importLegacySessionCompatibilityWindow, listLegacySessionImportLedger } from './session-import.js';
+import { importLegacySessionCompatibilityWindow, listLegacySessionImportLedger } from './session-import';
 import {
     emptyImportAccumulator,
     legacyEnvelope,
     readLegacyEnvelopes,
     sessionSummary,
     writeLegacyLog,
-} from './session-import-regression-test-support.js';
-import { importJsonlSource } from './session-import-sources.js';
+} from './session-import-regression-test-support';
+import { importJsonlSource } from './session-import-sources';
 import {
     countRows,
     openMigratedTestDb,
     SESSION_IMPORT_TEST_CREATED_AT,
     SESSION_IMPORT_TEST_SESSION_ID,
     writeLegacyFixture,
-} from './session-import-test-support.js';
+} from './session-import-test-support';
 import { mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 

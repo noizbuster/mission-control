@@ -11,7 +11,7 @@ export {
     SqlSessionInputDelivery,
     type SqlSessionInputDeliveryOptions,
     type SqlSessionInputDeliveryRecord,
-} from './session-input-delivery-sql.js';
+} from './session-input-delivery-sql';
 
 export interface SessionInputRecord {
     readonly inputId: string;

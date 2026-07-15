@@ -6,28 +6,28 @@ import {
     AgentEventSchema,
     type AgentSnapshot,
 } from '@mission-control/protocol';
-import type { AbgTimelineEntry } from '../behavior/timeline.js';
+import type { AbgTimelineEntry } from '../behavior/timeline';
 import {
     createObservabilityRedactor,
     type ObservabilityRedactor,
     redactAgentEventEnvelopeForObservability,
     redactAgentEventForObservability,
-} from '../providers/observability-redactor.js';
-import { SessionEventLog } from '../session-log.js';
-import { jsonlStoreError } from './jsonl-errors.js';
-import { sessionMismatch } from './jsonl-session-event-errors.js';
+} from '../providers/observability-redactor';
+import { SessionEventLog } from '../session-log';
+import { jsonlStoreError } from './jsonl-errors';
+import { sessionMismatch } from './jsonl-session-event-errors';
 import {
     type OpenedJsonlSessionFile,
     type OpenJsonlSessionFileOptions,
     openJsonlSessionFile,
-} from './jsonl-session-files.js';
-import { defaultSession, deriveSession } from './jsonl-session-projection.js';
-import { createJsonlSessionEventRecord, serializeJsonlRecord } from './jsonl-session-records.js';
-import type { MemoryStore, SessionCompactionRecordInput } from './memory-store.js';
-import { createSessionCompactionEvent } from './session-compaction-event.js';
+} from './jsonl-session-files';
+import { defaultSession, deriveSession } from './jsonl-session-projection';
+import { createJsonlSessionEventRecord, serializeJsonlRecord } from './jsonl-session-records';
+import type { MemoryStore, SessionCompactionRecordInput } from './memory-store';
+import { createSessionCompactionEvent } from './session-compaction-event';
 import { randomUUID } from 'node:crypto';
 
-export { JsonlSessionEventStoreError } from './jsonl-errors.js';
+export { JsonlSessionEventStoreError } from './jsonl-errors';
 
 export type JsonlSessionEventIdFactory = (event: AgentEvent, sequence: number) => string;
 

@@ -1,8 +1,8 @@
 import type { AgentEventEnvelope } from '@mission-control/protocol';
-import { resolveMissionControlDataDir } from '../memory/data-dir.js';
-import { openLocalSessionProjectionStore, readLocalSessionReplay } from '../memory/local-session-store.js';
-import { REDACTED_CREDENTIAL } from '../providers/redaction-handler.js';
-import type { ReplayDiagnostic, SessionReplayProjection } from '../session-replay-types.js';
+import { resolveMissionControlDataDir } from '../memory/data-dir';
+import { openLocalSessionProjectionStore, readLocalSessionReplay } from '../memory/local-session-store';
+import { REDACTED_CREDENTIAL } from '../providers/redaction-handler';
+import type { ReplayDiagnostic, SessionReplayProjection } from '../session-replay-types';
 
 export const SESSION_SEARCH_TIMEOUT_MS = 60_000;
 export const MAX_SESSIONS_TO_SCAN = 50;

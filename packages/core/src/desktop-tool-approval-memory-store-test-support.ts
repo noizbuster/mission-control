@@ -1,8 +1,8 @@
 import type { AgentEvent } from '@mission-control/protocol';
-import { type DesktopApprovalEffectRecord, sameDesktopApprovalEffect } from './desktop-approval-effect.js';
-import { fixedNow } from './desktop-session-commands-test-support.js';
-import { toolCallsFromEvents } from './desktop-tool-approval-authority.js';
-import type { DesktopApprovalStore } from './desktop-tool-approvals.js';
+import { type DesktopApprovalEffectRecord, sameDesktopApprovalEffect } from './desktop-approval-effect';
+import { fixedNow } from './desktop-session-commands-test-support';
+import { toolCallsFromEvents } from './desktop-tool-approval-authority';
+import type { DesktopApprovalStore } from './desktop-tool-approvals';
 
 export type MemoryApprovalStore = DesktopApprovalStore & {
     readonly events: readonly AgentEvent[];

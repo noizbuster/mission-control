@@ -2,10 +2,10 @@ import type { LanguageModelV3StreamPart } from '@ai-sdk/provider';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { spawnChildCodingAgent } from '../behavior/subagents/spawn-child.js';
-import { createChildToolRegistry, createTaskToolRegistration, TASK_TOOL_NAME } from './task-tool.js';
-import { ToolRegistry } from './tool-registry.js';
-import type { ToolRegistration } from './tool-registry-types.js';
+import { spawnChildCodingAgent } from '../behavior/subagents/spawn-child';
+import { createChildToolRegistry, createTaskToolRegistration, TASK_TOOL_NAME } from './task-tool';
+import { ToolRegistry } from './tool-registry';
+import type { ToolRegistration } from './tool-registry-types';
 
 const NOW = '2026-06-16T00:00:00.000Z';
 const MODEL = { providerID: 'anthropic', modelID: 'claude-fable-5' } as const;

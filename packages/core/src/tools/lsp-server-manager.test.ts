@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { LspServerConfig, LspServerManagerDeps } from './lsp-server-manager.js';
-import { DEFAULT_LSP_SERVERS, LspServerManager } from './lsp-server-manager.js';
-import type { StdioLspClientOptions } from './lsp-stdio-client.js';
-import { StdioLspClient } from './lsp-stdio-client.js';
+import type { LspServerConfig, LspServerManagerDeps } from './lsp-server-manager';
+import { DEFAULT_LSP_SERVERS, LspServerManager } from './lsp-server-manager';
+import type { StdioLspClientOptions } from './lsp-stdio-client';
+import { StdioLspClient } from './lsp-stdio-client';
 
 const WORKSPACE_ROOT = '/workspace';
 

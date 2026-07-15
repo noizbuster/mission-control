@@ -1,6 +1,6 @@
 import { AbgGraphSpecSchema, WorkflowSpecSchema } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { createRunnerWorkflowGraph, RUNNER_WORKFLOW_GRAPH_ID } from './runner-workflow-graph.js';
+import { createRunnerWorkflowGraph, RUNNER_WORKFLOW_GRAPH_ID } from './runner-workflow-graph';
 import { readFile } from 'node:fs/promises';
 
 const workflowJsonPath = `${process.cwd()}/examples/abg/runner.workflow.json`;

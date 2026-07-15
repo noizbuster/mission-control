@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { discoverAgents } from '../agent-loader.js';
-import { CapabilityRegistry } from '../capability/index.js';
-import type { LoadContext } from '../capability/types.js';
-import { CROSS_HARNESS_PROVIDERS, registerBuiltinProviders } from './index.js';
+import { discoverAgents } from '../agent-loader';
+import { CapabilityRegistry } from '../capability/index';
+import type { LoadContext } from '../capability/types';
+import { CROSS_HARNESS_PROVIDERS, registerBuiltinProviders } from './index';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

@@ -1,6 +1,6 @@
-import type { ResolvedMcpServer } from './config.js';
-import { RemoteMcpClient } from './http-client.js';
-import { StdioMcpClient } from './stdio-client.js';
+import type { ResolvedMcpServer } from './config';
+import { RemoteMcpClient } from './http-client';
+import { StdioMcpClient } from './stdio-client';
 
 export function createDefaultMcpClient(
     server: ResolvedMcpServer,

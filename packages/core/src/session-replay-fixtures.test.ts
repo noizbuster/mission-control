@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { projectJsonlSessionReplayPrefix } from './session-replay.js';
+import { projectJsonlSessionReplayPrefix } from './session-replay';
 import { readFile } from 'node:fs/promises';
 
 describe('session replay JSONL fixtures', () => {

@@ -2,7 +2,7 @@ export {
     SessionArchiveValidationError,
     type SessionArchiveValidationErrorCode,
     validateSessionArchiveManifestForImport,
-} from './memory/session-archive-validation.js';
+} from './memory/session-archive-validation';
 export {
     type ApprovalProjection,
     type CodingReplayStep,
@@ -22,4 +22,4 @@ export {
     type SessionTreeProjectionDiagnostic,
     type ToolOutcomeProjection,
     type ToolOutcomeStatus,
-} from './session-replay.js';
+} from './session-replay';

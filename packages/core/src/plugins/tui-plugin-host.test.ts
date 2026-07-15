@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TuiPluginHostRegistry } from './tui-plugin-host.js';
+import { TuiPluginHostRegistry } from './tui-plugin-host';
 
 const trustedLookup = async () => ({
     decision: 'trusted' as const,

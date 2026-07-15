@@ -1,6 +1,6 @@
 import { expect } from 'vitest';
-import { projectSessionReplay } from './session-replay.js';
-import { approvalEvent, envelope, runEvent } from './session-replay-coding-test-support.js';
+import { projectSessionReplay } from './session-replay';
+import { approvalEvent, envelope, runEvent } from './session-replay-coding-test-support';
 
 export function expectBlockedApprovalAndResumedRunProjection(): void {
     const sessionId = 'session_replay_run_blocked_resumed';

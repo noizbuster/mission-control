@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { projectSessionReplay } from './session-replay.js';
+import { projectSessionReplay } from './session-replay';
 import {
     approvalEvent,
     diffAppliedEvent,
@@ -16,8 +16,8 @@ import {
     sessionStoppedEvent,
     toolCompletedEvent,
     toolFailedEvent,
-} from './session-replay-coding-test-support.js';
-import { expectBlockedApprovalAndResumedRunProjection } from './session-replay-run-state-test-support.js';
+} from './session-replay-coding-test-support';
+import { expectBlockedApprovalAndResumedRunProjection } from './session-replay-run-state-test-support';
 
 describe('session replay coding projections', () => {
     it('reconstructs provider tool calls, approvals, tool results, and continuation messages', () => {

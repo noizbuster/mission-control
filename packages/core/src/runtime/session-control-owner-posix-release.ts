@@ -1,7 +1,7 @@
-import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db.js';
-import type { SessionControlLease } from './session-control-lease.js';
-import { runSessionControlLeaseImmediate } from './session-control-lease-sql.js';
-import { SESSION_CONTROL_DEAD_LEASE_RETENTION_MS } from './session-control-operation-types.js';
+import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db';
+import type { SessionControlLease } from './session-control-lease';
+import { runSessionControlLeaseImmediate } from './session-control-lease-sql';
+import { SESSION_CONTROL_DEAD_LEASE_RETENTION_MS } from './session-control-operation-types';
 
 export async function releaseSessionControlOwnerLease(input: {
     readonly runtime: LocalLibsqlWriteTarget;

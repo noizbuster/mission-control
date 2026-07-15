@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import type { SessionControlEpoch } from '../../runtime/session-control-cancellation.js';
-import { ToolRegistry } from '../tool-registry.js';
-import type { ToolExecutionContext } from '../tool-registry-types.js';
+import type { SessionControlEpoch } from '../../runtime/session-control-cancellation';
+import { ToolRegistry } from '../tool-registry';
+import type { ToolExecutionContext } from '../tool-registry-types';
 import {
     type ChildSpawnRequest,
     createFullParityTaskToolRegistration,
     type TaskToolRuntime,
     taskToolInputSchema,
-} from './task-tool.js';
+} from './task-tool';
 
 const CONTROL_EPOCH: SessionControlEpoch = {
     dbIdentity: 'c'.repeat(64),

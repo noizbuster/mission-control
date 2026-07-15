@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { parseTrustedCommandChain } from './bash-run-command-guard.js';
-import type { CommandExecutionRequest, CommandExecutionResult } from './command-run-executor.js';
-import { type CommandChainStep, executeCommandChain } from './command-run-executor.js';
+import { parseTrustedCommandChain } from './bash-run-command-guard';
+import type { CommandExecutionRequest, CommandExecutionResult } from './command-run-executor';
+import { type CommandChainStep, executeCommandChain } from './command-run-executor';
 
 describe('parseTrustedCommandChain', () => {
     it('returns a single-pipeline chain with no operators for plain input', () => {

@@ -1,6 +1,6 @@
 import type { AbgSignal } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { type RecordedTurn, recordedEventTypes, replayRecordedTurn } from './recorded-llm-replay.js';
+import { type RecordedTurn, recordedEventTypes, replayRecordedTurn } from './recorded-llm-replay';
 
 const NOW = '2026-06-16T00:00:00.000Z';
 const ctx = { graphId: 'g1', nodeId: 'llm-1', now: () => NOW };

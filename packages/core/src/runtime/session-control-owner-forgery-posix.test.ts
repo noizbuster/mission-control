@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { openLocalLibsqlDb } from '../db/local-libsql-db.js';
-import { readSessionControlLease } from './session-control-lease.js';
+import { openLocalLibsqlDb } from '../db/local-libsql-db';
+import { readSessionControlLease } from './session-control-lease';
 import {
     publishPosixSessionControlOwner,
     resolveAuthenticatedPosixSessionControlOwner,
     SessionControlOwnerError,
-} from './session-control-owner-posix.js';
-import { generateSessionControlNonce } from './session-control-registry-auth.js';
-import { publishSessionControlRegistry, readSessionControlRegistry } from './session-control-registry-file.js';
+} from './session-control-owner-posix';
+import { generateSessionControlNonce } from './session-control-registry-auth';
+import { publishSessionControlRegistry, readSessionControlRegistry } from './session-control-registry-file';
 import { chmod, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

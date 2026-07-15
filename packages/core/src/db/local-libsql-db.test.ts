@@ -6,8 +6,8 @@ import {
     listLocalDbMigrationLedger,
     openLocalLibsqlDb,
     runLocalDbMigrations,
-} from './local-libsql-db.js';
-import { runtimePersistenceSchemaSql } from './local-libsql-schema-runtime.js';
+} from './local-libsql-db';
+import { runtimePersistenceSchemaSql } from './local-libsql-schema-runtime';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

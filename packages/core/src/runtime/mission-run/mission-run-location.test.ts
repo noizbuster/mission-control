@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { openLocalLibsqlDb } from '../../db/local-libsql-db.js';
-import { localSessionDbPath } from '../../memory/local-session-store-paths.js';
-import { materializeMission } from './mission-run-service.js';
-import { normalizeMissionRunStoreLocation } from './mission-run-store-location.js';
-import { makeTempRoot, makeTestWorkflowSpec, seedOmoRoot } from './mission-run-test-support.js';
-import { createMission, listMissions } from './mission-store.js';
+import { openLocalLibsqlDb } from '../../db/local-libsql-db';
+import { localSessionDbPath } from '../../memory/local-session-store-paths';
+import { materializeMission } from './mission-run-service';
+import { normalizeMissionRunStoreLocation } from './mission-run-store-location';
+import { makeTempRoot, makeTestWorkflowSpec, seedOmoRoot } from './mission-run-test-support';
+import { createMission, listMissions } from './mission-store';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';

@@ -1,4 +1,4 @@
-import { repoToolFailure } from './read-tools-errors.js';
+import { repoToolFailure } from './read-tools-errors';
 import type { Stats } from 'node:fs';
 import { realpath, stat } from 'node:fs/promises';
 import { isAbsolute, relative, resolve } from 'node:path';

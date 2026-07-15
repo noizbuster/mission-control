@@ -1,7 +1,7 @@
 import { modelMessageSchema } from 'ai';
 import { describe, expect, it } from 'vitest';
-import { redactModelMessagesForObservability } from './model-message-observability.js';
-import { createObservabilityRedactor } from './observability-redactor.js';
+import { redactModelMessagesForObservability } from './model-message-observability';
+import { createObservabilityRedactor } from './observability-redactor';
 import { createHash } from 'node:crypto';
 
 describe('model message observability', () => {

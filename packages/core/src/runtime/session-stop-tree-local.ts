@@ -1,8 +1,8 @@
 import type { SessionStopScope } from '@mission-control/protocol';
-import { resolveMissionControlDataDir } from '../memory/data-dir.js';
-import { openCanonicalRuntimeDb } from './local-runtime-db.js';
-import { createPlatformSessionOwnerControlClient } from './session-owner-control-client.js';
-import { type SessionStopTreeResult, stopSessionTree } from './session-stop-tree.js';
+import { resolveMissionControlDataDir } from '../memory/data-dir';
+import { openCanonicalRuntimeDb } from './local-runtime-db';
+import { createPlatformSessionOwnerControlClient } from './session-owner-control-client';
+import { type SessionStopTreeResult, stopSessionTree } from './session-stop-tree';
 
 export type StopLocalSessionTreeInput = {
     readonly targetSessionId: string;

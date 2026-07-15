@@ -6,7 +6,7 @@ import {
     globPrefix,
     isDynamic,
     unquote,
-} from './bash-path-extraction.js';
+} from './bash-path-extraction';
 import { homedir } from 'node:os';
 
 describe('bash path extraction', () => {

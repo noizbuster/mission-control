@@ -1,7 +1,7 @@
 import type { PermissionDecision, SidecarStreamFrame } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createSshToolRegistration, registerSshTool, type SshInput, type SshToolOptions } from './ssh-tool.js';
-import { ToolRegistry } from './tool-registry.js';
+import { createSshToolRegistration, registerSshTool, type SshInput, type SshToolOptions } from './ssh-tool';
+import { ToolRegistry } from './tool-registry';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { readLocalSessionReplay } from './local-session-store.js';
+import { readLocalSessionReplay } from './local-session-store';
 import {
     sessionStartedEvent,
     sessionStoppedEvent,
     tempDataDir,
     writeLegacyJsonl,
     writeLegacySource,
-} from './local-session-store-test-support.js';
+} from './local-session-store-test-support';
 import { readFile } from 'node:fs/promises';
 
 describe('local session store legacy JSONL compatibility', () => {

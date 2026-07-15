@@ -2,9 +2,9 @@ import {
     composeObservabilityTextStreams,
     createObservabilityTextStream,
     type ObservabilityTextStream,
-} from './observability-text-stream.js';
-import { OBSERVABILITY_UNAVAILABLE, redactObservabilityValue } from './observability-value-traversal.js';
-import { createCredentialTextRedactor, createExactSecretTextRedactor } from './redaction-handler.js';
+} from './observability-text-stream';
+import { OBSERVABILITY_UNAVAILABLE, redactObservabilityValue } from './observability-value-traversal';
+import { createCredentialTextRedactor, createExactSecretTextRedactor } from './redaction-handler';
 
 export const OBSERVABILITY_REDACTION_MAX_BYTES = 64 * 1024;
 export const OBSERVABILITY_REDACTION_MAX_DEPTH = 16;

@@ -1,9 +1,9 @@
-import { parseSseFrames, readSseStream } from '../shared/sse-stream-transport.js';
+import { parseSseFrames, readSseStream } from '../shared/sse-stream-transport';
 import {
     type OpenAIResponsesTransport,
     OpenAIResponsesTransportError,
     type OpenAIResponsesTransportRequest,
-} from './openai-responses-transport.js';
+} from './openai-responses-transport';
 
 export function createNodeOpenAIResponsesTransport(): OpenAIResponsesTransport {
     return {

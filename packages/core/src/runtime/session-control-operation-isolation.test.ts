@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { openLocalLibsqlDb } from '../db/local-libsql-db.js';
-import { expireSessionControlLease } from './session-control-lease.js';
+import { openLocalLibsqlDb } from '../db/local-libsql-db';
+import { expireSessionControlLease } from './session-control-lease';
 import {
     createSessionControlOperation,
     readSessionControlOperation,
     recoverExpiredSessionControlOperations,
     settleSessionControlOperationHandle,
-} from './session-control-operation.js';
+} from './session-control-operation';
 import {
     acquireOperationTestLease,
     cleanupOperationTestRuntimes,
@@ -15,7 +15,7 @@ import {
     readMutationProbe,
     TEST_DB_IDENTITY,
     TEST_SESSION_ID,
-} from './session-control-operation-test-support.js';
+} from './session-control-operation-test-support';
 
 afterEach(cleanupOperationTestRuntimes);
 

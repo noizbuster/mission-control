@@ -1,6 +1,6 @@
 import type { SidecarStreamFrame } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { assemblePtyFrames, createPtySessionTransport, PTY_OUTPUT_CAP_BYTES } from './pty-client.js';
+import { assemblePtyFrames, createPtySessionTransport, PTY_OUTPUT_CAP_BYTES } from './pty-client';
 
 function frame(seq: number, payload: string, end: boolean, error?: string): SidecarStreamFrame {
     return {

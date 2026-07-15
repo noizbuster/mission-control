@@ -1,7 +1,7 @@
 import { createClient } from '@libsql/client';
 import { AgentEventEnvelopeSchema } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import { projectSessionAdmission } from '../session-admission.js';
+import { projectSessionAdmission } from '../session-admission';
 import {
     abortCompleted,
     abortedSessionEvents,
@@ -10,7 +10,7 @@ import {
     nextRunStarted,
     SESSION_ID,
     sessionStarted,
-} from './session-stop-projection-events-test-support.js';
+} from './session-stop-projection-events-test-support';
 import {
     insertSurvivor,
     openStore,
@@ -18,13 +18,13 @@ import {
     readSessionRow,
     sessionStatus,
     settleSurvivor,
-} from './session-stop-projection-test-support.js';
+} from './session-stop-projection-test-support';
 import {
     cleanupSqliteSessionEventStoreTestDirs,
     createSqliteSessionEventStoreTestDbUrl,
-} from './sqlite-session-event-store-test-support.js';
-import { projectSessionEventsToSqlite } from './sqlite-session-projection.js';
-import { openSqliteSessionProjectionStoreForTests } from './sqlite-session-projection-test-support.js';
+} from './sqlite-session-event-store-test-support';
+import { projectSessionEventsToSqlite } from './sqlite-session-projection';
+import { openSqliteSessionProjectionStoreForTests } from './sqlite-session-projection-test-support';
 
 describe('session stop SQLite projection', () => {
     afterEach(cleanupSqliteSessionEventStoreTestDirs);

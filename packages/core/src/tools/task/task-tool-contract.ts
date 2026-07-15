@@ -1,7 +1,7 @@
 import type { PolicyEffectRule } from '@mission-control/protocol';
 import { z } from 'zod';
-import type { SessionControlEpoch } from '../../runtime/session-control-cancellation.js';
-import type { CategoryDefinition } from './category-catalog.js';
+import type { SessionControlEpoch } from '../../runtime/session-control-cancellation';
+import type { CategoryDefinition } from './category-catalog';
 
 export const batchTaskItemSchema = z
     .object({

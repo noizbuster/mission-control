@@ -3,17 +3,17 @@ import type { AgentEventEnvelope, ProtocolError, ProviderStreamChunk } from '@mi
 import {
     guardProviderChunkForObservability,
     redactProviderChunkForObservability,
-} from './observability-provider-chunk.js';
-import { createObservabilityRedactor, redactAgentEventEnvelopeForObservability } from './observability-redactor.js';
-import { createProviderStreamObservability } from './provider-stream-observability.js';
-import { eventForProviderChunk, responseFailedChunk, responseStartedChunk } from './provider-turn-events.js';
-import { closeProviderChunkIterator, nextProviderChunk } from './provider-turn-timeout.js';
+} from './observability-provider-chunk';
+import { createObservabilityRedactor, redactAgentEventEnvelopeForObservability } from './observability-redactor';
+import { createProviderStreamObservability } from './provider-stream-observability';
+import { eventForProviderChunk, responseFailedChunk, responseStartedChunk } from './provider-turn-events';
+import { closeProviderChunkIterator, nextProviderChunk } from './provider-turn-timeout';
 import {
     ProviderTurnError,
     type ProviderTurnRunInput,
     type ProviderTurnRunnerOptions,
     type ProviderTurnRunResult,
-} from './provider-turn-types.js';
+} from './provider-turn-types';
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 const DEFAULT_RETRY_LIMIT = 7;

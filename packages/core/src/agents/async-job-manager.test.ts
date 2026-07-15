@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { JobExecuteFn } from './async-job-manager.js';
-import { AsyncJobManager } from './async-job-manager.js';
+import type { JobExecuteFn } from './async-job-manager';
+import { AsyncJobManager } from './async-job-manager';
 
 type JobResult = { status: 'completed' | 'failed'; output: string };
 

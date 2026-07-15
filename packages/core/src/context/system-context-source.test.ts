@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { emitMidConversationSystemMessage } from './mid-conversation-message.js';
+import { emitMidConversationSystemMessage } from './mid-conversation-message';
 import {
     packSystemContextSource,
     SystemContextRegistry,
     SystemContextRegistryError,
     type SystemContextSource,
     stringContextCodec,
-} from './system-context-source.js';
+} from './system-context-source';
 
 function makeCounterSource(key: string): {
     source: SystemContextSource<string>;

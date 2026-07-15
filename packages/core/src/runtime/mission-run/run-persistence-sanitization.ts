@@ -1,7 +1,7 @@
 import { type Run, RunSchema } from '@mission-control/protocol';
-import type { ObservabilityRedactor } from '../../providers/observability-redactor.js';
-import { redactCredentialText } from '../../providers/redaction-handler.js';
-import { TERMINAL_RUN_STATUSES } from './run-status-transitions.js';
+import type { ObservabilityRedactor } from '../../providers/observability-redactor';
+import { redactCredentialText } from '../../providers/redaction-handler';
+import { TERMINAL_RUN_STATUSES } from './run-status-transitions';
 
 export function sanitizeRunForPersistence(run: Run, observabilityRedactor?: ObservabilityRedactor): Run {
     const observableRun = RunSchema.parse(observabilityRedactor?.redactValue(run) ?? run);

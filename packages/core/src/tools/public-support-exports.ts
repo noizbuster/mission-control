@@ -1,4 +1,4 @@
-export { type TodoItem, type TodoWriteInput, todoWriteToolRegistration } from './todowrite-tool.js';
+export { type TodoItem, type TodoWriteInput, todoWriteToolRegistration } from './todowrite-tool';
 export {
     type ToolAdvertisement,
     type ToolExecutionContext,
@@ -9,8 +9,8 @@ export {
     type ToolOutputLimit,
     type ToolRegistration,
     ToolRegistry,
-} from './tool-registry.js';
-export { type TruncatedOutput, truncateOutput, withContinuationHint } from './truncate.js';
+} from './tool-registry';
+export { type TruncatedOutput, truncateOutput, withContinuationHint } from './truncate';
 export {
     createEnvTtsCredentialResolver,
     createTtsToolRegistration,
@@ -23,7 +23,7 @@ export {
     type TtsCredentialResolver,
     type TtsToolOptions,
     type TtsTransport,
-} from './tts-tool.js';
+} from './tts-tool';
 export {
     allVisionProviders,
     getVisionProvider,
@@ -31,32 +31,32 @@ export {
     type VisionImage,
     type VisionProvider,
     type VisionRequestInput,
-} from './vision-providers.js';
+} from './vision-providers';
 export {
     VISION_PROVIDER_IDS,
     type VisionProviderId,
     visionCredentialHint,
     visionProviderIdSchema,
-} from './vision-schemas.js';
+} from './vision-schemas';
 export type {
     WebSearchInput,
     WebSearchOutput,
-} from './web-search-schemas.js';
+} from './web-search-schemas';
 export {
     createWebSearchToolRegistration,
     registerWebSearchTool,
     type WebSearchToolOptions,
-} from './web-search-tool.js';
+} from './web-search-tool';
 export {
     selectWebSearchProvider,
     type WebSearchProviderId,
-} from './web-search-transport.js';
-export { type WebfetchInput, type WebfetchOutput, webfetchToolRegistration } from './webfetch-tool.js';
+} from './web-search-transport';
+export { type WebfetchInput, type WebfetchOutput, webfetchToolRegistration } from './webfetch-tool';
 export {
     createWebfetchToolRegistration,
     registerWebfetchTool,
     type WebfetchToolOptions,
-} from './webfetch-tool-factory.js';
+} from './webfetch-tool-factory';
 export {
     createWorkflowToolRegistration,
     registerWorkflowTool,
@@ -65,4 +65,4 @@ export {
     type WorkflowToolParams,
     type WorkflowToolResult,
     workflowInputSchema,
-} from './workflow-tool/workflow-tool.js';
+} from './workflow-tool/workflow-tool';

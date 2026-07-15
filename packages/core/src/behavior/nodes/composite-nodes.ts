@@ -1,6 +1,6 @@
 import type { AbgNodeSpec, AbgSignal } from '@mission-control/protocol';
-import { createAbgEmitSignal } from '../abg-emit.js';
-import type { AbgNodeRunContext, AbgNodeRunner } from '../node-registry.js';
+import { createAbgEmitSignal } from '../abg-emit';
+import type { AbgNodeRunContext, AbgNodeRunner } from '../node-registry';
 import {
     cancel,
     failure,
@@ -14,12 +14,12 @@ import {
     success,
     transition,
     uniqueStrings,
-} from './composite-node-utils.js';
-import { runParallelFanOut } from './parallel-fan-out.js';
-import { collectStaticParallelOutcomes } from './parallel-static.js';
-import { runAllApproveVerdict } from './parallel-verdict.js';
-import { createRaceNodeRunner } from './race-node.js';
-import { runSpeculativeNode } from './speculative-node.js';
+} from './composite-node-utils';
+import { runParallelFanOut } from './parallel-fan-out';
+import { collectStaticParallelOutcomes } from './parallel-static';
+import { runAllApproveVerdict } from './parallel-verdict';
+import { createRaceNodeRunner } from './race-node';
+import { runSpeculativeNode } from './speculative-node';
 
 export class AbgCompositeNodeError extends Error {
     constructor(message: string) {

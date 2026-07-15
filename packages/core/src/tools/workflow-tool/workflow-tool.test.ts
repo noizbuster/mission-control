@@ -1,13 +1,13 @@
 import type { WorkflowSpec } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { WorkflowRegistry } from '../../workflows/workflow-registry.js';
-import type { ToolExecutionContext } from '../tool-registry-types.js';
+import { WorkflowRegistry } from '../../workflows/workflow-registry';
+import type { ToolExecutionContext } from '../tool-registry-types';
 import {
     createWorkflowToolRegistration,
     WORKFLOW_TOOL_NAME,
     type WorkflowToolOptions,
     workflowInputSchema,
-} from './workflow-tool.js';
+} from './workflow-tool';
 
 // --- Fixtures ---------------------------------------------------------------
 

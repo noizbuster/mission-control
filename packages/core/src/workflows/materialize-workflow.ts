@@ -14,8 +14,8 @@
  * (broad deny first, specific allow after) are preserved.
  */
 import type { AbgGraphSpec, Mode, WorkflowSpec } from '@mission-control/protocol';
-import { createDefaultWorkflowGraph } from '../behavior/default-workflow-graph.js';
-import { applyMode } from '../behavior/modes/mode-application.js';
+import { createDefaultWorkflowGraph } from '../behavior/default-workflow-graph';
+import { applyMode } from '../behavior/modes/mode-application';
 
 /** The workflow name used as the no-`#` / plain-prompt fallback. */
 export const DEFAULT_WORKFLOW_NAME = 'default';

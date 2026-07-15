@@ -1,12 +1,12 @@
 import type { ProviderAuthFile, ProviderCredential, ProviderCredentialSummary } from '@mission-control/protocol';
-import type { ProviderCredentialResolveInput, ProviderCredentialResolver } from './credential-resolver.js';
+import type { ProviderCredentialResolveInput, ProviderCredentialResolver } from './credential-resolver';
 import {
     ProviderCredentialResolutionError,
     redactCredentialText,
     summarizeResolvedProviderCredential,
-} from './credential-resolver.js';
-import { createObservabilityRedactor, type ObservabilityRedactor } from './observability-redactor.js';
-import type { ProviderAuthStore } from './provider-auth-store.js';
+} from './credential-resolver';
+import { createObservabilityRedactor, type ObservabilityRedactor } from './observability-redactor';
+import type { ProviderAuthStore } from './provider-auth-store';
 
 export type ProviderAuthStoreCredentialResolverAuthStore = Pick<ProviderAuthStore, 'readAuthFile'>;
 

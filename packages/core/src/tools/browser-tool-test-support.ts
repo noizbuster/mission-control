@@ -1,6 +1,6 @@
 import type { PermissionDecision } from '@mission-control/protocol';
-import type { ProjectTrustDecision, ProjectTrustReader } from '../trust/project-trust-store.js';
-import type { BrowserConnectFn, BrowserPageSeam, BrowserToolOptions, BrowserWaitUntil } from './browser-tool.js';
+import type { ProjectTrustDecision, ProjectTrustReader } from '../trust/project-trust-store';
+import type { BrowserConnectFn, BrowserPageSeam, BrowserToolOptions, BrowserWaitUntil } from './browser-tool';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

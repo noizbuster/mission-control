@@ -1,12 +1,12 @@
 // allow: SIZE_OK -- HEAD 446 -> current 472 pure LOC; one provider-turn retry and settlement state-machine regression matrix.
 import type { ProviderStreamChunk } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import { JsonlSessionEventStore } from '../memory/jsonl-session-event-store.js';
-import { projectSessionReplay } from '../session-replay.js';
-import { createDeterministicProvider } from './deterministic-provider.js';
-import { ProviderTurnRunner } from './provider-turn-runner.js';
-import { closeProviderChunkIterator } from './provider-turn-timeout.js';
-import type { ProviderAdapter } from './provider-turn-types.js';
+import { JsonlSessionEventStore } from '../memory/jsonl-session-event-store';
+import { projectSessionReplay } from '../session-replay';
+import { createDeterministicProvider } from './deterministic-provider';
+import { ProviderTurnRunner } from './provider-turn-runner';
+import { closeProviderChunkIterator } from './provider-turn-timeout';
+import type { ProviderAdapter } from './provider-turn-types';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

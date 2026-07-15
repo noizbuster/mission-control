@@ -13,9 +13,9 @@
  */
 import type { ProtocolError } from '@mission-control/protocol';
 import { z } from 'zod';
-import type { Skill } from '../skills/skill-loader.js';
-import type { ToolRegistry } from './tool-registry.js';
-import { type ToolAdvertisement, ToolExecutionError, type ToolRegistration } from './tool-registry-types.js';
+import type { Skill } from '../skills/skill-loader';
+import type { ToolRegistry } from './tool-registry';
+import { type ToolAdvertisement, ToolExecutionError, type ToolRegistration } from './tool-registry-types';
 import { readFile } from 'node:fs/promises';
 
 export const SKILL_TOOL_NAME = 'skill';

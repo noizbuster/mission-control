@@ -1,21 +1,21 @@
 import type { AgentDefinition, PolicyEffectRule } from '@mission-control/protocol';
-import { JOB_TOOL_NAME } from '../tools/job-tool.js';
-import type { ChildSpawnRequest } from '../tools/task/task-tool.js';
-import { TASK_TOOL_NAME } from '../tools/task-tool.js';
-import { ToolRegistry } from '../tools/tool-registry.js';
-import { ToolExecutionError } from '../tools/tool-registry-types.js';
-import { createYieldToolRegistration } from '../tools/yield-tool/yield-tool.js';
-import type { AgentIndex } from './agent-registry.js';
-import { hasHardDroppedCapability } from './child-graph-spawn.js';
+import { JOB_TOOL_NAME } from '../tools/job-tool';
+import type { ChildSpawnRequest } from '../tools/task/task-tool';
+import { TASK_TOOL_NAME } from '../tools/task-tool';
+import { ToolRegistry } from '../tools/tool-registry';
+import { ToolExecutionError } from '../tools/tool-registry-types';
+import { createYieldToolRegistration } from '../tools/yield-tool/yield-tool';
+import type { AgentIndex } from './agent-registry';
+import { hasHardDroppedCapability } from './child-graph-spawn';
 import {
     createChildToolInvocationPolicy,
     isCategoryToolAllowed,
     isToolDeniedForEveryResource,
-} from './child-tool-permissions.js';
-import type { ModelPattern } from './model-resolver.js';
-import { deriveChildPathPolicies } from './path-policy-derive.js';
-import { canSpawn } from './spawn-policy.js';
-import { buildChildSystemPrompt } from './spawn-prompt-builder.js';
+} from './child-tool-permissions';
+import type { ModelPattern } from './model-resolver';
+import { deriveChildPathPolicies } from './path-policy-derive';
+import { canSpawn } from './spawn-policy';
+import { buildChildSystemPrompt } from './spawn-prompt-builder';
 import { createHash } from 'node:crypto';
 
 export type PreparedChildSpawnAuthority = {

@@ -12,12 +12,12 @@
  * diagnostics and are skipped.
  */
 import { type AgentDefinition, type AgentSource } from '@mission-control/protocol';
-import { defaultReadOnlyRepoToolDenylist, toPosixPath } from '../tools/read-tools-paths.js';
-import { AgentParseError, parseAgentFile } from './agent-parser.js';
-import { BUNDLED_AGENT_TEMPLATES } from './bundled/index.js';
-import { CapabilityRegistry } from './capability/index.js';
-import type { AgentPluginProvider, LoadContext } from './capability/types.js';
-import { registerBuiltinProviders } from './providers/index.js';
+import { defaultReadOnlyRepoToolDenylist, toPosixPath } from '../tools/read-tools-paths';
+import { AgentParseError, parseAgentFile } from './agent-parser';
+import { BUNDLED_AGENT_TEMPLATES } from './bundled/index';
+import { CapabilityRegistry } from './capability/index';
+import type { AgentPluginProvider, LoadContext } from './capability/types';
+import { registerBuiltinProviders } from './providers/index';
 import type { Dirent } from 'node:fs';
 import { lstat, readdir, readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createAbgEmitSignal, resetEmitSequence } from './abg-emit.js';
+import { createAbgEmitSignal, resetEmitSequence } from './abg-emit';
 
 const baseInput = {
     nodeId: 'llm-actor',

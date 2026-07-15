@@ -1,7 +1,7 @@
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { type CommandExecutionRequest, type CommandExecutionResult, registerCommandRunTool } from './command-run.js';
-import { ToolRegistry } from './tool-registry.js';
+import { type CommandExecutionRequest, type CommandExecutionResult, registerCommandRunTool } from './command-run';
+import { ToolRegistry } from './tool-registry';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

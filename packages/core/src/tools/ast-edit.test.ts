@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import type { NativeAstReplaceChange } from '../native/natives-client.js';
-import { type AstRewriteFn, createAstEditToolRegistration } from './ast-edit.js';
-import { type AstEditOutput, astEditInputSchema } from './ast-edit-schemas.js';
-import { StagedPreviewRegistry } from './staged-preview-registry.js';
-import { ToolRegistry } from './tool-registry.js';
+import type { NativeAstReplaceChange } from '../native/natives-client';
+import { type AstRewriteFn, createAstEditToolRegistration } from './ast-edit';
+import { type AstEditOutput, astEditInputSchema } from './ast-edit-schemas';
+import { StagedPreviewRegistry } from './staged-preview-registry';
+import { ToolRegistry } from './tool-registry';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

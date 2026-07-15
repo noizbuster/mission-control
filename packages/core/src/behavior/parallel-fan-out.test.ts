@@ -1,8 +1,8 @@
 import type { AbgNodeSpec, AbgSignal } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { createBlackboard } from '../memory/blackboard.js';
-import { collectSignals, createCompositeNodeTestContext } from './composite-node-test-helpers.js';
-import { type AbgNodeRunContext, createDefaultAbgNodeRegistry, runAbgNode } from './node-registry.js';
+import { createBlackboard } from '../memory/blackboard';
+import { collectSignals, createCompositeNodeTestContext } from './composite-node-test-helpers';
+import { type AbgNodeRunContext, createDefaultAbgNodeRegistry, runAbgNode } from './node-registry';
 
 function fanOutContext() {
     return { ...createCompositeNodeTestContext(), blackboard: createBlackboard() };

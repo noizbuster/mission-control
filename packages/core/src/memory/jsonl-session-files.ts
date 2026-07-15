@@ -1,8 +1,8 @@
 import type { AgentEventEnvelope } from '@mission-control/protocol';
-import { SessionEventLog } from '../session-log.js';
-import { type DataDirResolutionOptions, resolveMissionControlDataDir } from './data-dir.js';
-import { JsonlSessionEventStoreError, jsonlStoreError } from './jsonl-errors.js';
-import { createJsonlSessionLogHeader, parseJsonlSessionLog, serializeJsonlRecord } from './jsonl-session-records.js';
+import { SessionEventLog } from '../session-log';
+import { type DataDirResolutionOptions, resolveMissionControlDataDir } from './data-dir';
+import { JsonlSessionEventStoreError, jsonlStoreError } from './jsonl-errors';
+import { createJsonlSessionLogHeader, parseJsonlSessionLog, serializeJsonlRecord } from './jsonl-session-records';
 import { type FileHandle, mkdir, open, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 

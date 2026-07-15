@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { openLocalLibsqlDb, runLocalLibsqlWrite } from '../db/local-libsql-db.js';
-import { runEvent } from '../session-replay-coding-test-support.js';
+import { openLocalLibsqlDb, runLocalLibsqlWrite } from '../db/local-libsql-db';
+import { runEvent } from '../session-replay-coding-test-support';
 import {
     cleanupSqliteSessionEventStoreTestDirs,
     createSqliteSessionEventStoreTestDbUrl,
     openSqliteSessionEventStoreForTests,
     sessionStartedEvent,
     taskCompletedEvent,
-} from './sqlite-session-event-store-test-support.js';
+} from './sqlite-session-event-store-test-support';
 
 afterEach(cleanupSqliteSessionEventStoreTestDirs);
 

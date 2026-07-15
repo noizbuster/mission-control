@@ -20,9 +20,9 @@
 import type { AgentEvent, ProtocolError, ToolResultStatus } from '@mission-control/protocol';
 import type { JSONSchema7, Tool } from 'ai';
 import { jsonSchema, tool } from 'ai';
-import type { SessionControlEpoch } from '../../../runtime/session-control-cancellation.js';
-import type { ToolRegistry } from '../../../tools/tool-registry.js';
-import type { ToolAdvertisement, ToolInvocationSettlement } from '../../../tools/tool-registry-types.js';
+import type { SessionControlEpoch } from '../../../runtime/session-control-cancellation';
+import type { ToolRegistry } from '../../../tools/tool-registry';
+import type { ToolAdvertisement, ToolInvocationSettlement } from '../../../tools/tool-registry-types';
 
 export class AbgToolBridgeError extends Error {
     constructor(message: string) {

@@ -8,22 +8,22 @@
  * attempted providers are collected and redacted from the final output so no
  * API key ever leaks into results, answers, or error messages.
  */
-import { createSecretRedactor } from './mcp/secret-redaction.js';
+import { createSecretRedactor } from './mcp/secret-redaction';
 import {
     allWebSearchProviders,
     resolveInput,
     resolveProviderChain,
     type WebSearchProvider,
-} from './web-search-providers.js';
+} from './web-search-providers';
 import type {
     WebSearchInput,
     WebSearchOutput,
     WebSearchProviderId,
     WebSearchProviderPreference,
     WebSearchResult,
-} from './web-search-schemas.js';
+} from './web-search-schemas';
 
-export type { WebSearchProviderId } from './web-search-schemas.js';
+export type { WebSearchProviderId } from './web-search-schemas';
 
 const WEB_SEARCH_TIMEOUT_MS = 25_000;
 

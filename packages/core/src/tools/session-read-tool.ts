@@ -6,8 +6,8 @@ import {
     type SessionMessageEntry,
     type SessionToolsOptions,
     summarizeProjection,
-} from './session-tools-shared.js';
-import type { ToolRegistration } from './tool-registry-types.js';
+} from './session-tools-shared';
+import type { ToolRegistration } from './tool-registry-types';
 
 const OUTPUT_LIMIT_CHARS = 8000;
 const DEFAULT_MESSAGE_LIMIT = 200;

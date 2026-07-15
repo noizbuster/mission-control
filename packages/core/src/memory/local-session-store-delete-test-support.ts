@@ -1,11 +1,11 @@
-import { openLocalLibsqlDb } from '../db/local-libsql-db.js';
-import { localSessionDbUrl } from './local-session-store.js';
-import { CREATED_AT } from './local-session-store-test-support.js';
+import { openLocalLibsqlDb } from '../db/local-libsql-db';
+import { localSessionDbUrl } from './local-session-store';
+import { CREATED_AT } from './local-session-store-test-support';
 
 export {
     type SessionReferenceCounts,
     sessionReferenceCounts,
-} from './local-session-store-delete-counts-test-support.js';
+} from './local-session-store-delete-counts-test-support';
 
 type SessionScopedRowsInput = {
     readonly dataDir: string;

@@ -1,5 +1,5 @@
-import { resolveMissionControlDataDir } from '../../memory/data-dir.js';
-import type { ObservabilityRedactor } from '../../providers/observability-redactor.js';
+import { resolveMissionControlDataDir } from '../../memory/data-dir';
+import type { ObservabilityRedactor } from '../../providers/observability-redactor';
 
 export type MissionRunStoreLocation =
     | string

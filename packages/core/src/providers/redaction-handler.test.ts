@@ -1,11 +1,11 @@
 import type { ProviderStreamChunk } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import { JsonlSessionEventStore } from '../memory/jsonl-session-event-store.js';
-import { parseJsonlSessionLog } from '../memory/jsonl-session-records.js';
-import { projectSessionReplay } from '../session-replay.js';
-import { redactCredentialText } from './credential-resolver.js';
-import { ProviderTurnRunner } from './provider-turn-runner.js';
-import type { ProviderAdapter } from './provider-turn-types.js';
+import { JsonlSessionEventStore } from '../memory/jsonl-session-event-store';
+import { parseJsonlSessionLog } from '../memory/jsonl-session-records';
+import { projectSessionReplay } from '../session-replay';
+import { redactCredentialText } from './credential-resolver';
+import { ProviderTurnRunner } from './provider-turn-runner';
+import type { ProviderAdapter } from './provider-turn-types';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

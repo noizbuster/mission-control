@@ -1,9 +1,9 @@
 import type { Client } from '@libsql/client';
 import { AgentEventEnvelopeSchema } from '@mission-control/protocol';
 import { z } from 'zod';
-import { openLocalLibsqlDb } from '../db/local-libsql-db.js';
-import { SESSION_ID } from './session-stop-projection-events-test-support.js';
-import { SqliteSessionEventStore } from './sqlite-session-event-store.js';
+import { openLocalLibsqlDb } from '../db/local-libsql-db';
+import { SESSION_ID } from './session-stop-projection-events-test-support';
+import { SqliteSessionEventStore } from './sqlite-session-event-store';
 
 const sessionRowSchema = z.object({ status: z.string(), metadata_json: z.string() });
 const inputRowSchema = z.object({ input_id: z.string(), status: z.string() });

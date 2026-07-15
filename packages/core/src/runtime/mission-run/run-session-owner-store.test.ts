@@ -1,8 +1,8 @@
 import { RunSchema } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { makeTempRoot, seedOmoRoot } from './mission-run-test-support.js';
-import { attachRunSessionOwner, settleRunSessionOwner } from './run-session-owner-store.js';
-import { createRun, readRun, updateRunStatus } from './run-store.js';
+import { makeTempRoot, seedOmoRoot } from './mission-run-test-support';
+import { attachRunSessionOwner, settleRunSessionOwner } from './run-session-owner-store';
+import { createRun, readRun, updateRunStatus } from './run-store';
 
 describe('Run session owner attachment', () => {
     it.each([

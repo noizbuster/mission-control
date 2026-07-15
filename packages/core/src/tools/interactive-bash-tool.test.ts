@@ -7,8 +7,8 @@ import {
     type InteractiveBashOutput,
     isTmuxAvailable,
     tokenizeTmuxCommand,
-} from './interactive-bash-tool.js';
-import { type ToolInvocationSettlement, ToolRegistry } from './tool-registry.js';
+} from './interactive-bash-tool';
+import { type ToolInvocationSettlement, ToolRegistry } from './tool-registry';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -50,7 +50,7 @@ describe('interactive_bash tool', () => {
 
         it('registers nothing when tmux absent via registerInteractiveBashTool', async () => {
             const registry = new ToolRegistry();
-            const { registerInteractiveBashTool } = await import('./interactive-bash-tool.js');
+            const { registerInteractiveBashTool } = await import('./interactive-bash-tool');
             const advertisement = await registerInteractiveBashTool(registry, {
                 workspaceRoot: await tempRoot(),
                 requestPermission: allowPermission,

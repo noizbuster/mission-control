@@ -6,17 +6,17 @@ import type {
     PermissionRequest,
     ToolCall,
 } from '@mission-control/protocol';
-import type { DesktopApprovalEffectOutcome } from './desktop-approval-effect.js';
-import { sessionEvent, toolFailed } from './desktop-tool-approval-events.js';
+import type { DesktopApprovalEffectOutcome } from './desktop-approval-effect';
+import { sessionEvent, toolFailed } from './desktop-tool-approval-events';
 import {
     type CommandExecutionRequest,
     type CommandExecutionResult,
     registerCommandRunTool,
-} from './tools/command-run.js';
-import { registerFileEditTool } from './tools/file-edit.js';
-import { registerFilePatchTool } from './tools/file-patch.js';
-import { registerFileWriteTool } from './tools/file-write.js';
-import { ToolRegistry } from './tools/tool-registry.js';
+} from './tools/command-run';
+import { registerFileEditTool } from './tools/file-edit';
+import { registerFilePatchTool } from './tools/file-patch';
+import { registerFileWriteTool } from './tools/file-write';
+import { ToolRegistry } from './tools/tool-registry';
 
 export async function executeApprovedDesktopTool(input: {
     readonly append: (event: AgentEvent) => Promise<void>;

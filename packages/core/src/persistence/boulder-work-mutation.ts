@@ -5,7 +5,7 @@ import {
     boulderFilePath,
     readBoulder,
     writeBoulder,
-} from './boulder-store.js';
+} from './boulder-store';
 import { type FileHandle, mkdir, open, rm } from 'node:fs/promises';
 import { dirname } from 'node:path';
 

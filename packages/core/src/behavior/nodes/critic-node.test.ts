@@ -1,12 +1,12 @@
 import type { AbgNodeSpec, AbgSignal } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { createBlackboard } from '../../memory/blackboard.js';
+import { createBlackboard } from '../../memory/blackboard';
 import {
     aggregateCriticEvaluation,
     type CriticEvaluationVerdict,
     normalizeEvaluationInput,
     runCriticNode,
-} from './critic-node.js';
+} from './critic-node';
 
 const NOW = '2026-06-16T00:00:00.000Z';
 

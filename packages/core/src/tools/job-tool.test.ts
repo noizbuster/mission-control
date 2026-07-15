@@ -2,14 +2,14 @@
 import type { AgentDefinition } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { AgentIndex } from '../agents/agent-registry.js';
-import type { JobExecuteFn } from '../agents/async-job-manager.js';
-import { AsyncJobManager } from '../agents/async-job-manager.js';
-import { ConcreteTaskToolRuntime } from '../agents/task-tool-runtime.js';
-import { createJobToolRegistration, JOB_TOOL_NAME, jobInputSchema } from './job-tool.js';
-import type { ChildSpawnRequest } from './task/task-tool.js';
-import { ToolRegistry } from './tool-registry.js';
-import type { ToolAdvertisement, ToolRegistration } from './tool-registry-types.js';
+import { AgentIndex } from '../agents/agent-registry';
+import type { JobExecuteFn } from '../agents/async-job-manager';
+import { AsyncJobManager } from '../agents/async-job-manager';
+import { ConcreteTaskToolRuntime } from '../agents/task-tool-runtime';
+import { createJobToolRegistration, JOB_TOOL_NAME, jobInputSchema } from './job-tool';
+import type { ChildSpawnRequest } from './task/task-tool';
+import { ToolRegistry } from './tool-registry';
+import type { ToolAdvertisement, ToolRegistration } from './tool-registry-types';
 
 type Empty = Record<string, never>;
 

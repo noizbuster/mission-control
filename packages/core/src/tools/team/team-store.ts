@@ -34,7 +34,7 @@ import {
     type TeamTask,
     taskListSchema,
     teamStateSchema,
-} from './team-schemas.js';
+} from './team-schemas';
 import { randomUUID } from 'node:crypto';
 import { mkdir, open, opendir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';

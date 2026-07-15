@@ -8,7 +8,7 @@
  * `better-sqlite3` adapter (and its ambient module declaration) into consuming
  * TypeScript programs.
  */
-import type { MemoryEntry, MemoryQuery } from './persistent-memory-store.js';
+import type { MemoryEntry, MemoryQuery } from './persistent-memory-store';
 
 /** JSON-serialize a value; non-serializable values fall back to a String() envelope. */
 export function serializeValue(value: unknown): string {

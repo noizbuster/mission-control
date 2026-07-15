@@ -4,25 +4,25 @@ import {
     type AnthropicMessagesTransport,
     createAnthropicMessagesProvider,
     createNodeAnthropicMessagesTransport,
-} from './anthropic/anthropic-messages-provider.js';
-import { type ProviderCredentialResolver } from './credential-resolver.js';
+} from './anthropic/anthropic-messages-provider';
+import { type ProviderCredentialResolver } from './credential-resolver';
 import {
     createGeminiGenerateContentProvider,
     createNodeGeminiGenerateContentTransport,
     type GeminiGenerateContentTransport,
-} from './google/gemini-generate-content-provider.js';
-import { createLocalCodingProvider } from './local-coding-provider.js';
+} from './google/gemini-generate-content-provider';
+import { createLocalCodingProvider } from './local-coding-provider';
 import {
     createNodeOpenAIResponsesTransport,
     createOpenAIResponsesProvider,
     type OpenAIResponsesTransport,
-} from './openai/openai-responses-provider.js';
+} from './openai/openai-responses-provider';
 import {
     createNodeOpenAICompatibleTransport,
     createOpenAICompatibleProvider,
     type OpenAICompatibleTransport,
-} from './openai-compatible/openai-compatible-provider.js';
-import type { ProviderAdapter } from './provider-turn-types.js';
+} from './openai-compatible/openai-compatible-provider';
+import type { ProviderAdapter } from './provider-turn-types';
 
 export type ProviderFactoryTransports = {
     readonly openAIResponses?: OpenAIResponsesTransport;

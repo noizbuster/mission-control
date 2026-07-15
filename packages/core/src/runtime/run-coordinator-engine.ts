@@ -7,31 +7,31 @@ import type {
     RunCoordinatorEventMetadata,
     RunCoordinatorState,
 } from '@mission-control/protocol';
-import { SessionAdmissionService } from '../session-admission-service.js';
-import { interruptActiveRun, statusFromActiveRun } from './run-coordinator-active-run.js';
-import * as runAdmission from './run-coordinator-admission.js';
+import { SessionAdmissionService } from '../session-admission-service';
+import { interruptActiveRun, statusFromActiveRun } from './run-coordinator-active-run';
+import * as runAdmission from './run-coordinator-admission';
 import {
     type BlockedRunSnapshot,
     type DrainCommand,
     drainCoordinatorRun,
     findResumableBlockedRun,
-} from './run-coordinator-drain.js';
-import { RunCoordinatorIdSequence } from './run-coordinator-ids.js';
+} from './run-coordinator-drain';
+import { RunCoordinatorIdSequence } from './run-coordinator-ids';
 import {
     type RunCoordinatorActiveRun,
     type RunCoordinatorProviderTurnResult,
     type RunCoordinatorResult,
     type RunCoordinatorRunEventType,
-} from './run-coordinator-lifecycle.js';
-import { readRunCoordinatorMessages } from './run-coordinator-messages.js';
+} from './run-coordinator-lifecycle';
+import { readRunCoordinatorMessages } from './run-coordinator-messages';
 import {
     appendRunCoordinatorEnvelope,
     type RunCoordinatorPromptInput,
     type RunCoordinatorTurnContext,
     type SessionRunCoordinatorOptions,
-} from './run-coordinator-types.js';
-import type { SessionControlAttachment, SessionControlStopContext } from './session-control-host.js';
-import { appendFencedSessionStopEvent } from './session-stop-event-writer.js';
+} from './run-coordinator-types';
+import type { SessionControlAttachment, SessionControlStopContext } from './session-control-host';
+import { appendFencedSessionStopEvent } from './session-stop-event-writer';
 
 export class SessionRunCoordinator {
     private readonly options: SessionRunCoordinatorOptions;

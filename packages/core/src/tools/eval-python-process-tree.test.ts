@@ -4,7 +4,7 @@ import {
     type ProcessTreeCommandRunFn,
     PythonProcessTreeTerminationError,
     pythonSpawnOptionsFor,
-} from './eval-python-kernel.js';
+} from './eval-python-kernel';
 
 describe('Python eval process-tree lifecycle', () => {
     it('creates a detached process group for POSIX kernels', () => {

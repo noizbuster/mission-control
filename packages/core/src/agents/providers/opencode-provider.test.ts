@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { LoadContext } from '../capability/types.js';
-import { opencodeProvider } from './opencode-provider.js';
+import type { LoadContext } from '../capability/types';
+import { opencodeProvider } from './opencode-provider';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { WorkflowRegistry } from '../workflows/workflow-registry.js';
-import { PluginManager } from './plugin-manager.js';
+import { WorkflowRegistry } from '../workflows/workflow-registry';
+import { PluginManager } from './plugin-manager';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -163,7 +163,7 @@ describe('PluginManager integration', () => {
     });
 
     it('skill dirs from plugins integrate with discoverSkills additionalSkillDirs', async () => {
-        const { discoverSkills } = await import('../skills/skill-loader.js');
+        const { discoverSkills } = await import('../skills/skill-loader');
         await createTestPlugin(tempHome);
 
         const manager = new PluginManager({ pluginHome: tempHome });
@@ -187,7 +187,7 @@ describe('PluginManager integration', () => {
     });
 
     it('workflow dirs from plugins integrate with discoverWorkflows additionalWorkflowDirs', async () => {
-        const { discoverWorkflows } = await import('../workflows/workflow-loader.js');
+        const { discoverWorkflows } = await import('../workflows/workflow-loader');
         await createTestPlugin(tempHome);
 
         const manager = new PluginManager({ pluginHome: tempHome });

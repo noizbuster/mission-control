@@ -1,6 +1,6 @@
 import type { ProviderStreamChunk } from '@mission-control/protocol';
-import type { SessionControlEpoch } from '../runtime/session-control-cancellation.js';
-import { ProviderTurnError } from './provider-turn-types.js';
+import type { SessionControlEpoch } from '../runtime/session-control-cancellation';
+import { ProviderTurnError } from './provider-turn-types';
 
 export type ProviderChunkIterator = AsyncIterator<ProviderStreamChunk>;
 

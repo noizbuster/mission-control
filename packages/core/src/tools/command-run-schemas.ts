@@ -1,9 +1,9 @@
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { z } from 'zod';
-import { redactCredentialText } from '../providers/credential-resolver.js';
-import { truncateToValidUtf8Boundary } from '../providers/stream-decoder.js';
-import type { CommandExecutionRequest, CommandExecutionResult } from './command-run-executor.js';
-import type { CommandRunPolicyProfile } from './command-run-policy.js';
+import { redactCredentialText } from '../providers/credential-resolver';
+import { truncateToValidUtf8Boundary } from '../providers/stream-decoder';
+import type { CommandExecutionRequest, CommandExecutionResult } from './command-run-executor';
+import type { CommandRunPolicyProfile } from './command-run-policy';
 
 export const commandRunInputSchema = z
     .object({

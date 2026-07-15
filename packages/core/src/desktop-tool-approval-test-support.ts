@@ -1,13 +1,13 @@
 import { defaultModelProviderSelection } from '@mission-control/config';
 import type { AgentEvent, ApprovalRecord, ToolCall } from '@mission-control/protocol';
-import { fixedNow } from './desktop-session-commands-test-support.js';
-import type { DesktopApprovalSettlementOptions, DesktopApprovalStore } from './desktop-tool-approvals.js';
+import { fixedNow } from './desktop-session-commands-test-support';
+import type { DesktopApprovalSettlementOptions, DesktopApprovalStore } from './desktop-tool-approvals';
 
-export { createDeferred, type Deferred } from './desktop-tool-approval-async-test-support.js';
+export { createDeferred, type Deferred } from './desktop-tool-approval-async-test-support';
 export {
     createMemoryApprovalStore,
     type MemoryApprovalStore,
-} from './desktop-tool-approval-memory-store-test-support.js';
+} from './desktop-tool-approval-memory-store-test-support';
 
 export function approvalDecision(sessionId: string, approvalId: string, reason: string) {
     return { sessionId, approvalId, state: 'approved' as const, reason };

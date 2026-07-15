@@ -1,11 +1,11 @@
-import type { ObservabilityRedactor } from '../providers/observability-redactor.js';
-import { BrowserConnectionManager } from './browser-tool-connection-manager.js';
-import type { BrowserInput, BrowserOutput } from './browser-tool-contract.js';
-import { redactBrowserToolError } from './browser-tool-error-redaction.js';
-import { browserFailure, browserOutput, capScreenshot } from './browser-tool-output.js';
-import type { BrowserPageSeam } from './browser-tool-puppeteer.js';
-import { ToolExecutionError } from './tool-registry-types.js';
-import { truncateOutput } from './truncate.js';
+import type { ObservabilityRedactor } from '../providers/observability-redactor';
+import { BrowserConnectionManager } from './browser-tool-connection-manager';
+import type { BrowserInput, BrowserOutput } from './browser-tool-contract';
+import { redactBrowserToolError } from './browser-tool-error-redaction';
+import { browserFailure, browserOutput, capScreenshot } from './browser-tool-output';
+import type { BrowserPageSeam } from './browser-tool-puppeteer';
+import { ToolExecutionError } from './tool-registry-types';
+import { truncateOutput } from './truncate';
 
 type BrowserPageActionOptions = {
     readonly maxModelOutputChars: number;

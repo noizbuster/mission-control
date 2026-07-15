@@ -1,7 +1,7 @@
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import { type FilePatchToolOptions, registerFilePatchTool } from './file-patch.js';
-import { ToolRegistry } from './tool-registry.js';
+import { type FilePatchToolOptions, registerFilePatchTool } from './file-patch';
+import { ToolRegistry } from './tool-registry';
 import { execFile } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

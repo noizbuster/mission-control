@@ -15,8 +15,8 @@
  */
 
 import type { AbgNodeSpec, AbgSignal } from '@mission-control/protocol';
-import { createAbgEmitSignal } from '../abg-emit.js';
-import type { AbgNodeRunContext } from '../node-registry.js';
+import { createAbgEmitSignal } from '../abg-emit';
+import type { AbgNodeRunContext } from '../node-registry';
 
 export async function* runHumanApprovalNode(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
     yield {

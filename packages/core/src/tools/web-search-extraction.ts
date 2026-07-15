@@ -13,7 +13,7 @@
  * mismatch. The NativesClient is injectable so tests exercise extraction
  * without the native addon.
  */
-import type { NativesClient } from '../native/natives-client.js';
+import type { NativesClient } from '../native/natives-client';
 
 const EXTRACTION_TIMEOUT_MS = 15_000;
 const MAX_EXTRACT_CHARS = 20_000;

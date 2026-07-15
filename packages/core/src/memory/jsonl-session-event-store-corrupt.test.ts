@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { JsonlSessionEventStore, JsonlSessionEventStoreError } from './jsonl-session-event-store.js';
-import { createTempDataDir } from './jsonl-session-event-store-test-support.js';
+import { JsonlSessionEventStore, JsonlSessionEventStoreError } from './jsonl-session-event-store';
+import { createTempDataDir } from './jsonl-session-event-store-test-support';
 import { appendFile } from 'node:fs/promises';
 import { join } from 'node:path';
 

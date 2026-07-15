@@ -1,8 +1,8 @@
 import type { Client } from '@libsql/client';
 import type { AgentEventEnvelope } from '@mission-control/protocol';
-import { refreshSessionAwaitingFromPendingWaits } from './session-awaiting-sql.js';
-import { deriveSessionProjectionRecordsFromEnvelopes } from './session-projection.js';
-import { replaceStatements } from './sqlite-session-projection-statements.js';
+import { refreshSessionAwaitingFromPendingWaits } from './session-awaiting-sql';
+import { deriveSessionProjectionRecordsFromEnvelopes } from './session-projection';
+import { replaceStatements } from './sqlite-session-projection-statements';
 
 export async function replaceSqliteSessionProjection(input: {
     readonly client: Client;

@@ -1,10 +1,10 @@
 import type { ProviderStreamChunk } from '@mission-control/protocol';
-import { type OpenAIResponsesErrorRedactor, protocolErrorFromOpenAIError } from './openai-responses-errors.js';
+import { type OpenAIResponsesErrorRedactor, protocolErrorFromOpenAIError } from './openai-responses-errors';
 import {
     parseOpenAIFunctionCallItem,
     parseOpenAIMessageOutputText,
     parseOpenAIResponsesStreamEvent,
-} from './openai-responses-events.js';
+} from './openai-responses-events';
 import {
     completeToolCall,
     completeToolCallsFromResponseOutput,
@@ -15,7 +15,7 @@ import {
     providerToolCallMessageFields,
     rememberFunctionCall,
     requireToolCallState,
-} from './openai-responses-tool-calls.js';
+} from './openai-responses-tool-calls';
 
 export { createOpenAIResponsesMappingState, type OpenAIResponsesMappingState };
 

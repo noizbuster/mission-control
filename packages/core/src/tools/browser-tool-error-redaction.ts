@@ -1,6 +1,6 @@
 import type { AgentEvent } from '@mission-control/protocol';
-import { type ObservabilityRedactor, redactAgentEventForObservability } from '../providers/observability-redactor.js';
-import { ToolExecutionError } from './tool-registry-types.js';
+import { type ObservabilityRedactor, redactAgentEventForObservability } from '../providers/observability-redactor';
+import { ToolExecutionError } from './tool-registry-types';
 
 export function redactBrowserToolError(
     error: ToolExecutionError,

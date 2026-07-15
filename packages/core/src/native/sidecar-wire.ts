@@ -1,5 +1,5 @@
 import { type AgentEvent, type SidecarWireResponse, SidecarWireResponseSchema } from '@mission-control/protocol';
-import { SidecarProtocolError } from './sidecar-errors.js';
+import { SidecarProtocolError } from './sidecar-errors';
 
 export function normalizeSidecarLine(line: string, sessionId?: string): AgentEvent {
     return sidecarResponseToAgentEvent(parseSidecarWireResponse(line), sessionId);

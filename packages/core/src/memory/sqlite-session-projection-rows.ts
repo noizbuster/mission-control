@@ -5,7 +5,7 @@ export {
     runRecordFromRow,
     sessionRecordFromRow,
     toolRecordFromRow,
-} from './sqlite-session-projection-row-decoders.js';
+} from './sqlite-session-projection-row-decoders';
 export {
     approvalRowSchema,
     diagnosticRowSchema,
@@ -13,4 +13,4 @@ export {
     runRowSchema,
     sessionRowSchema,
     toolRowSchema,
-} from './sqlite-session-projection-row-schemas.js';
+} from './sqlite-session-projection-row-schemas';

@@ -1,6 +1,6 @@
 import type { AbgGraphSnapshot, AgentEvent, AgentSession, AgentSnapshot } from '@mission-control/protocol';
-import { deriveAbgGraphSnapshot } from './behavior/graph-state.js';
-import { type AbgTimelineEntry, projectAbgTimeline } from './behavior/timeline.js';
+import { deriveAbgGraphSnapshot } from './behavior/graph-state';
+import { type AbgTimelineEntry, projectAbgTimeline } from './behavior/timeline';
 
 export class SessionEventLog {
     private readonly events: AgentEvent[] = [];

@@ -1,9 +1,9 @@
 import type { AgentMessage, ProviderStreamChunk, ToolDefinition } from '@mission-control/protocol';
-import type { ProviderTurnRequest } from '../provider-turn-types.js';
+import type { ProviderTurnRequest } from '../provider-turn-types';
 import type {
     GeminiGenerateContentTransport,
     GeminiGenerateContentTransportRequest,
-} from './gemini-generate-content-provider.js';
+} from './gemini-generate-content-provider';
 
 export function geminiCredential(providerID: string, apiKey: string) {
     return {

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { WorkflowRegistry } from '../workflows/workflow-registry.js';
-import { discoverPlugins, loadPluginManifest } from './plugin-loader.js';
-import { PluginManager } from './plugin-manager.js';
-import { ensurePluginDirs, resolvePluginDir, resolvePluginHome } from './plugin-paths.js';
+import { WorkflowRegistry } from '../workflows/workflow-registry';
+import { discoverPlugins, loadPluginManifest } from './plugin-loader';
+import { PluginManager } from './plugin-manager';
+import { ensurePluginDirs, resolvePluginDir, resolvePluginHome } from './plugin-paths';
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

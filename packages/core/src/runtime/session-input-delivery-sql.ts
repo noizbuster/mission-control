@@ -1,15 +1,15 @@
 import type { Delivery } from '@mission-control/protocol';
 import { z } from 'zod';
-import { type LocalLibsqlDb, runLocalLibsqlWrite } from '../db/local-libsql-db.js';
-import { runLocalLibsqlClientTransaction } from '../db/local-libsql-transaction.js';
-import { openMissionControlDb } from '../db/mission-control-db.js';
+import { type LocalLibsqlDb, runLocalLibsqlWrite } from '../db/local-libsql-db';
+import { runLocalLibsqlClientTransaction } from '../db/local-libsql-transaction';
+import { openMissionControlDb } from '../db/mission-control-db';
 import {
     ensurePublicSessionRow,
     persistSessionAwaiting,
     refreshSessionAwaitingFromPendingWaits,
-} from '../memory/session-awaiting-sql.js';
-import { deriveSessionLifecycleFromSql } from '../memory/session-lifecycle-sql-authorities.js';
-import type { SessionInputRecord } from './session-input-delivery.js';
+} from '../memory/session-awaiting-sql';
+import { deriveSessionLifecycleFromSql } from '../memory/session-lifecycle-sql-authorities';
+import type { SessionInputRecord } from './session-input-delivery';
 
 const inputStatusSchema = z.enum(['pending', 'admitted', 'promoted', 'cancelled']);
 type SqlSessionInputStatus = z.infer<typeof inputStatusSchema>;

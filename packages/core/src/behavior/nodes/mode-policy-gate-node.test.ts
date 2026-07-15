@@ -1,7 +1,7 @@
 import type { AbgSignal, PolicyEffectRule } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { PLANNER_READONLY_POLICIES } from '../planner-workflow-graph.js';
-import { runModePolicyGateNode } from './policy-gate-node.js';
+import { PLANNER_READONLY_POLICIES } from '../planner-workflow-graph';
+import { runModePolicyGateNode } from './policy-gate-node';
 
 type ModePolicyPayload = {
     readonly decision: string;

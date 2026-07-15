@@ -4,30 +4,30 @@ import {
     SessionOwnerControlRequestSchema,
     type SessionOwnerControlToken,
 } from '@mission-control/protocol';
-import { SessionControlFencedError, type SessionControlHost } from './session-control-host.js';
-import { preserveAuthenticatedSessionControlSocketDuringClose } from './session-control-registry-auth.js';
+import { SessionControlFencedError, type SessionControlHost } from './session-control-host';
+import { preserveAuthenticatedSessionControlSocketDuringClose } from './session-control-registry-auth';
 import {
     attachSessionOwnerControlFrameReader,
     encodeSessionOwnerControlFrame,
     parseSessionOwnerControlFrame,
-} from './session-owner-control-framing.js';
+} from './session-owner-control-framing';
 import {
     sessionOwnerControlErrorResponse,
     sessionOwnerControlRequestId,
     trackSessionOwnerControlStopResponse,
-} from './session-owner-control-response.js';
+} from './session-owner-control-response';
 import {
     createSessionOwnerControlToken,
     matchesSessionOwnerControlToken,
     SessionOwnerControlServerError,
-} from './session-owner-control-token.js';
+} from './session-owner-control-token';
 import {
     assertSessionOwnerControlAcquireMatches,
     finishSessionOwnerControlStopResponse,
     type SessionOwnerControlTokenState,
     waitForSessionOwnerControlStopResponses,
-} from './session-owner-control-token-state.js';
-import { SessionStopService } from './session-stop-service.js';
+} from './session-owner-control-token-state';
+import { SessionStopService } from './session-stop-service';
 import type { Duplex } from 'node:stream';
 
 export class SessionOwnerControlServer {

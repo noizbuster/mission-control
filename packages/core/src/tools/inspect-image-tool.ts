@@ -24,12 +24,12 @@ import {
     stripDataUriPrefix,
     type VisionFetchFn,
     type VisionImage,
-} from './look-at-tool.js';
-import { type ToolAdvertisement, ToolExecutionError, type ToolRegistration, ToolRegistry } from './tool-registry.js';
-import type { ToolExecutionContext } from './tool-registry-types.js';
-import { truncateOutput } from './truncate.js';
-import type { VisionProviderId } from './vision-schemas.js';
-import { visionCredentialHint } from './vision-schemas.js';
+} from './look-at-tool';
+import { type ToolAdvertisement, ToolExecutionError, type ToolRegistration, ToolRegistry } from './tool-registry';
+import type { ToolExecutionContext } from './tool-registry-types';
+import { truncateOutput } from './truncate';
+import type { VisionProviderId } from './vision-schemas';
+import { visionCredentialHint } from './vision-schemas';
 import { readFileSync, statSync } from 'node:fs';
 import { basename } from 'node:path';
 

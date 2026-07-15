@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { createObservabilityRedactor } from '../providers/observability-redactor.js';
-import { BrowserConnectionManager } from './browser-tool-connection-manager.js';
+import { createObservabilityRedactor } from '../providers/observability-redactor';
+import { BrowserConnectionManager } from './browser-tool-connection-manager';
 import {
     BROWSER_TOOL_DESCRIPTION,
     BROWSER_TOOL_GUIDELINE,
@@ -16,11 +16,11 @@ import {
     DEFAULT_PROTOCOL_TIMEOUT_MS,
     DEFAULT_VIEWPORT,
     type ResolvedBrowserToolOptions,
-} from './browser-tool-contract.js';
-import { runBrowserTool } from './browser-tool-execution.js';
-import { browserModelOutput } from './browser-tool-output.js';
-import { createPuppeteerCoreConnector } from './browser-tool-puppeteer.js';
-import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './tool-registry.js';
+} from './browser-tool-contract';
+import { runBrowserTool } from './browser-tool-execution';
+import { browserModelOutput } from './browser-tool-output';
+import { createPuppeteerCoreConnector } from './browser-tool-puppeteer';
+import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './tool-registry';
 
 export {
     type BrowserInput,
@@ -28,7 +28,7 @@ export {
     type BrowserToolOptions,
     browserInputSchema,
     browserOutputSchema,
-} from './browser-tool-contract.js';
+} from './browser-tool-contract';
 export {
     type BrowserConnectFn,
     type BrowserConnectionSeam,
@@ -36,7 +36,7 @@ export {
     type BrowserPageSeam,
     type BrowserWaitUntil,
     createPuppeteerCoreConnector,
-} from './browser-tool-puppeteer.js';
+} from './browser-tool-puppeteer';
 
 export type BrowserToolLifecycle = {
     readonly reset: () => Promise<void>;

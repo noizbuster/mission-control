@@ -7,7 +7,7 @@ import {
     recordToolTurn,
     turnSignatureFromActions,
     type ToolActionFingerprint,
-} from './loop-safety.js';
+} from './loop-safety';
 
 function action(
     toolName: string,

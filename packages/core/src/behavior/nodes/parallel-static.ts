@@ -1,6 +1,6 @@
 import type { AbgNodeSpec, AbgSignal } from '@mission-control/protocol';
-import type { AbgNodeRunContext } from '../node-registry.js';
-import { isFailureSignal, readPositiveIntConfig } from './composite-node-utils.js';
+import type { AbgNodeRunContext } from '../node-registry';
+import { isFailureSignal, readPositiveIntConfig } from './composite-node-utils';
 
 const DEFAULT_STATIC_PARALLEL_CONCURRENCY = 2;
 

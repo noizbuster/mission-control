@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { MAX_LEGACY_SOURCE_BYTES, readLegacySource } from './session-import-files.js';
+import { MAX_LEGACY_SOURCE_BYTES, readLegacySource } from './session-import-files';
 import { mkdtemp, rm, truncate, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

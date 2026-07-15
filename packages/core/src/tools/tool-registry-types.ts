@@ -1,7 +1,7 @@
 import type { Client } from '@libsql/client';
 import type { AgentEvent, ProtocolError, ToolDefinition, ToolResult } from '@mission-control/protocol';
 import { z } from 'zod';
-import type { SessionControlEpoch } from '../runtime/session-control-cancellation.js';
+import type { SessionControlEpoch } from '../runtime/session-control-cancellation';
 
 export const ToolRegistrationMetadataSchema = z
     .object({

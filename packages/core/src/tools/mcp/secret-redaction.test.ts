@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createSecretRedactor, MCP_REDACTED_SECRET } from './secret-redaction.js';
+import { createSecretRedactor, MCP_REDACTED_SECRET } from './secret-redaction';
 
 describe('createSecretRedactor', () => {
     it('redacts a known secret from a plain string', () => {

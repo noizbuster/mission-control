@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { fileWriteInputSchema } from '../tools/file-write-schemas.js';
-import { createFullParityTaskToolRegistration } from '../tools/task/task-tool.js';
-import { ToolRegistry } from '../tools/tool-registry.js';
-import { createChildToolInvocationPolicy } from './child-tool-permissions.js';
+import { fileWriteInputSchema } from '../tools/file-write-schemas';
+import { createFullParityTaskToolRegistration } from '../tools/task/task-tool';
+import { ToolRegistry } from '../tools/tool-registry';
+import { createChildToolInvocationPolicy } from './child-tool-permissions';
 import {
     advertisedChildToolNames,
     allowAllChildPermissions,
@@ -10,7 +10,7 @@ import {
     makePermissionAgent,
     makePermissionRequest,
     toolOutputSchema,
-} from './task-tool-runtime-permissions-test-support.js';
+} from './task-tool-runtime-permissions-test-support';
 
 describe('ConcreteTaskToolRuntime child permission enforcement', () => {
     it('removes inherited denies after the deep category allow even when parent tools execute permissively', async () => {

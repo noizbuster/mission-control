@@ -1,6 +1,6 @@
 import type { Client } from '@libsql/client';
-import type { LocalLibsqlWriteTarget } from './local-libsql-db.js';
-import type { LocalLibsqlWriteKey } from './local-libsql-identity.js';
+import type { LocalLibsqlWriteTarget } from './local-libsql-db';
+import type { LocalLibsqlWriteKey } from './local-libsql-identity';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 export const localDbWriteErrorCodes = ['write_lane_reentrant', 'client_quarantined'] as const;

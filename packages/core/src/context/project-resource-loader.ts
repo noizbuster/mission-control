@@ -1,5 +1,5 @@
-import { createWorkspaceGuard } from '../tools/read-tools-paths.js';
-import type { ProjectTrustDecision, ProjectTrustStore } from '../trust/project-trust-store.js';
+import { createWorkspaceGuard } from '../tools/read-tools-paths';
+import type { ProjectTrustDecision, ProjectTrustStore } from '../trust/project-trust-store';
 import { open } from 'node:fs/promises';
 
 export const defaultProjectResourcePaths = ['AGENTS.md', 'AGENTS.MD', 'CLAUDE.md', 'CLAUDE.MD'] as const;

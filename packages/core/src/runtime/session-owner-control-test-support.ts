@@ -1,9 +1,9 @@
-import { openLocalLibsqlDb } from '../db/local-libsql-db.js';
-import { openLocalSessionEventStore } from '../memory/local-session-store.js';
-import { SessionControlHost } from './session-control-host.js';
-import { resolvePosixSessionControlPaths } from './session-control-registry-paths.js';
-import { createPosixSessionOwnerControlClient } from './session-owner-control-client.js';
-import { resolveSessionStoreIdentity } from './session-store-identity.js';
+import { openLocalLibsqlDb } from '../db/local-libsql-db';
+import { openLocalSessionEventStore } from '../memory/local-session-store';
+import { SessionControlHost } from './session-control-host';
+import { resolvePosixSessionControlPaths } from './session-control-registry-paths';
+import { createPosixSessionOwnerControlClient } from './session-owner-control-client';
+import { resolveSessionStoreIdentity } from './session-store-identity';
 import { chmod, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

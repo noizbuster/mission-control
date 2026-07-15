@@ -1,11 +1,11 @@
 import type { PermissionRequest } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createNativesClient } from '../native/natives-client.js';
-import { registerReadOnlyRepoTools } from './read-tools.js';
-import { createWorkspaceGuard } from './read-tools-paths.js';
-import type { ReadOutput } from './read-tools-schemas.js';
-import { searchRepoText } from './read-tools-search.js';
-import { ToolRegistry } from './tool-registry.js';
+import { createNativesClient } from '../native/natives-client';
+import { registerReadOnlyRepoTools } from './read-tools';
+import { createWorkspaceGuard } from './read-tools-paths';
+import type { ReadOutput } from './read-tools-schemas';
+import { searchRepoText } from './read-tools-search';
+import { ToolRegistry } from './tool-registry';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

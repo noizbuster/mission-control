@@ -8,43 +8,43 @@ import type {
     PermissionDecision,
     PermissionRequest,
 } from '@mission-control/protocol';
-import { createCodingAgentGraph } from './behavior/coding-agent-graph.js';
-import { createCodingAgentNodeRegistry } from './behavior/coding-agent-registry.js';
-import { type DesktopApprovalEffectOutcome, type DesktopApprovalEffectRecord } from './desktop-approval-effect.js';
+import { createCodingAgentGraph } from './behavior/coding-agent-graph';
+import { createCodingAgentNodeRegistry } from './behavior/coding-agent-registry';
+import { type DesktopApprovalEffectOutcome, type DesktopApprovalEffectRecord } from './desktop-approval-effect';
 import {
     hasPendingDesktopApprovals,
     projectDesktopApprovalContinuationMessages,
-} from './desktop-approval-transcript.js';
+} from './desktop-approval-transcript';
 import {
     type DesktopApprovalDecisionInput,
     type DesktopApprovalStore,
     ensurePendingToolApprovalForCurrentBlockedRun,
     ensureRuntimeOwnedPermissionRequestForBlockedToolCall,
     settleDesktopApproval,
-} from './desktop-tool-approvals.js';
-import type { JsonlSessionEventIdFactory } from './memory/jsonl-session-event-store.js';
-import type { LocalSessionEventStore } from './memory/local-session-store.js';
-import { openLocalSessionEventStore } from './memory/local-session-store.js';
-import { wrapFlatProviderAsSdkModel } from './providers/ai-sdk/flat-provider-bridge.js';
-import { createObservabilityRedactor, type ObservabilityRedactor } from './providers/observability-redactor.js';
+} from './desktop-tool-approvals';
+import type { JsonlSessionEventIdFactory } from './memory/jsonl-session-event-store';
+import type { LocalSessionEventStore } from './memory/local-session-store';
+import { openLocalSessionEventStore } from './memory/local-session-store';
+import { wrapFlatProviderAsSdkModel } from './providers/ai-sdk/flat-provider-bridge';
+import { createObservabilityRedactor, type ObservabilityRedactor } from './providers/observability-redactor';
 import {
     createProviderAuthStoreCredentialResolver,
     createProviderAuthStoreObservabilityRedactor,
-} from './providers/provider-auth-resolver.js';
-import { createProviderAuthStore } from './providers/provider-auth-store.js';
-import { createProviderRouter } from './providers/provider-factory.js';
-import type { ProviderAdapter } from './providers/provider-turn-types.js';
-import { createGraphTurnRunner } from './runtime/graph-coordinator-turn.js';
-import type { RunCoordinatorPromptInput, RunCoordinatorReadMessages } from './runtime/run-coordinator.js';
-import type { RunCoordinatorTurnRunner } from './runtime/run-coordinator-types.js';
-import { type SessionRunOwner, type SessionRunOwnerReceipt, SessionRunOwnerRegistry } from './runtime/run-owner.js';
-import type { SessionControlHost } from './runtime/session-control-host.js';
-import type { CommandExecutionRequest, CommandExecutionResult } from './tools/command-run.js';
-import { registerCommandRunTool } from './tools/command-run.js';
-import { registerFileEditTool } from './tools/file-edit.js';
-import { registerFilePatchTool } from './tools/file-patch.js';
-import { registerFileWriteTool } from './tools/file-write.js';
-import { ToolRegistry } from './tools/tool-registry.js';
+} from './providers/provider-auth-resolver';
+import { createProviderAuthStore } from './providers/provider-auth-store';
+import { createProviderRouter } from './providers/provider-factory';
+import type { ProviderAdapter } from './providers/provider-turn-types';
+import { createGraphTurnRunner } from './runtime/graph-coordinator-turn';
+import type { RunCoordinatorPromptInput, RunCoordinatorReadMessages } from './runtime/run-coordinator';
+import type { RunCoordinatorTurnRunner } from './runtime/run-coordinator-types';
+import { type SessionRunOwner, type SessionRunOwnerReceipt, SessionRunOwnerRegistry } from './runtime/run-owner';
+import type { SessionControlHost } from './runtime/session-control-host';
+import type { CommandExecutionRequest, CommandExecutionResult } from './tools/command-run';
+import { registerCommandRunTool } from './tools/command-run';
+import { registerFileEditTool } from './tools/file-edit';
+import { registerFilePatchTool } from './tools/file-patch';
+import { registerFileWriteTool } from './tools/file-write';
+import { ToolRegistry } from './tools/tool-registry';
 
 export type DesktopPromptCommandInput = {
     readonly sessionId: string;

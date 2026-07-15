@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { JsonlSessionEventStore } from './jsonl-session-event-store.js';
+import { JsonlSessionEventStore } from './jsonl-session-event-store';
 import {
     createTempDataDir,
     envelopeSequence,
     readJsonlRecords,
     sessionStartedEvent,
     taskCompletedEvent,
-} from './jsonl-session-event-store-test-support.js';
+} from './jsonl-session-event-store-test-support';
 import { join } from 'node:path';
 
 describe('JsonlSessionEventStore replay and sequence', () => {

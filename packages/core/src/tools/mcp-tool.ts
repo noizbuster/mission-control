@@ -13,9 +13,9 @@
  * client is expected to enforce its own server-side permission model.
  */
 import { z } from 'zod';
-import type { ToolRegistration } from './tool-registry-types.js';
-import { ToolExecutionError } from './tool-registry-types.js';
-import { truncateOutput, withContinuationHint } from './truncate.js';
+import type { ToolRegistration } from './tool-registry-types';
+import { ToolExecutionError } from './tool-registry-types';
+import { truncateOutput, withContinuationHint } from './truncate';
 
 /** A tool exposed by the connected MCP server (mirrors MCP `Tool`). */
 export type McpToolInfo = {

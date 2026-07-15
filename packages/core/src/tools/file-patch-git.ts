@@ -1,4 +1,4 @@
-import { filePatchFailure } from './file-patch-errors.js';
+import { filePatchFailure } from './file-patch-errors';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 

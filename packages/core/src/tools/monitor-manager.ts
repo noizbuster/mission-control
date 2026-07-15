@@ -13,8 +13,8 @@
 // lifecycle deterministically without spawning real processes; production wires the
 // default `node:child_process` spawner.
 
-import { redactCredentialText } from '../providers/credential-resolver.js';
-import { createStreamDecoder, truncateToValidUtf8Boundary } from '../providers/stream-decoder.js';
+import { redactCredentialText } from '../providers/credential-resolver';
+import { createStreamDecoder, truncateToValidUtf8Boundary } from '../providers/stream-decoder';
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 

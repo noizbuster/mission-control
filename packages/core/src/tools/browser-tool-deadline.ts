@@ -1,4 +1,4 @@
-import { browserFailure } from './browser-tool-output.js';
+import { browserFailure } from './browser-tool-output';
 
 export const MAX_BROWSER_CLEANUP_TIMEOUT_MS = 1_000;
 

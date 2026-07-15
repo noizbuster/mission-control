@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentRef } from '../agents/runtime-registry.js';
-import { RuntimeAgentRegistry } from '../agents/runtime-registry.js';
-import { createIrcToolRegistration, IRC_TOOL_NAME, IrcBus, type IrcToolInput, type IrcToolOutput } from './irc-tool.js';
-import type { ToolRegistration } from './tool-registry-types.js';
+import type { AgentRef } from '../agents/runtime-registry';
+import { RuntimeAgentRegistry } from '../agents/runtime-registry';
+import { createIrcToolRegistration, IRC_TOOL_NAME, IrcBus, type IrcToolInput, type IrcToolOutput } from './irc-tool';
+import type { ToolRegistration } from './tool-registry-types';
 
 type AdoptInput = Omit<AgentRef, 'createdAt' | 'lastActivity'>;
 

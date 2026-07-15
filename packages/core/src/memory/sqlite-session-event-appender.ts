@@ -4,17 +4,17 @@ import {
     AgentEventEnvelopeSchema,
     AgentEventSchema,
 } from '@mission-control/protocol';
-import type { LocalLibsqlDb } from '../db/local-libsql-db.js';
-import { toolCallsFromEvent } from '../desktop-tool-approval-authority.js';
+import type { LocalLibsqlDb } from '../db/local-libsql-db';
+import { toolCallsFromEvent } from '../desktop-tool-approval-authority';
 import {
     type ObservabilityRedactor,
     redactAgentEventEnvelopeForObservability,
     redactAgentEventForObservability,
-} from '../providers/observability-redactor.js';
-import type { JsonlSessionEventIdFactory } from './jsonl-session-event-store.js';
-import { recordSqliteDesktopToolProposals } from './sqlite-session-desktop-tool-proposals.js';
-import { appendParsedSqliteEnvelope, ensureWritableEvent } from './sqlite-session-event-store-append.js';
-import { ensureSqliteSessionRows, readSqliteNextSequence } from './sqlite-session-event-store-sql.js';
+} from '../providers/observability-redactor';
+import type { JsonlSessionEventIdFactory } from './jsonl-session-event-store';
+import { recordSqliteDesktopToolProposals } from './sqlite-session-desktop-tool-proposals';
+import { appendParsedSqliteEnvelope, ensureWritableEvent } from './sqlite-session-event-store-append';
+import { ensureSqliteSessionRows, readSqliteNextSequence } from './sqlite-session-event-store-sql';
 
 type SqliteSessionEventAppenderOptions = {
     readonly runtime: LocalLibsqlDb;

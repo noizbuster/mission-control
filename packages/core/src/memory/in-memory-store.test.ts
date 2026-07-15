@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { InMemoryEventStore } from './in-memory-store.js';
+import { InMemoryEventStore } from './in-memory-store';
 
 describe('InMemoryEventStore', () => {
     it('appends events and derives snapshot', async () => {

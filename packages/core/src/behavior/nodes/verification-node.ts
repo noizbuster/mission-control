@@ -21,8 +21,8 @@
  * REJECT → fix-loop.
  */
 import type { AbgNodeSpec } from '@mission-control/protocol';
-import { createAbgEmitSignal } from '../abg-emit.js';
-import type { AbgNodeRunner } from '../node-registry.js';
+import { createAbgEmitSignal } from '../abg-emit';
+import type { AbgNodeRunner } from '../node-registry';
 
 export type VerificationPhaseName = 'automated' | 'review' | 'qa' | 'direct-read';
 

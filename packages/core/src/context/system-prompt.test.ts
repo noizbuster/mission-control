@@ -4,7 +4,7 @@ import {
     _testResetPromptCache,
     assembleSystemPrompt,
     DEFAULT_CODING_AGENT_PERSONA,
-} from './system-prompt.js';
+} from './system-prompt';
 
 describe('assembleSystemPrompt', () => {
     it('returns a non-empty persona with coding-agent identity and tool-usage guidance', () => {

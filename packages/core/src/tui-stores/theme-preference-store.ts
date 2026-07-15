@@ -1,7 +1,7 @@
 import { type TuiThemePreference, TuiThemePreferenceSchema } from '@mission-control/protocol';
 import { z } from 'zod';
-import { resolveMissionControlDataDir } from '../memory/data-dir.js';
-import { atomicWriteTextFile, jsonText, parseJsonText, readOptionalTextFile } from './store-file-io.js';
+import { resolveMissionControlDataDir } from '../memory/data-dir';
+import { atomicWriteTextFile, jsonText, parseJsonText, readOptionalTextFile } from './store-file-io';
 import { join } from 'node:path';
 
 export const TUI_THEME_OVERRIDE_MAX_ENTRIES = 200;

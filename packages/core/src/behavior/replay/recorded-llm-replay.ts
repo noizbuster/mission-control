@@ -12,7 +12,7 @@
  * primitive + its identity guarantee land here.
  */
 import type { AbgSignal } from '@mission-control/protocol';
-import { createAbgEmitSignal } from '../abg-emit.js';
+import { createAbgEmitSignal } from '../abg-emit';
 
 export type RecordedToolCall = {
     readonly toolCallId: string;

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { createStaticProviderCredentialResolver } from '../credential-resolver.js';
+import { createStaticProviderCredentialResolver } from '../credential-resolver';
 import {
     AnthropicMessagesTransportError,
     type AnthropicMessagesTransportRequest,
     createAnthropicMessagesProvider,
-} from './anthropic-messages-provider.js';
+} from './anthropic-messages-provider';
 import {
     anthropicCredential,
     anthropicTurnRequest,
@@ -13,7 +13,7 @@ import {
     readToolDefinition,
     throwingStream,
     transportFromEvents,
-} from './anthropic-messages-test-support.js';
+} from './anthropic-messages-test-support';
 
 describe('Anthropic Messages provider adapter', () => {
     it('streams text chunks and sends authenticated Messages requests with tools', async () => {

@@ -1,8 +1,8 @@
 import type { PermissionDecision, PermissionRequest, SidecarStreamFrame } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { ShellSessionTransport, ShellSessionTransportRequest } from './shell-session.js';
-import { registerShellSessionTool } from './shell-session.js';
-import { type ToolInvocationSettlement, ToolRegistry } from './tool-registry.js';
+import type { ShellSessionTransport, ShellSessionTransportRequest } from './shell-session';
+import { registerShellSessionTool } from './shell-session';
+import { type ToolInvocationSettlement, ToolRegistry } from './tool-registry';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

@@ -1,6 +1,6 @@
 import { AbgGraphSpecSchema, WorkflowSpecSchema } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { createDefaultWorkflowGraph, DEFAULT_WORKFLOW_GRAPH_ID } from './default-workflow-graph.js';
+import { createDefaultWorkflowGraph, DEFAULT_WORKFLOW_GRAPH_ID } from './default-workflow-graph';
 import { readFile } from 'node:fs/promises';
 
 const workflowJsonPath = `${process.cwd()}/examples/abg/default.workflow.json`;

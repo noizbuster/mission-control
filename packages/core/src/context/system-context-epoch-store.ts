@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { type LocalLibsqlDb, runLocalLibsqlWrite } from '../db/local-libsql-db.js';
-import { openMissionControlDb } from '../db/mission-control-db.js';
+import { type LocalLibsqlDb, runLocalLibsqlWrite } from '../db/local-libsql-db';
+import { openMissionControlDb } from '../db/mission-control-db';
 
 export type ContextEpochRecordInput = {
     readonly sessionId: string;

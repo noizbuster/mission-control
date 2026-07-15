@@ -1,7 +1,7 @@
 import type { AgentEvent, AgentEventEnvelope } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import { BOULDER_SCHEMA_VERSION, readBoulder, writeBoulder } from '../persistence/boulder-store.js';
-import { projectSessionReplay } from '../session-replay.js';
+import { BOULDER_SCHEMA_VERSION, readBoulder, writeBoulder } from '../persistence/boulder-store';
+import { projectSessionReplay } from '../session-replay';
 import {
     CHECKPOINT_TOOL_NAME,
     CheckpointCoordinator,
@@ -9,8 +9,8 @@ import {
     createCheckpointToolRegistration,
     createRewindToolRegistration,
     REWIND_TOOL_NAME,
-} from './checkpoint-tool.js';
-import type { ToolExecutionContext } from './tool-registry-types.js';
+} from './checkpoint-tool';
+import type { ToolExecutionContext } from './tool-registry-types';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

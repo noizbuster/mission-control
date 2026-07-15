@@ -1,8 +1,8 @@
 import type { Client } from '@libsql/client';
-import { ensurePublicSessionRow } from '../memory/session-awaiting-sql.js';
-import { runtimeStatusToDb } from './agent-job-sql-mirror-rows.js';
-import type { BackgroundJobHandle } from './async-job-manager.js';
-import type { AgentRef } from './runtime-registry.js';
+import { ensurePublicSessionRow } from '../memory/session-awaiting-sql';
+import { runtimeStatusToDb } from './agent-job-sql-mirror-rows';
+import type { BackgroundJobHandle } from './async-job-manager';
+import type { AgentRef } from './runtime-registry';
 
 export async function upsertRuntimeAgentRow(input: { readonly client: Client; readonly ref: AgentRef }): Promise<void> {
     await ensurePublicSessionRow({

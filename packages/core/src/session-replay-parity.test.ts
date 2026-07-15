@@ -4,19 +4,19 @@ import {
     createJsonlSessionEventRecord,
     createJsonlSessionLogHeader,
     serializeJsonlRecord,
-} from './memory/jsonl-session-records.js';
+} from './memory/jsonl-session-records';
 import {
     REPLAY_PARITY_SESSION_ID,
     replayParityEvents,
     replayParitySummary,
-} from './memory/session-replay-parity-fixtures.js';
+} from './memory/session-replay-parity-fixtures';
 import {
     openJsonlReplayParityLedger,
     PlannedSqliteReplayLedgerFake,
     type ReplayParityLedger,
-} from './memory/session-replay-parity-test-support.js';
-import type { SessionReplayProjection } from './session-replay.js';
-import { projectJsonlSessionReplayPrefix } from './session-replay.js';
+} from './memory/session-replay-parity-test-support';
+import type { SessionReplayProjection } from './session-replay';
+import { projectJsonlSessionReplayPrefix } from './session-replay';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

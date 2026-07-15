@@ -4,8 +4,8 @@ import type {
     NativeSidecarStatus,
     SidecarTaskOutput,
 } from '@mission-control/protocol';
-import { MockSidecarClient } from './native/mock-sidecar-client.js';
-import type { SidecarClient } from './native/sidecar-client.js';
+import { MockSidecarClient } from './native/mock-sidecar-client';
+import type { SidecarClient } from './native/sidecar-client';
 
 const sidecarEnvKey = 'MISSION_CONTROL_SIDECAR';
 

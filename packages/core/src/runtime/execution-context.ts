@@ -1,4 +1,4 @@
-import type { CancellationToken, TaskStatus } from '../cancellation.js';
+import type { CancellationToken, TaskStatus } from '../cancellation';
 
 export type AgentExecutionContext = {
     readonly sessionId: string;

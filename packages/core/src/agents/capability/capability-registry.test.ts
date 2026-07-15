@@ -1,8 +1,8 @@
 import type { AgentDefinition } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import type { DiscoverAgentsResult } from '../agent-loader.js';
-import { CapabilityRegistry } from './index.js';
-import type { AgentPluginProvider, LoadContext } from './types.js';
+import type { DiscoverAgentsResult } from '../agent-loader';
+import { CapabilityRegistry } from './index';
+import type { AgentPluginProvider, LoadContext } from './types';
 
 const CTX: LoadContext = { workspaceRoot: '/ws', userConfigDir: '/cfg' };
 

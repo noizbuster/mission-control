@@ -18,12 +18,12 @@ import { type AbgNodeSpec, WorkflowSpecSchema } from '@mission-control/protocol'
 import type { ModelMessage } from 'ai';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createBlackboard } from '../memory/blackboard.js';
-import { collectSignals, createCompositeNodeTestContext } from './composite-node-test-helpers.js';
-import type { AbgNodeRunContext } from './node-registry.js';
-import { runCriticNode } from './nodes/critic-node.js';
-import { createPlannerWorkflowGraph, PLANNER_REVIEW_GAP_ANALYSIS_PROMPT } from './planner-workflow-graph.js';
-import { createRunnerWorkflowGraph } from './runner-workflow-graph.js';
+import { createBlackboard } from '../memory/blackboard';
+import { collectSignals, createCompositeNodeTestContext } from './composite-node-test-helpers';
+import type { AbgNodeRunContext } from './node-registry';
+import { runCriticNode } from './nodes/critic-node';
+import { createPlannerWorkflowGraph, PLANNER_REVIEW_GAP_ANALYSIS_PROMPT } from './planner-workflow-graph';
+import { createRunnerWorkflowGraph } from './runner-workflow-graph';
 import { readFile } from 'node:fs/promises';
 
 const WORKFLOW_FIXTURE_PATH = `${process.cwd()}/examples/abg/planner.workflow.json`;
@@ -202,7 +202,7 @@ describe('planner review-plan: runtime outputKey seam cleanup', () => {
     });
 
     it('runLlmActorNode is importable for cross-suite parity (smoke)', async () => {
-        const { runLlmActorNode } = await import('./nodes/llm-actor/llm-actor-node-runner.js');
+        const { runLlmActorNode } = await import('./nodes/llm-actor/llm-actor-node-runner');
         const graph = createPlannerWorkflowGraph();
         const approvalGate = findNode(graph, 'approval-gate');
         const blackboard = createBlackboard();

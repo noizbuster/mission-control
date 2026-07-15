@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { importLegacySessionCompatibilityWindow } from './session-import.js';
-import { legacyEnvelope, readLegacyEnvelopes, writeLegacyLog } from './session-import-regression-test-support.js';
+import { importLegacySessionCompatibilityWindow } from './session-import';
+import { legacyEnvelope, readLegacyEnvelopes, writeLegacyLog } from './session-import-regression-test-support';
 import {
     countRows,
     openMigratedTestDb,
     SESSION_IMPORT_TEST_CREATED_AT,
     SESSION_IMPORT_TEST_SESSION_ID,
     writeLegacyFixture,
-} from './session-import-test-support.js';
+} from './session-import-test-support';
 import { mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 

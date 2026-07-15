@@ -15,9 +15,9 @@
  */
 import { AGENT_THINKING_LEVELS, type AgentDefinition, type AgentThinkingLevel } from '@mission-control/protocol';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
-import type { AgentDiscoveryDiagnostic } from '../agent-loader.js';
-import { AgentParseError, parseAgentFile } from '../agent-parser.js';
-import type { LoadContext } from '../capability/types.js';
+import type { AgentDiscoveryDiagnostic } from '../agent-loader';
+import { AgentParseError, parseAgentFile } from '../agent-parser';
+import type { LoadContext } from '../capability/types';
 import type { Dirent } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { basename, join } from 'node:path';

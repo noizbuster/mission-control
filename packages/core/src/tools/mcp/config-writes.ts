@@ -1,8 +1,8 @@
 import type { McpConfig, McpConfigEntry } from '@mission-control/protocol';
 import { McpConfigSchema, McpProjectConfigSchema, MissionControlConfigSchema } from '@mission-control/protocol';
-import { resolveProjectConfigPath, resolveUserConfigPathForWrite } from './config-paths.js';
-import { readProjectConfig, readUserConfig } from './config-readers.js';
-import type { LoadMcpConfigOptions } from './config-types.js';
+import { resolveProjectConfigPath, resolveUserConfigPathForWrite } from './config-paths';
+import { readProjectConfig, readUserConfig } from './config-readers';
+import type { LoadMcpConfigOptions } from './config-types';
 import { randomUUID } from 'node:crypto';
 import { chmod, mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { allWebSearchProviders, getWebSearchProvider, resolveProviderChain } from './web-search-providers.js';
-import { WEB_SEARCH_PROVIDER_IDS } from './web-search-schemas.js';
+import { allWebSearchProviders, getWebSearchProvider, resolveProviderChain } from './web-search-providers';
+import { WEB_SEARCH_PROVIDER_IDS } from './web-search-schemas';
 
 const ALL_PROVIDER_KEYS: Array<[string, string]> = [
     ['EXA_API_KEY', 'exa-key'],

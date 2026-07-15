@@ -1,8 +1,8 @@
 import type { AbgNodeModelOptions, AgentDefinition } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import type { ModelPattern } from '../agents/model-resolver.js';
-import type { ModelRole } from '../agents/model-roles.js';
-import { buildResolveModelFn } from './task-tool-full-parity-factory.js';
+import type { ModelPattern } from '../agents/model-resolver';
+import type { ModelRole } from '../agents/model-roles';
+import { buildResolveModelFn } from './task-tool-full-parity-factory';
 
 const MODELS = {
     concrete: { providerID: 'concrete', modelID: 'concrete-model' },

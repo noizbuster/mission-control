@@ -6,8 +6,8 @@
  * an agent.
  */
 import type { AgentDefinition, AgentSource } from '@mission-control/protocol';
-import { parseAgentFile } from '../agent-parser.js';
-import type { AgentPluginProvider, LoadContext } from '../capability/types.js';
+import { parseAgentFile } from '../agent-parser';
+import type { AgentPluginProvider, LoadContext } from '../capability/types';
 import type { Dirent } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';

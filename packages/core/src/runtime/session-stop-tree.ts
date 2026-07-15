@@ -5,14 +5,14 @@ import type {
     SessionStopReceiptContract,
     SessionStopScope,
 } from '@mission-control/protocol';
-import type { SessionOwnerControlClient } from './session-owner-control-client.js';
-import { acquireSessionStopTreeFixedPoint } from './session-stop-tree-fixed-point.js';
+import type { SessionOwnerControlClient } from './session-owner-control-client';
+import { acquireSessionStopTreeFixedPoint } from './session-stop-tree-fixed-point';
 import {
     type CanonicalSessionTreeDescendant,
     type CanonicalSessionTreeResult,
     readCanonicalSessionTree,
     SESSION_STOP_TREE_MAX_SESSIONS,
-} from './session-stop-tree-resolver.js';
+} from './session-stop-tree-resolver';
 import {
     aggregateSessionStopTree,
     descendingDepths,
@@ -22,7 +22,7 @@ import {
     sessionStopErrorCode,
     terminalTreeSession,
     validateSessionStopTreeInput,
-} from './session-stop-tree-support.js';
+} from './session-stop-tree-support';
 import { randomUUID } from 'node:crypto';
 
 export { SESSION_STOP_TREE_MAX_SESSIONS };

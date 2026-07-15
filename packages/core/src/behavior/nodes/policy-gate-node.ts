@@ -28,9 +28,9 @@ import type {
     PolicyEffectRule,
     PolicyEffectRuleSet,
 } from '@mission-control/protocol';
-import { evaluateRules } from '../../permissions/rule-evaluator.js';
-import { createAbgEmitSignal } from '../abg-emit.js';
-import type { AbgNodeRunContext } from '../node-registry.js';
+import { evaluateRules } from '../../permissions/rule-evaluator';
+import { createAbgEmitSignal } from '../abg-emit';
+import type { AbgNodeRunContext } from '../node-registry';
 
 export async function* runPolicyGateNode(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
     yield {

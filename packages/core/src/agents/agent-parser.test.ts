@@ -1,6 +1,6 @@
 import type { AgentDefinition } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { AgentParseError, parseAgentFile } from './agent-parser.js';
+import { AgentParseError, parseAgentFile } from './agent-parser';
 
 const FILE = '/agents/test.md';
 const SOURCE = 'project' as const;

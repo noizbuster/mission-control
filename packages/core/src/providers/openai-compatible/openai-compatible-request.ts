@@ -5,17 +5,17 @@ import type {
     ProviderToolCallTranscript,
     ToolDefinition,
 } from '@mission-control/protocol';
-import { ProviderCredentialResolutionError, type ProviderCredentialResolver } from '../credential-resolver.js';
-import { ProviderTurnError, type ProviderTurnRequest } from '../provider-turn-types.js';
-import { createVariantLookup } from '../shared/variant-cache.js';
-import { type OpenAICompatibleProviderSpec, openAICompatibleProviderSpec } from './openai-compatible-specs.js';
+import { ProviderCredentialResolutionError, type ProviderCredentialResolver } from '../credential-resolver';
+import { ProviderTurnError, type ProviderTurnRequest } from '../provider-turn-types';
+import { createVariantLookup } from '../shared/variant-cache';
+import { type OpenAICompatibleProviderSpec, openAICompatibleProviderSpec } from './openai-compatible-specs';
 import type {
     OpenAICompatibleChatMessage,
     OpenAICompatibleChatToolCall,
     OpenAICompatibleRequestBody,
     OpenAICompatibleTool,
     OpenAICompatibleTransportRequest,
-} from './openai-compatible-transport.js';
+} from './openai-compatible-transport';
 
 export async function resolveOpenAICompatibleCredential(
     resolver: ProviderCredentialResolver,

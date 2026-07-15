@@ -1,5 +1,5 @@
 import type { McpConfig } from '@mission-control/protocol';
-import type { ProjectTrustDecision } from '../../trust/project-trust-store.js';
+import type { ProjectTrustDecision } from '../../trust/project-trust-store';
 import {
     mcpConfigDirEnvKey,
     ProfileNameValidationError,
@@ -7,22 +7,22 @@ import {
     resolveUserConfigPath,
     resolveUserProfileCandidates,
     validateProfileName,
-} from './config-paths.js';
-import { type ReadProjectResult, type ReadUserResult, readProjectConfig, readUserConfig } from './config-readers.js';
-import { resolveMcpServers } from './config-resolver.js';
+} from './config-paths';
+import { type ReadProjectResult, type ReadUserResult, readProjectConfig, readUserConfig } from './config-readers';
+import { resolveMcpServers } from './config-resolver';
 import type {
     LoadMcpConfigOptions,
     McpConfigParseError,
     McpConfigScope,
     ResolvedMcpConfig,
     ResolvedMcpServer,
-} from './config-types.js';
+} from './config-types';
 import {
     removeProjectMcpServer,
     removeUserMcpServer,
     writeProjectMcpServer,
     writeUserMcpServer,
-} from './config-writes.js';
+} from './config-writes';
 
 export type ReadScopeServersResult = {
     readonly servers: McpConfig;

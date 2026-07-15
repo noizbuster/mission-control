@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { parseAgentFile } from '../agent-parser.js';
-import deep from './deep.md.js';
-import designer from './designer.md.js';
-import explore from './explore.md.js';
-import librarian from './librarian.md.js';
-import oracle from './oracle.md.js';
-import planner from './planner.md.js';
-import quick from './quick.md.js';
-import reasoner from './reasoner.md.js';
-import reviewer from './reviewer.md.js';
+import { parseAgentFile } from '../agent-parser';
+import deep from './deep.md';
+import designer from './designer.md';
+import explore from './explore.md';
+import librarian from './librarian.md';
+import oracle from './oracle.md';
+import planner from './planner.md';
+import quick from './quick.md';
+import reasoner from './reasoner.md';
+import reviewer from './reviewer.md';
 
 const BUNDLED_TEMPLATES = [
     { name: 'quick', template: quick },

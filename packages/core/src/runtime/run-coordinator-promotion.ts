@@ -1,6 +1,6 @@
 import type { AgentEvent } from '@mission-control/protocol';
-import type { PromptInputState, SessionAdmissionEventStore } from '../session-admission-types.js';
-import * as runAdmission from './run-coordinator-admission.js';
+import type { PromptInputState, SessionAdmissionEventStore } from '../session-admission-types';
+import * as runAdmission from './run-coordinator-admission';
 
 export type RunCoordinatorPromotionResult = 'promoted' | 'idle' | 'run_requested';
 

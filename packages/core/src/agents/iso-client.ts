@@ -19,7 +19,7 @@ import {
     type SidecarIsoResolveResponse,
     SidecarIsoResolveResponseSchema,
 } from '@mission-control/protocol';
-import { createStreamDecoder } from '../providers/stream-decoder.js';
+import { createStreamDecoder } from '../providers/stream-decoder';
 import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { cp, mkdir, mkdtemp, rm } from 'node:fs/promises';

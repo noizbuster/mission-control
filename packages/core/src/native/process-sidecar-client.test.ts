@@ -1,8 +1,8 @@
 import { type AgentEvent, SIDECAR_PROTOCOL_VERSION } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { AgentRuntime } from '../agent-runtime.js';
-import { createAllowPermissionDecision } from '../permissions.js';
-import { ProcessSidecarClient } from './sidecar-client.js';
+import { AgentRuntime } from '../agent-runtime';
+import { createAllowPermissionDecision } from '../permissions';
+import { ProcessSidecarClient } from './sidecar-client';
 import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

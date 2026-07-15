@@ -7,7 +7,7 @@ import {
     parseToolArgumentsJson,
     protocolError,
     versionHashFor,
-} from './tool-registry-invocation.js';
+} from './tool-registry-invocation';
 import {
     type RegisteredTool,
     type ToolAdvertisement,
@@ -15,7 +15,7 @@ import {
     type ToolInvocationSettlement,
     type ToolRegistration,
     ToolRegistrationMetadataSchema,
-} from './tool-registry-types.js';
+} from './tool-registry-types';
 
 export type {
     ToolAdvertisement,
@@ -25,8 +25,8 @@ export type {
     ToolModelOutput,
     ToolOutputLimit,
     ToolRegistration,
-} from './tool-registry-types.js';
-export { ToolExecutionError } from './tool-registry-types.js';
+} from './tool-registry-types';
+export { ToolExecutionError } from './tool-registry-types';
 
 export type ToolInvocationPolicy = (
     advertisement: ToolAdvertisement,

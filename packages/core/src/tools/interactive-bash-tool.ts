@@ -13,12 +13,12 @@
 
 import type { AgentEvent, PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { z } from 'zod';
-import { redactCredentialText } from '../providers/credential-resolver.js';
-import { commandRunFailure } from './command-run-errors.js';
-import { type CommandExecutionResult, executeCommand } from './command-run-executor.js';
-import { permissionRequest, requestToolPermission } from './tool-permissions.js';
-import type { ToolAdvertisement, ToolRegistration } from './tool-registry.js';
-import type { ToolExecutionContext } from './tool-registry-types.js';
+import { redactCredentialText } from '../providers/credential-resolver';
+import { commandRunFailure } from './command-run-errors';
+import { type CommandExecutionResult, executeCommand } from './command-run-executor';
+import { permissionRequest, requestToolPermission } from './tool-permissions';
+import type { ToolAdvertisement, ToolRegistration } from './tool-registry';
+import type { ToolExecutionContext } from './tool-registry-types';
 import { spawnSync } from 'node:child_process';
 import { realpath } from 'node:fs/promises';
 

@@ -5,7 +5,7 @@ import type {
     PromptInputState,
     SessionAdmissionProjection,
     TranscriptBranchNode,
-} from './session-admission-types.js';
+} from './session-admission-types';
 
 export class SessionAdmissionProjectionError extends Error {
     constructor(message: string) {

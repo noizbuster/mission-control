@@ -1,13 +1,13 @@
 import type { AgentDefinition } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import type { SessionControlEpoch } from '../runtime/session-control-cancellation.js';
-import type { ChildSpawnRequest } from '../tools/task/task-tool.js';
-import { ToolRegistry } from '../tools/tool-registry.js';
-import { AgentIndex } from './agent-registry.js';
-import { AsyncJobManager } from './async-job-manager.js';
-import { AgentLifecycleManager } from './lifecycle-manager.js';
-import { RuntimeAgentRegistry } from './runtime-registry.js';
-import { ConcreteTaskToolRuntime, type TaskToolRuntimeServices } from './task-tool-runtime.js';
+import type { SessionControlEpoch } from '../runtime/session-control-cancellation';
+import type { ChildSpawnRequest } from '../tools/task/task-tool';
+import { ToolRegistry } from '../tools/tool-registry';
+import { AgentIndex } from './agent-registry';
+import { AsyncJobManager } from './async-job-manager';
+import { AgentLifecycleManager } from './lifecycle-manager';
+import { RuntimeAgentRegistry } from './runtime-registry';
+import { ConcreteTaskToolRuntime, type TaskToolRuntimeServices } from './task-tool-runtime';
 
 const CONTROL_EPOCH: SessionControlEpoch = {
     dbIdentity: 'a'.repeat(64),

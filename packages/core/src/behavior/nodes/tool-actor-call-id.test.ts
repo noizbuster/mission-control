@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { ToolRegistry } from '../../tools/tool-registry.js';
-import { createCodingAgentNodeRegistry } from '../coding-agent-registry.js';
-import { runAbgGraph } from '../graph-runner.js';
+import { ToolRegistry } from '../../tools/tool-registry';
+import { createCodingAgentNodeRegistry } from '../coding-agent-registry';
+import { runAbgGraph } from '../graph-runner';
 
 describe('ToolActor invocation identity', () => {
     it('keeps each repeated node invocation unique and correlated across request and result events', async () => {

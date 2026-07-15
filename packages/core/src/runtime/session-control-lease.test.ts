@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { type LocalLibsqlDb, openLocalLibsqlDb } from '../db/local-libsql-db.js';
+import { type LocalLibsqlDb, openLocalLibsqlDb } from '../db/local-libsql-db';
 import {
     acquireSessionControlLease,
     readSessionControlLease,
     renewSessionControlLease,
     runWithSessionControlLeaseFence,
     SessionControlLeaseError,
-} from './session-control-lease.js';
-import { SESSION_CONTROL_RENEW_INTERVAL_MS, startSessionControlLeaseRenewer } from './session-control-lease-renewer.js';
+} from './session-control-lease';
+import { SESSION_CONTROL_RENEW_INTERVAL_MS, startSessionControlLeaseRenewer } from './session-control-lease-renewer';
 import { createHash } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

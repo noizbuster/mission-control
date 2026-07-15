@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { isTursoAvailable, TursoPersistentStore } from './turso-persistent-store.js';
+import { isTursoAvailable, TursoPersistentStore } from './turso-persistent-store';
 
 describe('TursoPersistentStore', () => {
     let store: TursoPersistentStore;

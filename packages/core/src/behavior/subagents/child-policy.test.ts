@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CHILD_DROPPED_CAPABILITY_KINDS, DESTRUCTIVE_PERMISSION_KINDS, isChildSafeCapability } from './child-policy.js';
+import { CHILD_DROPPED_CAPABILITY_KINDS, DESTRUCTIVE_PERMISSION_KINDS, isChildSafeCapability } from './child-policy';
 
 describe('CHILD_DROPPED_CAPABILITY_KINDS (network/subagent/workflow blocklist extension)', () => {
     it('keeps the compatibility destructive set at bash/write/patch', () => {

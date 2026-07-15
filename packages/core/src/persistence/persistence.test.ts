@@ -7,16 +7,16 @@ import {
     readBoulder,
     updateBoulderWork,
     writeBoulder,
-} from './boulder-store.js';
+} from './boulder-store';
 import {
     appendNotepad,
     assertAppendOnly,
     NotepadAppendOnlyError,
     NotepadStoreError,
     readNotepad,
-} from './notepad-store.js';
-import { DEFAULT_OMO_SUBDIRS, ensureOmoDirs, isGitignored, OmoPersistenceError, resolveOmoRoot } from './paths.js';
-import { PlanStoreError, parsePlanChecklist, parsePlanChecklistText, readPlan } from './plan-store.js';
+} from './notepad-store';
+import { DEFAULT_OMO_SUBDIRS, ensureOmoDirs, isGitignored, OmoPersistenceError, resolveOmoRoot } from './paths';
+import { PlanStoreError, parsePlanChecklist, parsePlanChecklistText, readPlan } from './plan-store';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

@@ -1,9 +1,9 @@
 import type { ProviderStreamChunk } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { createStaticProviderCredentialResolver } from '../credential-resolver.js';
-import type { ProviderTurnRequest } from '../provider-turn-types.js';
-import { createNodeAnthropicMessagesTransport } from './anthropic-messages-http-transport.js';
-import { createAnthropicMessagesProvider } from './anthropic-messages-provider.js';
+import { createStaticProviderCredentialResolver } from '../credential-resolver';
+import type { ProviderTurnRequest } from '../provider-turn-types';
+import { createNodeAnthropicMessagesTransport } from './anthropic-messages-http-transport';
+import { createAnthropicMessagesProvider } from './anthropic-messages-provider';
 
 const { ANTHROPIC_API_KEY, MCTRL_ANTHROPIC_LIVE, MCTRL_ANTHROPIC_LIVE_MODEL } = process.env;
 const liveEnabled = MCTRL_ANTHROPIC_LIVE === '1' && ANTHROPIC_API_KEY !== undefined;

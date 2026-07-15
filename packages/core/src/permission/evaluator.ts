@@ -1,5 +1,5 @@
 import type { PermissionDecision, PermissionRequest, PermissionRule } from '@mission-control/protocol';
-import { matchesGlob } from './glob.js';
+import { matchesGlob } from './glob';
 
 export type PermissionEvaluation = {
     readonly decision: PermissionDecision;

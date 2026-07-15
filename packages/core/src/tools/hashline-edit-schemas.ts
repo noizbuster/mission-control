@@ -1,7 +1,7 @@
 import type { DiffFile, PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { DiffFileSchema } from '@mission-control/protocol';
 import { z } from 'zod';
-import { diffFileOutput } from './file-patch-schemas.js';
+import { diffFileOutput } from './file-patch-schemas';
 
 // A single LINE#ID-anchored edit. `lines` may be a string, a string array, or
 // (for `replace` only) null/[] meaning delete the targeted line(s).

@@ -1,7 +1,7 @@
 import type { AgentSession } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { projectAbgSignalToEvent } from './behavior/signals.js';
-import { SessionEventLog } from './session-log.js';
+import { projectAbgSignalToEvent } from './behavior/signals';
+import { SessionEventLog } from './session-log';
 
 describe('SessionEventLog', () => {
     it('keeps events append-only and derives snapshots from the log', () => {

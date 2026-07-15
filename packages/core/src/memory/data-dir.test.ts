@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveMissionControlDataDir } from './data-dir.js';
+import { resolveMissionControlDataDir } from './data-dir';
 
 describe('resolveMissionControlDataDir', () => {
     it('uses MCTRL_DATA_DIR before platform fallbacks', () => {

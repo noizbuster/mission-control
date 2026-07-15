@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { parseAnthropicMessagesSseEvents } from './anthropic/anthropic-messages-http-transport.js';
-import { parseGeminiGenerateContentSseEvents } from './google/gemini-generate-content-http-transport.js';
-import { parseOpenAIResponsesSseEvents } from './openai/openai-responses-http-transport.js';
-import { parseOpenAICompatibleSseEvents } from './openai-compatible/openai-compatible-http-transport.js';
+import { parseAnthropicMessagesSseEvents } from './anthropic/anthropic-messages-http-transport';
+import { parseGeminiGenerateContentSseEvents } from './google/gemini-generate-content-http-transport';
+import { parseOpenAIResponsesSseEvents } from './openai/openai-responses-http-transport';
+import { parseOpenAICompatibleSseEvents } from './openai-compatible/openai-compatible-http-transport';
 import { readdir, readFile } from 'node:fs/promises';
 
 type SseParseResult = {

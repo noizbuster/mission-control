@@ -8,7 +8,7 @@ import {
     type BinaryDetector,
     type BinaryResolution,
     runAstGrep,
-} from './ast-grep-runner.js';
+} from './ast-grep-runner';
 
 const sgBinary: BinaryResolution = { command: 'sg', prefixArgs: [] };
 

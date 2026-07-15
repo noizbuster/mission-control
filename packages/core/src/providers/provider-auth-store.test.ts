@@ -1,7 +1,7 @@
 import { missionControlAuthFileEnvKey, missionControlAuthSchemaURL } from '@mission-control/config';
 import { MODEL_ROLE_IDS, type ModelProviderSelection, ProviderAuthFileSchema } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createProviderAuthStore } from './provider-auth-store.js';
+import { createProviderAuthStore } from './provider-auth-store';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

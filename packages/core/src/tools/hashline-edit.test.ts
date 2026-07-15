@@ -1,11 +1,11 @@
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import { applyHashlineEdits, dedupeEdits, normalizeEdits } from './hashline/edit-operations.js';
-import { computeLineHash, formatHashLine, formatHashLines } from './hashline/hash-computation.js';
-import { executeHashlineEdits } from './hashline/hashline-edit-executor.js';
-import { HashlineMismatchError, parseLineRef, validateLineRefs } from './hashline/validation.js';
-import { createHashlineEditToolRegistration, type HashlineEditToolOptions } from './hashline-edit.js';
-import { ToolRegistry } from './tool-registry.js';
+import { applyHashlineEdits, dedupeEdits, normalizeEdits } from './hashline/edit-operations';
+import { computeLineHash, formatHashLine, formatHashLines } from './hashline/hash-computation';
+import { executeHashlineEdits } from './hashline/hashline-edit-executor';
+import { HashlineMismatchError, parseLineRef, validateLineRefs } from './hashline/validation';
+import { createHashlineEditToolRegistration, type HashlineEditToolOptions } from './hashline-edit';
+import { ToolRegistry } from './tool-registry';
 import { execFile } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

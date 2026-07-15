@@ -10,7 +10,7 @@ import {
     type SessionPendingInput,
     type SessionPendingWait,
     type SessionTerminalEvent,
-} from './session-status-derivation.js';
+} from './session-status-derivation';
 
 const sessionRowSchema = z.object({
     status: z.enum(['idle', 'running', 'awaiting', 'stopped', 'failed']),

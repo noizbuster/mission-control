@@ -1,5 +1,5 @@
 import { type AgentEventEnvelope, AgentEventEnvelopeSchema } from '@mission-control/protocol';
-import { jsonlStoreError } from './jsonl-errors.js';
+import { jsonlStoreError } from './jsonl-errors';
 
 export const JSONL_SESSION_LOG_HEADER_KIND = 'mission-control.session-log';
 export const JSONL_SESSION_EVENT_RECORD_KIND = 'mission-control.session-event';

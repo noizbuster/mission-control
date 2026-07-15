@@ -4,7 +4,7 @@ import {
     callLifecycle,
     createRegistration,
     toolContext,
-} from './browser-tool-lifecycle-test-support.js';
+} from './browser-tool-lifecycle-test-support';
 
 describe('browser tool page lifecycle', () => {
     afterEach(() => vi.useRealTimers());

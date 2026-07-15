@@ -2,7 +2,7 @@ import {
     type AbgToolSettlement,
     type AbgToolSettlementLedger,
     isApprovalRequiredSettlement,
-} from './abg-tool-bridge.js';
+} from './abg-tool-bridge';
 
 export function firstApprovalBlockedSettlementInProposalOrder(
     ledger: AbgToolSettlementLedger | undefined,

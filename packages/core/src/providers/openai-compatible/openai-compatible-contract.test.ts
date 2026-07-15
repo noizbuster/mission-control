@@ -1,9 +1,9 @@
 import { expect, it } from 'vitest';
-import { createStaticProviderCredentialResolver } from '../credential-resolver.js';
-import { openAICompatibleProviderContract } from '../provider-adapter-contract-registrations.js';
-import { describeProviderAdapterContract } from '../provider-adapter-contract-test-support.js';
-import { createOpenAICompatibleProvider, OpenAICompatibleTransportError } from './openai-compatible-provider.js';
-import { collectChunks, createProviderContext, credential, turnRequest } from './openai-compatible-test-support.js';
+import { createStaticProviderCredentialResolver } from '../credential-resolver';
+import { openAICompatibleProviderContract } from '../provider-adapter-contract-registrations';
+import { describeProviderAdapterContract } from '../provider-adapter-contract-test-support';
+import { createOpenAICompatibleProvider, OpenAICompatibleTransportError } from './openai-compatible-provider';
+import { collectChunks, createProviderContext, credential, turnRequest } from './openai-compatible-test-support';
 
 describeProviderAdapterContract(openAICompatibleProviderContract);
 

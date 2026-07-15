@@ -1,5 +1,5 @@
 import { index, integer, primaryKey, sqliteTable, text, unique } from 'drizzle-orm/sqlite-core';
-import { sessionLifecycleStatuses } from './session-schema-literals.js';
+import { sessionLifecycleStatuses } from './session-schema-literals';
 
 export const sessions = sqliteTable(
     'sessions',

@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { index, integer, sqliteTable, text, unique } from 'drizzle-orm/sqlite-core';
-import { sessions } from './session-core-schema.js';
+import { sessions } from './session-core-schema';
 import {
     sessionAwaitReasons,
     sessionAwaitSourceKinds,
@@ -8,7 +8,7 @@ import {
     sessionInputDeliveries,
     sessionInputStatuses,
     sessionRelationKinds,
-} from './session-schema-literals.js';
+} from './session-schema-literals';
 
 export const sessionAwaits = sqliteTable(
     'session_awaits',

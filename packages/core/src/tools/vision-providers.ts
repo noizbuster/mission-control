@@ -20,7 +20,7 @@
  * - openrouter: OpenAI-compatible chat completions (configurable model)
  * - zai: glm-4v vision (OpenAI-compatible)
  */
-import type { VisionProviderId } from './vision-schemas.js';
+import type { VisionProviderId } from './vision-schemas';
 
 /** Resolved image/document content sent to a vision model. */
 export type VisionImage = {

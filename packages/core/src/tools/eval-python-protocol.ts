@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { createStreamDecoder } from '../providers/stream-decoder.js';
-import type { PythonChildProcess } from './eval-python-process-tree.js';
-import type { EvalToolBridge } from './eval-tool-bridge.js';
+import { createStreamDecoder } from '../providers/stream-decoder';
+import type { PythonChildProcess } from './eval-python-process-tree';
+import type { EvalToolBridge } from './eval-tool-bridge';
 
 const PythonKernelOutboundSchema = z.discriminatedUnion('type', [
     z.object({ type: z.literal('ready') }),

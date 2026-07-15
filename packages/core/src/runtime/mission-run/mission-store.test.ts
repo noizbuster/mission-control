@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { createObservabilityRedactor } from '../../providers/observability-redactor.js';
-import { materializeMission } from './mission-run-service.js';
-import { makeMissionRunTestLocation, makeTestWorkflowSpec } from './mission-run-test-support.js';
+import { createObservabilityRedactor } from '../../providers/observability-redactor';
+import { materializeMission } from './mission-run-service';
+import { makeMissionRunTestLocation, makeTestWorkflowSpec } from './mission-run-test-support';
 import {
     createMission,
     listMissions,
@@ -10,7 +10,7 @@ import {
     missionFilePath,
     readMission,
     updateMission,
-} from './mission-store.js';
+} from './mission-store';
 import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 

@@ -7,7 +7,7 @@
  * discovery-time behavior). Purely in-memory; performs no I/O.
  */
 import type { AgentDefinition } from '@mission-control/protocol';
-import type { AgentDiscoveryDiagnostic, DiscoverAgentsResult } from './agent-loader.js';
+import type { AgentDiscoveryDiagnostic, DiscoverAgentsResult } from './agent-loader';
 
 export class AgentIndex {
     private readonly agents = new Map<string, AgentDefinition>();

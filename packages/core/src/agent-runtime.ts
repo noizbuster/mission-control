@@ -10,9 +10,9 @@ import type {
     PermissionRequest,
 } from '@mission-control/protocol';
 import type { ModelMessage } from 'ai';
-import { runRuntimeDemoTask } from './agent-runtime-demo.js';
-import type { AgentRuntimeOptions } from './agent-runtime-options.js';
-import { runRuntimeSkillInvocationTask, type SkillInvocationTaskInput } from './agent-runtime-skill.js';
+import { runRuntimeDemoTask } from './agent-runtime-demo';
+import type { AgentRuntimeOptions } from './agent-runtime-options';
+import { runRuntimeSkillInvocationTask, type SkillInvocationTaskInput } from './agent-runtime-skill';
 import {
     allocatePromptTaskId,
     createRuntimeApprovalGate,
@@ -23,28 +23,28 @@ import {
     sessionStartedEvent,
     sessionStoppedEvent,
     stopRuntimeSession,
-} from './agent-runtime-support.js';
-import { type ApprovalUpdateInput, PermissionGate } from './approval-gate.js';
-import type { PricingTable } from './behavior/budget/cost-ledger.js';
-import { type AbgGraphRunResult, runAbgGraph } from './behavior/graph-runner.js';
-import type { AbgNodeRegistry } from './behavior/node-registry.js';
-import type { LlmActorModel } from './behavior/nodes/llm-actor/llm-actor-node.js';
-import type { AbgTimelineEntry } from './behavior/timeline.js';
-import type { ProjectInstructionResource } from './context/project-context-messages.js';
-import type { SystemPromptEnvironment } from './context/system-prompt.js';
-import { EventBus } from './event-bus.js';
-import type { PersistentMemoryStore } from './memory/persistent-memory-store.js';
-import type { SidecarClient } from './native/sidecar-client.js';
+} from './agent-runtime-support';
+import { type ApprovalUpdateInput, PermissionGate } from './approval-gate';
+import type { PricingTable } from './behavior/budget/cost-ledger';
+import { type AbgGraphRunResult, runAbgGraph } from './behavior/graph-runner';
+import type { AbgNodeRegistry } from './behavior/node-registry';
+import type { LlmActorModel } from './behavior/nodes/llm-actor/llm-actor-node';
+import type { AbgTimelineEntry } from './behavior/timeline';
+import type { ProjectInstructionResource } from './context/project-context-messages';
+import type { SystemPromptEnvironment } from './context/system-prompt';
+import { EventBus } from './event-bus';
+import type { PersistentMemoryStore } from './memory/persistent-memory-store';
+import type { SidecarClient } from './native/sidecar-client';
 import {
     composeObservabilityRedactors,
     createObservabilityRedactor,
     type ObservabilityRedactor,
     redactAgentEventForObservability,
-} from './providers/observability-redactor.js';
-import { SessionEventLog } from './session-log.js';
-import type { ToolRegistry } from './tools/tool-registry.js';
+} from './providers/observability-redactor';
+import { SessionEventLog } from './session-log';
+import type { ToolRegistry } from './tools/tool-registry';
 
-export type { AgentRuntimeOptions } from './agent-runtime-options.js';
+export type { AgentRuntimeOptions } from './agent-runtime-options';
 export type { SkillInvocationTaskInput };
 
 /**
@@ -56,7 +56,7 @@ export type { SkillInvocationTaskInput };
 export type RunGraphOptions = {
     readonly registry?: AbgNodeRegistry;
     readonly resolveSdkModel?: (options: AbgNodeModelOptions) => LlmActorModel;
-    readonly agentModelLookup?: import('./behavior/agent-model-resolver.js').AgentModelLookup;
+    readonly agentModelLookup?: import('./behavior/agent-model-resolver').AgentModelLookup;
     readonly toolRegistry?: ToolRegistry;
     readonly initialMessages?: readonly ModelMessage[];
     readonly abortSignal?: AbortSignal;

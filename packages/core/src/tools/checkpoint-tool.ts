@@ -21,7 +21,7 @@
  * the coordinator's captured `collapsedMessageCount`.
  */
 import { z } from 'zod';
-import { ToolExecutionError, type ToolRegistration } from './tool-registry-types.js';
+import { ToolExecutionError, type ToolRegistration } from './tool-registry-types';
 
 export const CHECKPOINT_TOOL_NAME = 'checkpoint';
 export const REWIND_TOOL_NAME = 'rewind';

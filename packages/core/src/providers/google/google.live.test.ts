@@ -1,9 +1,9 @@
 import type { ProviderStreamChunk } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { createStaticProviderCredentialResolver } from '../credential-resolver.js';
-import type { ProviderTurnRequest } from '../provider-turn-types.js';
-import { createNodeGeminiGenerateContentTransport } from './gemini-generate-content-http-transport.js';
-import { createGeminiGenerateContentProvider } from './gemini-generate-content-provider.js';
+import { createStaticProviderCredentialResolver } from '../credential-resolver';
+import type { ProviderTurnRequest } from '../provider-turn-types';
+import { createNodeGeminiGenerateContentTransport } from './gemini-generate-content-http-transport';
+import { createGeminiGenerateContentProvider } from './gemini-generate-content-provider';
 
 const { GOOGLE_API_KEY, MCTRL_GOOGLE_LIVE, MCTRL_GOOGLE_LIVE_MODEL } = process.env;
 const liveEnabled = MCTRL_GOOGLE_LIVE === '1' && GOOGLE_API_KEY !== undefined;

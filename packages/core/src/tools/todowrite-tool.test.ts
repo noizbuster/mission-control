@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groupTodosByPhase, type TodoItem, todoWriteToolRegistration } from './todowrite-tool.js';
+import { groupTodosByPhase, type TodoItem, todoWriteToolRegistration } from './todowrite-tool';
 
 const reg = todoWriteToolRegistration;
 

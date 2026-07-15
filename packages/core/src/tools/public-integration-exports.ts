@@ -4,7 +4,7 @@ export {
     type InvalidInput,
     type InvalidOutput,
     registerInvalidTool,
-} from './invalid-tool.js';
+} from './invalid-tool';
 export {
     createJobToolRegistration,
     JOB_TOOL_NAME,
@@ -12,7 +12,7 @@ export {
     type JobToolParams,
     type JobToolResult,
     jobInputSchema,
-} from './job-tool.js';
+} from './job-tool';
 export {
     createLookAtToolRegistration,
     defaultVisionFetch,
@@ -26,8 +26,8 @@ export {
     type PreparedVisionInput,
     registerLookAtTool,
     type VisionFetchFn,
-} from './look-at-tool.js';
-export { createDelegatingLspClient } from './lsp-delegating-client.js';
+} from './look-at-tool';
+export { createDelegatingLspClient } from './lsp-delegating-client';
 export {
     type CommandExists,
     DEFAULT_LSP_SERVERS,
@@ -36,7 +36,7 @@ export {
     LspServerManager,
     type LspServerManagerDeps,
     type LspServerManagerOptions,
-} from './lsp-server-manager.js';
+} from './lsp-server-manager';
 export {
     encodeLspMessage,
     type LspDocumentSource,
@@ -46,7 +46,7 @@ export {
     StdioLspClient,
     type StdioLspClientDeps,
     type StdioLspClientOptions,
-} from './lsp-stdio-client.js';
+} from './lsp-stdio-client';
 export {
     type CreateLspToolInput,
     createLspToolRegistration,
@@ -61,7 +61,7 @@ export {
     type LspPosition,
     type LspRange,
     type LspSymbol,
-} from './lsp-tool.js';
+} from './lsp-tool';
 export {
     type LoadMcpConfigOptions,
     type LoadRuntimeMcpConfigOptions,
@@ -84,15 +84,15 @@ export {
     validateProfileName,
     writeProjectMcpServer,
     writeUserMcpServer,
-} from './mcp/config.js';
+} from './mcp/config';
 export {
     type ConnectedMcpServer,
     McpConnectionManager,
     type McpConnectionManagerDependencies,
     type McpConnectionManagerOptions,
-} from './mcp/connection-manager.js';
-export { RemoteMcpClient, type RemoteMcpClientOptions } from './mcp/http-client.js';
-export { StdioMcpClient, type StdioMcpClientOptions } from './mcp/stdio-client.js';
+} from './mcp/connection-manager';
+export { RemoteMcpClient, type RemoteMcpClientOptions } from './mcp/http-client';
+export { StdioMcpClient, type StdioMcpClientOptions } from './mcp/stdio-client';
 export {
     asToolRegistryWithMcp,
     mcpToolName,
@@ -100,7 +100,7 @@ export {
     registerNamespacedMcpTools,
     sanitizeMcpName,
     type ToolRegistryWithMcp,
-} from './mcp/surfacing.js';
+} from './mcp/surfacing';
 export {
     type CreateMcpToolInput,
     createMcpToolRegistration,
@@ -109,7 +109,7 @@ export {
     type McpInput,
     type McpOutput,
     type McpToolInfo,
-} from './mcp-tool.js';
+} from './mcp-tool';
 export {
     createMonitorListToolRegistration,
     MONITOR_LIST_TOOL_NAME,
@@ -119,7 +119,7 @@ export {
     monitorListInputSchema,
     monitorListOutputSchema,
     registerMonitorListTool,
-} from './monitor-list-tool.js';
+} from './monitor-list-tool';
 export {
     compileMonitorFilter,
     createDefaultSpawner,
@@ -139,7 +139,7 @@ export {
     type MonitorStartRequest,
     type MonitorStatus,
     type MonitorStream,
-} from './monitor-manager.js';
+} from './monitor-manager';
 export {
     createMonitorOutputToolRegistration,
     MONITOR_OUTPUT_TOOL_NAME,
@@ -149,7 +149,7 @@ export {
     monitorOutputInputSchema,
     monitorOutputOutputSchema,
     registerMonitorOutputTool,
-} from './monitor-output-tool.js';
+} from './monitor-output-tool';
 export {
     createMonitorStartToolRegistration,
     DEFAULT_MONITOR_TOOLS_CONFIG,
@@ -161,7 +161,7 @@ export {
     monitorStartInputSchema,
     monitorStartOutputSchema,
     registerMonitorStartTool,
-} from './monitor-start-tool.js';
+} from './monitor-start-tool';
 export {
     createMonitorStopToolRegistration,
     MONITOR_STOP_TOOL_NAME,
@@ -171,7 +171,7 @@ export {
     monitorStopInputSchema,
     monitorStopOutputSchema,
     registerMonitorStopTool,
-} from './monitor-stop-tool.js';
+} from './monitor-stop-tool';
 export {
     assertNotepadWriteAllowed,
     isNotepadPath,
@@ -181,4 +181,4 @@ export {
     type NotepadWriteOperation,
     type NotepadWriteOperationAppend,
     type NotepadWriteOperationForbidden,
-} from './notepad-guard/notepad-guard.js';
+} from './notepad-guard/notepad-guard';

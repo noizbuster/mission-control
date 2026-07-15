@@ -1,8 +1,8 @@
 import type { InValue } from '@libsql/client';
 import { z } from 'zod';
-import type { SessionPendingWait } from '../memory/session-status-derivation.js';
-import type { BackgroundJobHandle } from './async-job-manager.js';
-import type { AgentKind, AgentRef, AgentStatus } from './runtime-registry.js';
+import type { SessionPendingWait } from '../memory/session-status-derivation';
+import type { BackgroundJobHandle } from './async-job-manager';
+import type { AgentKind, AgentRef, AgentStatus } from './runtime-registry';
 
 const runtimeAgentMetadataSchema = z
     .object({

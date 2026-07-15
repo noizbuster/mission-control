@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createStreamDecoder, truncateToValidUtf8Boundary } from './stream-decoder.js';
+import { createStreamDecoder, truncateToValidUtf8Boundary } from './stream-decoder';
 import { Buffer } from 'node:buffer';
 
 describe('createStreamDecoder', () => {

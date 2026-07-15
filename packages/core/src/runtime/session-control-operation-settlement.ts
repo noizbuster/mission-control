@@ -1,18 +1,18 @@
 import type { Client } from '@libsql/client';
-import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db.js';
-import type { SessionControlCallbackFence } from './session-control-cancellation.js';
-import type { SessionControlLease } from './session-control-lease.js';
+import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db';
+import type { SessionControlCallbackFence } from './session-control-cancellation';
+import type { SessionControlLease } from './session-control-lease';
 import {
     isLiveOperationLease,
     runSessionControlOperationImmediate,
     selectSessionControlOperation,
-} from './session-control-operation-sql.js';
+} from './session-control-operation-sql';
 import {
     assertOperationWallTime,
     redactLateSettlementMetadata,
     SESSION_CONTROL_SETTLED_RETENTION_MS,
     type SessionControlOperation,
-} from './session-control-operation-types.js';
+} from './session-control-operation-types';
 import { randomUUID } from 'node:crypto';
 
 type HandleSettlementInput = {

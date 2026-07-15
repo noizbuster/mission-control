@@ -19,8 +19,8 @@
  * from the caller's `roleConfig` or input.
  */
 import type { AgentDefinition } from '@mission-control/protocol';
-import type { ModelRole } from './model-roles.js';
-import { LEGACY_CATEGORY_MODEL_ALIASES, parseModelAlias } from './model-roles.js';
+import type { ModelRole } from './model-roles';
+import { LEGACY_CATEGORY_MODEL_ALIASES, parseModelAlias } from './model-roles';
 
 export interface ModelPattern {
     readonly providerID: string;

@@ -5,13 +5,13 @@ import type {
     ModelProviderSelection,
     ToolCall,
 } from '@mission-control/protocol';
-import type { ProjectContextMessageOptions } from '../context/project-context-messages.js';
-import type { ObservabilityRedactor } from '../providers/observability-redactor.js';
-import type { ProviderAdapter } from '../providers/provider-turn-types.js';
-import type { AdmitPromptInput, SessionAdmissionEventStore } from '../session-admission-types.js';
-import type { ToolInvocationSettlement, ToolRegistry } from '../tools/tool-registry.js';
-import type { RunCoordinatorProviderTurnResult } from './run-coordinator-lifecycle.js';
-import type { SessionControlHost } from './session-control-host.js';
+import type { ProjectContextMessageOptions } from '../context/project-context-messages';
+import type { ObservabilityRedactor } from '../providers/observability-redactor';
+import type { ProviderAdapter } from '../providers/provider-turn-types';
+import type { AdmitPromptInput, SessionAdmissionEventStore } from '../session-admission-types';
+import type { ToolInvocationSettlement, ToolRegistry } from '../tools/tool-registry';
+import type { RunCoordinatorProviderTurnResult } from './run-coordinator-lifecycle';
+import type { SessionControlHost } from './session-control-host';
 
 export type RunCoordinatorStore = SessionAdmissionEventStore & {
     readonly appendEnvelopeWithStoreSequence?: (envelope: AgentEventEnvelope) => Promise<void>;

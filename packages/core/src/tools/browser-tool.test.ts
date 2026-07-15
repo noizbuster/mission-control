@@ -4,7 +4,7 @@ import {
     type BrowserInput,
     createBrowserToolRegistration,
     registerBrowserTool,
-} from './browser-tool.js';
+} from './browser-tool';
 import {
     allowAllBrowserPermissions,
     browserToolContext,
@@ -15,8 +15,8 @@ import {
     makeBrowserToolWorkspace,
     mockBrowserCdp,
     projectTrustReader,
-} from './browser-tool-test-support.js';
-import { ToolRegistry } from './tool-registry.js';
+} from './browser-tool-test-support';
+import { ToolRegistry } from './tool-registry';
 
 describe('browser tool', () => {
     afterEach(async () => {

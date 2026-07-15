@@ -16,24 +16,24 @@
 
 import type { Client } from '@libsql/client';
 import { type Run, type RunCost, RunSchema, type RunStatus, type TaskRetryState } from '@mission-control/protocol';
-import type { ObservabilityRedactor } from '../../providers/observability-redactor.js';
-import { findMostRecentFailedRunRecord } from './failed-run-store.js';
-import { listRunsFromDb, mutateRunInDb, mutateRunWithClient, readRunFromDb, writeRunToDb } from './mission-run-db.js';
-import { type MissionRunStoreLocation, normalizeMissionRunStoreLocation } from './mission-run-store-location.js';
+import type { ObservabilityRedactor } from '../../providers/observability-redactor';
+import { findMostRecentFailedRunRecord } from './failed-run-store';
+import { listRunsFromDb, mutateRunInDb, mutateRunWithClient, readRunFromDb, writeRunToDb } from './mission-run-db';
+import { type MissionRunStoreLocation, normalizeMissionRunStoreLocation } from './mission-run-store-location';
 import {
     compatibleRunFilePath,
     listCompatibleRunJsonRecords,
     RunStoreError,
     readCompatibleRunJsonRecord,
-} from './run-json-compatibility.js';
-import { sanitizeRunForPersistence, sanitizeTerminalReason } from './run-persistence-sanitization.js';
-import { runWithoutSessionOwnerAuthority } from './run-session-owner-authority.js';
+} from './run-json-compatibility';
+import { sanitizeRunForPersistence, sanitizeTerminalReason } from './run-persistence-sanitization';
+import { runWithoutSessionOwnerAuthority } from './run-session-owner-authority';
 import {
     ALLOWED_RUN_TRANSITIONS,
     assertRunTransition,
     MissionRunTransitionError,
     TERMINAL_RUN_STATUSES,
-} from './run-status-transitions.js';
+} from './run-status-transitions';
 
 export {
     ALLOWED_RUN_TRANSITIONS,

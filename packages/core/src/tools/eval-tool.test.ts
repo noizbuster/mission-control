@@ -1,8 +1,8 @@
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import { type EvalInput, type EvalOutput } from './eval-schemas.js';
-import { createEvalToolRegistration, type EvalToolOptions } from './eval-tool.js';
-import { ToolRegistry } from './tool-registry.js';
+import { type EvalInput, type EvalOutput } from './eval-schemas';
+import { createEvalToolRegistration, type EvalToolOptions } from './eval-tool';
+import { ToolRegistry } from './tool-registry';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

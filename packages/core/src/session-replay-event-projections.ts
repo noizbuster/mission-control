@@ -1,5 +1,5 @@
 import type { AgentEvent, AgentEventEnvelope } from '@mission-control/protocol';
-import type { ApprovalProjection, ToolOutcomeProjection, ToolOutcomeStatus } from './session-replay-types.js';
+import type { ApprovalProjection, ToolOutcomeProjection, ToolOutcomeStatus } from './session-replay-types';
 
 export function projectApprovals(envelopes: readonly AgentEventEnvelope[]): readonly ApprovalProjection[] {
     const approvals = new Map<string, ApprovalProjection>();

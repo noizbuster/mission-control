@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type PlanChecklist, parsePlanChecklistText, parsePlanSections } from './plan-store.js';
+import { type PlanChecklist, parsePlanChecklistText, parsePlanSections } from './plan-store';
 
 describe('parsePlanChecklistText — section-scoped counting', () => {
     it('counts all column-0 checkboxes when no counted heading exists (fallback)', () => {

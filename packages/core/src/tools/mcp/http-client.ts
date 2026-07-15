@@ -37,10 +37,10 @@ import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { RequestOptions } from '@modelcontextprotocol/sdk/shared/protocol.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
-import type { McpClient, McpToolInfo } from '../mcp-tool.js';
-import { ToolExecutionError } from '../tool-registry-types.js';
-import { DEFAULT_MCP_TIMEOUT_MS, McpDeadline, raceWithDeadline } from './deadline.js';
-import { createSecretRedactor, type SecretRedactor } from './secret-redaction.js';
+import type { McpClient, McpToolInfo } from '../mcp-tool';
+import { ToolExecutionError } from '../tool-registry-types';
+import { DEFAULT_MCP_TIMEOUT_MS, McpDeadline, raceWithDeadline } from './deadline';
+import { createSecretRedactor, type SecretRedactor } from './secret-redaction';
 
 const CLIENT_NAME = 'mission-control';
 const CLIENT_VERSION = '0.1.0';

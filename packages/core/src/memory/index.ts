@@ -1,14 +1,14 @@
-export type { DataDirResolutionOptions } from './data-dir.js';
-export { missionControlDataDirEnvKey, resolveMissionControlDataDir } from './data-dir.js';
-export { InMemoryEventStore } from './in-memory-store.js';
-export type { JsonlSessionEventIdFactory, JsonlSessionEventStoreOpenOptions } from './jsonl-session-event-store.js';
-export { JsonlSessionEventStore, JsonlSessionEventStoreError } from './jsonl-session-event-store.js';
+export type { DataDirResolutionOptions } from './data-dir';
+export { missionControlDataDirEnvKey, resolveMissionControlDataDir } from './data-dir';
+export { InMemoryEventStore } from './in-memory-store';
+export type { JsonlSessionEventIdFactory, JsonlSessionEventStoreOpenOptions } from './jsonl-session-event-store';
+export { JsonlSessionEventStore, JsonlSessionEventStoreError } from './jsonl-session-event-store';
 export {
     JSONL_SESSION_EVENT_RECORD_KIND,
     JSONL_SESSION_LOG_HEADER_KIND,
     JSONL_SESSION_LOG_RECORD_VERSION,
     parseJsonlSessionLog,
-} from './jsonl-session-records.js';
+} from './jsonl-session-records';
 export {
     deleteLocalSessionRows,
     deleteLocalSessionTreeRows,
@@ -25,32 +25,32 @@ export {
     openLocalSessionEventStore,
     openLocalSessionProjectionStore,
     readLocalSessionReplay,
-} from './local-session-store.js';
-export type { MemoryStore, SessionCompactionRecordInput } from './memory-store.js';
+} from './local-session-store';
+export type { MemoryStore, SessionCompactionRecordInput } from './memory-store';
 export {
     InMemoryPersistentStore,
     type MemoryEntry,
     type MemoryNamespace,
     type MemoryQuery,
     type PersistentMemoryStore,
-} from './persistent-memory-store.js';
+} from './persistent-memory-store';
 export {
     type CreatePersistentStoreOptions,
     createPersistentStore,
     type PersistentStoreOpener,
     type TursoAvailabilityProbe,
-} from './persistent-store-factory.js';
+} from './persistent-store-factory';
 export {
     type CreateSessionArchiveInput,
     createSessionArchive,
     parseSessionArchive,
     SessionArchiveFileError,
-} from './session-archive-file.js';
+} from './session-archive-file';
 export {
     SessionArchiveValidationError,
     type SessionArchiveValidationErrorCode,
     validateSessionArchiveManifestForImport,
-} from './session-archive-validation.js';
+} from './session-archive-validation';
 export {
     exportLegacySessionJsonl,
     importLegacySessionCompatibilityWindow,
@@ -59,13 +59,13 @@ export {
     LegacySessionImportConflictError,
     type LegacySessionImportResult,
     listLegacySessionImportLedger,
-} from './session-import.js';
+} from './session-import';
 export type {
     LegacySessionImportDiagnostic,
     LegacySessionImportLedgerEntry,
     LegacySessionSourceKind,
-} from './session-import-sql.js';
-export { deriveSessionProjectionRecords } from './session-projection.js';
+} from './session-import-sql';
+export { deriveSessionProjectionRecords } from './session-projection';
 export type {
     SessionProjectionApprovalRecord,
     SessionProjectionDiagnostic,
@@ -75,17 +75,17 @@ export type {
     SessionProjectionRunRecord,
     SessionProjectionSessionRecord,
     SessionProjectionToolRecord,
-} from './session-projection-types.js';
+} from './session-projection-types';
 export {
     SqliteSessionEventStore,
     SqliteSessionEventStoreError,
     type SqliteSessionEventStoreOpenOptions,
     type SqliteSessionEventStoreRuntimeOptions,
-} from './sqlite-session-event-store.js';
+} from './sqlite-session-event-store';
 export {
     createSqliteSessionProjectionStore,
     openSqliteSessionProjectionStore,
     projectSessionEventsToSqlite,
     type SqliteSessionProjectionStore,
-} from './sqlite-session-projection.js';
-export { isTursoAvailable, TursoPersistentStore } from './turso-persistent-store.js';
+} from './sqlite-session-projection';
+export { isTursoAvailable, TursoPersistentStore } from './turso-persistent-store';

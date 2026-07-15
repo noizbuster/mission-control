@@ -23,15 +23,15 @@ import {
     type TaskRetryState,
     type WorkflowSpec,
 } from '@mission-control/protocol';
-import type { SessionControlAttachment, SessionControlHost } from '../session-control-host.js';
-import { type MissionRunStoreLocation, normalizeMissionRunStoreLocation } from './mission-run-store-location.js';
-import { readMission, updateMission } from './mission-store.js';
+import type { SessionControlAttachment, SessionControlHost } from '../session-control-host';
+import { type MissionRunStoreLocation, normalizeMissionRunStoreLocation } from './mission-run-store-location';
+import { readMission, updateMission } from './mission-store';
 import {
     type RunSessionOwnerAttachment,
     type RunSessionOwnerSettlement,
     settleRunSessionOwner,
-} from './run-session-owner-store.js';
-import { createRun, type RunPatch, TERMINAL_RUN_STATUSES, updateRunStatus } from './run-store.js';
+} from './run-session-owner-store';
+import { createRun, type RunPatch, TERMINAL_RUN_STATUSES, updateRunStatus } from './run-store';
 import { randomUUID } from 'node:crypto';
 
 const missionRunAttachments = new Map<string, SessionControlAttachment>();

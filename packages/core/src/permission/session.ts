@@ -1,7 +1,7 @@
 import type { PermissionReply, PermissionRequest, PermissionRule } from '@mission-control/protocol';
-import { evaluatePermissionRequest, type PermissionEvaluation } from './evaluator.js';
-import { PermissionRuleStore } from './store.js';
-import { normalizePermissionRequest, normalizePermissionRules } from './workspace-root.js';
+import { evaluatePermissionRequest, type PermissionEvaluation } from './evaluator';
+import { PermissionRuleStore } from './store';
+import { normalizePermissionRequest, normalizePermissionRules } from './workspace-root';
 
 export type PermissionSessionOptions = {
     readonly builtInRules?: readonly PermissionRule[];

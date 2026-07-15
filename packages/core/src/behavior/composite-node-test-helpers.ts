@@ -1,5 +1,5 @@
 import type { AbgSignal } from '@mission-control/protocol';
-import { type AbgNodeRegistry, type AbgNodeRunContext, createDefaultAbgNodeRegistry } from './node-registry.js';
+import { type AbgNodeRegistry, type AbgNodeRunContext, createDefaultAbgNodeRegistry } from './node-registry';
 
 export type CompositeNodeTestContext = AbgNodeRunContext & {
     readonly registry: AbgNodeRegistry;

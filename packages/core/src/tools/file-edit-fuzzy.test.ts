@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { FuzzyReplaceResult } from './file-edit-fuzzy.js';
+import type { FuzzyReplaceResult } from './file-edit-fuzzy';
 import {
     BlockAnchorReplacer,
     ContextAwareReplacer,
@@ -14,7 +14,7 @@ import {
     SimpleReplacer,
     TrimmedBoundaryReplacer,
     WhitespaceNormalizedReplacer,
-} from './file-edit-fuzzy.js';
+} from './file-edit-fuzzy';
 
 describe('levenshtein', () => {
     it('returns 0 for identical strings', () => {

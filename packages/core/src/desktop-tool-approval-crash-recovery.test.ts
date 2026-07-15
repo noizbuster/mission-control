@@ -1,6 +1,6 @@
 import type { AgentEvent } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import type { DesktopApprovalEffect } from './desktop-approval-effect.js';
+import type { DesktopApprovalEffect } from './desktop-approval-effect';
 import {
     approvalDecision,
     approvalOptions,
@@ -10,11 +10,11 @@ import {
     permissionRequestedEvent,
     providerToolCallEvent,
     runBlockedEvent,
-} from './desktop-tool-approval-test-support.js';
-import type { DesktopApprovalStore } from './desktop-tool-approvals.js';
-import { settleDesktopApproval } from './desktop-tool-approvals.js';
-import { openLocalSessionEventStore } from './memory/local-session-store.js';
-import { tempDataDir } from './memory/local-session-store-test-support.js';
+} from './desktop-tool-approval-test-support';
+import type { DesktopApprovalStore } from './desktop-tool-approvals';
+import { settleDesktopApproval } from './desktop-tool-approvals';
+import { openLocalSessionEventStore } from './memory/local-session-store';
+import { tempDataDir } from './memory/local-session-store-test-support';
 
 const CLAIMED_AT = '2026-07-15T01:00:00.000Z';
 const LEASE_EXPIRES_AT = '2026-07-15T01:01:00.000Z';

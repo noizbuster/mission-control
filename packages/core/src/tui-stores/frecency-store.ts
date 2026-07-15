@@ -1,6 +1,6 @@
 import { type TuiFrecencyRecord, TuiFrecencyRecordSchema } from '@mission-control/protocol';
-import { resolveMissionControlDataDir } from '../memory/data-dir.js';
-import { atomicWriteTextFile, jsonlText, parseJsonlRecords, readOptionalTextFile } from './store-file-io.js';
+import { resolveMissionControlDataDir } from '../memory/data-dir';
+import { atomicWriteTextFile, jsonlText, parseJsonlRecords, readOptionalTextFile } from './store-file-io';
 import { join } from 'node:path';
 
 export const TUI_FRECENCY_MAX_ENTRIES = 500;

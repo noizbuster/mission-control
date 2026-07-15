@@ -1,9 +1,9 @@
 import type { ProtocolError } from '@mission-control/protocol';
 import { ZodError } from 'zod';
-import type { ProviderCredentialResolver } from '../credential-resolver.js';
-import { ProviderTurnError } from '../provider-turn-types.js';
-import { GeminiGenerateContentEventParseError } from './gemini-generate-content-events.js';
-import { GeminiGenerateContentTransportError } from './gemini-generate-content-transport.js';
+import type { ProviderCredentialResolver } from '../credential-resolver';
+import { ProviderTurnError } from '../provider-turn-types';
+import { GeminiGenerateContentEventParseError } from './gemini-generate-content-events';
+import { GeminiGenerateContentTransportError } from './gemini-generate-content-transport';
 
 export function mapGeminiProviderError(error: unknown, resolver: ProviderCredentialResolver): ProtocolError {
     if (error instanceof ProviderTurnError) {

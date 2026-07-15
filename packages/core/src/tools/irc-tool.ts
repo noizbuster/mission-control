@@ -20,9 +20,9 @@
  */
 
 import { z } from 'zod';
-import type { AgentKind, AgentStatus, RuntimeAgentRegistry } from '../agents/runtime-registry.js';
-import { getRuntimeRegistry } from '../agents/runtime-registry.js';
-import type { ToolRegistration } from './tool-registry-types.js';
+import type { AgentKind, AgentStatus, RuntimeAgentRegistry } from '../agents/runtime-registry';
+import { getRuntimeRegistry } from '../agents/runtime-registry';
+import type { ToolRegistration } from './tool-registry-types';
 import { randomUUID } from 'node:crypto';
 
 export const IRC_TOOL_NAME = 'irc';

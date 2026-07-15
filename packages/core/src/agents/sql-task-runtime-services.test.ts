@@ -1,9 +1,9 @@
 import { createClient } from '@libsql/client';
 import { afterEach, describe, expect, it } from 'vitest';
-import { missionControlDataDirEnvKey } from '../memory/data-dir.js';
-import { openLocalSessionEventStore } from '../memory/local-session-store-open.js';
-import { localRuntimeDbUrl } from '../runtime/local-runtime-db.js';
-import { createSqlTaskRuntimeServices } from './sql-task-runtime-services.js';
+import { missionControlDataDirEnvKey } from '../memory/data-dir';
+import { openLocalSessionEventStore } from '../memory/local-session-store-open';
+import { localRuntimeDbUrl } from '../runtime/local-runtime-db';
+import { createSqlTaskRuntimeServices } from './sql-task-runtime-services';
 import { existsSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

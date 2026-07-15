@@ -1,7 +1,7 @@
 import type { PermissionRequest } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import { PermissionSession } from './session.js';
-import { PermissionRuleStore } from './store.js';
+import { PermissionSession } from './session';
+import { PermissionRuleStore } from './store';
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

@@ -1,6 +1,6 @@
-import { SessionControlOwnerError } from './session-control-owner-error.js';
-import { windowsSessionControlProxyInvocation } from './session-control-platform.js';
-import { readWindowsProxyReady, waitForWindowsProxyExit } from './session-control-proxy-windows-lifecycle.js';
+import { SessionControlOwnerError } from './session-control-owner-error';
+import { windowsSessionControlProxyInvocation } from './session-control-platform';
+import { readWindowsProxyReady, waitForWindowsProxyExit } from './session-control-proxy-windows-lifecycle';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';

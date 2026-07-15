@@ -1,6 +1,6 @@
 import type { AgentMessage } from '@mission-control/protocol';
-import { ProjectTrustStore } from '../trust/project-trust-store.js';
-import { loadProjectResources } from './project-resource-loader.js';
+import { ProjectTrustStore } from '../trust/project-trust-store';
+import { loadProjectResources } from './project-resource-loader';
 
 export type ProjectContextMessageOptions = {
     readonly workspaceRoot: string;

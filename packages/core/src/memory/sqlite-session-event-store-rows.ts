@@ -2,8 +2,8 @@ import type { ResultSet } from '@libsql/client';
 import type { AgentEvent } from '@mission-control/protocol';
 import { type AgentEventEnvelope, AgentEventEnvelopeSchema } from '@mission-control/protocol';
 import { z } from 'zod';
-import { SessionEventLog } from '../session-log.js';
-import { SqliteSessionEventStoreError } from './sqlite-session-event-store-errors.js';
+import { SessionEventLog } from '../session-log';
+import { SqliteSessionEventStoreError } from './sqlite-session-event-store-errors';
 
 const nextSequenceRowSchema = z.object({ next_seq: z.number().int().nonnegative() });
 const envelopeRowSchema = z.object({ payload_json: z.string() });

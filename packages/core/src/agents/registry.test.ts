@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentExecutionContext } from '../runtime/execution-context.js';
-import { SubAgentRegistry } from './registry.js';
-import type { SubAgent } from './sub-agent.js';
+import type { AgentExecutionContext } from '../runtime/execution-context';
+import { SubAgentRegistry } from './registry';
+import type { SubAgent } from './sub-agent';
 
 describe('SubAgentRegistry', () => {
     it('registers and resolves mock SubAgent', async () => {

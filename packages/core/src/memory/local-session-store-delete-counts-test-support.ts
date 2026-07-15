@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { openLocalLibsqlDb } from '../db/local-libsql-db.js';
-import { localSessionDbUrl } from './local-session-store.js';
+import { openLocalLibsqlDb } from '../db/local-libsql-db';
+import { localSessionDbUrl } from './local-session-store';
 
 export type SessionReferenceCounts = {
     readonly sessions: number;

@@ -11,7 +11,7 @@ import {
     emitPermissionRequestedEvent,
     emitReplyEvent,
     type PermissionGateContext,
-} from './approval-gate-events.js';
+} from './approval-gate-events';
 import {
     type ApprovalEventType,
     approvalIdFor,
@@ -21,9 +21,9 @@ import {
     errorCodeFor,
     permissionError,
     replyForApprovalState,
-} from './approval-gate-helpers.js';
-import { PermissionSession } from './permission/session.js';
-import { PermissionRuleStore } from './permission/store.js';
+} from './approval-gate-helpers';
+import { PermissionSession } from './permission/session';
+import { PermissionRuleStore } from './permission/store';
 
 export type PermissionDecisionResolver = (
     request: PermissionRequest,

@@ -1,8 +1,8 @@
 import type { BrowserConfig, PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { z } from 'zod';
-import type { ObservabilityRedactor } from '../providers/observability-redactor.js';
-import type { ProjectTrustReader } from '../trust/project-trust-store.js';
-import type { BrowserConnectFn } from './browser-tool-puppeteer.js';
+import type { ObservabilityRedactor } from '../providers/observability-redactor';
+import type { ProjectTrustReader } from '../trust/project-trust-store';
+import type { BrowserConnectFn } from './browser-tool-puppeteer';
 
 export const BROWSER_TOOL_NAME = 'browser';
 export const DEFAULT_TIMEOUT_SECONDS = 30;

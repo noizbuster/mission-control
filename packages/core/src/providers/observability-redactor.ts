@@ -1,11 +1,11 @@
 import { type AbgSignal, AbgSignalSchema } from '@mission-control/protocol';
-import { OBSERVABILITY_UNAVAILABLE, type ObservabilityRedactor } from './observability-value-redactor.js';
+import { OBSERVABILITY_UNAVAILABLE, type ObservabilityRedactor } from './observability-value-redactor';
 
 export {
     redactAgentEventEnvelopeForObservability,
     redactAgentEventForObservability,
-} from './observability-event-redactor.js';
-export { redactProviderChunkForObservability } from './observability-provider-chunk.js';
+} from './observability-event-redactor';
+export { redactProviderChunkForObservability } from './observability-provider-chunk';
 export {
     composeObservabilityRedactors,
     createObservabilityRedactor,
@@ -18,7 +18,7 @@ export {
     type ObservabilityRedactor,
     type ObservabilityRedactorOptions,
     type ObservabilityTextStream,
-} from './observability-value-redactor.js';
+} from './observability-value-redactor';
 
 export function redactAbgSignalForObservability(signal: AbgSignal, redactor: ObservabilityRedactor): AbgSignal {
     const parsed = AbgSignalSchema.safeParse(redactor.redactValue(signal));

@@ -1,15 +1,15 @@
 import { type InStatement } from '@libsql/client';
 import { z } from 'zod';
-import { runLocalLibsqlWrite } from '../db/local-libsql-db.js';
-import { runLocalLibsqlClientTransaction } from '../db/local-libsql-transaction.js';
-import type { ObservabilityRedactor } from '../providers/observability-redactor.js';
-import { openCanonicalRuntimeDb } from '../runtime/local-runtime-db.js';
-import { readCanonicalSessionTree } from '../runtime/session-stop-tree-resolver.js';
-import type { SessionStoreIdentity } from '../runtime/session-store-identity.js';
-import { computeCanonicalSessionTreeToken } from '../runtime/session-tree-token.js';
-import { resolveMissionControlDataDir } from './data-dir.js';
-import { importLegacySessionCompatibilityWindow } from './session-import.js';
-import { createSqliteSessionProjectionStore, type SqliteSessionProjectionStore } from './sqlite-session-projection.js';
+import { runLocalLibsqlWrite } from '../db/local-libsql-db';
+import { runLocalLibsqlClientTransaction } from '../db/local-libsql-transaction';
+import type { ObservabilityRedactor } from '../providers/observability-redactor';
+import { openCanonicalRuntimeDb } from '../runtime/local-runtime-db';
+import { readCanonicalSessionTree } from '../runtime/session-stop-tree-resolver';
+import type { SessionStoreIdentity } from '../runtime/session-store-identity';
+import { computeCanonicalSessionTreeToken } from '../runtime/session-tree-token';
+import { resolveMissionControlDataDir } from './data-dir';
+import { importLegacySessionCompatibilityWindow } from './session-import';
+import { createSqliteSessionProjectionStore, type SqliteSessionProjectionStore } from './sqlite-session-projection';
 
 export type EnsuredLocalSessionDatabase = {
     readonly identity: SessionStoreIdentity;

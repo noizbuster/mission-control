@@ -5,11 +5,11 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { globToolRegistration } from './glob-tool.js';
-import { todoWriteToolRegistration } from './todowrite-tool.js';
-import { ToolRegistry } from './tool-registry.js';
-import type { ToolAdvertisement } from './tool-registry-types.js';
-import { webfetchToolRegistration } from './webfetch-tool.js';
+import { globToolRegistration } from './glob-tool';
+import { todoWriteToolRegistration } from './todowrite-tool';
+import { ToolRegistry } from './tool-registry';
+import type { ToolAdvertisement } from './tool-registry-types';
+import { webfetchToolRegistration } from './webfetch-tool';
 import { createServer, type Server } from 'node:http';
 
 function registerAll(registry: ToolRegistry): readonly ToolAdvertisement[] {

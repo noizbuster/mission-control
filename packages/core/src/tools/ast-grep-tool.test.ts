@@ -1,23 +1,23 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import type { NativeAstReplaceChange } from '../native/natives-client.js';
-import type { AstRewriteFn } from './ast-edit.js';
-import type { AstGrepMatch, AstGrepResult, AstGrepRunOptions } from './ast-grep-runner.js';
-import { AstGrepRunnerError } from './ast-grep-runner.js';
+import type { NativeAstReplaceChange } from '../native/natives-client';
+import type { AstRewriteFn } from './ast-edit';
+import type { AstGrepMatch, AstGrepResult, AstGrepRunOptions } from './ast-grep-runner';
+import { AstGrepRunnerError } from './ast-grep-runner';
 import {
     type AstGrepOutput,
     type AstGrepQueryOutput,
     type AstGrepRewriteOutput,
     astGrepParametersJsonSchema,
-} from './ast-grep-schemas.js';
+} from './ast-grep-schemas';
 import {
     type AstGrepRunnerFn,
     type AstGrepToolOptions,
     createAstGrepToolRegistration,
     registerAstGrepTool,
-} from './ast-grep-tool.js';
-import { createResolveToolRegistration } from './resolve/resolve-tool.js';
-import { StagedPreviewRegistry } from './staged-preview-registry.js';
-import { ToolExecutionError, ToolRegistry } from './tool-registry.js';
+} from './ast-grep-tool';
+import { createResolveToolRegistration } from './resolve/resolve-tool';
+import { StagedPreviewRegistry } from './staged-preview-registry';
+import { ToolExecutionError, ToolRegistry } from './tool-registry';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

@@ -1,8 +1,8 @@
 import type { ProviderStreamChunk } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import type { SessionControlEpoch } from '../runtime/session-control-cancellation.js';
-import { ProviderTurnRunner } from './provider-turn-runner.js';
-import type { ProviderAdapter, ProviderAdapterContext } from './provider-turn-types.js';
+import type { SessionControlEpoch } from '../runtime/session-control-cancellation';
+import { ProviderTurnRunner } from './provider-turn-runner';
+import type { ProviderAdapter, ProviderAdapterContext } from './provider-turn-types';
 
 const CONTROL_EPOCH: SessionControlEpoch = {
     dbIdentity: 'b'.repeat(64),

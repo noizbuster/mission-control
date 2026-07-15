@@ -8,4 +8,4 @@ export {
     type ProjectTrustStoreOptions,
     projectTrustDecisions,
     resolveProjectTrustDecision,
-} from './project-trust-store.js';
+} from './project-trust-store';

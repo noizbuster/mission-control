@@ -1,6 +1,6 @@
-export { createGraphTurnRunner, type GraphTurnRunnerWiring } from './graph-coordinator-turn.js';
-export { SessionRunCoordinator } from './run-coordinator-engine.js';
-export type { RunCoordinatorProviderTurnResult, RunCoordinatorResult } from './run-coordinator-lifecycle.js';
+export { createGraphTurnRunner, type GraphTurnRunnerWiring } from './graph-coordinator-turn';
+export { SessionRunCoordinator } from './run-coordinator-engine';
+export type { RunCoordinatorProviderTurnResult, RunCoordinatorResult } from './run-coordinator-lifecycle';
 export type {
     RunCoordinatorPromptInput,
     RunCoordinatorReadMessages,
@@ -8,4 +8,4 @@ export type {
     RunCoordinatorTurnContext,
     RunCoordinatorTurnRunner,
     SessionRunCoordinatorOptions,
-} from './run-coordinator-types.js';
+} from './run-coordinator-types';

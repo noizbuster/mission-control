@@ -1,7 +1,7 @@
 import type { SessionAbortAffectedCounts, SessionStopReceiptContract } from '@mission-control/protocol';
-import type { LocalSessionEventStore } from '../memory/local-session-store.js';
-import type { SessionControlAttachedHandle, SessionControlHost } from './session-control-host.js';
-import type { SessionControlOperationTimer } from './session-control-operation.js';
+import type { LocalSessionEventStore } from '../memory/local-session-store';
+import type { SessionControlAttachedHandle, SessionControlHost } from './session-control-host';
+import type { SessionControlOperationTimer } from './session-control-operation';
 
 export type ExactSessionStopInput = {
     readonly sessionId: string;

@@ -1,17 +1,17 @@
 import { SessionStopReceiptSchema } from '@mission-control/protocol';
-import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db.js';
-import type { LocalSessionEventStore } from '../memory/local-session-store.js';
-import type { ObservabilityRedactor } from '../providers/observability-redactor.js';
-import { releaseMissionRunControlAttachment } from './mission-run/mission-run-service.js';
-import { SessionControlFencedError, type SessionControlHost } from './session-control-host.js';
-import { runWithSessionControlLeaseFence, SessionControlLeaseError } from './session-control-lease.js';
+import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db';
+import type { LocalSessionEventStore } from '../memory/local-session-store';
+import type { ObservabilityRedactor } from '../providers/observability-redactor';
+import { releaseMissionRunControlAttachment } from './mission-run/mission-run-service';
+import { SessionControlFencedError, type SessionControlHost } from './session-control-host';
+import { runWithSessionControlLeaseFence, SessionControlLeaseError } from './session-control-lease';
 import {
     completeSessionControlOperationWithClient,
     failSessionControlOperationAfterFenceLoss,
-} from './session-control-operation.js';
-import { SessionStopAcquisitionController } from './session-stop-acquisition.js';
-import { appendFencedSessionStopEvent } from './session-stop-event-writer.js';
-import { applyStopMutation, readSessionStatus, refreshStoppedSession } from './session-stop-mutation.js';
+} from './session-control-operation';
+import { SessionStopAcquisitionController } from './session-stop-acquisition';
+import { appendFencedSessionStopEvent } from './session-stop-event-writer';
+import { applyStopMutation, readSessionStatus, refreshStoppedSession } from './session-stop-mutation';
 import {
     abortCompletedEvent,
     appendStopCancellationEvents,
@@ -19,10 +19,10 @@ import {
     hasStopAffected,
     settleStopHandlesBeforeDeadline,
     stopReceipt,
-} from './session-stop-service-support.js';
-import type { ExactSessionStopAcquisition, ExactSessionStopInput, SessionStopReceipt } from './session-stop-types.js';
+} from './session-stop-service-support';
+import type { ExactSessionStopAcquisition, ExactSessionStopInput, SessionStopReceipt } from './session-stop-types';
 
-export type { ExactSessionStopAcquisition, ExactSessionStopInput, SessionStopReceipt } from './session-stop-types.js';
+export type { ExactSessionStopAcquisition, ExactSessionStopInput, SessionStopReceipt } from './session-stop-types';
 
 export class SessionStopService {
     private readonly runtime: LocalLibsqlWriteTarget;

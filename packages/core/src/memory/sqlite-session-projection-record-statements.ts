@@ -1,12 +1,12 @@
 import type { InStatement } from '@libsql/client';
-import type { ToolOutcomeStatus } from '../session-replay-types.js';
+import type { ToolOutcomeStatus } from '../session-replay-types';
 import type {
     SessionProjectionApprovalRecord,
     SessionProjectionDiagnostic,
     SessionProjectionProviderFailureRecord,
     SessionProjectionRunRecord,
     SessionProjectionToolRecord,
-} from './session-projection-types.js';
+} from './session-projection-types';
 
 export function insertRunStatement(record: SessionProjectionRunRecord): InStatement {
     return {

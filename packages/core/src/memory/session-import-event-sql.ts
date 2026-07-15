@@ -1,15 +1,15 @@
 import type { InStatement } from '@libsql/client';
 import type { AgentEventEnvelope } from '@mission-control/protocol';
-import { type LocalLibsqlWriteTarget, runLocalLibsqlWrite } from '../db/local-libsql-db.js';
-import { runLocalLibsqlClientTransaction } from '../db/local-libsql-transaction.js';
-import { refreshSessionAwaitingFromPendingWaits } from './session-awaiting-sql.js';
-import { absentExactLegacyEnvelopes } from './session-import-event-identities.js';
-import { readCanonicalSessionEnvelopes } from './session-import-event-read.js';
-import { hasLegacyImport, recordLegacyImport } from './session-import-sql.js';
-import { importedSessionSummaryStatements, maximumIsoTimestamp } from './session-import-summary-sql.js';
-import { deriveSessionProjectionRecordsFromEnvelopes } from './session-projection.js';
-import { ensureSqliteSessionRows } from './sqlite-session-event-store-sql.js';
-import { replaceStatements } from './sqlite-session-projection-statements.js';
+import { type LocalLibsqlWriteTarget, runLocalLibsqlWrite } from '../db/local-libsql-db';
+import { runLocalLibsqlClientTransaction } from '../db/local-libsql-transaction';
+import { refreshSessionAwaitingFromPendingWaits } from './session-awaiting-sql';
+import { absentExactLegacyEnvelopes } from './session-import-event-identities';
+import { readCanonicalSessionEnvelopes } from './session-import-event-read';
+import { hasLegacyImport, recordLegacyImport } from './session-import-sql';
+import { importedSessionSummaryStatements, maximumIsoTimestamp } from './session-import-summary-sql';
+import { deriveSessionProjectionRecordsFromEnvelopes } from './session-projection';
+import { ensureSqliteSessionRows } from './sqlite-session-event-store-sql';
+import { replaceStatements } from './sqlite-session-projection-statements';
 
 export type JsonlSessionRowsImportResult =
     | { readonly kind: 'source_skipped' }

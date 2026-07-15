@@ -5,8 +5,8 @@ import {
     createJsonlSessionLogHeader,
     parseJsonlSessionLog,
     serializeJsonlRecord,
-} from './jsonl-session-records.js';
-import type { ImportAccumulator } from './session-import-sources.js';
+} from './jsonl-session-records';
+import type { ImportAccumulator } from './session-import-sources';
 import { readFile, writeFile } from 'node:fs/promises';
 
 export function emptyImportAccumulator(): ImportAccumulator {

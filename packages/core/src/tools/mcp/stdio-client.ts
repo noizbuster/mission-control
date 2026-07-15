@@ -23,10 +23,10 @@
 import type { ProtocolError } from '@mission-control/protocol';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import type { McpClient, McpToolInfo } from '../mcp-tool.js';
-import { ToolExecutionError } from '../tool-registry-types.js';
-import { DEFAULT_MCP_TIMEOUT_MS, McpDeadline, raceWithDeadline } from './deadline.js';
-import { createSecretRedactor, type SecretRedactor } from './secret-redaction.js';
+import type { McpClient, McpToolInfo } from '../mcp-tool';
+import { ToolExecutionError } from '../tool-registry-types';
+import { DEFAULT_MCP_TIMEOUT_MS, McpDeadline, raceWithDeadline } from './deadline';
+import { createSecretRedactor, type SecretRedactor } from './secret-redaction';
 
 const CLIENT_NAME = 'mission-control';
 const CLIENT_VERSION = '0.1.0';

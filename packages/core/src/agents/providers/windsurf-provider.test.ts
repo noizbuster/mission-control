@@ -1,7 +1,7 @@
 import type { AgentDefinition } from '@mission-control/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { LoadContext } from '../capability/types.js';
-import { windsurfAgentProvider } from './windsurf-provider.js';
+import type { LoadContext } from '../capability/types';
+import { windsurfAgentProvider } from './windsurf-provider';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

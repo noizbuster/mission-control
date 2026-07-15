@@ -1,8 +1,8 @@
 import type { AgentEvent, ProtocolError, ProviderStreamChunk } from '@mission-control/protocol';
-import { JsonlSessionEventStore } from '../memory/jsonl-session-event-store.js';
-import type { ProviderAdapter, ProviderTurnRequest } from '../providers/provider-turn-types.js';
-import { SessionRunCoordinator } from './run-coordinator.js';
-import type { RunCoordinatorTurnRunner } from './run-coordinator-types.js';
+import { JsonlSessionEventStore } from '../memory/jsonl-session-event-store';
+import type { ProviderAdapter, ProviderTurnRequest } from '../providers/provider-turn-types';
+import { SessionRunCoordinator } from './run-coordinator';
+import type { RunCoordinatorTurnRunner } from './run-coordinator-types';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

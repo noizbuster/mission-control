@@ -17,7 +17,7 @@ import {
     ttsOutputSchema,
 } from '@mission-control/protocol';
 import type { z } from 'zod';
-import { type ToolAdvertisement, ToolExecutionError, type ToolRegistration, ToolRegistry } from './tool-registry.js';
+import { type ToolAdvertisement, ToolExecutionError, type ToolRegistration, ToolRegistry } from './tool-registry';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 

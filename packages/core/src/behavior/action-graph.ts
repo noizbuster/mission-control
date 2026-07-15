@@ -1,4 +1,4 @@
-import type { BehaviorNode } from './behavior-node.js';
+import type { BehaviorNode } from './behavior-node';
 
 export type ActionGraphNode = BehaviorNode;
 

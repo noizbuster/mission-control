@@ -4,8 +4,8 @@ import type {
     PermissionDecision,
     PermissionRequest,
 } from '@mission-control/protocol';
-import { runTaskWithSidecarFallback } from './agent-runtime-sidecar.js';
-import type { SidecarClient } from './native/sidecar-client.js';
+import { runTaskWithSidecarFallback } from './agent-runtime-sidecar';
+import type { SidecarClient } from './native/sidecar-client';
 
 export type RuntimeDemoTaskInput = {
     readonly sessionId: string;

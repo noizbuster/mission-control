@@ -1,7 +1,7 @@
 import type { AgentEventEnvelope } from '@mission-control/protocol';
 import { AgentEventEnvelopeSchema } from '@mission-control/protocol';
 import { z } from 'zod';
-import type { SessionProjectionDiagnostic } from './session-projection-types.js';
+import type { SessionProjectionDiagnostic } from './session-projection-types';
 
 export type ParsedSqliteProjectionInput =
     | { readonly kind: 'ok'; readonly envelopes: readonly AgentEventEnvelope[] }

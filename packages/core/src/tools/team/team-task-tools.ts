@@ -13,9 +13,9 @@
  * claimants serialise and exactly one succeeds.
  */
 import { z } from 'zod';
-import type { ToolRegistration } from '../tool-registry-types.js';
-import { ToolExecutionError } from '../tool-registry-types.js';
-import { type TeamToolContext, type TeamToolFactoryOptions, teamModeEnabled } from './team-context.js';
+import type { ToolRegistration } from '../tool-registry-types';
+import { ToolExecutionError } from '../tool-registry-types';
+import { type TeamToolContext, type TeamToolFactoryOptions, teamModeEnabled } from './team-context';
 import {
     type TeamTaskCreateInput,
     type TeamTaskGetInput,
@@ -25,8 +25,8 @@ import {
     teamTaskGetInputSchema,
     teamTaskListInputSchema,
     teamTaskUpdateInputSchema,
-} from './team-schemas.js';
-import { createTask, getTask, readState, readTasks, updateTask } from './team-store.js';
+} from './team-schemas';
+import { createTask, getTask, readState, readTasks, updateTask } from './team-store';
 
 const OUTPUT_LIMIT = { maxModelOutputChars: 6000 } as const;
 const CAPABILITY_CLASSES = ['team'] as const;

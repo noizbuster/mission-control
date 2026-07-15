@@ -5,9 +5,9 @@ import {
     createJsonlSessionLogHeader,
     parseJsonlSessionLog,
     serializeJsonlRecord,
-} from './memory/jsonl-session-records.js';
-import { SessionEventLog } from './session-log.js';
-import { projectJsonlSessionReplayPrefix, projectSessionReplay } from './session-replay.js';
+} from './memory/jsonl-session-records';
+import { SessionEventLog } from './session-log';
+import { projectJsonlSessionReplayPrefix, projectSessionReplay } from './session-replay';
 
 describe('session replay projectors', () => {
     it('reconstructs the same ABG timeline and graph snapshot as the live log', () => {

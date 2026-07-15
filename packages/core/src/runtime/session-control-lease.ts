@@ -1,12 +1,12 @@
 import type { Client } from '@libsql/client';
-import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db.js';
+import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db';
 import {
     insertSessionControlLease,
     replaceExpiredSessionControlLease,
     runSessionControlLeaseImmediate,
     selectSessionControlLease,
-} from './session-control-lease-sql.js';
-import { SESSION_CONTROL_DEAD_LEASE_RETENTION_MS } from './session-control-operation-types.js';
+} from './session-control-lease-sql';
+import { SESSION_CONTROL_DEAD_LEASE_RETENTION_MS } from './session-control-operation-types';
 
 export const SESSION_CONTROL_LEASE_TTL_MS = 15_000;
 

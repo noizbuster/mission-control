@@ -3,13 +3,13 @@ import {
     acquireSessionControlLease,
     expireSessionControlLease,
     readSessionControlLease,
-} from './session-control-lease.js';
-import { readSessionControlOperation, settleSessionControlOperationHandle } from './session-control-operation.js';
-import { SessionOwnerControlClientError } from './session-owner-control-client.js';
+} from './session-control-lease';
+import { readSessionControlOperation, settleSessionControlOperationHandle } from './session-control-operation';
+import { SessionOwnerControlClientError } from './session-owner-control-client';
 import {
     cleanupSessionOwnerControlFixtures,
     createSessionOwnerControlFixture as createFixture,
-} from './session-owner-control-test-support.js';
+} from './session-owner-control-test-support';
 import { createHash } from 'node:crypto';
 
 afterEach(cleanupSessionOwnerControlFixtures);

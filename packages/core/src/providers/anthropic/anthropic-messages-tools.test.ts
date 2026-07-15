@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createStaticProviderCredentialResolver } from '../credential-resolver.js';
+import { createStaticProviderCredentialResolver } from '../credential-resolver';
 import {
     type AnthropicMessagesTransportRequest,
     createAnthropicMessagesProvider,
-} from './anthropic-messages-provider.js';
+} from './anthropic-messages-provider';
 import {
     anthropicCredential,
     anthropicTurnRequest,
@@ -12,7 +12,7 @@ import {
     readToolDefinition,
     transportFromEvents,
     transportFromTurnEvents,
-} from './anthropic-messages-test-support.js';
+} from './anthropic-messages-test-support';
 
 describe('Anthropic Messages tool use', () => {
     it('maps Anthropic tool_use blocks to provider-neutral tool calls and transcript metadata', async () => {

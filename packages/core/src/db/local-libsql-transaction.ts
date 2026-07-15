@@ -1,5 +1,5 @@
 import type { Client } from '@libsql/client';
-import { quarantineLocalLibsqlClient } from './local-libsql-registry.js';
+import { quarantineLocalLibsqlClient } from './local-libsql-registry';
 
 export async function runLocalLibsqlClientTransaction<T>(client: Client, write: () => Promise<T>): Promise<T> {
     await client.execute('BEGIN IMMEDIATE TRANSACTION');

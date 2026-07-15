@@ -1,5 +1,5 @@
 import type { AgentEvent, ProtocolError } from '@mission-control/protocol';
-import { ToolExecutionError } from './tool-registry-types.js';
+import { ToolExecutionError } from './tool-registry-types';
 
 export type FilePatchFailureCode =
     | 'approval_denied'

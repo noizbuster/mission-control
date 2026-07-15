@@ -1,7 +1,7 @@
 import type { AgentDefinition } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { deriveChildPathPolicies, evaluatePathPolicies } from '../../agents/path-policy-derive.js';
-import { canSpawn } from '../../agents/spawn-policy.js';
+import { deriveChildPathPolicies, evaluatePathPolicies } from '../../agents/path-policy-derive';
+import { canSpawn } from '../../agents/spawn-policy';
 
 /**
  * Ported from opencode `test/agent/plan-mode-subagent-bypass.test.ts` (issue #26514).

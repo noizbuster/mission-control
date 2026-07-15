@@ -15,7 +15,7 @@
  * — children SHOULD keep yield. It is the one capability that terminates a child.
  */
 import { z } from 'zod';
-import { ToolExecutionError, type ToolRegistration } from '../tool-registry-types.js';
+import { ToolExecutionError, type ToolRegistration } from '../tool-registry-types';
 
 /** The canonical tool name so registry lookups avoid magic strings. */
 export const YIELD_TOOL_NAME = 'yield';

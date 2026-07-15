@@ -1,9 +1,9 @@
-import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db.js';
-import { runSessionControlOperationImmediate } from './session-control-operation-sql.js';
+import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db';
+import { runSessionControlOperationImmediate } from './session-control-operation-sql';
 import {
     SESSION_CONTROL_GC_INTERVAL_MS,
     SESSION_CONTROL_LATE_SETTLEMENT_RETENTION_MS,
-} from './session-control-operation-types.js';
+} from './session-control-operation-types';
 
 type ScheduledCallback = () => void | Promise<void>;
 

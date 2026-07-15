@@ -3,8 +3,8 @@ import type {
     RunCoordinatorActiveRun,
     RunCoordinatorResult,
     RunCoordinatorRunEventType,
-} from './run-coordinator-lifecycle.js';
-import { safeRunReason } from './run-coordinator-lifecycle.js';
+} from './run-coordinator-lifecycle';
+import { safeRunReason } from './run-coordinator-lifecycle';
 
 export function statusFromActiveRun(activeRun: RunCoordinatorActiveRun | undefined): RunCoordinatorResult {
     if (activeRun === undefined) {

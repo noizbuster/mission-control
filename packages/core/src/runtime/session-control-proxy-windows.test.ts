@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import {
     createWindowsSessionControlProxyTransport,
     launchWindowsSessionControlProxy,
-} from './session-control-proxy-windows.js';
-import { authenticateIncomingSessionControlConnection } from './session-control-registry-auth.js';
+} from './session-control-proxy-windows';
+import { authenticateIncomingSessionControlConnection } from './session-control-registry-auth';
 import { once } from 'node:events';
 import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

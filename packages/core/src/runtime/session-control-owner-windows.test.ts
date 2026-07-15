@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { readSessionControlLease } from './session-control-lease.js';
-import { cleanupOperationTestRuntimes, createOperationTestRuntime } from './session-control-operation-test-support.js';
-import { publishWindowsSessionControlOwner } from './session-control-owner-windows.js';
-import { type WindowsSessionControlProxyLaunchInput, windowsPipeName } from './session-control-proxy-windows.js';
+import { readSessionControlLease } from './session-control-lease';
+import { cleanupOperationTestRuntimes, createOperationTestRuntime } from './session-control-operation-test-support';
+import { publishWindowsSessionControlOwner } from './session-control-owner-windows';
+import { type WindowsSessionControlProxyLaunchInput, windowsPipeName } from './session-control-proxy-windows';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

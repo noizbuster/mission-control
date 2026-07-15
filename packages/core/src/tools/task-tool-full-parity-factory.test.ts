@@ -16,12 +16,12 @@ import type {
 } from '@mission-control/protocol';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
-import type { ModelPattern } from '../agents/model-resolver.js';
+import type { ModelPattern } from '../agents/model-resolver';
 import {
     buildResolveModelFn,
     createFullParityTaskToolRegistrationForCli,
-} from './task-tool-full-parity-factory.js';
-import { ToolRegistry } from './tool-registry.js';
+} from './task-tool-full-parity-factory';
+import { ToolRegistry } from './tool-registry';
 
 const parentModel: AbgNodeModelOptions = { providerID: 'local', modelID: 'local-echo' };
 const parentModelWithVariant: AbgNodeModelOptions = {
@@ -159,7 +159,7 @@ describe('buildResolveModelFn', () => {
     });
 
     describe('roleConfig routing (TODO #3 wiring)', () => {
-        const roleConfig: Partial<Record<import('../agents/model-roles.js').ModelRole, ModelPattern>> = {
+        const roleConfig: Partial<Record<import('../agents/model-roles').ModelRole, ModelPattern>> = {
             slow: { providerID: 'anthropic', modelID: 'claude-sonnet-4-6' },
         };
 
@@ -174,7 +174,7 @@ describe('buildResolveModelFn', () => {
 
         it('preserves the mctrl/task skip-guard over roleConfig at the factory level', () => {
             // Given: a roleConfig with a task entry that must NOT be consulted
-            const taskRoleConfig: Partial<Record<import('../agents/model-roles.js').ModelRole, ModelPattern>> = {
+            const taskRoleConfig: Partial<Record<import('../agents/model-roles').ModelRole, ModelPattern>> = {
                 task: { providerID: 'should-not-be-used', modelID: 'no' },
             };
             const resolveModel = buildResolveModelFn({ model: parentModel, roleConfig: taskRoleConfig });

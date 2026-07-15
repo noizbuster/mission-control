@@ -1,4 +1,4 @@
-import { REDACTED_CREDENTIAL } from './redaction-handler.js';
+import { REDACTED_CREDENTIAL } from './redaction-handler';
 
 export type ObservabilityTextStream = {
     readonly push: (text: string) => readonly string[];

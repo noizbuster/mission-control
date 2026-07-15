@@ -8,14 +8,14 @@ import type {
     PermissionRequest,
     ProtocolErrorCode,
 } from '@mission-control/protocol';
-import type { AgentRuntimeOptions } from './agent-runtime-options.js';
-import { resolveSidecarCommand } from './agent-runtime-sidecar.js';
-import { PermissionGate } from './approval-gate.js';
-import { EventBus } from './event-bus.js';
-import { MockSidecarClient } from './native/mock-sidecar-client.js';
-import { ProcessSidecarClient, type SidecarClient } from './native/sidecar-client.js';
-import { createDefaultPermissionDecision } from './permissions.js';
-import { SessionEventLog } from './session-log.js';
+import type { AgentRuntimeOptions } from './agent-runtime-options';
+import { resolveSidecarCommand } from './agent-runtime-sidecar';
+import { PermissionGate } from './approval-gate';
+import { EventBus } from './event-bus';
+import { MockSidecarClient } from './native/mock-sidecar-client';
+import { ProcessSidecarClient, type SidecarClient } from './native/sidecar-client';
+import { createDefaultPermissionDecision } from './permissions';
+import { SessionEventLog } from './session-log';
 
 export function createRuntimeSidecarClient(options: AgentRuntimeOptions): SidecarClient {
     return options.useNative

@@ -1,8 +1,8 @@
 import type { ProtocolError } from '@mission-control/protocol';
-import type { ProviderCredentialResolver } from '../credential-resolver.js';
-import { ProviderTurnError } from '../provider-turn-types.js';
-import { OpenAIResponsesEventParseError } from './openai-responses-events.js';
-import { OpenAIResponsesTransportError } from './openai-responses-transport.js';
+import type { ProviderCredentialResolver } from '../credential-resolver';
+import { ProviderTurnError } from '../provider-turn-types';
+import { OpenAIResponsesEventParseError } from './openai-responses-events';
+import { OpenAIResponsesTransportError } from './openai-responses-transport';
 
 export type OpenAIResponsesErrorRedactor = (text: string) => string;
 

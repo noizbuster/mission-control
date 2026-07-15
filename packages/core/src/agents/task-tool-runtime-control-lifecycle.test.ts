@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { attachChildControl } from './task-tool-runtime-control.js';
+import { attachChildControl } from './task-tool-runtime-control';
 import {
     abortListenerCounts,
     cleanupLifecycleHosts,
     createLifecycleHost,
     makeLifecycleServices,
-} from './task-tool-runtime-lifecycle-test-support.js';
+} from './task-tool-runtime-lifecycle-test-support';
 
 afterEach(async () => {
     vi.restoreAllMocks();

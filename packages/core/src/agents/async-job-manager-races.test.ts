@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AsyncJobCleanupError, AsyncJobManager, QuarantinedJobSettlementError } from './async-job-manager.js';
+import { AsyncJobCleanupError, AsyncJobManager, QuarantinedJobSettlementError } from './async-job-manager';
 import {
     abortListenerCounts,
     cleanupLifecycleHosts,
     createLifecycleHost,
-} from './task-tool-runtime-lifecycle-test-support.js';
+} from './task-tool-runtime-lifecycle-test-support';
 
 afterEach(async () => {
     vi.restoreAllMocks();

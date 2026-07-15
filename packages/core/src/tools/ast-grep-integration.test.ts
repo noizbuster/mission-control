@@ -12,7 +12,7 @@
  */
 
 import { afterEach, describe, expect, it } from 'vitest';
-import { runAstGrep } from './ast-grep-runner.js';
+import { runAstGrep } from './ast-grep-runner';
 import { spawnSync } from 'node:child_process';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

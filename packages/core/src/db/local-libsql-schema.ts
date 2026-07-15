@@ -1,11 +1,11 @@
 import type { Client, InStatement } from '@libsql/client';
-import { agentJobRelationSchemaSql } from './local-libsql-schema-agent-jobs.js';
-import { rebuildLegacyDesktopApprovalEffects } from './local-libsql-schema-approval-effects.js';
-import { sessionEventStoreSchemaSql } from './local-libsql-schema-events.js';
-import { memoryEntriesSchemaSql } from './local-libsql-schema-memory.js';
-import { sessionProjectionSchemaSql } from './local-libsql-schema-projections.js';
-import { runtimePersistenceSchemaSql } from './local-libsql-schema-runtime.js';
-import { sessionControlSchemaSql } from './local-libsql-schema-session-control.js';
+import { agentJobRelationSchemaSql } from './local-libsql-schema-agent-jobs';
+import { rebuildLegacyDesktopApprovalEffects } from './local-libsql-schema-approval-effects';
+import { sessionEventStoreSchemaSql } from './local-libsql-schema-events';
+import { memoryEntriesSchemaSql } from './local-libsql-schema-memory';
+import { sessionProjectionSchemaSql } from './local-libsql-schema-projections';
+import { runtimePersistenceSchemaSql } from './local-libsql-schema-runtime';
+import { sessionControlSchemaSql } from './local-libsql-schema-session-control';
 
 export const localDbSchemaSql = [
     ...memoryEntriesSchemaSql,

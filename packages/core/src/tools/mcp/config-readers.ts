@@ -1,6 +1,6 @@
 import type { McpProjectConfig, MissionControlConfig } from '@mission-control/protocol';
 import { McpProjectConfigSchema, MissionControlConfigSchema } from '@mission-control/protocol';
-import { stripJsoncComments } from '../../workflows/jsonc-parser.js';
+import { stripJsoncComments } from '../../workflows/jsonc-parser';
 import { readFile } from 'node:fs/promises';
 
 export type ReadUserResult = { readonly config: MissionControlConfig | undefined; readonly error?: string };

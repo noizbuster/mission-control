@@ -1,10 +1,10 @@
 import type { ModelMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import type { SessionControlEpoch } from '../../../runtime/session-control-cancellation.js';
-import { ToolRegistry } from '../../../tools/tool-registry.js';
-import type { ToolExecutionContext } from '../../../tools/tool-registry-types.js';
-import { bridgeAdvertisementToAiSdk } from './abg-tool-bridge.js';
+import type { SessionControlEpoch } from '../../../runtime/session-control-cancellation';
+import { ToolRegistry } from '../../../tools/tool-registry';
+import type { ToolExecutionContext } from '../../../tools/tool-registry-types';
+import { bridgeAdvertisementToAiSdk } from './abg-tool-bridge';
 
 const CONTROL_EPOCH: SessionControlEpoch = {
     dbIdentity: 'd'.repeat(64),

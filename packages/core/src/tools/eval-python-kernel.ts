@@ -1,19 +1,19 @@
-import type { EvalRunResult } from './eval-context-manager.js';
+import type { EvalRunResult } from './eval-context-manager';
 import {
     createPythonProcessTreeTerminator,
     defaultPythonSpawn,
     type PythonChildProcess,
     type PythonProcessTreeTerminateFn,
     type PythonSpawnFn,
-} from './eval-python-process-tree.js';
+} from './eval-python-process-tree';
 import {
     createPythonProtocolLineReader,
     type PythonKernelParsedResult,
     type PythonKernelRunSettlement,
     PythonProtocolSession,
-} from './eval-python-protocol.js';
-import { EVAL_PYTHON_RUNNER_SOURCE } from './eval-python-runner-source.js';
-import type { EvalToolBridge } from './eval-tool-bridge.js';
+} from './eval-python-protocol';
+import { EVAL_PYTHON_RUNNER_SOURCE } from './eval-python-runner-source';
+import type { EvalToolBridge } from './eval-tool-bridge';
 
 export {
     createPythonProcessTreeTerminator,
@@ -23,7 +23,7 @@ export {
     PythonProcessTreeTerminationError,
     type PythonSpawnFn,
     pythonSpawnOptionsFor,
-} from './eval-python-process-tree.js';
+} from './eval-python-process-tree';
 
 const DEFAULT_PYTHON_BIN = 'python3';
 const DEFAULT_TIMEOUT_MS = 30_000;

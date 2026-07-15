@@ -6,36 +6,36 @@ import {
     MemoryBackendSchema,
 } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { createLearnToolRegistration, LEARN_TOOL_NAME, registerLearnTool } from './learn-tool.js';
+import { createLearnToolRegistration, LEARN_TOOL_NAME, registerLearnTool } from './learn-tool';
 import {
     createManageSkillToolRegistration,
     MANAGE_SKILL_TOOL_NAME,
     registerManageSkillTool,
-} from './manage-skill-tool.js';
+} from './manage-skill-tool';
 import {
     DeferredMemoryBackend,
     LocalMemoryBackend,
     MEMORY_BACKEND_NOT_CONFIGURED,
     type MemoryBackend,
     resolveMemoryBackend,
-} from './memory-backend.js';
-import { createMemoryEditToolRegistration, MEMORY_EDIT_TOOL_NAME, registerMemoryEditTool } from './memory-edit-tool.js';
+} from './memory-backend';
+import { createMemoryEditToolRegistration, MEMORY_EDIT_TOOL_NAME, registerMemoryEditTool } from './memory-edit-tool';
 import {
     createMemoryRecallToolRegistration,
     RECALL_TOOL_NAME,
     registerMemoryRecallTool,
-} from './memory-recall-tool.js';
+} from './memory-recall-tool';
 import {
     createMemoryReflectToolRegistration,
     REFLECT_TOOL_NAME,
     registerMemoryReflectTool,
-} from './memory-reflect-tool.js';
+} from './memory-reflect-tool';
 import {
     createMemoryRetainToolRegistration,
     RETAIN_TOOL_NAME,
     registerMemoryRetainTool,
-} from './memory-retain-tool.js';
-import { ToolRegistry } from './tool-registry.js';
+} from './memory-retain-tool';
+import { ToolRegistry } from './tool-registry';
 
 /** All six memory tools and their register helpers, exercised together for gating parity. */
 const TOOL_NAMES = [

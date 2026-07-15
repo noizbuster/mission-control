@@ -1,7 +1,7 @@
-import type { AbgGraphRunResult } from '../behavior/graph-runner.js';
-import { redactModelMessagesForObservability } from './model-message-observability.js';
-import { redactAgentEventForObservability } from './observability-event-redactor.js';
-import type { ObservabilityRedactor } from './observability-value-redactor.js';
+import type { AbgGraphRunResult } from '../behavior/graph-runner';
+import { redactModelMessagesForObservability } from './model-message-observability';
+import { redactAgentEventForObservability } from './observability-event-redactor';
+import type { ObservabilityRedactor } from './observability-value-redactor';
 
 export function redactGraphRunResultForObservability(
     result: AbgGraphRunResult,

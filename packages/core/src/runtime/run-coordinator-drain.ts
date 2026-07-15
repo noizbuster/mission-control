@@ -9,9 +9,9 @@ import {
     type RunCoordinatorProviderTurnResult,
     type RunCoordinatorResult,
     type RunCoordinatorRunEventType,
-} from './run-coordinator-lifecycle.js';
-import type { RunCoordinatorPromotionInput } from './run-coordinator-promotion.js';
-import { promoteSingleRunInput, promoteWakeBatch } from './run-coordinator-promotion.js';
+} from './run-coordinator-lifecycle';
+import type { RunCoordinatorPromotionInput } from './run-coordinator-promotion';
+import { promoteSingleRunInput, promoteWakeBatch } from './run-coordinator-promotion';
 
 export type DrainCommand = 'wake' | 'run' | 'resume';
 

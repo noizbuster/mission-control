@@ -1,7 +1,7 @@
 import type { AgentDefinition } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import type { ModelPattern, ResolveAgentModelInput } from './model-resolver.js';
-import { DEFAULT_ROLE_CONFIG, resolveAgentModel } from './model-resolver.js';
+import type { ModelPattern, ResolveAgentModelInput } from './model-resolver';
+import { DEFAULT_ROLE_CONFIG, resolveAgentModel } from './model-resolver';
 
 function makeAgent(overrides?: Partial<AgentDefinition>): AgentDefinition {
     return {

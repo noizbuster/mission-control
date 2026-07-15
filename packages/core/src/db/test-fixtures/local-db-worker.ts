@@ -5,8 +5,8 @@ import { access, writeFile } from 'node:fs/promises';
 import { registerHooks } from 'node:module';
 import { basename, dirname } from 'node:path';
 
-type MissionControlDbModule = typeof import('../mission-control-db.js');
-type LocalLibsqlDbModule = typeof import('../local-libsql-db.js');
+type MissionControlDbModule = typeof import('../mission-control-db');
+type LocalLibsqlDbModule = typeof import('../local-libsql-db');
 
 const sourceRootUrl = new URL('../../', import.meta.url).href;
 const workerDeadlineMs = 12_000;
@@ -21,12 +21,13 @@ const workerArgsSchema = z.union([
 
 registerHooks({
     resolve(specifier, context, nextResolve) {
-        if (
-            context.parentURL?.startsWith(sourceRootUrl) === true &&
-            specifier.startsWith('.') &&
-            specifier.endsWith('.js')
-        ) {
-            return nextResolve(`${specifier.slice(0, -3)}.ts`, context);
+        if (context.parentURL?.startsWith(sourceRootUrl) === true && specifier.startsWith('.')) {
+            if (specifier.endsWith('.js')) {
+                return nextResolve(`${specifier.slice(0, -3)}.ts`, context);
+            }
+            if (!specifier.endsWith('.ts') && !specifier.endsWith('.json') && !specifier.endsWith('.node')) {
+                return nextResolve(`${specifier}.ts`, context);
+            }
         }
         return nextResolve(specifier, context);
     },

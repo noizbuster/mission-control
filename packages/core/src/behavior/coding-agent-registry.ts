@@ -10,15 +10,15 @@
  * real implementations, while existing mock-driven tests are untouched.
  */
 
-import { type AbgNodeRegistry, createAbgNodeRegistry } from './node-registry.js';
-import { createCompositeNodeRunners } from './nodes/composite-nodes.js';
-import { runCriticNode } from './nodes/critic-node.js';
-import { runHumanApprovalNode } from './nodes/human-approval-node.js';
-import { runLlmActorNode } from './nodes/llm-actor/llm-actor-node-runner.js';
-import { runMemoryNode } from './nodes/memory-node.js';
-import { runModePolicyGateNode, runPolicyGateNode } from './nodes/policy-gate-node.js';
-import { runSupervisorNode } from './nodes/supervisor-node.js';
-import { runToolActorNode } from './nodes/tool-actor-node.js';
+import { type AbgNodeRegistry, createAbgNodeRegistry } from './node-registry';
+import { createCompositeNodeRunners } from './nodes/composite-nodes';
+import { runCriticNode } from './nodes/critic-node';
+import { runHumanApprovalNode } from './nodes/human-approval-node';
+import { runLlmActorNode } from './nodes/llm-actor/llm-actor-node-runner';
+import { runMemoryNode } from './nodes/memory-node';
+import { runModePolicyGateNode, runPolicyGateNode } from './nodes/policy-gate-node';
+import { runSupervisorNode } from './nodes/supervisor-node';
+import { runToolActorNode } from './nodes/tool-actor-node';
 
 export function createCodingAgentNodeRegistry(): AbgNodeRegistry {
     const registry = createAbgNodeRegistry();

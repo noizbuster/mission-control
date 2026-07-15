@@ -1,17 +1,17 @@
 import type { AgentDefinition, PolicyEffectRule } from '@mission-control/protocol';
-import type { ChildHostCallbacks } from '../behavior/subagents/spawn-child.js';
-import type { SdkModelResolver } from '../providers/ai-sdk/model-resolver.js';
-import type { SessionControlEpoch } from '../runtime/session-control-cancellation.js';
-import type { SessionControlHost } from '../runtime/session-control-host.js';
-import type { ChildSpawnResult } from '../tools/task/task-tool.js';
-import type { ToolRegistry } from '../tools/tool-registry.js';
-import type { AgentIndex } from './agent-registry.js';
-import type { AsyncJobManager } from './async-job-manager.js';
-import { createChildGraphSpawnFn, defaultSpawnFn } from './child-graph-spawn.js';
-import type { AgentLifecycleManager } from './lifecycle-manager.js';
-import type { ModelPattern } from './model-resolver.js';
-import type { RuntimeAgentRegistry } from './runtime-registry.js';
-import type { TaskToolSubagentMirror } from './task-tool-runtime-types.js';
+import type { ChildHostCallbacks } from '../behavior/subagents/spawn-child';
+import type { SdkModelResolver } from '../providers/ai-sdk/model-resolver';
+import type { SessionControlEpoch } from '../runtime/session-control-cancellation';
+import type { SessionControlHost } from '../runtime/session-control-host';
+import type { ChildSpawnResult } from '../tools/task/task-tool';
+import type { ToolRegistry } from '../tools/tool-registry';
+import type { AgentIndex } from './agent-registry';
+import type { AsyncJobManager } from './async-job-manager';
+import { createChildGraphSpawnFn, defaultSpawnFn } from './child-graph-spawn';
+import type { AgentLifecycleManager } from './lifecycle-manager';
+import type { ModelPattern } from './model-resolver';
+import type { RuntimeAgentRegistry } from './runtime-registry';
+import type { TaskToolSubagentMirror } from './task-tool-runtime-types';
 
 export type TaskToolRuntimeServices = {
     readonly jobManager: AsyncJobManager;

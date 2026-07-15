@@ -1,7 +1,7 @@
-import type { NativeSummaryResult } from '../native/natives-client.js';
-import { computeLineHash } from './hashline/hash-computation.js';
-import { repoToolFailure } from './read-tools-errors.js';
-import { createWorkspaceGuard, isBinarySample, type WorkspaceGuard } from './read-tools-paths.js';
+import type { NativeSummaryResult } from '../native/natives-client';
+import { computeLineHash } from './hashline/hash-computation';
+import { repoToolFailure } from './read-tools-errors';
+import { createWorkspaceGuard, isBinarySample, type WorkspaceGuard } from './read-tools-paths';
 import {
     type ListInput,
     type ListOutput,
@@ -23,15 +23,15 @@ import {
     searchModelOutput,
     searchOutputSchema,
     searchParametersJsonSchema,
-} from './read-tools-schemas.js';
-import { searchRepoText } from './read-tools-search.js';
-import { interceptRead } from './scheme-resolver.js';
-import { permissionRequest, requestToolPermission } from './tool-permissions.js';
-import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './tool-registry.js';
+} from './read-tools-schemas';
+import { searchRepoText } from './read-tools-search';
+import { interceptRead } from './scheme-resolver';
+import { permissionRequest, requestToolPermission } from './tool-permissions';
+import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './tool-registry';
 import { open, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
-export type { ReadOnlyRepoToolOptions } from './read-tools-schemas.js';
+export type { ReadOnlyRepoToolOptions } from './read-tools-schemas';
 
 type ReadOnlyRepoToolRegistrations = readonly [
     ToolRegistration<ReadInput, ReadOutput>,

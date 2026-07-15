@@ -5,7 +5,7 @@ import {
     createJsonlSessionEventRecord,
     createJsonlSessionLogHeader,
     serializeJsonlRecord,
-} from './jsonl-session-records.js';
+} from './jsonl-session-records';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

@@ -1,12 +1,12 @@
 // allow: SIZE_OK -- HEAD 294 -> current 303 pure LOC; one session run-owner lifecycle and durable settlement state machine.
 import type { ModelProviderSelection } from '@mission-control/protocol';
-import type { ProjectContextMessageOptions } from '../context/project-context-messages.js';
-import type { JsonlSessionEventIdFactory } from '../memory/jsonl-session-event-store.js';
-import { type LocalSessionEventStore, openLocalSessionEventStore } from '../memory/local-session-store.js';
-import type { ObservabilityRedactor } from '../providers/observability-redactor.js';
-import type { ProviderAdapter } from '../providers/provider-turn-types.js';
-import type { ToolRegistry } from '../tools/tool-registry.js';
-import { type RunCoordinatorResult, SessionRunCoordinator } from './run-coordinator.js';
+import type { ProjectContextMessageOptions } from '../context/project-context-messages';
+import type { JsonlSessionEventIdFactory } from '../memory/jsonl-session-event-store';
+import { type LocalSessionEventStore, openLocalSessionEventStore } from '../memory/local-session-store';
+import type { ObservabilityRedactor } from '../providers/observability-redactor';
+import type { ProviderAdapter } from '../providers/provider-turn-types';
+import type { ToolRegistry } from '../tools/tool-registry';
+import { type RunCoordinatorResult, SessionRunCoordinator } from './run-coordinator';
 import type {
     RunCoordinatorEnvelopeObserver,
     RunCoordinatorEventObserver,
@@ -15,9 +15,9 @@ import type {
     RunCoordinatorToolCallObserver,
     RunCoordinatorToolSettlementObserver,
     RunCoordinatorTurnRunner,
-} from './run-coordinator-types.js';
-import { promptInput } from './run-owner-prompt-input.js';
-import type { SessionControlHost } from './session-control-host.js';
+} from './run-coordinator-types';
+import { promptInput } from './run-owner-prompt-input';
+import type { SessionControlHost } from './session-control-host';
 
 export type SessionRunOwnerReceipt = {
     readonly sessionId: string;

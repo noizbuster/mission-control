@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { LoadContext } from '../capability/types.js';
-import { loadClaudeCompatibleAgents } from './_claude-compatible.js';
-import { cursorAgentProvider } from './cursor-provider.js';
+import type { LoadContext } from '../capability/types';
+import { loadClaudeCompatibleAgents } from './_claude-compatible';
+import { cursorAgentProvider } from './cursor-provider';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

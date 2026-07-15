@@ -1,6 +1,6 @@
-import { resolveProjectTrustDecision } from '../trust/project-trust-store.js';
-import type { ResolvedBrowserToolOptions } from './browser-tool-contract.js';
-import { ToolExecutionError } from './tool-registry-types.js';
+import { resolveProjectTrustDecision } from '../trust/project-trust-store';
+import type { ResolvedBrowserToolOptions } from './browser-tool-contract';
+import { ToolExecutionError } from './tool-registry-types';
 
 type BrowserLiveAuthority = Pick<ResolvedBrowserToolOptions, 'projectTrustStore' | 'workspaceRoot'>;
 

@@ -13,7 +13,7 @@
  * leading unheaded block. The input contract is otherwise unchanged: a flat `todos` array.
  */
 import { z } from 'zod';
-import type { ToolRegistration } from './tool-registry-types.js';
+import type { ToolRegistration } from './tool-registry-types';
 
 const todoItemSchema = z.object({
     content: z.string().min(1),

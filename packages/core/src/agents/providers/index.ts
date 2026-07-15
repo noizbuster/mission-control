@@ -10,17 +10,17 @@
  * after registering the priority-100 builtin 4-scope provider, so
  * mission-control's own agents always win name conflicts over imported ones.
  */
-import type { CapabilityRegistry } from '../capability/index.js';
-import type { AgentPluginProvider } from '../capability/types.js';
-import { claudeCodeAgentProvider } from './claude-provider.js';
-import { clineAgentProvider } from './cline-provider.js';
-import { codexAgentProvider } from './codex-provider.js';
-import { cursorAgentProvider } from './cursor-provider.js';
-import { geminiAgentProvider } from './gemini-provider.js';
-import { githubCopilotProvider } from './github-copilot-provider.js';
-import { opencodeProvider } from './opencode-provider.js';
-import { vscodeProvider } from './vscode-provider.js';
-import { windsurfAgentProvider } from './windsurf-provider.js';
+import type { CapabilityRegistry } from '../capability/index';
+import type { AgentPluginProvider } from '../capability/types';
+import { claudeCodeAgentProvider } from './claude-provider';
+import { clineAgentProvider } from './cline-provider';
+import { codexAgentProvider } from './codex-provider';
+import { cursorAgentProvider } from './cursor-provider';
+import { geminiAgentProvider } from './gemini-provider';
+import { githubCopilotProvider } from './github-copilot-provider';
+import { opencodeProvider } from './opencode-provider';
+import { vscodeProvider } from './vscode-provider';
+import { windsurfAgentProvider } from './windsurf-provider';
 
 export const CROSS_HARNESS_PROVIDERS: readonly AgentPluginProvider[] = [
     claudeCodeAgentProvider,

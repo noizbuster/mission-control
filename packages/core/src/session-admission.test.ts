@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { JsonlSessionEventStore } from './memory/jsonl-session-event-store.js';
-import { projectSessionAdmission, SessionAdmissionError, SessionAdmissionService } from './session-admission.js';
-import { cleanupSessionAdmissionTestDirs, openAdmissionContext } from './session-admission-test-support.js';
+import { JsonlSessionEventStore } from './memory/jsonl-session-event-store';
+import { projectSessionAdmission, SessionAdmissionError, SessionAdmissionService } from './session-admission';
+import { cleanupSessionAdmissionTestDirs, openAdmissionContext } from './session-admission-test-support';
 
 afterEach(cleanupSessionAdmissionTestDirs);
 

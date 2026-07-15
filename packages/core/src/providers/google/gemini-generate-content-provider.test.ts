@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { createStaticProviderCredentialResolver } from '../credential-resolver.js';
+import { createStaticProviderCredentialResolver } from '../credential-resolver';
 import {
     createGeminiGenerateContentProvider,
     GeminiGenerateContentTransportError,
     type GeminiGenerateContentTransportRequest,
-} from './gemini-generate-content-provider.js';
+} from './gemini-generate-content-provider';
 import {
     captureError,
     collectChunks,
@@ -13,7 +13,7 @@ import {
     searchToolDefinition,
     throwingStream,
     transportFromEvents,
-} from './gemini-generate-content-test-support.js';
+} from './gemini-generate-content-test-support';
 
 describe('Gemini GenerateContent provider adapter', () => {
     it('streams text chunks and sends authenticated requests with function declarations', async () => {

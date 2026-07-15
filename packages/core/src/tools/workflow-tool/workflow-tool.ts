@@ -17,9 +17,9 @@
  */
 import type { WorkflowSpec } from '@mission-control/protocol';
 import { z } from 'zod';
-import type { WorkflowRegistry } from '../../workflows/workflow-registry.js';
-import type { ToolRegistry } from '../tool-registry.js';
-import { type ToolAdvertisement, type ToolRegistration } from '../tool-registry-types.js';
+import type { WorkflowRegistry } from '../../workflows/workflow-registry';
+import type { ToolRegistry } from '../tool-registry';
+import { type ToolAdvertisement, type ToolRegistration } from '../tool-registry-types';
 
 /** The canonical tool name so recursion guards and registry lookups avoid magic strings. */
 export const WORKFLOW_TOOL_NAME = 'workflow';

@@ -11,8 +11,8 @@
 
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { describe, expect, it, vi } from 'vitest';
-import { LspDiagnosticsLedger } from './lsp-diagnostics-ledger.js';
-import { createLspRenameToolRegistration } from './lsp-rename-tool.js';
+import { LspDiagnosticsLedger } from './lsp-diagnostics-ledger';
+import { createLspRenameToolRegistration } from './lsp-rename-tool';
 import {
     createLspToolRegistration,
     InProcessLspClient,
@@ -25,7 +25,7 @@ import {
     type LspServerStatusEntry,
     type LspSymbol,
     type LspWorkspaceEdit,
-} from './lsp-tool.js';
+} from './lsp-tool';
 
 const ctx = { toolCallId: 'c1', toolName: 'lsp', signal: new AbortController().signal };
 const SAMPLE_URI = 'file:///workspace/src/sample.ts';

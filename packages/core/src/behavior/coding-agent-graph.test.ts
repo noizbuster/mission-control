@@ -14,11 +14,11 @@ import type { AbgSignal, AgentEvent } from '@mission-control/protocol';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { ToolExecutionError, ToolRegistry } from '../tools/tool-registry.js';
-import type { ToolRegistration } from '../tools/tool-registry-types.js';
-import { createCodingAgentGraph } from './coding-agent-graph.js';
-import { createCodingAgentNodeRegistry } from './coding-agent-registry.js';
-import { runAbgGraph } from './graph-runner.js';
+import { ToolExecutionError, ToolRegistry } from '../tools/tool-registry';
+import type { ToolRegistration } from '../tools/tool-registry-types';
+import { createCodingAgentGraph } from './coding-agent-graph';
+import { createCodingAgentNodeRegistry } from './coding-agent-registry';
+import { runAbgGraph } from './graph-runner';
 
 const NOW = '2026-06-16T00:00:00.000Z';
 const MODEL_SELECTION = { providerID: 'anthropic', modelID: 'claude-fable-5' } as const;

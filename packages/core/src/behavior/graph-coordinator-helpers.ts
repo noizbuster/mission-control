@@ -7,19 +7,19 @@ import type {
     AgentEvent,
     ModelProviderSelection,
 } from '@mission-control/protocol';
-import type { Blackboard } from '../memory/blackboard.js';
-import { createBlackboard } from '../memory/blackboard.js';
+import type { Blackboard } from '../memory/blackboard';
+import { createBlackboard } from '../memory/blackboard';
 import {
     createObservabilityRedactor,
     type ObservabilityRedactor,
-} from '../providers/observability-redactor.js';
-import { createAbgEmitSignal, resetEmitSequence } from './abg-emit.js';
-import type { AuthorableAbgGraph } from './authorable-graph.js';
-import type { CostLedger } from './budget/cost-ledger.js';
-import { createCostLedger } from './budget/cost-ledger.js';
-import type { AbgGraphRunnerInput } from './graph-runner.js';
-import type { LoopSafetyNodeState } from './loop-safety.js';
-import { projectAbgSignalToEvent } from './signals.js';
+} from '../providers/observability-redactor';
+import { createAbgEmitSignal, resetEmitSequence } from './abg-emit';
+import type { AuthorableAbgGraph } from './authorable-graph';
+import type { CostLedger } from './budget/cost-ledger';
+import { createCostLedger } from './budget/cost-ledger';
+import type { AbgGraphRunnerInput } from './graph-runner';
+import type { LoopSafetyNodeState } from './loop-safety';
+import { projectAbgSignalToEvent } from './signals';
 
 const defaultRetryLimit = 2;
 const defaultMaxNodeRuns = 48;

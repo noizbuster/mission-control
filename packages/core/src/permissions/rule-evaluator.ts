@@ -1,5 +1,5 @@
 import type { PolicyEffect, PolicyEffectRule, PolicyEffectRuleSet } from '@mission-control/protocol';
-import { wildcardMatch } from './wildcard-match.js';
+import { wildcardMatch } from './wildcard-match';
 
 /**
  * Result of evaluating policy-gate rules against a single action/resource pair.

@@ -1,6 +1,6 @@
 import type { ProviderStreamChunk } from '@mission-control/protocol';
-import { filePatchCall } from './desktop-session-commands-test-support.js';
-import type { ProviderAdapter, ProviderTurnRequest } from './providers/provider-turn-types.js';
+import { filePatchCall } from './desktop-session-commands-test-support';
+import type { ProviderAdapter, ProviderTurnRequest } from './providers/provider-turn-types';
 
 export type Deferred<T> = {
     readonly promise: Promise<T>;

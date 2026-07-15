@@ -14,15 +14,15 @@
 
 import type { AbgSignal } from '@mission-control/protocol';
 import type { TextStreamPart, ToolSet } from 'ai';
-import { observableToolInput } from '../../../providers/model-message-observability.js';
+import { observableToolInput } from '../../../providers/model-message-observability';
 import {
     createObservabilityRedactor,
     type ObservabilityRedactor,
     type ObservabilityTextStream,
-} from '../../../providers/observability-redactor.js';
-import { errorToString } from '../../../util/error-to-string.js';
-import { createAbgEmitSignal } from '../../abg-emit.js';
-import type { AbgToolSettlementLedger } from './abg-tool-bridge.js';
+} from '../../../providers/observability-redactor';
+import { errorToString } from '../../../util/error-to-string';
+import { createAbgEmitSignal } from '../../abg-emit';
+import type { AbgToolSettlementLedger } from './abg-tool-bridge';
 
 export type StreamPartAdapterContext = {
     readonly graphId: string | undefined;

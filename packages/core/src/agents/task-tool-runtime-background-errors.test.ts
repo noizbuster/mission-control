@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { SessionControlEpoch } from '../runtime/session-control-cancellation.js';
-import { AsyncJobCleanupError } from './async-job-manager.js';
-import { ChildSessionCleanupError } from './task-tool-runtime-control.js';
+import type { SessionControlEpoch } from '../runtime/session-control-cancellation';
+import { AsyncJobCleanupError } from './async-job-manager';
+import { ChildSessionCleanupError } from './task-tool-runtime-control';
 import {
     abortListenerCounts,
     buildLifecycleRuntime,
@@ -10,7 +10,7 @@ import {
     lifecycleRequest,
     makeLifecycleServices,
     resolvingMirror,
-} from './task-tool-runtime-lifecycle-test-support.js';
+} from './task-tool-runtime-lifecycle-test-support';
 
 afterEach(async () => {
     vi.restoreAllMocks();

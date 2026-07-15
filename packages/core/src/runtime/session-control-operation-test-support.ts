@@ -1,6 +1,6 @@
-import type { LocalLibsqlDb } from '../db/local-libsql-db.js';
-import { openCanonicalRuntimeDb } from './local-runtime-db.js';
-import { acquireSessionControlLease, type SessionControlLease } from './session-control-lease.js';
+import type { LocalLibsqlDb } from '../db/local-libsql-db';
+import { openCanonicalRuntimeDb } from './local-runtime-db';
+import { acquireSessionControlLease, type SessionControlLease } from './session-control-lease';
 import { createHash } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

@@ -1,6 +1,6 @@
-import { sessionStoreDatabasePath } from '../runtime/session-store-identity.js';
-import { resolveMissionControlDataDir } from './data-dir.js';
-import { JsonlSessionEventStoreError } from './jsonl-session-event-store.js';
+import { sessionStoreDatabasePath } from '../runtime/session-store-identity';
+import { resolveMissionControlDataDir } from './data-dir';
+import { JsonlSessionEventStoreError } from './jsonl-session-event-store';
 import { pathToFileURL } from 'node:url';
 
 export function missionControlDbPath(dataDir = resolveMissionControlDataDir()): string {

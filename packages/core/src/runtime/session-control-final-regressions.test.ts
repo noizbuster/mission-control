@@ -1,12 +1,12 @@
 import { SESSION_OWNER_CONTROL_PROTOCOL_VERSION } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import { readSessionControlOperation } from './session-control-operation.js';
-import { readSessionControlRegistry } from './session-control-registry-file.js';
-import { encodeSessionOwnerControlFrame } from './session-owner-control-framing.js';
+import { readSessionControlOperation } from './session-control-operation';
+import { readSessionControlRegistry } from './session-control-registry-file';
+import { encodeSessionOwnerControlFrame } from './session-owner-control-framing';
 import {
     cleanupSessionOwnerControlFixtures,
     createSessionOwnerControlFixture as createFixture,
-} from './session-owner-control-test-support.js';
+} from './session-owner-control-test-support';
 import { randomUUID } from 'node:crypto';
 import { createConnection, type Socket } from 'node:net';
 

@@ -8,7 +8,7 @@
 // `LspDiagnostic` type and uses message+severity as the stable identity so the
 // same error surfacing again after a re-analysis is recognised as stale.
 
-import type { LspDiagnostic } from './lsp-tool.js';
+import type { LspDiagnostic } from './lsp-tool';
 
 /**
  * Stable identity for a diagnostic, independent of its line/character position.

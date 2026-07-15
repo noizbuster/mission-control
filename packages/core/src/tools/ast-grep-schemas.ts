@@ -16,7 +16,7 @@
  *   so existing callers observe no contract drift.
  */
 import { z } from 'zod';
-import type { AstGrepMatch } from './ast-grep-runner.js';
+import type { AstGrepMatch } from './ast-grep-runner';
 
 export type AstGrepInput = {
     readonly pattern: string;

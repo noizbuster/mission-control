@@ -1,8 +1,8 @@
-import type { SessionControlLease } from './session-control-lease.js';
-import { SessionControlOwnerError } from './session-control-owner-error.js';
-import type { SessionControlProcessState } from './session-control-process.js';
-import { authenticateSessionControlEndpoint, sessionControlNonceHash } from './session-control-registry-auth.js';
-import { readSessionControlRegistry, type SessionControlRegistry } from './session-control-registry-file.js';
+import type { SessionControlLease } from './session-control-lease';
+import { SessionControlOwnerError } from './session-control-owner-error';
+import type { SessionControlProcessState } from './session-control-process';
+import { authenticateSessionControlEndpoint, sessionControlNonceHash } from './session-control-registry-auth';
+import { readSessionControlRegistry, type SessionControlRegistry } from './session-control-registry-file';
 import { lstat, readdir, rm } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 

@@ -1,5 +1,5 @@
-import type { CancellationToken, TaskHandle, TaskStatus } from '../cancellation.js';
-import type { AgentTask } from './execution-context.js';
+import type { CancellationToken, TaskHandle, TaskStatus } from '../cancellation';
+import type { AgentTask } from './execution-context';
 
 export interface AgentScheduler {
     schedule(task: AgentTask): Promise<TaskHandle>;

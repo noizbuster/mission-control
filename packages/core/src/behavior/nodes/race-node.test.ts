@@ -1,7 +1,7 @@
 import type { AbgSignal } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { collectSignals } from '../composite-node-test-helpers.js';
-import { createRaceNodeRunner } from './race-node.js';
+import { collectSignals } from '../composite-node-test-helpers';
+import { createRaceNodeRunner } from './race-node';
 import {
     CLEANUP_TIMEOUT_MS,
     cooperativeLoser,
@@ -20,7 +20,7 @@ import {
     TEST_GUARD_MS,
     validSuccess,
     validWinner,
-} from './race-node-test-support.js';
+} from './race-node-test-support';
 
 afterEach(() => {
     vi.useRealTimers();

@@ -7,11 +7,11 @@ import type {
     DesktopApprovalEffectRecord,
     DesktopApprovalEffectResolutionInput,
     DesktopApprovalEffectSettlementInput,
-} from '../desktop-approval-effect.js';
-import { sameDesktopApprovalEffect } from '../desktop-approval-effect.js';
-import { readSqliteDesktopApprovalEffect } from './sqlite-session-approval-effect-records.js';
+} from '../desktop-approval-effect';
+import { sameDesktopApprovalEffect } from '../desktop-approval-effect';
+import { readSqliteDesktopApprovalEffect } from './sqlite-session-approval-effect-records';
 
-export { readSqliteDesktopApprovalEffect } from './sqlite-session-approval-effect-records.js';
+export { readSqliteDesktopApprovalEffect } from './sqlite-session-approval-effect-records';
 
 export async function reserveSqliteDesktopApprovalEffect(
     client: Client,

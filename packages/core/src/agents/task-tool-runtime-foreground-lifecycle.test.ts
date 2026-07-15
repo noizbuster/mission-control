@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ChildSessionCancelledError, ChildSessionCleanupError } from './task-tool-runtime-control.js';
+import { ChildSessionCancelledError, ChildSessionCleanupError } from './task-tool-runtime-control';
 import {
     abortListenerCounts,
     buildLifecycleRuntime,
@@ -8,7 +8,7 @@ import {
     lifecycleRequest,
     makeLifecycleServices,
     resolvingMirror,
-} from './task-tool-runtime-lifecycle-test-support.js';
+} from './task-tool-runtime-lifecycle-test-support';
 
 afterEach(async () => {
     vi.restoreAllMocks();

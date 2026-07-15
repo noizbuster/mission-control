@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { createStaticProviderCredentialResolver } from '../credential-resolver.js';
-import { createOpenAICompatibleProvider, type OpenAICompatibleTransport } from './openai-compatible-provider.js';
-import { collectChunks, createProviderContext, credential, turnRequest } from './openai-compatible-test-support.js';
+import { createStaticProviderCredentialResolver } from '../credential-resolver';
+import { createOpenAICompatibleProvider, type OpenAICompatibleTransport } from './openai-compatible-provider';
+import { collectChunks, createProviderContext, credential, turnRequest } from './openai-compatible-test-support';
 
 describe('OpenAI-compatible unsupported provider guard', () => {
     it('fails providers without explicit compatible-adapter proof before transport execution', async () => {

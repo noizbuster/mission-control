@@ -29,7 +29,7 @@ describe('local libSQL write architecture', () => {
             },
             {
                 path: 'agents/index.ts',
-                source: "export { SqlAgentJobMirror } from './agent-job-sql-mirror.js';",
+                source: "export { SqlAgentJobMirror } from './agent-job-sql-mirror';",
             },
             {
                 path: 'memory/turso-persistent-store.ts',

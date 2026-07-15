@@ -1,7 +1,7 @@
-import { type ProjectTrustReader, resolveProjectTrustDecision } from '../../trust/project-trust-store.js';
-import { ToolExecutionError } from '../tool-registry-types.js';
-import type { McpConfigScope } from './config.js';
-import type { McpConnectionManager } from './connection-manager.js';
+import { type ProjectTrustReader, resolveProjectTrustDecision } from '../../trust/project-trust-store';
+import { ToolExecutionError } from '../tool-registry-types';
+import type { McpConfigScope } from './config';
+import type { McpConnectionManager } from './connection-manager';
 
 export async function requireMcpLiveAuthority(
     scope: McpConfigScope,

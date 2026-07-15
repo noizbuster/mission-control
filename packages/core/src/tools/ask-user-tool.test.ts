@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { askUserInputSchema, askUserQuestionSchema } from './ask-user-schemas.js';
+import { askUserInputSchema, askUserQuestionSchema } from './ask-user-schemas';
 import {
     ASK_USER_BLOCKED_ANSWER,
     type AskUserInput,
     type AskUserQuestionRequest,
     createAskUserToolRegistration,
-} from './ask-user-tool.js';
-import type { ToolExecutionContext } from './tool-registry-types.js';
+} from './ask-user-tool';
+import type { ToolExecutionContext } from './tool-registry-types';
 
 function createContext(): ToolExecutionContext {
     return {

@@ -5,9 +5,9 @@ import {
     type DebugInput,
     type DebugOutput,
     registerDebugTool,
-} from './debug-tool.js';
-import { ToolRegistry } from './tool-registry.js';
-import type { ToolExecutionContext } from './tool-registry-types.js';
+} from './debug-tool';
+import { ToolRegistry } from './tool-registry';
+import type { ToolExecutionContext } from './tool-registry-types';
 
 const EXEC_CONTEXT: ToolExecutionContext = {
     toolCallId: 'call_test',

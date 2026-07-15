@@ -1,7 +1,7 @@
 import type { BrowserConfig } from '@mission-control/protocol';
 import type { Browser as PuppeteerBrowserLike, Page as PuppeteerPageLike } from 'puppeteer-core';
-import { raceBrowserCleanup } from './browser-tool-deadline.js';
-import { browserFailure } from './browser-tool-output.js';
+import { raceBrowserCleanup } from './browser-tool-deadline';
+import { browserFailure } from './browser-tool-output';
 
 export type BrowserWaitUntil = 'load' | 'domcontentloaded' | 'networkidle0' | 'networkidle2';
 

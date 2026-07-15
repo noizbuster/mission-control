@@ -1,16 +1,16 @@
 // allow: SIZE_OK -- HEAD 397 -> current 388 pure LOC; one task routing, batch, resume, and background lifecycle state-machine matrix.
 import { beforeAll, describe, expect, it } from 'vitest';
-import { discoverAgents } from '../../agents/agent-loader.js';
-import { AgentIndex } from '../../agents/agent-registry.js';
-import type { ToolExecutionContext } from '../tool-registry-types.js';
-import { getCategory } from './category-catalog.js';
+import { discoverAgents } from '../../agents/agent-loader';
+import { AgentIndex } from '../../agents/agent-registry';
+import type { ToolExecutionContext } from '../tool-registry-types';
+import { getCategory } from './category-catalog';
 import {
     type ChildSpawnRequest,
     type CreateFullParityTaskToolOptions,
     createFullParityTaskToolRegistration,
     type TaskToolRuntime,
     taskToolInputSchema,
-} from './task-tool.js';
+} from './task-tool';
 
 // --- Mock runtime ----------------------------------------------------------
 

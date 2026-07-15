@@ -1,22 +1,22 @@
-import type { ProviderCredentialResolver } from '../credential-resolver.js';
-import { type ProviderAdapter, ProviderTurnError } from '../provider-turn-types.js';
-import { mapGeminiProviderError } from './gemini-generate-content-errors.js';
+import type { ProviderCredentialResolver } from '../credential-resolver';
+import { type ProviderAdapter, ProviderTurnError } from '../provider-turn-types';
+import { mapGeminiProviderError } from './gemini-generate-content-errors';
 import {
     createGeminiGenerateContentMappingState,
     mapGeminiGenerateContentStreamEvent,
-} from './gemini-generate-content-mapper.js';
+} from './gemini-generate-content-mapper';
 import {
     apiKeyForGeminiCredential,
     createGeminiGenerateContentTransportRequest,
     resolveGeminiCredential,
-} from './gemini-generate-content-request.js';
+} from './gemini-generate-content-request';
 import {
     type GeminiGenerateContentTransport,
     GeminiGenerateContentTransportError,
     type GeminiGenerateContentTransportRequest,
-} from './gemini-generate-content-transport.js';
+} from './gemini-generate-content-transport';
 
-export { createNodeGeminiGenerateContentTransport } from './gemini-generate-content-http-transport.js';
+export { createNodeGeminiGenerateContentTransport } from './gemini-generate-content-http-transport';
 export type { GeminiGenerateContentTransport, GeminiGenerateContentTransportRequest };
 export { GeminiGenerateContentTransportError };
 

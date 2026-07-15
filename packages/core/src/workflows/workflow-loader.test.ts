@@ -1,9 +1,9 @@
 // allow: SIZE_OK -- HEAD 320 -> current 348 pure LOC; one workflow discovery security and first-wins integration matrix.
 import { type WorkflowSpec, WorkflowSpecSchema } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { stripJsoncComments } from './jsonc-parser.js';
-import { DEFAULT_MAX_WORKFLOW_FILE_BYTES, type DiscoverWorkflowsResult, discoverWorkflows } from './workflow-loader.js';
-import { WorkflowRegistry } from './workflow-registry.js';
+import { stripJsoncComments } from './jsonc-parser';
+import { DEFAULT_MAX_WORKFLOW_FILE_BYTES, type DiscoverWorkflowsResult, discoverWorkflows } from './workflow-loader';
+import { WorkflowRegistry } from './workflow-registry';
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

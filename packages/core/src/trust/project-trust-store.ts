@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { resolveMissionControlDataDir } from '../memory/data-dir.js';
+import { resolveMissionControlDataDir } from '../memory/data-dir';
 import { randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';

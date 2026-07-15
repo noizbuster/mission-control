@@ -1,21 +1,21 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { openLocalLibsqlDb } from '../db/local-libsql-db.js';
+import { openLocalLibsqlDb } from '../db/local-libsql-db';
 import {
     acquireSessionControlLease,
     runWithSessionControlLeaseFence,
     SessionControlLeaseError,
-} from './session-control-lease.js';
+} from './session-control-lease';
 import {
     publishPosixSessionControlOwner,
     resolveAuthenticatedPosixSessionControlOwner,
-} from './session-control-owner-posix.js';
+} from './session-control-owner-posix';
 import {
     authenticateSessionControlEndpoint,
     generateSessionControlNonce,
     sessionControlNonceHash,
-} from './session-control-registry-auth.js';
-import { publishSessionControlRegistry } from './session-control-registry-file.js';
-import { resolvePosixSessionControlPaths } from './session-control-registry-paths.js';
+} from './session-control-registry-auth';
+import { publishSessionControlRegistry } from './session-control-registry-file';
+import { resolvePosixSessionControlPaths } from './session-control-registry-paths';
 import { chmod, mkdtemp, rm } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';

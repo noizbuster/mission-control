@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { discoverSkills, parseSkillFrontmatter, resolveUserConfigDir, type Skill } from './skill-loader.js';
+import { discoverSkills, parseSkillFrontmatter, resolveUserConfigDir, type Skill } from './skill-loader';
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

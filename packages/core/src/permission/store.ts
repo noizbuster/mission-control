@@ -1,7 +1,7 @@
 import { type PermissionRule, PermissionRuleSchema } from '@mission-control/protocol';
 import { z } from 'zod';
-import { resolveMissionControlDataDir } from '../memory/data-dir.js';
-import { normalizePermissionRules, normalizePermissionWorkspaceRoot } from './workspace-root.js';
+import { resolveMissionControlDataDir } from '../memory/data-dir';
+import { normalizePermissionRules, normalizePermissionWorkspaceRoot } from './workspace-root';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join } from 'node:path';

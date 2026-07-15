@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { DesktopApprovalEffect } from '../desktop-approval-effect.js';
-import { openLocalSessionEventStore } from './local-session-store.js';
-import { tempDataDir } from './local-session-store-test-support.js';
+import type { DesktopApprovalEffect } from '../desktop-approval-effect';
+import { openLocalSessionEventStore } from './local-session-store';
+import { tempDataDir } from './local-session-store-test-support';
 
 const REQUESTED_AT = '2026-07-15T00:00:00.000Z';
 const BEFORE_LEASE = '2026-07-15T00:00:30.000Z';

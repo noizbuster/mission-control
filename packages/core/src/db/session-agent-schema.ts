@@ -1,6 +1,6 @@
 import { index, sqliteTable, text } from 'drizzle-orm/sqlite-core';
-import { sessions } from './session-core-schema.js';
-import { asyncJobStatuses, runtimeAgentStatuses } from './session-schema-literals.js';
+import { sessions } from './session-core-schema';
+import { asyncJobStatuses, runtimeAgentStatuses } from './session-schema-literals';
 
 export const runtimeAgents = sqliteTable(
     'runtime_agents',

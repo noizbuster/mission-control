@@ -9,12 +9,12 @@
  * instead of hitting the network.
  */
 import { z } from 'zod';
-import type { NativesClient } from '../native/natives-client.js';
-import type { SchemeResolver } from './scheme-resolver.js';
-import { interceptWebfetch } from './scheme-resolver.js';
-import type { ToolRegistration } from './tool-registry-types.js';
-import { ToolExecutionError } from './tool-registry-types.js';
-import { truncateOutput, withContinuationHint } from './truncate.js';
+import type { NativesClient } from '../native/natives-client';
+import type { SchemeResolver } from './scheme-resolver';
+import { interceptWebfetch } from './scheme-resolver';
+import type { ToolRegistration } from './tool-registry-types';
+import { ToolExecutionError } from './tool-registry-types';
+import { truncateOutput, withContinuationHint } from './truncate';
 
 const DEFAULT_MAX_LENGTH = 8000;
 const HTML_CONTENT_TYPES = new Set(['text/html', 'application/xhtml+xml']);

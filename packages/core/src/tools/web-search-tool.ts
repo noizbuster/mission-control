@@ -12,9 +12,9 @@
  * provider configured → a helpful `ToolExecutionError`.
  */
 import type { z } from 'zod';
-import { type NativesClient } from '../native/natives-client.js';
-import { type ToolAdvertisement, ToolExecutionError, type ToolRegistration, ToolRegistry } from './tool-registry.js';
-import { extractSiteContent } from './web-search-extraction.js';
+import { type NativesClient } from '../native/natives-client';
+import { type ToolAdvertisement, ToolExecutionError, type ToolRegistration, ToolRegistry } from './tool-registry';
+import { extractSiteContent } from './web-search-extraction';
 import {
     type WebSearchInput,
     type WebSearchOutput,
@@ -22,8 +22,8 @@ import {
     webSearchInputSchema,
     webSearchOutputSchema,
     webSearchParametersJsonSchema,
-} from './web-search-schemas.js';
-import { executeWebSearch, noProviderMessage } from './web-search-transport.js';
+} from './web-search-schemas';
+import { executeWebSearch, noProviderMessage } from './web-search-transport';
 
 export type WebSearchToolOptions = {
     readonly sessionId: string;

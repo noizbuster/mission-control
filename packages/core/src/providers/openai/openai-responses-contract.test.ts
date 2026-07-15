@@ -1,4 +1,4 @@
-import { openAIResponsesProviderContract } from '../provider-adapter-contract-registrations.js';
-import { describeProviderAdapterContract } from '../provider-adapter-contract-test-support.js';
+import { openAIResponsesProviderContract } from '../provider-adapter-contract-registrations';
+import { describeProviderAdapterContract } from '../provider-adapter-contract-test-support';
 
 describeProviderAdapterContract(openAIResponsesProviderContract);

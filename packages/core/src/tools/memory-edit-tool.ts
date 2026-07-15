@@ -8,9 +8,9 @@
  * backend it returns `memory_backend_not_configured`.
  */
 import { z } from 'zod';
-import { isMemoryBackendActive, MEMORY_BACKEND_NOT_CONFIGURED, type MemoryBackend } from './memory-backend.js';
-import { ToolRegistry } from './tool-registry.js';
-import type { ToolAdvertisement, ToolRegistration } from './tool-registry-types.js';
+import { isMemoryBackendActive, MEMORY_BACKEND_NOT_CONFIGURED, type MemoryBackend } from './memory-backend';
+import { ToolRegistry } from './tool-registry';
+import type { ToolAdvertisement, ToolRegistration } from './tool-registry-types';
 
 export const MEMORY_EDIT_TOOL_NAME = 'memory_edit';
 

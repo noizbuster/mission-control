@@ -1,6 +1,6 @@
 import type { AbgSignal } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { runHumanApprovalNode } from './human-approval-node.js';
+import { runHumanApprovalNode } from './human-approval-node';
 
 async function collectSignals(signals: AsyncIterable<AbgSignal>): Promise<readonly AbgSignal[]> {
     const collected: AbgSignal[] = [];

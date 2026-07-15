@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeSidecarLine, ProcessSidecarClient } from './sidecar-client.js';
+import { normalizeSidecarLine, ProcessSidecarClient } from './sidecar-client';
 import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

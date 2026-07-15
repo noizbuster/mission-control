@@ -6,24 +6,24 @@ import {
     type GoalRuntime,
     type GoalToolOptions,
     type GoalToolOutput,
-} from './goal-tool.js';
-import { createInvalidToolRegistration, INVALID_TOOL_NAME, type InvalidInput } from './invalid-tool.js';
-import { createPlanExitToolRegistration, PLAN_EXIT_TOOL_NAME, type PlanExitOutput } from './plan-exit-tool.js';
+} from './goal-tool';
+import { createInvalidToolRegistration, INVALID_TOOL_NAME, type InvalidInput } from './invalid-tool';
+import { createPlanExitToolRegistration, PLAN_EXIT_TOOL_NAME, type PlanExitOutput } from './plan-exit-tool';
 import {
     createReportFindingToolRegistration,
     REPORT_FINDING_TOOL_NAME,
     type ReportFinding,
     reportFindingInputSchema,
-} from './report-finding-tool.js';
+} from './report-finding-tool';
 import {
     createReportToolIssueToolRegistration,
     REPORT_TOOL_ISSUE_TOOL_NAME,
     type ReportToolIssue,
     type ReportToolIssueToolOptions,
     registerReportToolIssueTool,
-} from './report-tool-issue-tool.js';
-import { ToolRegistry } from './tool-registry.js';
-import type { ToolExecutionContext } from './tool-registry-types.js';
+} from './report-tool-issue-tool';
+import { ToolRegistry } from './tool-registry';
+import type { ToolExecutionContext } from './tool-registry-types';
 
 const CTX: ToolExecutionContext = {
     toolCallId: 'tc_test',
@@ -277,7 +277,7 @@ describe('report_tool_issue tool', () => {
 // --- goal ------------------------------------------------------------------
 
 function makeRuntime(overrides: Partial<GoalRuntime> = {}): GoalRuntime {
-    let goal: import('./goal-tool.js').GoalState | null = null;
+    let goal: import('./goal-tool').GoalState | null = null;
     return {
         createGoal: (args) => {
             goal = {
@@ -291,11 +291,11 @@ function makeRuntime(overrides: Partial<GoalRuntime> = {}): GoalRuntime {
         getGoal: () => goal,
         completeGoal: () => {
             if (goal !== null) goal = { ...goal, status: 'complete' };
-            return goal as import('./goal-tool.js').GoalState;
+            return goal as import('./goal-tool').GoalState;
         },
         resumeGoal: () => {
             if (goal !== null) goal = { ...goal, status: 'active' };
-            return goal as import('./goal-tool.js').GoalState;
+            return goal as import('./goal-tool').GoalState;
         },
         dropGoal: () => {
             const prev = goal;

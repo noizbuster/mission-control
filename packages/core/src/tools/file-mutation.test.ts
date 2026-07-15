@@ -1,7 +1,7 @@
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import { executeFileMutation, type FileMutationTarget, preflightTextFileMutationTargets } from './file-mutation.js';
-import { createPatchWorkspaceGuard } from './file-patch-paths.js';
+import { executeFileMutation, type FileMutationTarget, preflightTextFileMutationTargets } from './file-mutation';
+import { createPatchWorkspaceGuard } from './file-patch-paths';
 import { execFile } from 'node:child_process';
 import { mkdtemp, readFile, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

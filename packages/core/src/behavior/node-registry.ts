@@ -6,15 +6,15 @@ import type {
     AgentEvent,
     PolicyEffectRule,
 } from '@mission-control/protocol';
-import type { ProjectInstructionResource } from '../context/project-context-messages.js';
-import type { SystemPromptEnvironment } from '../context/system-prompt.js';
-import type { Blackboard } from '../memory/blackboard.js';
-import type { ObservabilityRedactor } from '../providers/observability-redactor.js';
-import type { ToolRegistry } from '../tools/tool-registry.js';
-import type { CostLedger } from './budget/cost-ledger.js';
-import { createCompositeNodeRunners } from './nodes/composite-nodes.js';
-import { createLeafNodeRunners } from './nodes/leaf-nodes.js';
-import type { LlmActorModel } from './nodes/llm-actor/llm-actor-node.js';
+import type { ProjectInstructionResource } from '../context/project-context-messages';
+import type { SystemPromptEnvironment } from '../context/system-prompt';
+import type { Blackboard } from '../memory/blackboard';
+import type { ObservabilityRedactor } from '../providers/observability-redactor';
+import type { ToolRegistry } from '../tools/tool-registry';
+import type { CostLedger } from './budget/cost-ledger';
+import { createCompositeNodeRunners } from './nodes/composite-nodes';
+import { createLeafNodeRunners } from './nodes/leaf-nodes';
+import type { LlmActorModel } from './nodes/llm-actor/llm-actor-node';
 
 export type AbgObservedGraphEvent = {
     readonly type: string;
@@ -65,7 +65,7 @@ export type AbgNodeRunContext = {
      * normal control flow).
      */
     readonly abortSignal?: AbortSignal;
-    readonly controlEpoch?: import('../runtime/session-control-cancellation.js').SessionControlEpoch;
+    readonly controlEpoch?: import('../runtime/session-control-cancellation').SessionControlEpoch;
     /**
      * Per-run cost ledger (ABG §11.4). When present, `LLMActor` prices each turn's usage
      * against the configured `PricingTable` and emits `policy.budget.accumulated` /

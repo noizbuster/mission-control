@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { OmoPersistenceError, omoFilePath } from './paths.js';
+import { OmoPersistenceError, omoFilePath } from './paths';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';

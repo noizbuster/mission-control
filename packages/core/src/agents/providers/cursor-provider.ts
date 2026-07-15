@@ -12,8 +12,8 @@
  * agents; diagnostics are available on the helper's return value).
  */
 import type { AgentDefinition } from '@mission-control/protocol';
-import type { AgentPluginProvider, LoadContext } from '../capability/types.js';
-import { loadClaudeCompatibleAgents } from './_claude-compatible.js';
+import type { AgentPluginProvider, LoadContext } from '../capability/types';
+import { loadClaudeCompatibleAgents } from './_claude-compatible';
 import { join } from 'node:path';
 
 async function loadAgents(ctx: LoadContext): Promise<readonly AgentDefinition[]> {

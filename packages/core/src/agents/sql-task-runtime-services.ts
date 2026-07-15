@@ -1,13 +1,13 @@
-import type { LocalLibsqlDb } from '../db/local-libsql-db.js';
-import { resolveMissionControlDataDir } from '../memory/data-dir.js';
-import type { ObservabilityRedactor } from '../providers/observability-redactor.js';
-import { openCanonicalRuntimeDb } from '../runtime/local-runtime-db.js';
-import { SessionControlHost } from '../runtime/session-control-host.js';
-import { type AgentJobRecoveryReport, SqlAgentJobMirror } from './agent-job-sql-mirror.js';
-import { AsyncJobManager } from './async-job-manager.js';
-import { AgentLifecycleManager } from './lifecycle-manager.js';
-import { RuntimeAgentRegistry } from './runtime-registry.js';
-import type { TaskToolRuntimeServices } from './task-tool-runtime.js';
+import type { LocalLibsqlDb } from '../db/local-libsql-db';
+import { resolveMissionControlDataDir } from '../memory/data-dir';
+import type { ObservabilityRedactor } from '../providers/observability-redactor';
+import { openCanonicalRuntimeDb } from '../runtime/local-runtime-db';
+import { SessionControlHost } from '../runtime/session-control-host';
+import { type AgentJobRecoveryReport, SqlAgentJobMirror } from './agent-job-sql-mirror';
+import { AsyncJobManager } from './async-job-manager';
+import { AgentLifecycleManager } from './lifecycle-manager';
+import { RuntimeAgentRegistry } from './runtime-registry';
+import type { TaskToolRuntimeServices } from './task-tool-runtime';
 
 export type SqlTaskRuntimeServicesOptions = {
     readonly maxConcurrency?: number;

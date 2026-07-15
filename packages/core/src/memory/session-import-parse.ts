@@ -1,8 +1,8 @@
 import { type Run, RunSchema } from '@mission-control/protocol';
-import { runWithoutSessionOwnerAuthority } from '../runtime/mission-run/run-session-owner-authority.js';
-import { JsonlSessionEventStoreError } from './jsonl-errors.js';
-import type { FoundLegacySource } from './session-import-files.js';
-import type { LegacySessionImportDiagnostic } from './session-import-sql.js';
+import { runWithoutSessionOwnerAuthority } from '../runtime/mission-run/run-session-owner-authority';
+import { JsonlSessionEventStoreError } from './jsonl-errors';
+import type { FoundLegacySource } from './session-import-files';
+import type { LegacySessionImportDiagnostic } from './session-import-sql';
 
 export function parseLegacyRun(
     contents: string,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EventBus } from './event-bus.js';
+import { EventBus } from './event-bus';
 
 describe('EventBus', () => {
     it('subscribe receives events and unsubscribe stops delivery', () => {

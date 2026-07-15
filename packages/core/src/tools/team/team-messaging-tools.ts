@@ -13,11 +13,11 @@
  */
 
 import { z } from 'zod';
-import type { ToolRegistration } from '../tool-registry-types.js';
-import { ToolExecutionError } from '../tool-registry-types.js';
-import { type TeamToolContext, type TeamToolFactoryOptions, teamModeEnabled } from './team-context.js';
-import { type TeamMessage, type TeamSendMessageInput, teamSendMessageInputSchema } from './team-schemas.js';
-import { appendMessage, findMember, isLead, readState, resolveLeadName } from './team-store.js';
+import type { ToolRegistration } from '../tool-registry-types';
+import { ToolExecutionError } from '../tool-registry-types';
+import { type TeamToolContext, type TeamToolFactoryOptions, teamModeEnabled } from './team-context';
+import { type TeamMessage, type TeamSendMessageInput, teamSendMessageInputSchema } from './team-schemas';
+import { appendMessage, findMember, isLead, readState, resolveLeadName } from './team-store';
 import { randomUUID } from 'node:crypto';
 
 const OUTPUT_LIMIT = { maxModelOutputChars: 6000 } as const;

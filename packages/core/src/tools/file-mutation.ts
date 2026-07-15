@@ -5,12 +5,12 @@ import type {
     PermissionKind,
     PermissionRequest,
 } from '@mission-control/protocol';
-import type { NativesClient } from '../native/natives-client.js';
-import { assertTextPatchTarget } from './file-patch-binary.js';
-import { filePatchFailure } from './file-patch-errors.js';
-import { isDirtyTrackedTarget } from './file-patch-git.js';
-import type { PatchTarget, PatchWorkspaceGuard } from './file-patch-paths.js';
-import { permissionRequest, requestToolPermission } from './tool-permissions.js';
+import type { NativesClient } from '../native/natives-client';
+import { assertTextPatchTarget } from './file-patch-binary';
+import { filePatchFailure } from './file-patch-errors';
+import { isDirtyTrackedTarget } from './file-patch-git';
+import type { PatchTarget, PatchWorkspaceGuard } from './file-patch-paths';
+import { permissionRequest, requestToolPermission } from './tool-permissions';
 
 type WorkspaceMutationQueueEntry = {
     readonly token: symbol;

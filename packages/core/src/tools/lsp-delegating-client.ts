@@ -15,7 +15,7 @@
  * no language to route by. The `lsp` tool reports a clear "does not support"
  * error for that operation instead of silently guessing a server.
  */
-import type { LspServerManager } from './lsp-server-manager.js';
+import type { LspServerManager } from './lsp-server-manager';
 import type {
     LspCallHierarchyItem,
     LspClient,
@@ -25,7 +25,7 @@ import type {
     LspPrepareRenameResult,
     LspSymbol,
     LspWorkspaceEdit,
-} from './lsp-tool.js';
+} from './lsp-tool';
 
 export function createDelegatingLspClient(manager: LspServerManager): LspClient {
     return {

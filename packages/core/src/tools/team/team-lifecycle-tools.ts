@@ -14,9 +14,9 @@
  * each factory decide.
  */
 import { z } from 'zod';
-import type { ToolRegistration } from '../tool-registry-types.js';
-import { ToolExecutionError } from '../tool-registry-types.js';
-import { type TeamToolContext, type TeamToolFactoryOptions, teamModeEnabled } from './team-context.js';
+import type { ToolRegistration } from '../tool-registry-types';
+import { ToolExecutionError } from '../tool-registry-types';
+import { type TeamToolContext, type TeamToolFactoryOptions, teamModeEnabled } from './team-context';
 import {
     type TeamCreateInput,
     type TeamDeleteInput,
@@ -28,7 +28,7 @@ import {
     teamShutdownDecisionInputSchema,
     teamShutdownRequestInputSchema,
     teamSpecSchema,
-} from './team-schemas.js';
+} from './team-schemas';
 import {
     buildInitialState,
     deleteTeam,
@@ -39,7 +39,7 @@ import {
     updateState,
     writeConfig,
     writeState,
-} from './team-store.js';
+} from './team-store';
 
 const OUTPUT_LIMIT = { maxModelOutputChars: 6000 } as const;
 const CAPABILITY_CLASSES = ['team'] as const;

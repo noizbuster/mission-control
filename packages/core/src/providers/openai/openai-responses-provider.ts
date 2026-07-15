@@ -1,20 +1,20 @@
-import type { ProviderCredentialResolver } from '../credential-resolver.js';
-import { type ProviderAdapter, ProviderTurnError } from '../provider-turn-types.js';
-import { mapOpenAIProviderError } from './openai-responses-errors.js';
-import { createOpenAIResponsesMappingState, mapOpenAIResponsesStreamEvent } from './openai-responses-mapper.js';
+import type { ProviderCredentialResolver } from '../credential-resolver';
+import { type ProviderAdapter, ProviderTurnError } from '../provider-turn-types';
+import { mapOpenAIProviderError } from './openai-responses-errors';
+import { createOpenAIResponsesMappingState, mapOpenAIResponsesStreamEvent } from './openai-responses-mapper';
 import {
     bearerTokenForCredential,
     createOpenAIResponsesTransportRequest,
     resolveOpenAICredential,
-} from './openai-responses-request.js';
+} from './openai-responses-request';
 import {
     defaultOpenAIResponsesEndpoint,
     type OpenAIResponsesTransport,
     OpenAIResponsesTransportError,
     type OpenAIResponsesTransportRequest,
-} from './openai-responses-transport.js';
+} from './openai-responses-transport';
 
-export { createNodeOpenAIResponsesTransport } from './openai-responses-http-transport.js';
+export { createNodeOpenAIResponsesTransport } from './openai-responses-http-transport';
 export type { OpenAIResponsesTransport, OpenAIResponsesTransportRequest };
 export { OpenAIResponsesTransportError };
 

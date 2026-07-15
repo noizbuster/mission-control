@@ -3,17 +3,17 @@ import {
     acquireSessionControlLease,
     expireSessionControlLease,
     readSessionControlLease,
-} from './session-control-lease.js';
-import { readSessionControlOperation } from './session-control-operation.js';
-import { generateSessionControlNonce } from './session-control-registry-auth.js';
-import { readSessionControlRegistry } from './session-control-registry-file.js';
-import { createSessionOwnerControlClient, SessionOwnerControlClientError } from './session-owner-control-client.js';
+} from './session-control-lease';
+import { readSessionControlOperation } from './session-control-operation';
+import { generateSessionControlNonce } from './session-control-registry-auth';
+import { readSessionControlRegistry } from './session-control-registry-file';
+import { createSessionOwnerControlClient, SessionOwnerControlClientError } from './session-owner-control-client';
 import {
     cleanupSessionOwnerControlFixtures,
     createSessionOwnerControlFixture as createFixture,
     wait,
     waitFor,
-} from './session-owner-control-test-support.js';
+} from './session-owner-control-test-support';
 import { createHash } from 'node:crypto';
 
 afterEach(async () => {

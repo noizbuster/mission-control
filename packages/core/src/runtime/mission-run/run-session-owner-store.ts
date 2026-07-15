@@ -1,7 +1,7 @@
 import { type Run, RunSchema } from '@mission-control/protocol';
-import type { MissionRunStoreLocation } from './mission-run-store-location.js';
-import { RunStoreError } from './run-json-compatibility.js';
-import { mutateStoredRun, type RunPatch, transitionStoredRun } from './run-store.js';
+import type { MissionRunStoreLocation } from './mission-run-store-location';
+import { RunStoreError } from './run-json-compatibility';
+import { mutateStoredRun, type RunPatch, transitionStoredRun } from './run-store';
 
 export type RunSessionOwnerAttachment = {
     readonly sessionId: string;

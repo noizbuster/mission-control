@@ -12,17 +12,17 @@
  */
 import type { AbgNodeModelOptions, AbgSignal, AgentEvent } from '@mission-control/protocol';
 import type { ModelMessage } from 'ai';
-import type { ObservabilityRedactor } from '../../providers/observability-redactor.js';
-import { createObservabilityRedactor } from '../../providers/observability-redactor.js';
-import type { SessionControlEpoch } from '../../runtime/session-control-cancellation.js';
-import type { AskUserQuestionRequest } from '../../tools/ask-user-schemas.js';
-import { ASK_USER_BLOCKED_ANSWER, createAskUserToolRegistration } from '../../tools/ask-user-tool.js';
-import type { TaskOutput } from '../../tools/task-tool.js';
-import type { ToolRegistry } from '../../tools/tool-registry.js';
-import { createCodingAgentGraph } from '../coding-agent-graph.js';
-import { createCodingAgentNodeRegistry } from '../coding-agent-registry.js';
-import { runAbgGraph } from '../graph-runner.js';
-import type { LlmActorModel } from '../nodes/llm-actor/llm-actor-node.js';
+import type { ObservabilityRedactor } from '../../providers/observability-redactor';
+import { createObservabilityRedactor } from '../../providers/observability-redactor';
+import type { SessionControlEpoch } from '../../runtime/session-control-cancellation';
+import type { AskUserQuestionRequest } from '../../tools/ask-user-schemas';
+import { ASK_USER_BLOCKED_ANSWER, createAskUserToolRegistration } from '../../tools/ask-user-tool';
+import type { TaskOutput } from '../../tools/task-tool';
+import type { ToolRegistry } from '../../tools/tool-registry';
+import { createCodingAgentGraph } from '../coding-agent-graph';
+import { createCodingAgentNodeRegistry } from '../coding-agent-registry';
+import { runAbgGraph } from '../graph-runner';
+import type { LlmActorModel } from '../nodes/llm-actor/llm-actor-node';
 
 /**
  * Optional callbacks that route a child's host-facing interactions (ask_user overlay,

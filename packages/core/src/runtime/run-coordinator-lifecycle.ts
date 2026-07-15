@@ -4,7 +4,7 @@ import type {
     RunCoordinatorEventMetadata,
     RunCoordinatorState,
 } from '@mission-control/protocol';
-import { redactCredentialText } from '../providers/redaction-handler.js';
+import { redactCredentialText } from '../providers/redaction-handler';
 
 export type RunCoordinatorResult = {
     readonly status: 'idle' | 'running' | 'completed' | 'interrupted' | 'failed' | 'blocked_on_approval';

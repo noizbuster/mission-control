@@ -20,21 +20,21 @@
  * complementing the bridge's synchronous SDK-contract gate.
  */
 import type { AbgNodeSpec, AbgSignal } from '@mission-control/protocol';
-import { packContext } from '../../../context/context-packer.js';
-import { assembleSystemPrompt, type SystemPromptSkill } from '../../../context/system-prompt.js';
-import { createAbgEmitSignal } from '../../abg-emit.js';
-import type { AbgNodeRunContext, AbgNodeRunner } from '../../node-registry.js';
-import { type ParseStructuredOutputResult, parseStructuredOutput } from '../../structured-blackboard.js';
-import { bridgeAdvertisementsToAiSdk, createAbgToolSettlementLedger } from './abg-tool-bridge.js';
-import { type LlmActorTurnResult, runLlmActor } from './llm-actor-node.js';
+import { packContext } from '../../../context/context-packer';
+import { assembleSystemPrompt, type SystemPromptSkill } from '../../../context/system-prompt';
+import { createAbgEmitSignal } from '../../abg-emit';
+import type { AbgNodeRunContext, AbgNodeRunner } from '../../node-registry';
+import { type ParseStructuredOutputResult, parseStructuredOutput } from '../../structured-blackboard';
+import { bridgeAdvertisementsToAiSdk, createAbgToolSettlementLedger } from './abg-tool-bridge';
+import { type LlmActorTurnResult, runLlmActor } from './llm-actor-node';
 import {
     applyEnumConstraint,
     filterByCapabilities,
     readOutputShape,
     readPriorSummary,
     readStringConfig,
-} from './llm-actor-node-helpers.js';
-import { discoverPromptSkills } from './llm-actor-skill-cache.js';
+} from './llm-actor-node-helpers';
+import { discoverPromptSkills } from './llm-actor-skill-cache';
 
 export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
     const nodeId = node.id;

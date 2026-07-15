@@ -1,5 +1,5 @@
 import type { AbgGraphSnapshot, AgentEvent, AgentSnapshot, ModelProviderSelection } from '@mission-control/protocol';
-import type { AbgTimelineEntry } from '../behavior/timeline.js';
+import type { AbgTimelineEntry } from '../behavior/timeline';
 
 export type SessionCompactionRecordInput = {
     readonly sessionId: string;

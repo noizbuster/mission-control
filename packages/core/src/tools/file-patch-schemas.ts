@@ -1,7 +1,7 @@
 import type { DiffFile, DiffLine, PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { DiffFileSchema } from '@mission-control/protocol';
 import { z } from 'zod';
-import { redactCredentialLines } from '../providers/credential-resolver.js';
+import { redactCredentialLines } from '../providers/credential-resolver';
 
 export const filePatchInputSchema = z
     .object({

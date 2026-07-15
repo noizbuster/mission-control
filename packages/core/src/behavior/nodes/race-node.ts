@@ -1,12 +1,12 @@
 import type { AbgNodeSpec, AbgSignal } from '@mission-control/protocol';
-import type { AbgNodeRunContext, AbgNodeRunner } from '../node-registry.js';
-import { cancelled, failure, isFailureSignal, started, success } from './composite-node-utils.js';
+import type { AbgNodeRunContext, AbgNodeRunner } from '../node-registry';
+import { cancelled, failure, isFailureSignal, started, success } from './composite-node-utils';
 import {
     cleanupRaceBranches,
     DEFAULT_RACE_CLEANUP_TIMEOUT_MS,
     MAX_RACE_CLEANUP_TIMEOUT_MS,
     type RaceCleanupFailure,
-} from './race-cleanup.js';
+} from './race-cleanup';
 
 export const MAX_RACE_CHILDREN = 4;
 

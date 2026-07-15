@@ -24,8 +24,8 @@ import type {
     PermissionRequest,
     ProtocolError,
 } from '@mission-control/protocol';
-import { spawnChildCodingAgent } from '../behavior/subagents/spawn-child.js';
-import type { SdkModelResolver } from '../providers/ai-sdk/model-resolver.js';
+import { spawnChildCodingAgent } from '../behavior/subagents/spawn-child';
+import type { SdkModelResolver } from '../providers/ai-sdk/model-resolver';
 import {
     type CreateTaskToolInput,
     createChildToolRegistry,
@@ -33,9 +33,9 @@ import {
     type TaskInput,
     type TaskOutput,
     type TaskSpawnFn,
-} from './task-tool.js';
-import { permissionRequest, requestToolPermission } from './tool-permissions.js';
-import { type ToolAdvertisement, ToolExecutionError, type ToolRegistration, ToolRegistry } from './tool-registry.js';
+} from './task-tool';
+import { permissionRequest, requestToolPermission } from './tool-permissions';
+import { type ToolAdvertisement, ToolExecutionError, type ToolRegistration, ToolRegistry } from './tool-registry';
 
 export type TaskToolOptions = {
     readonly workspaceRoot: string;

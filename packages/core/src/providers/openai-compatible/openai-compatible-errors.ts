@@ -1,9 +1,9 @@
 import type { ProtocolError } from '@mission-control/protocol';
 import { ZodError } from 'zod';
-import type { ProviderCredentialResolver } from '../credential-resolver.js';
-import { ProviderTurnError } from '../provider-turn-types.js';
-import { OpenAICompatibleEventParseError } from './openai-compatible-events.js';
-import { OpenAICompatibleTransportError } from './openai-compatible-transport.js';
+import type { ProviderCredentialResolver } from '../credential-resolver';
+import { ProviderTurnError } from '../provider-turn-types';
+import { OpenAICompatibleEventParseError } from './openai-compatible-events';
+import { OpenAICompatibleTransportError } from './openai-compatible-transport';
 
 export type OpenAICompatibleErrorRedactor = (text: string) => string;
 

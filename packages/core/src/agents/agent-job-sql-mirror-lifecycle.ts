@@ -3,11 +3,11 @@ import {
     ensurePublicSessionRow,
     persistSessionAwaiting,
     refreshSessionAwaitingFromPendingWaits,
-} from '../memory/session-awaiting-sql.js';
-import { resolvedSubagentJob } from './agent-job-sql-mirror-handles.js';
-import { upsertJobRow } from './agent-job-sql-mirror-persist.js';
-import type { ResolveSubagentWaitInput, StartSubagentWaitInput } from './agent-job-sql-mirror-types.js';
-import type { BackgroundJobHandle } from './async-job-manager.js';
+} from '../memory/session-awaiting-sql';
+import { resolvedSubagentJob } from './agent-job-sql-mirror-handles';
+import { upsertJobRow } from './agent-job-sql-mirror-persist';
+import type { ResolveSubagentWaitInput, StartSubagentWaitInput } from './agent-job-sql-mirror-types';
+import type { BackgroundJobHandle } from './async-job-manager';
 
 export async function recordJobWithLifecycle(client: Client, handle: BackgroundJobHandle): Promise<void> {
     await upsertJobRow({ client, handle });

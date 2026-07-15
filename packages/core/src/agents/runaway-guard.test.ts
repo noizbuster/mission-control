@@ -5,7 +5,7 @@ import {
     formatSalvageSnippet,
     RunawayGuard,
     SOFT_REQUEST_BUDGET,
-} from './runaway-guard.js';
+} from './runaway-guard';
 
 describe('SOFT_REQUEST_BUDGET', () => {
     it('ships the oh-my-pi budget defaults (explore=40, quick=40, default=90)', () => {

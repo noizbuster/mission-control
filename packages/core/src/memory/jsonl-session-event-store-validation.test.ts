@@ -1,6 +1,6 @@
 import type { AgentEvent } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import { JsonlSessionEventStore } from './jsonl-session-event-store.js';
+import { JsonlSessionEventStore } from './jsonl-session-event-store';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

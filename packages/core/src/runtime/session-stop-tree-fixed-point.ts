@@ -3,16 +3,16 @@ import type {
     SessionStopTreeHeldBarrier,
     SessionStopTreeSessionResult,
     StopSessionTreeInput,
-} from './session-stop-tree.js';
-import type { CanonicalSessionTreeDescendant, CanonicalSessionTreeResult } from './session-stop-tree-resolver.js';
+} from './session-stop-tree';
+import type { CanonicalSessionTreeDescendant, CanonicalSessionTreeResult } from './session-stop-tree-resolver';
 import {
     ascendingDepths,
     failedTreeSession,
     parentsRemainStable,
     remainingTime,
     terminalTreeSession,
-} from './session-stop-tree-support.js';
-import { encodeCanonicalSessionTree } from './session-tree-token.js';
+} from './session-stop-tree-support';
+import { encodeCanonicalSessionTree } from './session-tree-token';
 
 type BarrierAcquisition = SessionStopTreeHeldBarrier | { readonly errorCode: SessionStopErrorCode };
 

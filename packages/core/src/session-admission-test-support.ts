@@ -1,5 +1,5 @@
-import { JsonlSessionEventStore } from './memory/jsonl-session-event-store.js';
-import { SessionAdmissionService } from './session-admission.js';
+import { JsonlSessionEventStore } from './memory/jsonl-session-event-store';
+import { SessionAdmissionService } from './session-admission';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

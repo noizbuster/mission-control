@@ -1,17 +1,17 @@
-import { type LocalLibsqlWriteTarget, runLocalLibsqlWrite } from '../db/local-libsql-db.js';
+import { type LocalLibsqlWriteTarget, runLocalLibsqlWrite } from '../db/local-libsql-db';
 import {
     createObservabilityRedactor,
     type ObservabilityRedactor,
     redactAgentEventEnvelopeForObservability,
-} from '../providers/observability-redactor.js';
-import { JsonlSessionEventStoreError } from './jsonl-errors.js';
-import { type ParsedJsonlSessionLog, parseJsonlSessionLog } from './jsonl-session-records.js';
-import { importJsonlSessionRows } from './session-import-event-sql.js';
-import { readLegacySource } from './session-import-files.js';
-import { legacyImportIdFor, recordImport, skipImported } from './session-import-ledger.js';
-import { jsonlImportDiagnostic, parseLegacyRun, sourceImportDiagnostic } from './session-import-parse.js';
-import { importMissionRunRow } from './session-import-run-sql.js';
-import type { LegacySessionImportDiagnostic } from './session-import-sql.js';
+} from '../providers/observability-redactor';
+import { JsonlSessionEventStoreError } from './jsonl-errors';
+import { type ParsedJsonlSessionLog, parseJsonlSessionLog } from './jsonl-session-records';
+import { importJsonlSessionRows } from './session-import-event-sql';
+import { readLegacySource } from './session-import-files';
+import { legacyImportIdFor, recordImport, skipImported } from './session-import-ledger';
+import { jsonlImportDiagnostic, parseLegacyRun, sourceImportDiagnostic } from './session-import-parse';
+import { importMissionRunRow } from './session-import-run-sql';
+import type { LegacySessionImportDiagnostic } from './session-import-sql';
 import { basename } from 'node:path';
 
 export type ImportAccumulator = {

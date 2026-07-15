@@ -1,7 +1,7 @@
 import type { LanguageModelV3Message, LanguageModelV3StreamPart } from '@ai-sdk/provider';
 import { describe, expect, it } from 'vitest';
-import { createDefaultWorkflowGraph } from '../../behavior/default-workflow-graph.js';
-import { createLocalEchoSdkModel } from './local-echo-sdk-model.js';
+import { createDefaultWorkflowGraph } from '../../behavior/default-workflow-graph';
+import { createLocalEchoSdkModel } from './local-echo-sdk-model';
 
 const SYSTEM_PROMPT_KEY = 'systemPrompt';
 

@@ -5,7 +5,7 @@ import {
     createRunnerWorkflowGraph,
     RUNNER_FINAL_STRIKE_BUDGET,
     routeFixLoop,
-} from './runner-workflow-graph.js';
+} from './runner-workflow-graph';
 
 function nodeById(id: string): AbgNodeSpec | undefined {
     return createRunnerWorkflowGraph().nodes.find((node) => node.id === id);

@@ -8,7 +8,7 @@ import {
     sessionStoreDatabasePath,
     sessionStoreIdentityFromCanonicalDatabasePath,
     takeDataDirPermissionWarnings,
-} from './session-store-identity.js';
+} from './session-store-identity';
 import { createHash } from 'node:crypto';
 import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

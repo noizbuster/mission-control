@@ -1,6 +1,6 @@
 import type { AgentDefinition } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import { canSpawn, resolveParentSpawns } from './spawn-policy.js';
+import { canSpawn, resolveParentSpawns } from './spawn-policy';
 
 const baseParent: AgentDefinition = {
     name: 'supervisor',

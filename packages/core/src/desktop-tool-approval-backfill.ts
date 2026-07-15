@@ -1,19 +1,19 @@
 import type { AgentEvent, ModelProviderSelection, ToolCall } from '@mission-control/protocol';
-import { desktopApprovalEffect } from './desktop-approval-effect.js';
-import { withDesktopApprovalSettlementLock } from './desktop-approval-settlement-lock.js';
+import { desktopApprovalEffect } from './desktop-approval-effect';
+import { withDesktopApprovalSettlementLock } from './desktop-approval-settlement-lock';
 import {
     approvalEvent,
     approvalIdForToolCall,
     latestApprovalRecord,
     pendingApprovalContextForCurrentRun,
-} from './desktop-tool-approval-events.js';
+} from './desktop-tool-approval-events';
 import {
     blockedToolAuthority,
     hasRuntimeOwnedCancelledApproval,
     hasRuntimeOwnedPermissionRequest,
     pendingApprovalRecord,
     permissionRequestedEvent,
-} from './desktop-tool-approval-provenance.js';
+} from './desktop-tool-approval-provenance';
 
 export type DesktopApprovalBackfillStore = {
     readonly append: (event: AgentEvent) => Promise<void>;

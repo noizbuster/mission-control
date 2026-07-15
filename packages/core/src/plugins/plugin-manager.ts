@@ -31,9 +31,9 @@ import {
     PluginToolDefinitionSchema,
 } from '@mission-control/protocol';
 import type { ZodType } from 'zod';
-import { stripJsoncComments } from '../workflows/jsonc-parser.js';
-import { WorkflowRegistry } from '../workflows/workflow-registry.js';
-import { discoverPlugins } from './plugin-loader.js';
+import { stripJsoncComments } from '../workflows/jsonc-parser';
+import { WorkflowRegistry } from '../workflows/workflow-registry';
+import { discoverPlugins } from './plugin-loader';
 import type { Dirent } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';

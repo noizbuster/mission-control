@@ -17,12 +17,12 @@
 import type { AgentEvent, PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { DiffFileSchema } from '@mission-control/protocol';
 import { z } from 'zod';
-import { fileMutationDiffEvents } from './file-mutation.js';
-import type { LspClient, LspWorkspaceEdit } from './lsp-tool.js';
-import { type ApplyWorkspaceEditDeps, applyLspWorkspaceEdit } from './lsp-workspace-edit.js';
-import { permissionRequest, requestToolPermission } from './tool-permissions.js';
-import type { ToolRegistration } from './tool-registry-types.js';
-import { ToolExecutionError } from './tool-registry-types.js';
+import { fileMutationDiffEvents } from './file-mutation';
+import type { LspClient, LspWorkspaceEdit } from './lsp-tool';
+import { type ApplyWorkspaceEditDeps, applyLspWorkspaceEdit } from './lsp-workspace-edit';
+import { permissionRequest, requestToolPermission } from './tool-permissions';
+import type { ToolRegistration } from './tool-registry-types';
+import { ToolExecutionError } from './tool-registry-types';
 
 const lspRenameInputSchema = z
     .object({

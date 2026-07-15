@@ -21,7 +21,7 @@ describe('local libSQL initialization baseline', () => {
         tempDirectories.push(directory);
 
         // When: the normal local database opener initializes the file.
-        const { openLocalLibsqlDb } = await import('./local-libsql-db.js');
+        const { openLocalLibsqlDb } = await import('./local-libsql-db');
         const runtime = await openLocalLibsqlDb({ url: `file:${join(directory, 'baseline.db')}` });
         const table = await runtime.client.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'memory_entries'",
@@ -34,7 +34,7 @@ describe('local libSQL initialization baseline', () => {
 
     it('keeps an in-memory database in memory journal mode', async () => {
         // Given: one isolated in-memory database.
-        const { openLocalLibsqlDb } = await import('./local-libsql-db.js');
+        const { openLocalLibsqlDb } = await import('./local-libsql-db');
         const runtime = await openLocalLibsqlDb({ url: ':memory:' });
 
         // When: its journal mode is queried after initialization.
@@ -47,7 +47,7 @@ describe('local libSQL initialization baseline', () => {
 
     it.each(['memory', 'file'] as const)('enables and enforces foreign keys for a %s database', async (kind) => {
         // Given: a real database opened through the normal memory or file path.
-        const { openLocalLibsqlDb } = await import('./local-libsql-db.js');
+        const { openLocalLibsqlDb } = await import('./local-libsql-db');
         const url = kind === 'memory' ? ':memory:' : `file:${join(await makeTempDirectory(), 'foreign-keys.db')}`;
         const runtime = await openLocalLibsqlDb({ url });
 
@@ -152,7 +152,7 @@ describe('local libSQL file PRAGMAs', () => {
     it('persists WAL, NORMAL synchronous mode, and the bounded busy timeout in a real file', async () => {
         // Given: an isolated path for a real local file database.
         const databasePath = join(await makeTempDirectory(), 'pragmas.db');
-        const { openLocalLibsqlDb } = await import('./local-libsql-db.js');
+        const { openLocalLibsqlDb } = await import('./local-libsql-db');
 
         // When: file initialization completes before the schema is queried.
         const runtime = await openLocalLibsqlDb({ url: `file:${databasePath}` });
@@ -212,7 +212,7 @@ async function installMockedDatabaseModules(options: MockedDatabaseOptions) {
         }),
     }));
     vi.resetModules();
-    const { openLocalLibsqlDb } = await import('./local-libsql-db.js');
+    const { openLocalLibsqlDb } = await import('./local-libsql-db');
     return { clients, createClient, openLocalLibsqlDb };
 }
 

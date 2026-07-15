@@ -13,7 +13,7 @@
  * supplied as an adopt-time callback rather than read from the ref.
  */
 
-import { type AgentRef, type AgentStatus, MAIN_AGENT_ID, type RuntimeAgentRegistry } from './runtime-registry.js';
+import { type AgentRef, type AgentStatus, MAIN_AGENT_ID, type RuntimeAgentRegistry } from './runtime-registry';
 
 /** Recreates an AgentRef from the ref's sessionFile after park. */
 export type AgentReviver = (id: string) => Promise<AgentRef>;

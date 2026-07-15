@@ -3,8 +3,8 @@ import {
     projectApprovalContinuationMessages,
     projectApprovalContinuationTranscript,
     type SequencedAgentMessage,
-} from './session-continuation-projection.js';
-import type { JsonlSessionReplayPrefixProjection } from './session-replay-types.js';
+} from './session-continuation-projection';
+import type { JsonlSessionReplayPrefixProjection } from './session-replay-types';
 
 export type SessionCompactionPreparation =
     | {

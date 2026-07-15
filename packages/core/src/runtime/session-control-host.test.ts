@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { type LocalLibsqlDb, openLocalLibsqlDb } from '../db/local-libsql-db.js';
+import { type LocalLibsqlDb, openLocalLibsqlDb } from '../db/local-libsql-db';
 import {
     SessionControlFencedError,
     SessionControlHost,
     type SessionControlHostPublisher,
-} from './session-control-host.js';
-import { acquireSessionControlLease } from './session-control-lease.js';
-import type { SessionControlLeaseRenewer } from './session-control-lease-renewer.js';
+} from './session-control-host';
+import { acquireSessionControlLease } from './session-control-lease';
+import type { SessionControlLeaseRenewer } from './session-control-lease-renewer';
 import { createHash } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

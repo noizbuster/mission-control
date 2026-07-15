@@ -1,19 +1,19 @@
 import type { ModelMessage } from 'ai';
 import { afterEach, describe, expect, it } from 'vitest';
-import { bridgeAdvertisementToAiSdk } from '../behavior/nodes/llm-actor/abg-tool-bridge.js';
-import type { BrowserConnectFn, BrowserPageSeam } from './browser-tool.js';
-import { createBrowserToolRegistration } from './browser-tool.js';
-import { BrowserHarness, toolContext } from './browser-tool-lifecycle-test-support.js';
+import { bridgeAdvertisementToAiSdk } from '../behavior/nodes/llm-actor/abg-tool-bridge';
+import type { BrowserConnectFn, BrowserPageSeam } from './browser-tool';
+import { createBrowserToolRegistration } from './browser-tool';
+import { BrowserHarness, toolContext } from './browser-tool-lifecycle-test-support';
 import {
     browserToolContext,
     browserToolOptions,
     cleanupBrowserToolWorkspaces,
     mockBrowserCdp,
     projectTrustReader,
-} from './browser-tool-test-support.js';
-import { browserEndpointRedactionSecrets } from './browser-tool-url.js';
-import { ToolRegistry } from './tool-registry.js';
-import { ToolExecutionError } from './tool-registry-types.js';
+} from './browser-tool-test-support';
+import { browserEndpointRedactionSecrets } from './browser-tool-url';
+import { ToolRegistry } from './tool-registry';
+import { ToolExecutionError } from './tool-registry-types';
 
 describe('browser tool redaction', () => {
     afterEach(cleanupBrowserToolWorkspaces);

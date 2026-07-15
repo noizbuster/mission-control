@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { NativesClient } from '../native/natives-client.js';
-import { extractSiteContent } from './web-search-extraction.js';
+import type { NativesClient } from '../native/natives-client';
+import { extractSiteContent } from './web-search-extraction';
 
 describe('extractSiteContent', () => {
     let originalFetch: typeof globalThis.fetch;

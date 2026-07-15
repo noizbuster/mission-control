@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { ApprovalMode, ResolveApprovalInput, ToolTier, UserToolPolicy } from './approval-tier.js';
-import { APPROVAL_MODE_MAX_TIER, resolveApproval, TIER_RANK } from './approval-tier.js';
+import type { ApprovalMode, ResolveApprovalInput, ToolTier, UserToolPolicy } from './approval-tier';
+import { APPROVAL_MODE_MAX_TIER, resolveApproval, TIER_RANK } from './approval-tier';
 
 const ALL_TIERS: readonly ToolTier[] = ['read', 'write', 'exec'];
 const ALL_MODES: readonly ApprovalMode[] = ['always-ask', 'write', 'yolo'];

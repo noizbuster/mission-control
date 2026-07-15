@@ -19,8 +19,8 @@
 // The pure helpers live in `persistent-memory-helpers.ts` (binding-free, shared with
 // TursoPersistentStore). Imported for local use and re-exported to preserve this module's
 // historical public API.
-import { deserializeValue, entryMatchesQuery, isExpired, serializeValue } from './persistent-memory-helpers.js';
-import type { MemoryEntry, MemoryQuery, PersistentMemoryStore } from './persistent-memory-store.js';
+import { deserializeValue, entryMatchesQuery, isExpired, serializeValue } from './persistent-memory-helpers';
+import type { MemoryEntry, MemoryQuery, PersistentMemoryStore } from './persistent-memory-store';
 
 export { deserializeValue, entryMatchesQuery, isExpired, serializeValue };
 

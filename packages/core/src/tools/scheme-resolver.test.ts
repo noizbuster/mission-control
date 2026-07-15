@@ -13,7 +13,7 @@ import {
     parseConflictBlocks,
     pathnameToPath,
     type SchemeResolveContext,
-} from './scheme-resolver.js';
+} from './scheme-resolver';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

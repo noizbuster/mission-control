@@ -4,9 +4,9 @@ import {
     type AbgNodeModelOptions,
     type AbgNodeSpec,
 } from '@mission-control/protocol';
-import type { AgentModelLookup } from './agent-model-resolver.js';
-import { resolveGraphAgentModels } from './agent-model-resolver.js';
-import { AbgGraphValidationError, type CompiledAbgRule, compileAbgRule } from './rule-compiler.js';
+import type { AgentModelLookup } from './agent-model-resolver';
+import { resolveGraphAgentModels } from './agent-model-resolver';
+import { AbgGraphValidationError, type CompiledAbgRule, compileAbgRule } from './rule-compiler';
 
 export type AuthorableAbgGraph = AbgGraphSpec & {
     readonly compiledRules: readonly CompiledAbgRule[];

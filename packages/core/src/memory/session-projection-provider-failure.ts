@@ -1,5 +1,5 @@
 import type { AgentEvent } from '@mission-control/protocol';
-import type { CodingReplayStep } from '../session-replay-types.js';
+import type { CodingReplayStep } from '../session-replay-types';
 
 type ProviderFailureStep = Extract<CodingReplayStep, { readonly kind: 'provider.failure' }>;
 

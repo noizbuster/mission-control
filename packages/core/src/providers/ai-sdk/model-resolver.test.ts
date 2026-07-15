@@ -1,6 +1,6 @@
 import type { LanguageModelV3, LanguageModelV3Message, LanguageModelV3StreamPart } from '@ai-sdk/provider';
 import { describe, expect, it } from 'vitest';
-import { createSdkModelResolver, SdkModelResolverError } from './model-resolver.js';
+import { createSdkModelResolver, SdkModelResolverError } from './model-resolver';
 
 type ResolvedModel = { readonly provider: string; readonly modelId: string };
 

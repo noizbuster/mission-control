@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { finalizeProviderTurnResult } from './run-coordinator-lifecycle.js';
+import { finalizeProviderTurnResult } from './run-coordinator-lifecycle';
 
 describe('run coordinator lifecycle reason safety', () => {
     it('redacts and bounds failed reasons before durable emission and return', async () => {

@@ -1,4 +1,4 @@
-import { prepareExactEdit } from './file-edit-operation.js';
+import { prepareExactEdit } from './file-edit-operation';
 import {
     type FileEditInput,
     type FileEditOutput,
@@ -10,15 +10,15 @@ import {
     fileEditParametersJsonSchema,
     type ResolvedFileEditToolOptions,
     resolveFileEditOptions,
-} from './file-edit-schemas.js';
-import { executeFileMutation, fileMutationDiffEvents, preflightTextFileMutationTargets } from './file-mutation.js';
-import { filePatchFailure } from './file-patch-errors.js';
-import { createPatchWorkspaceGuard, type PatchTarget } from './file-patch-paths.js';
-import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './tool-registry.js';
+} from './file-edit-schemas';
+import { executeFileMutation, fileMutationDiffEvents, preflightTextFileMutationTargets } from './file-mutation';
+import { filePatchFailure } from './file-patch-errors';
+import { createPatchWorkspaceGuard, type PatchTarget } from './file-patch-paths';
+import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './tool-registry';
 import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
 
-export type { FileEditToolOptions } from './file-edit-schemas.js';
+export type { FileEditToolOptions } from './file-edit-schemas';
 
 export async function registerFileEditTool(
     registry: ToolRegistry,

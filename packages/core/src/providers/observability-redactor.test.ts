@@ -1,14 +1,14 @@
 import type { AgentEvent, ProviderStreamChunk } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { redactProviderChunkForObservability } from './observability-provider-chunk.js';
+import { redactProviderChunkForObservability } from './observability-provider-chunk';
 import {
     createObservabilityRedactor,
     OBSERVABILITY_CIRCULAR,
     OBSERVABILITY_TRUNCATED,
     OBSERVABILITY_UNAVAILABLE,
     redactAgentEventForObservability,
-} from './observability-redactor.js';
-import { REDACTED_CREDENTIAL } from './redaction-handler.js';
+} from './observability-redactor';
+import { REDACTED_CREDENTIAL } from './redaction-handler';
 
 describe('observability redactor', () => {
     it('deep-redacts strings, arrays, plain objects, and errors without mutating input', () => {

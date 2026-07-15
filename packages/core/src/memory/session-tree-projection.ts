@@ -6,7 +6,7 @@ import type {
     SessionTreeNode,
     SessionTreeProjection,
     SessionTreeProjectionDiagnostic,
-} from '../session-replay-types.js';
+} from '../session-replay-types';
 
 type MutableSessionTreeNode = {
     readonly entryId: string;

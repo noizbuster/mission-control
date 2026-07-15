@@ -10,13 +10,13 @@
 
 import type { AgentEvent, PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { z } from 'zod';
-import { redactCredentialText } from '../providers/credential-resolver.js';
-import { assertTrustedWorkspace, buildTrustedBashEnv, defaultBashEnvAllowlist } from './bash-run-policy.js';
-import { commandRunFailure } from './command-run-errors.js';
-import type { MonitorManager, MonitorMode } from './monitor-manager.js';
-import { permissionRequest, requestToolPermission } from './tool-permissions.js';
-import type { ToolAdvertisement, ToolRegistration } from './tool-registry.js';
-import type { ToolExecutionContext } from './tool-registry-types.js';
+import { redactCredentialText } from '../providers/credential-resolver';
+import { assertTrustedWorkspace, buildTrustedBashEnv, defaultBashEnvAllowlist } from './bash-run-policy';
+import { commandRunFailure } from './command-run-errors';
+import type { MonitorManager, MonitorMode } from './monitor-manager';
+import { permissionRequest, requestToolPermission } from './tool-permissions';
+import type { ToolAdvertisement, ToolRegistration } from './tool-registry';
+import type { ToolExecutionContext } from './tool-registry-types';
 import { realpath } from 'node:fs/promises';
 
 export const MONITOR_START_TOOL_NAME = 'monitor_start';

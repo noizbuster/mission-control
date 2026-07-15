@@ -24,20 +24,20 @@
  */
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import type { z } from 'zod';
-import { createNativesClient } from '../native/natives-client.js';
+import { createNativesClient } from '../native/natives-client';
 import {
     type AstEditReplacement,
     type AstRewriteFn,
     applyStagedAstEdit,
     createDefaultAstRewriter,
-} from './ast-edit.js';
+} from './ast-edit';
 import {
     type AstGrepMatch,
     type AstGrepResult,
     type AstGrepRunOptions,
     defaultAstSearchFileCollector,
     runAstGrep,
-} from './ast-grep-runner.js';
+} from './ast-grep-runner';
 import {
     type AstGrepInput,
     type AstGrepOutput,
@@ -47,10 +47,10 @@ import {
     astGrepInputSchema,
     astGrepOutputSchema,
     astGrepParametersJsonSchema,
-} from './ast-grep-schemas.js';
-import { createPatchWorkspaceGuard } from './file-patch-paths.js';
-import { type StagedPreviewAction, type StagedPreviewRegistry } from './staged-preview-registry.js';
-import { type ToolAdvertisement, ToolExecutionError, type ToolRegistration, ToolRegistry } from './tool-registry.js';
+} from './ast-grep-schemas';
+import { createPatchWorkspaceGuard } from './file-patch-paths';
+import { type StagedPreviewAction, type StagedPreviewRegistry } from './staged-preview-registry';
+import { type ToolAdvertisement, ToolExecutionError, type ToolRegistration, ToolRegistry } from './tool-registry';
 import { relative } from 'node:path';
 
 const TRUNCATION_MARKER = 'result_truncated';

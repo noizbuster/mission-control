@@ -1,6 +1,6 @@
 import { AgentEventEnvelopeSchema } from '@mission-control/protocol';
-import { readLocalSessionReplay } from './memory/local-session-store.js';
-import type { DeterministicProviderStep } from './providers/deterministic-provider.js';
+import { readLocalSessionReplay } from './memory/local-session-store';
+import type { DeterministicProviderStep } from './providers/deterministic-provider';
 
 export function fixedNow(): string {
     return '2026-06-09T00:00:00.000Z';

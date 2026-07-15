@@ -1,8 +1,8 @@
 import type { LanguageModelV3StreamPart } from '@ai-sdk/provider';
 import { describe, expect, it } from 'vitest';
-import { createDeterministicProvider } from '../deterministic-provider.js';
-import type { ProviderAdapter } from '../provider-turn-types.js';
-import { FlatProviderBridgeError, wrapFlatProviderAsSdkModel } from './flat-provider-bridge.js';
+import { createDeterministicProvider } from '../deterministic-provider';
+import type { ProviderAdapter } from '../provider-turn-types';
+import { FlatProviderBridgeError, wrapFlatProviderAsSdkModel } from './flat-provider-bridge';
 
 /** Drive a model's doStream for a single user prompt and collect the emitted stream parts. */
 async function collectStreamParts(

@@ -19,8 +19,8 @@ import {
     type MediaImageProviderPreference,
 } from '@mission-control/protocol';
 import type { z } from 'zod';
-import { resolveMissionControlDataDir } from '../memory/data-dir.js';
-import { type ToolAdvertisement, ToolExecutionError, type ToolRegistration, ToolRegistry } from './tool-registry.js';
+import { resolveMissionControlDataDir } from '../memory/data-dir';
+import { type ToolAdvertisement, ToolExecutionError, type ToolRegistration, ToolRegistry } from './tool-registry';
 import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';

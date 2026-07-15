@@ -8,10 +8,10 @@
 
 import type { AgentEvent } from '@mission-control/protocol';
 import { z } from 'zod';
-import type { MonitorManager } from './monitor-manager.js';
-import type { MonitorToolsConfig } from './monitor-start-tool.js';
-import type { ToolAdvertisement, ToolRegistration } from './tool-registry.js';
-import type { ToolExecutionContext } from './tool-registry-types.js';
+import type { MonitorManager } from './monitor-manager';
+import type { MonitorToolsConfig } from './monitor-start-tool';
+import type { ToolAdvertisement, ToolRegistration } from './tool-registry';
+import type { ToolExecutionContext } from './tool-registry-types';
 
 export const MONITOR_STOP_TOOL_NAME = 'monitor_stop';
 const MONITOR_STOP_OUTPUT_LIMIT = { maxModelOutputChars: 1000 } as const;
@@ -138,5 +138,5 @@ function monitorStopEvents(output: MonitorStopOutput, context: { readonly toolCa
 }
 
 // Re-exported so callers can import the config + name cluster from one place.
-export { DEFAULT_MONITOR_TOOLS_CONFIG, type MonitorToolsConfig } from './monitor-start-tool.js';
+export { DEFAULT_MONITOR_TOOLS_CONFIG, type MonitorToolsConfig } from './monitor-start-tool';
 export type { ToolExecutionContext };

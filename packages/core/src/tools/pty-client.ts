@@ -1,6 +1,6 @@
 import { type SidecarStreamFrame, validateSidecarStreamFrames } from '@mission-control/protocol';
-import { redactCredentialText } from '../providers/credential-resolver.js';
-import { truncateToValidUtf8Boundary } from '../providers/stream-decoder.js';
+import { redactCredentialText } from '../providers/credential-resolver';
+import { truncateToValidUtf8Boundary } from '../providers/stream-decoder';
 
 /**
  * Cumulative output cap mirrored from the Rust `pty.alloc` handler. Applied on

@@ -1,7 +1,7 @@
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { z } from 'zod';
-import type { CommandChainStep, CommandExecutionRequest, CommandExecutionResult } from './command-run-executor.js';
-import { type CommandRunOutput, commandRunModelOutput, commandRunOutputSchema } from './command-run-schemas.js';
+import type { CommandChainStep, CommandExecutionRequest, CommandExecutionResult } from './command-run-executor';
+import { type CommandRunOutput, commandRunModelOutput, commandRunOutputSchema } from './command-run-schemas';
 
 export const bashRunInputSchema = z
     .object({

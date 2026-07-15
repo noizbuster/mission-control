@@ -3,13 +3,13 @@ import {
     createObservabilityRedactor,
     type ObservabilityRedactor,
     redactAgentEventEnvelopeForObservability,
-} from '../providers/observability-redactor.js';
-import { type JsonlSessionReplayPrefixProjection, projectSessionReplay } from '../session-replay.js';
-import type { ReplayDiagnostic } from '../session-replay-types.js';
-import { resolveMissionControlDataDir } from './data-dir.js';
-import { openEnsuredLocalSessionDatabase } from './local-session-store-database.js';
-import { readExportEnvelopes } from './session-import-event-sql.js';
-import { listLegacySessionImportLedger } from './session-import-sql.js';
+} from '../providers/observability-redactor';
+import { type JsonlSessionReplayPrefixProjection, projectSessionReplay } from '../session-replay';
+import type { ReplayDiagnostic } from '../session-replay-types';
+import { resolveMissionControlDataDir } from './data-dir';
+import { openEnsuredLocalSessionDatabase } from './local-session-store-database';
+import { readExportEnvelopes } from './session-import-event-sql';
+import { listLegacySessionImportLedger } from './session-import-sql';
 
 export type LocalSessionReplayReadResult =
     | {

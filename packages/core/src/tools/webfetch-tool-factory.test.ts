@@ -1,7 +1,7 @@
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { ToolRegistry } from './tool-registry.js';
-import { registerWebfetchTool } from './webfetch-tool-factory.js';
+import { ToolRegistry } from './tool-registry';
+import { registerWebfetchTool } from './webfetch-tool-factory';
 import { createServer, type Server } from 'node:http';
 
 describe('webfetch self-gating factory (graph-path permission gate)', () => {

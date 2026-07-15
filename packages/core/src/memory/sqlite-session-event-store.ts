@@ -5,9 +5,9 @@ import {
     type AgentSnapshot,
     type ToolCall,
 } from '@mission-control/protocol';
-import type { AbgTimelineEntry } from '../behavior/timeline.js';
-import type { LocalLibsqlDb } from '../db/local-libsql-db.js';
-import { openMissionControlDb } from '../db/mission-control-db.js';
+import type { AbgTimelineEntry } from '../behavior/timeline';
+import type { LocalLibsqlDb } from '../db/local-libsql-db';
+import { openMissionControlDb } from '../db/mission-control-db';
 import type {
     DesktopApprovalEffect,
     DesktopApprovalEffectClaimInput,
@@ -15,17 +15,17 @@ import type {
     DesktopApprovalEffectRecord,
     DesktopApprovalEffectResolutionInput,
     DesktopApprovalEffectSettlementInput,
-} from '../desktop-approval-effect.js';
+} from '../desktop-approval-effect';
 import {
     createObservabilityRedactor,
     type ObservabilityRedactor,
     redactAgentEventEnvelopeForObservability,
-} from '../providers/observability-redactor.js';
-import { projectSessionReplay, type SessionReplayProjection } from '../session-replay.js';
-import type { JsonlSessionEventIdFactory } from './jsonl-session-event-store.js';
-import { defaultSession, deriveSession } from './jsonl-session-projection.js';
-import type { MemoryStore, SessionCompactionRecordInput } from './memory-store.js';
-import { createSessionCompactionEvent } from './session-compaction-event.js';
+} from '../providers/observability-redactor';
+import { projectSessionReplay, type SessionReplayProjection } from '../session-replay';
+import type { JsonlSessionEventIdFactory } from './jsonl-session-event-store';
+import { defaultSession, deriveSession } from './jsonl-session-projection';
+import type { MemoryStore, SessionCompactionRecordInput } from './memory-store';
+import { createSessionCompactionEvent } from './session-compaction-event';
 import {
     claimSqliteDesktopApprovalEffect,
     readSqliteDesktopApprovalEffect,
@@ -33,14 +33,14 @@ import {
     reserveSqliteDesktopApprovalEffect,
     resolveSqliteDesktopApprovalEffect,
     settleSqliteDesktopApprovalEffect,
-} from './sqlite-session-approval-effects.js';
-import { readSqliteDesktopToolProposal } from './sqlite-session-desktop-tool-proposals.js';
-import { SqliteSessionEventAppender } from './sqlite-session-event-appender.js';
-import { SqliteSessionEventStoreError } from './sqlite-session-event-store-errors.js';
-import { readSqliteSessionEnvelopes } from './sqlite-session-event-store-read.js';
-import { logFromEvents } from './sqlite-session-event-store-rows.js';
-import { ensureSqliteSessionRows } from './sqlite-session-event-store-sql.js';
-import { runSqliteSessionWriteTransaction } from './sqlite-session-event-store-transaction.js';
+} from './sqlite-session-approval-effects';
+import { readSqliteDesktopToolProposal } from './sqlite-session-desktop-tool-proposals';
+import { SqliteSessionEventAppender } from './sqlite-session-event-appender';
+import { SqliteSessionEventStoreError } from './sqlite-session-event-store-errors';
+import { readSqliteSessionEnvelopes } from './sqlite-session-event-store-read';
+import { logFromEvents } from './sqlite-session-event-store-rows';
+import { ensureSqliteSessionRows } from './sqlite-session-event-store-sql';
+import { runSqliteSessionWriteTransaction } from './sqlite-session-event-store-transaction';
 import { randomUUID } from 'node:crypto';
 
 export { SqliteSessionEventStoreError };

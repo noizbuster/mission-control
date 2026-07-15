@@ -13,11 +13,11 @@ import type { LanguageModelV3StreamPart } from '@ai-sdk/provider';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { AgentRuntime } from './agent-runtime.js';
-import { createCodingAgentGraph } from './behavior/coding-agent-graph.js';
-import { createCodingAgentNodeRegistry } from './behavior/coding-agent-registry.js';
-import { ToolRegistry } from './tools/tool-registry.js';
-import type { ToolRegistration } from './tools/tool-registry-types.js';
+import { AgentRuntime } from './agent-runtime';
+import { createCodingAgentGraph } from './behavior/coding-agent-graph';
+import { createCodingAgentNodeRegistry } from './behavior/coding-agent-registry';
+import { ToolRegistry } from './tools/tool-registry';
+import type { ToolRegistration } from './tools/tool-registry-types';
 
 const MODEL_SELECTION = { providerID: 'local', modelID: 'local-coding' } as const;
 

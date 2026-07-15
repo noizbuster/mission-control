@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { TuiPluginManifestStore } from './plugin-manifest-store.js';
+import { TuiPluginManifestStore } from './plugin-manifest-store';
 import {
     cleanupTuiStoreTestScope,
     createTuiStoreTestScope,
     expectNoMctrlWrites,
     expectNoTemporaryFiles,
     type TuiStoreTestScope,
-} from './tui-store-test-support.js';
+} from './tui-store-test-support';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 

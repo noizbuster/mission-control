@@ -1,7 +1,7 @@
 import type { AgentDefinition } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import type { DiscoverAgentsResult } from './agent-loader.js';
-import { AgentIndex } from './agent-registry.js';
+import type { DiscoverAgentsResult } from './agent-loader';
+import { AgentIndex } from './agent-registry';
 
 function makeAgent(name: string, overrides?: Partial<AgentDefinition>): AgentDefinition {
     return {

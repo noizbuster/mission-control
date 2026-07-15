@@ -1,15 +1,15 @@
 import { modelProviderCatalog } from '@mission-control/config';
 import type { ProviderCredential, ToolDefinition } from '@mission-control/protocol';
-import { ProviderCredentialResolutionError, type ProviderCredentialResolver } from '../credential-resolver.js';
-import { ProviderTurnError, type ProviderTurnRequest } from '../provider-turn-types.js';
-import { createVariantLookup } from '../shared/variant-cache.js';
+import { ProviderCredentialResolutionError, type ProviderCredentialResolver } from '../credential-resolver';
+import { ProviderTurnError, type ProviderTurnRequest } from '../provider-turn-types';
+import { createVariantLookup } from '../shared/variant-cache';
 import type {
     OpenAIReasoningEffort,
     OpenAIResponsesInputItem,
     OpenAIResponsesRequestBody,
     OpenAIResponsesTool,
     OpenAIResponsesTransportRequest,
-} from './openai-responses-transport.js';
+} from './openai-responses-transport';
 
 export async function resolveOpenAICredential(
     resolver: ProviderCredentialResolver,

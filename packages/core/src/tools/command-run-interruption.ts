@@ -1,6 +1,6 @@
-import type { SessionControlEpoch } from '../runtime/session-control-cancellation.js';
-import type { CommandExecutionResult } from './command-run-executor.js';
-import type { ResolvedCommandRunToolOptions } from './command-run-schemas.js';
+import type { SessionControlEpoch } from '../runtime/session-control-cancellation';
+import type { CommandExecutionResult } from './command-run-executor';
+import type { ResolvedCommandRunToolOptions } from './command-run-schemas';
 
 export async function runCommandWithTimeout(
     options: ResolvedCommandRunToolOptions,

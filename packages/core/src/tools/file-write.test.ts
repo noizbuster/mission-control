@@ -1,7 +1,7 @@
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import { type FileWriteToolOptions, registerFileWriteTool } from './file-write.js';
-import { ToolRegistry } from './tool-registry.js';
+import { type FileWriteToolOptions, registerFileWriteTool } from './file-write';
+import { ToolRegistry } from './tool-registry';
 import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

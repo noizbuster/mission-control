@@ -7,8 +7,8 @@
  */
 
 import { z } from 'zod';
-import type { ToolRegistration } from './tool-registry-types.js';
-import { truncateOutput, withContinuationHint } from './truncate.js';
+import type { ToolRegistration } from './tool-registry-types';
+import { truncateOutput, withContinuationHint } from './truncate';
 import { readdir } from 'node:fs/promises';
 import { isAbsolute, join, relative, sep } from 'node:path';
 

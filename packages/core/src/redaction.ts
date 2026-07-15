@@ -11,7 +11,7 @@ export {
     redactAbgSignalForObservability,
     redactAgentEventEnvelopeForObservability,
     redactAgentEventForObservability,
-} from './providers/observability-redactor.js';
+} from './providers/observability-redactor';
 export {
     createCredentialRedactions,
     credentialRedactionsForText,
@@ -19,4 +19,4 @@ export {
     type RedactedCredentialLine,
     redactCredentialLines,
     redactCredentialText,
-} from './providers/redaction-handler.js';
+} from './providers/redaction-handler';

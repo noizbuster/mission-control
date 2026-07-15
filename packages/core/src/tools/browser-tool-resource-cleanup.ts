@@ -1,7 +1,7 @@
-import type { ObservabilityRedactor } from '../providers/observability-redactor.js';
-import { raceBrowserCleanup, raceBrowserOperation } from './browser-tool-deadline.js';
-import { browserFailure } from './browser-tool-output.js';
-import type { BrowserConnectionSeam, BrowserPageSeam } from './browser-tool-puppeteer.js';
+import type { ObservabilityRedactor } from '../providers/observability-redactor';
+import { raceBrowserCleanup, raceBrowserOperation } from './browser-tool-deadline';
+import { browserFailure } from './browser-tool-output';
+import type { BrowserConnectionSeam, BrowserPageSeam } from './browser-tool-puppeteer';
 
 const MAX_BROWSER_CLEANUP_ERRORS = 100;
 

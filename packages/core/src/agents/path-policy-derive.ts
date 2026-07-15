@@ -13,7 +13,7 @@
  * wildcard evaluator without duplicating its logic.
  */
 import type { AgentDefinition, PolicyEffectRule } from '@mission-control/protocol';
-import { type EvaluationResult, evaluateRules } from '../permissions/rule-evaluator.js';
+import { type EvaluationResult, evaluateRules } from '../permissions/rule-evaluator';
 
 /**
  * Derive the effective path-policy list for a child agent.

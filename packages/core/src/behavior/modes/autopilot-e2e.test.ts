@@ -15,11 +15,11 @@
  */
 import type { AbgSignal } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import type { AbgNodeRunContext } from '../node-registry.js';
-import { runModePolicyGateNode } from '../nodes/policy-gate-node.js';
-import { createPlannerWorkflowGraph } from '../planner-workflow-graph.js';
-import { autopilotMode } from './autopilot-mode.js';
-import { applyMode } from './mode-application.js';
+import type { AbgNodeRunContext } from '../node-registry';
+import { runModePolicyGateNode } from '../nodes/policy-gate-node';
+import { createPlannerWorkflowGraph } from '../planner-workflow-graph';
+import { autopilotMode } from './autopilot-mode';
+import { applyMode } from './mode-application';
 
 const NOW = '2026-06-22T00:00:00.000Z';
 

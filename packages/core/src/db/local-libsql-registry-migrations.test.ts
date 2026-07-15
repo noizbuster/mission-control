@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { openLocalLibsqlDb } from './local-libsql-db.js';
+import { openLocalLibsqlDb } from './local-libsql-db';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

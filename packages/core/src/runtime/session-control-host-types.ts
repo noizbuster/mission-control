@@ -1,8 +1,8 @@
-import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db.js';
-import type { SessionControlCallbackHandleKind } from './session-control-cancellation.js';
-import type { SessionControlLease } from './session-control-lease.js';
-import type { PosixSessionControlOwner } from './session-control-owner-posix.js';
-import type { ResolvePosixSessionControlPathsInput } from './session-control-registry-paths.js';
+import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db';
+import type { SessionControlCallbackHandleKind } from './session-control-cancellation';
+import type { SessionControlLease } from './session-control-lease';
+import type { PosixSessionControlOwner } from './session-control-owner-posix';
+import type { ResolvePosixSessionControlPathsInput } from './session-control-registry-paths';
 import type { Duplex } from 'node:stream';
 
 export type SessionControlEntityKind = 'run' | 'approval' | 'wait' | 'input' | 'mission_run' | 'job' | 'child';

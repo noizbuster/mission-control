@@ -1,6 +1,6 @@
 import type { AbgNodeSpec, AbgPolicySpec, AbgSignal } from '@mission-control/protocol';
-import { createAbgEmitSignal } from '../abg-emit.js';
-import type { AbgNodeRunContext, AbgNodeRunner } from '../node-registry.js';
+import { createAbgEmitSignal } from '../abg-emit';
+import type { AbgNodeRunContext, AbgNodeRunner } from '../node-registry';
 
 export function createLeafNodeRunners(): readonly (readonly [string, AbgNodeRunner])[] {
     return [

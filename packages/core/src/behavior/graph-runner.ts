@@ -7,17 +7,17 @@ import type {
     ModelProviderSelection,
 } from '@mission-control/protocol';
 import type { ModelMessage } from 'ai';
-import type { ProjectInstructionResource } from '../context/project-context-messages.js';
-import type { SystemPromptEnvironment } from '../context/system-prompt.js';
-import { redactGraphRunResultForObservability } from '../providers/graph-run-result-observability.js';
-import { createObservabilityRedactor, type ObservabilityRedactor } from '../providers/observability-redactor.js';
-import type { SessionControlEpoch } from '../runtime/session-control-cancellation.js';
-import type { ToolRegistry } from '../tools/tool-registry.js';
-import type { AgentModelLookup } from './agent-model-resolver.js';
-import type { PricingTable } from './budget/cost-ledger.js';
-import { runBoundedAbgGraph } from './graph-coordinator.js';
-import type { AbgNodeRegistry } from './node-registry.js';
-import type { LlmActorModel } from './nodes/llm-actor/llm-actor-node.js';
+import type { ProjectInstructionResource } from '../context/project-context-messages';
+import type { SystemPromptEnvironment } from '../context/system-prompt';
+import { redactGraphRunResultForObservability } from '../providers/graph-run-result-observability';
+import { createObservabilityRedactor, type ObservabilityRedactor } from '../providers/observability-redactor';
+import type { SessionControlEpoch } from '../runtime/session-control-cancellation';
+import type { ToolRegistry } from '../tools/tool-registry';
+import type { AgentModelLookup } from './agent-model-resolver';
+import type { PricingTable } from './budget/cost-ledger';
+import { runBoundedAbgGraph } from './graph-coordinator';
+import type { AbgNodeRegistry } from './node-registry';
+import type { LlmActorModel } from './nodes/llm-actor/llm-actor-node';
 
 export type AbgGraphRunnerInput = {
     readonly graph: unknown;

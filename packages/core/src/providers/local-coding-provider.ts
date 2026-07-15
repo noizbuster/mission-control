@@ -1,6 +1,6 @@
 import type { ProviderStreamChunk } from '@mission-control/protocol';
-import { localOutputForSystemContract } from './local-output-contract.js';
-import type { ProviderAdapter, ProviderAdapterContext, ProviderTurnRequest } from './provider-turn-types.js';
+import { localOutputForSystemContract } from './local-output-contract';
+import type { ProviderAdapter, ProviderAdapterContext, ProviderTurnRequest } from './provider-turn-types';
 
 export function createLocalCodingProvider(): ProviderAdapter {
     return {

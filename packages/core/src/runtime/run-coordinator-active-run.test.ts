@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { interruptActiveRun } from './run-coordinator-active-run.js';
+import { interruptActiveRun } from './run-coordinator-active-run';
 
 describe('run coordinator interrupt reason safety', () => {
     it('redacts and bounds interrupt reasons before durable emission', async () => {

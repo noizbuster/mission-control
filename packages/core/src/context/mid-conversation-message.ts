@@ -12,7 +12,7 @@
  * updates at safe boundaries.
  */
 import type { AgentMessage } from '@mission-control/protocol';
-import type { SystemContextRegistry } from './system-context-source.js';
+import type { SystemContextRegistry } from './system-context-source';
 
 /** A system-role message matching the protocol's `AgentMessage` discriminated union. */
 export type SystemMessage = Extract<AgentMessage, { readonly role: 'system' }>;

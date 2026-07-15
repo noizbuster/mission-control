@@ -1,7 +1,7 @@
 import { bench, describe } from 'vitest';
-import { createNativesClient } from '../native/natives-client.js';
-import { createWorkspaceGuard } from './read-tools-paths.js';
-import { searchRepoText } from './read-tools-search.js';
+import { createNativesClient } from '../native/natives-client';
+import { createWorkspaceGuard } from './read-tools-paths';
+import { searchRepoText } from './read-tools-search';
 import { existsSync, rmSync } from 'node:fs';
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

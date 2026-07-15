@@ -1,8 +1,8 @@
 // allow: SIZE_OK -- HEAD 398 -> current 409 pure LOC; one leased session-control ownership and attachment state machine.
-import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db.js';
-import { openLocalSessionEventStore } from '../memory/local-session-store.js';
-import type { ObservabilityRedactor } from '../providers/observability-redactor.js';
-import { acquireSessionChildSpawnBarrier, type SessionChildSpawnBarrier } from './session-child-spawn-barrier.js';
+import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db';
+import { openLocalSessionEventStore } from '../memory/local-session-store';
+import type { ObservabilityRedactor } from '../providers/observability-redactor';
+import { acquireSessionChildSpawnBarrier, type SessionChildSpawnBarrier } from './session-child-spawn-barrier';
 import {
     assertUniqueSessionControlHandles,
     type SessionControlAccessToken,
@@ -13,26 +13,26 @@ import {
     SessionControlFencedError,
     type SessionControlHostPublisher,
     type SessionControlStopContext,
-} from './session-control-host-types.js';
+} from './session-control-host-types';
 import {
     readSessionControlLease,
     runWithSessionControlLeaseFence,
     type SessionControlLease,
-} from './session-control-lease.js';
-import { type SessionControlLeaseRenewer, startSessionControlLeaseRenewer } from './session-control-lease-renewer.js';
-import { type PosixSessionControlOwner, publishPosixSessionControlOwner } from './session-control-owner-posix.js';
-import { publishWindowsSessionControlOwner } from './session-control-owner-windows.js';
-import { sessionControlTransportForPlatform } from './session-control-platform.js';
-import type { ResolvePosixSessionControlPathsInput } from './session-control-registry-paths.js';
-import { SessionOwnerControlServer } from './session-owner-control-server.js';
-import { SessionStopService } from './session-stop-service.js';
+} from './session-control-lease';
+import { type SessionControlLeaseRenewer, startSessionControlLeaseRenewer } from './session-control-lease-renewer';
+import { type PosixSessionControlOwner, publishPosixSessionControlOwner } from './session-control-owner-posix';
+import { publishWindowsSessionControlOwner } from './session-control-owner-windows';
+import { sessionControlTransportForPlatform } from './session-control-platform';
+import type { ResolvePosixSessionControlPathsInput } from './session-control-registry-paths';
+import { SessionOwnerControlServer } from './session-owner-control-server';
+import { SessionStopService } from './session-stop-service';
 import { randomUUID } from 'node:crypto';
 import type { Duplex } from 'node:stream';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const SESSION_CONTROL_FENCE_GRACE_MS = 1_000;
 
-export * from './session-control-host-types.js';
+export * from './session-control-host-types';
 
 type SessionEntry = {
     readonly sessionId: string;

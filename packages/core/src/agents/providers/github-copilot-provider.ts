@@ -3,8 +3,8 @@
  * for agent definition files in the standard markdown + YAML frontmatter
  * shape. Project-only; Copilot has no user-level agent config directory.
  */
-import type { AgentPluginProvider } from '../capability/types.js';
-import { scanAgentMarkdownDir } from './scan-agent-dir.js';
+import type { AgentPluginProvider } from '../capability/types';
+import { scanAgentMarkdownDir } from './scan-agent-dir';
 import { join } from 'node:path';
 
 export const githubCopilotProvider: AgentPluginProvider = {

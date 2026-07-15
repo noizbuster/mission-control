@@ -1,20 +1,20 @@
-import { composeObservabilityRedactors, createObservabilityRedactor } from '../providers/observability-redactor.js';
-import { BrowserConnectionManager } from './browser-tool-connection-manager.js';
+import { composeObservabilityRedactors, createObservabilityRedactor } from '../providers/observability-redactor';
+import { BrowserConnectionManager } from './browser-tool-connection-manager';
 import {
     type BrowserInput,
     type BrowserOutput,
     DEFAULT_TIMEOUT_SECONDS,
     type ResolvedBrowserToolOptions,
-} from './browser-tool-contract.js';
-import { createBrowserAbortScope } from './browser-tool-deadline.js';
-import { redactBrowserToolError } from './browser-tool-error-redaction.js';
-import { requireBrowserLiveAuthority } from './browser-tool-live-authority.js';
-import { browserFailure, browserOutput, requireBrowserApproval } from './browser-tool-output.js';
-import { readBrowserTitle, runExtract, runScreenshot } from './browser-tool-page-actions.js';
-import type { BrowserPageSeam } from './browser-tool-puppeteer.js';
-import { browserNavigationRedactionSecrets, observableBrowserUrl } from './browser-tool-url.js';
-import { type ToolExecutionContext, ToolExecutionError } from './tool-registry-types.js';
-import { truncateOutput } from './truncate.js';
+} from './browser-tool-contract';
+import { createBrowserAbortScope } from './browser-tool-deadline';
+import { redactBrowserToolError } from './browser-tool-error-redaction';
+import { requireBrowserLiveAuthority } from './browser-tool-live-authority';
+import { browserFailure, browserOutput, requireBrowserApproval } from './browser-tool-output';
+import { readBrowserTitle, runExtract, runScreenshot } from './browser-tool-page-actions';
+import type { BrowserPageSeam } from './browser-tool-puppeteer';
+import { browserNavigationRedactionSecrets, observableBrowserUrl } from './browser-tool-url';
+import { type ToolExecutionContext, ToolExecutionError } from './tool-registry-types';
+import { truncateOutput } from './truncate';
 
 type BrowserExecutionOptions = ResolvedBrowserToolOptions & {
     readonly requireLiveAuthority: () => Promise<void>;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { createBlackboard } from '../memory/blackboard.js';
-import { collectSignals, createCompositeNodeTestContext } from './composite-node-test-helpers.js';
-import { type AbgNodeRunContext, runAbgNode } from './node-registry.js';
+import { createBlackboard } from '../memory/blackboard';
+import { collectSignals, createCompositeNodeTestContext } from './composite-node-test-helpers';
+import { type AbgNodeRunContext, runAbgNode } from './node-registry';
 
 describe('ABG parallel verdict aggregation', () => {
     it('writes all-approve metadata and the aggregated blackboard value', async () => {

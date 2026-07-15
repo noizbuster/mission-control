@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { ToolExecutionError, ToolRegistry } from './tool-registry.js';
-import { type WebSearchInput, type WebSearchOutput, webSearchParametersJsonSchema } from './web-search-schemas.js';
+import { ToolExecutionError, ToolRegistry } from './tool-registry';
+import { type WebSearchInput, type WebSearchOutput, webSearchParametersJsonSchema } from './web-search-schemas';
 import {
     createWebSearchToolRegistration,
     registerWebSearchTool,
     type WebSearchToolOptions,
-} from './web-search-tool.js';
+} from './web-search-tool';
 
 describe('web_search tool', () => {
     const previousExa = process.env['EXA_API_KEY'];

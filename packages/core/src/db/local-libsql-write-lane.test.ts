@@ -4,8 +4,8 @@ import {
     type LocalLibsqlWriteTarget,
     openLocalLibsqlDb,
     runWithLocalLibsqlWriteLock,
-} from './local-libsql-db.js';
-import { deferred } from './local-libsql-registry-test-support.js';
+} from './local-libsql-db';
+import { deferred } from './local-libsql-registry-test-support';
 
 class TestWriteError extends Error {
     readonly name = 'TestWriteError';

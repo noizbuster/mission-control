@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { SessionControlRegistry } from './session-control-registry-file.js';
+import type { SessionControlRegistry } from './session-control-registry-file';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { chmod, lstat, rm } from 'node:fs/promises';
 import { createConnection, createServer, type Server, type Socket } from 'node:net';

@@ -9,9 +9,9 @@ import {
     askUserInputSchema,
     askUserOutputSchema,
     askUserParametersJsonSchema,
-} from './ask-user-schemas.js';
-import { ToolRegistry } from './tool-registry.js';
-import type { ToolAdvertisement, ToolRegistration } from './tool-registry-types.js';
+} from './ask-user-schemas';
+import { ToolRegistry } from './tool-registry';
+import type { ToolAdvertisement, ToolRegistration } from './tool-registry-types';
 
 export type {
     AskUserBlockedEvent,
@@ -19,8 +19,8 @@ export type {
     AskUserOutput,
     AskUserQuestionRequest,
     AskUserToolOptions,
-} from './ask-user-schemas.js';
-export { askUserInputSchema, askUserOutputSchema, askUserParametersJsonSchema } from './ask-user-schemas.js';
+} from './ask-user-schemas';
+export { askUserInputSchema, askUserOutputSchema, askUserParametersJsonSchema } from './ask-user-schemas';
 
 /** Sentinel returned in non-interactive mode; non-empty so it is not mistaken for a real free-text answer. */
 export const ASK_USER_BLOCKED_ANSWER = '(blocked: awaiting user input — no interactive host)';

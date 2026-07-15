@@ -1,6 +1,6 @@
 import type { AbgNodeSpec, AbgSignal } from '@mission-control/protocol';
-import { createAbgEmitSignal } from '../abg-emit.js';
-import type { AbgNodeRunContext } from '../node-registry.js';
+import { createAbgEmitSignal } from '../abg-emit';
+import type { AbgNodeRunContext } from '../node-registry';
 import {
     failure,
     isFailureSignal,
@@ -8,7 +8,7 @@ import {
     readPositiveIntConfig,
     readStringConfig,
     success,
-} from './composite-node-utils.js';
+} from './composite-node-utils';
 
 /**
  * Bounded fan-out concurrency for the parallel node's `fanOutKey` branch. Matches

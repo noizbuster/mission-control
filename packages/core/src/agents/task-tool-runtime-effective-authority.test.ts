@@ -1,17 +1,17 @@
 import type { AgentDefinition } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ToolRegistry } from '../tools/tool-registry.js';
-import { ToolExecutionError } from '../tools/tool-registry-types.js';
-import { AgentIndex } from './agent-registry.js';
-import type { ModelPattern } from './model-resolver.js';
-import { createSqlTaskRuntimeServices, type SqlTaskRuntimeServices } from './sql-task-runtime-services.js';
-import { ConcreteTaskToolRuntime } from './task-tool-runtime.js';
+import { ToolRegistry } from '../tools/tool-registry';
+import { ToolExecutionError } from '../tools/tool-registry-types';
+import { AgentIndex } from './agent-registry';
+import type { ModelPattern } from './model-resolver';
+import { createSqlTaskRuntimeServices, type SqlTaskRuntimeServices } from './sql-task-runtime-services';
+import { ConcreteTaskToolRuntime } from './task-tool-runtime';
 import {
     allowAllChildPermissions,
     makePermissionAgent,
     makePermissionRequest,
     makePermissionTool,
-} from './task-tool-runtime-permissions-test-support.js';
+} from './task-tool-runtime-permissions-test-support';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

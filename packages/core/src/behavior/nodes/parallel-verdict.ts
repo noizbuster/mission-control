@@ -1,6 +1,6 @@
 import type { AbgNodeSpec } from '@mission-control/protocol';
-import type { AbgNodeRunContext } from '../node-registry.js';
-import { readStringArrayConfig, readStringConfig } from './composite-node-utils.js';
+import type { AbgNodeRunContext } from '../node-registry';
+import { readStringArrayConfig, readStringConfig } from './composite-node-utils';
 
 export type ParallelVerdict = {
     readonly value: 'APPROVE' | 'REJECT';

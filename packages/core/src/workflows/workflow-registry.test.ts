@@ -1,6 +1,6 @@
 import type { Category, Mode, WorkflowSpec } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { WorkflowRegistry } from './workflow-registry.js';
+import { WorkflowRegistry } from './workflow-registry';
 
 function workflowSpec(name: string): WorkflowSpec {
     return {

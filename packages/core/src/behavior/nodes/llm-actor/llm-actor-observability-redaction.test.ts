@@ -4,12 +4,12 @@ import type { ModelMessage } from 'ai';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { createObservabilityRedactor } from '../../../providers/observability-redactor.js';
-import { REDACTED_CREDENTIAL } from '../../../providers/redaction-handler.js';
-import { ToolRegistry } from '../../../tools/tool-registry.js';
-import { ToolExecutionError, type ToolRegistration } from '../../../tools/tool-registry-types.js';
-import { bridgeAdvertisementsToAiSdk, createAbgToolSettlementLedger } from './abg-tool-bridge.js';
-import { runLlmActor } from './llm-actor-node.js';
+import { createObservabilityRedactor } from '../../../providers/observability-redactor';
+import { REDACTED_CREDENTIAL } from '../../../providers/redaction-handler';
+import { ToolRegistry } from '../../../tools/tool-registry';
+import { ToolExecutionError, type ToolRegistration } from '../../../tools/tool-registry-types';
+import { bridgeAdvertisementsToAiSdk, createAbgToolSettlementLedger } from './abg-tool-bridge';
+import { runLlmActor } from './llm-actor-node';
 
 const NOW = '2026-07-13T00:00:00.000Z';
 

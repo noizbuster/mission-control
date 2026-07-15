@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { importLegacySessionCompatibilityWindow } from './session-import.js';
-import { countRows, openMigratedTestDb, writeLegacyFixture } from './session-import-test-support.js';
+import { importLegacySessionCompatibilityWindow } from './session-import';
+import { countRows, openMigratedTestDb, writeLegacyFixture } from './session-import-test-support';
 import { rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 

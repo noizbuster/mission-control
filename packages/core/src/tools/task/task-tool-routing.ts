@@ -1,8 +1,8 @@
 import type { PolicyEffectRule } from '@mission-control/protocol';
-import type { SessionControlEpoch } from '../../runtime/session-control-cancellation.js';
-import { ToolExecutionError } from '../tool-registry-types.js';
-import { type CategoryDefinition, getCategory } from './category-catalog.js';
-import type { BatchTaskItem, ChildSpawnRequest, TaskToolParams } from './task-tool-contract.js';
+import type { SessionControlEpoch } from '../../runtime/session-control-cancellation';
+import { ToolExecutionError } from '../tool-registry-types';
+import { type CategoryDefinition, getCategory } from './category-catalog';
+import type { BatchTaskItem, ChildSpawnRequest, TaskToolParams } from './task-tool-contract';
 
 const NESTED_SUBAGENT_DENY_RULE: PolicyEffectRule = {
     action: 'subagent',

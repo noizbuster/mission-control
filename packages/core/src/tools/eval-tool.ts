@@ -11,8 +11,8 @@
  */
 
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
-import { type ProjectTrustReader, resolveProjectTrustDecision } from '../trust/project-trust-store.js';
-import { EvalContextManager, type EvalContextManagerOptions, type EvalRunResult } from './eval-context-manager.js';
+import { type ProjectTrustReader, resolveProjectTrustDecision } from '../trust/project-trust-store';
+import { EvalContextManager, type EvalContextManagerOptions, type EvalRunResult } from './eval-context-manager';
 import {
     type EvalCell,
     type EvalCellResult,
@@ -21,12 +21,12 @@ import {
     evalInputSchema,
     evalOutputSchema,
     evalParametersJsonSchema,
-} from './eval-schemas.js';
-import { createEvalToolBridge } from './eval-tool-bridge.js';
-import { createEvalToolHost } from './eval-tool-host.js';
-import { permissionRequest, requestToolPermission } from './tool-permissions.js';
-import { ToolRegistry } from './tool-registry.js';
-import { type ToolAdvertisement, ToolExecutionError, type ToolRegistration } from './tool-registry-types.js';
+} from './eval-schemas';
+import { createEvalToolBridge } from './eval-tool-bridge';
+import { createEvalToolHost } from './eval-tool-host';
+import { permissionRequest, requestToolPermission } from './tool-permissions';
+import { ToolRegistry } from './tool-registry';
+import { type ToolAdvertisement, ToolExecutionError, type ToolRegistration } from './tool-registry-types';
 
 const EVAL_TOOL_NAME = 'eval';
 const DEFAULT_MODEL_OUTPUT_CHARS = 8_000;

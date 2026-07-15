@@ -1,12 +1,12 @@
 import type { AbgNodeSpec, AbgSignal } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import type { AbgNodeRunContext, AbgNodeRunner } from '../node-registry.js';
+import type { AbgNodeRunContext, AbgNodeRunner } from '../node-registry';
 import {
     type BranchOutcome,
     decideSpeculativeWinner,
     readBranchScore,
     runSpeculativeNode,
-} from './speculative-node.js';
+} from './speculative-node';
 
 const NOW = '2026-06-16T00:00:00.000Z';
 

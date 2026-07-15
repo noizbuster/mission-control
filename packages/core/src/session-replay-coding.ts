@@ -5,7 +5,7 @@ import {
     ProtocolErrorSchema,
     type ToolResult,
 } from '@mission-control/protocol';
-import type { CodingReplayStep, ReplayDiagnostic } from './session-replay-types.js';
+import type { CodingReplayStep, ReplayDiagnostic } from './session-replay-types';
 
 const RUN_REPLAY_EVENT_TYPES: ReadonlySet<AgentEvent['type']> = new Set([
     'run.command.received',

@@ -1,21 +1,21 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { ProviderTurnRunner } from '../providers/provider-turn-runner.js';
-import type { ProviderAdapter, ProviderStreamChunk } from '../providers/provider-turn-types.js';
-import { ToolRegistry } from '../tools/tool-registry.js';
-import { expireSessionControlLease } from './session-control-lease.js';
+import { ProviderTurnRunner } from '../providers/provider-turn-runner';
+import type { ProviderAdapter, ProviderStreamChunk } from '../providers/provider-turn-types';
+import { ToolRegistry } from '../tools/tool-registry';
+import { expireSessionControlLease } from './session-control-lease';
 import {
     createSessionControlCallbackFence,
     createSessionControlOperation,
     readSessionControlOperation,
-} from './session-control-operation.js';
+} from './session-control-operation';
 import {
     acquireOperationTestLease,
     cleanupOperationTestRuntimes,
     createMutationProbe,
     createOperationTestRuntime,
     readMutationProbe,
-} from './session-control-operation-test-support.js';
+} from './session-control-operation-test-support';
 
 afterEach(cleanupOperationTestRuntimes);
 

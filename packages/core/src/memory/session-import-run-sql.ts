@@ -1,8 +1,8 @@
 import type { Client } from '@libsql/client';
 import type { Run } from '@mission-control/protocol';
-import type { ObservabilityRedactor } from '../providers/observability-redactor.js';
-import { sanitizeRunForPersistence } from '../runtime/mission-run/run-persistence-sanitization.js';
-import { runWithoutSessionOwnerAuthority } from '../runtime/mission-run/run-session-owner-authority.js';
+import type { ObservabilityRedactor } from '../providers/observability-redactor';
+import { sanitizeRunForPersistence } from '../runtime/mission-run/run-persistence-sanitization';
+import { runWithoutSessionOwnerAuthority } from '../runtime/mission-run/run-session-owner-authority';
 
 export async function importMissionRunRow(input: {
     readonly client: Client;

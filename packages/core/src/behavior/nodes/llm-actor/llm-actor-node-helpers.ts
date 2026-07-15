@@ -1,10 +1,10 @@
 import type { AbgNodeSpec } from '@mission-control/protocol';
 import type { ModelMessage } from 'ai';
-import type { ConversationSummary } from '../../../context/compaction.js';
-import type { Blackboard } from '../../../memory/blackboard.js';
-import type { ToolAdvertisement } from '../../../tools/tool-registry-types.js';
-import { type ParseStructuredOutputResult, type StructuredOutputShape } from '../../structured-blackboard.js';
-import type { LlmActorTurnResult } from './llm-actor-node.js';
+import type { ConversationSummary } from '../../../context/compaction';
+import type { Blackboard } from '../../../memory/blackboard';
+import type { ToolAdvertisement } from '../../../tools/tool-registry-types';
+import { type ParseStructuredOutputResult, type StructuredOutputShape } from '../../structured-blackboard';
+import type { LlmActorTurnResult } from './llm-actor-node';
 
 export function readStringConfig(node: AbgNodeSpec, key: string): string | undefined {
     const value = node.config?.[key];

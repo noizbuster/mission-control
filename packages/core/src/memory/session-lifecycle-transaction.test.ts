@@ -1,13 +1,13 @@
 import { AgentEventEnvelopeSchema } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import { openLocalLibsqlDb } from '../db/local-libsql-db.js';
-import { ensurePublicSessionRow, refreshSessionAwaitingFromPendingWaits } from './session-awaiting-sql.js';
+import { openLocalLibsqlDb } from '../db/local-libsql-db';
+import { ensurePublicSessionRow, refreshSessionAwaitingFromPendingWaits } from './session-awaiting-sql';
 import {
     cleanupSqliteSessionEventStoreTestDirs,
     createSqliteSessionEventStoreTestDbUrl,
-} from './sqlite-session-event-store-test-support.js';
-import { projectSessionEventsToSqlite } from './sqlite-session-projection.js';
-import { openSqliteSessionProjectionStoreForTests } from './sqlite-session-projection-test-support.js';
+} from './sqlite-session-event-store-test-support';
+import { projectSessionEventsToSqlite } from './sqlite-session-projection';
+import { openSqliteSessionProjectionStoreForTests } from './sqlite-session-projection-test-support';
 
 afterEach(cleanupSqliteSessionEventStoreTestDirs);
 

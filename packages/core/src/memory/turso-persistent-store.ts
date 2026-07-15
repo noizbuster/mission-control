@@ -17,11 +17,11 @@
  * share one local database without adding drizzle-kit.
  */
 import { and, eq, isNotNull, lte } from 'drizzle-orm';
-import type { LocalLibsqlDb } from '../db/local-libsql-db.js';
-import { openLocalLibsqlDb, runLocalLibsqlWrite } from '../db/local-libsql-db.js';
-import { memoryEntries } from '../db/schema.js';
-import { deserializeValue, entryMatchesQuery, isExpired, serializeValue } from './persistent-memory-helpers.js';
-import type { MemoryEntry, MemoryQuery, PersistentMemoryStore } from './persistent-memory-store.js';
+import type { LocalLibsqlDb } from '../db/local-libsql-db';
+import { openLocalLibsqlDb, runLocalLibsqlWrite } from '../db/local-libsql-db';
+import { memoryEntries } from '../db/schema';
+import { deserializeValue, entryMatchesQuery, isExpired, serializeValue } from './persistent-memory-helpers';
+import type { MemoryEntry, MemoryQuery, PersistentMemoryStore } from './persistent-memory-store';
 
 type MemoryRow = {
     readonly namespace: string;

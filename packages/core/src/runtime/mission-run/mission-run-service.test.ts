@@ -1,12 +1,12 @@
 import { RunSchema } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { openLocalLibsqlDb } from '../../db/local-libsql-db.js';
-import { openMissionControlDb } from '../../db/mission-control-db.js';
-import { localSessionDbPath, localSessionDbUrl } from '../../memory/local-session-store-paths.js';
-import { TursoPersistentStore } from '../../memory/turso-persistent-store.js';
-import { blockRun, cancelRun, completeRun, failRun, materializeMission, startRun } from './mission-run-service.js';
-import { makeTempRoot, makeTestWorkflowSpec, seedOmoRoot } from './mission-run-test-support.js';
-import { createMission, missionFilePath, readMission } from './mission-store.js';
+import { openLocalLibsqlDb } from '../../db/local-libsql-db';
+import { openMissionControlDb } from '../../db/mission-control-db';
+import { localSessionDbPath, localSessionDbUrl } from '../../memory/local-session-store-paths';
+import { TursoPersistentStore } from '../../memory/turso-persistent-store';
+import { blockRun, cancelRun, completeRun, failRun, materializeMission, startRun } from './mission-run-service';
+import { makeTempRoot, makeTestWorkflowSpec, seedOmoRoot } from './mission-run-test-support';
+import { createMission, missionFilePath, readMission } from './mission-store';
 import {
     createRun,
     findMostRecentFailedRun,
@@ -15,7 +15,7 @@ import {
     readRun,
     runFilePath,
     updateRunStatus,
-} from './run-store.js';
+} from './run-store';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 

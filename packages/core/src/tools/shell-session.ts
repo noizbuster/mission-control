@@ -6,21 +6,21 @@ import type {
     SidecarStreamFrame,
 } from '@mission-control/protocol';
 import { z } from 'zod';
-import { redactCredentialText } from '../providers/credential-resolver.js';
-import { truncateToValidUtf8Boundary } from '../providers/stream-decoder.js';
-import type { SessionControlEpoch } from '../runtime/session-control-cancellation.js';
+import { redactCredentialText } from '../providers/credential-resolver';
+import { truncateToValidUtf8Boundary } from '../providers/stream-decoder';
+import type { SessionControlEpoch } from '../runtime/session-control-cancellation';
 import {
     assertTrustedWorkspace,
     buildTrustedBashEnv,
     defaultBashEnvAllowlist,
     defaultBashRunTimeoutMs,
     resolveBashCwd,
-} from './bash-run-policy.js';
-import { commandOperatorAborted, commandRunFailure } from './command-run-errors.js';
-import { permissionRequest, requestToolPermission } from './tool-permissions.js';
-import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './tool-registry.js';
-import type { ToolExecutionContext } from './tool-registry-types.js';
-import { type TruncatedOutput, truncateOutput, withContinuationHint } from './truncate.js';
+} from './bash-run-policy';
+import { commandOperatorAborted, commandRunFailure } from './command-run-errors';
+import { permissionRequest, requestToolPermission } from './tool-permissions';
+import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './tool-registry';
+import type { ToolExecutionContext } from './tool-registry-types';
+import { type TruncatedOutput, truncateOutput, withContinuationHint } from './truncate';
 import { randomUUID } from 'node:crypto';
 import { realpath } from 'node:fs/promises';
 

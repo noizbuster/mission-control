@@ -1,7 +1,7 @@
 import type { AbgNodeSpec } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { appendNotepad, assertAppendOnly, NotepadAppendOnlyError, readNotepad } from '../persistence/notepad-store.js';
-import { parsePlanSections } from '../persistence/plan-store.js';
+import { appendNotepad, assertAppendOnly, NotepadAppendOnlyError, readNotepad } from '../persistence/notepad-store';
+import { parsePlanSections } from '../persistence/plan-store';
 import {
     createRunnerWorkflowGraph,
     RUNNER_CHECKBOX_UPDATE_PROMPT,
@@ -9,7 +9,7 @@ import {
     RUNNER_DELEGATION_SECTIONS,
     RUNNER_INIT_NOTEPAD_PROMPT,
     RUNNER_PARSE_PLAN_PROMPT,
-} from './runner-workflow-graph.js';
+} from './runner-workflow-graph';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

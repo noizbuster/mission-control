@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { ToolExecutionContext } from '../tool-registry-types.js';
-import { createFullParityTaskToolRegistration, type TaskToolRuntime, taskToolInputSchema } from './task-tool.js';
+import type { ToolExecutionContext } from '../tool-registry-types';
+import { createFullParityTaskToolRegistration, type TaskToolRuntime, taskToolInputSchema } from './task-tool';
 
 const context: ToolExecutionContext = {
     toolCallId: 'tc_batch_concurrency',

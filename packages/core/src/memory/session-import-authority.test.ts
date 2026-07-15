@@ -1,11 +1,11 @@
 import { RunSchema } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createObservabilityRedactor } from '../providers/observability-redactor.js';
-import { openCanonicalRuntimeDb } from '../runtime/local-runtime-db.js';
-import { attachRunSessionOwner, settleRunSessionOwner } from '../runtime/mission-run/run-session-owner-store.js';
-import { createRun, readRun } from '../runtime/mission-run/run-store.js';
-import { importLegacySessionCompatibilityWindow } from './session-import.js';
-import { readMissionRunDbRow } from './session-import-test-support.js';
+import { createObservabilityRedactor } from '../providers/observability-redactor';
+import { openCanonicalRuntimeDb } from '../runtime/local-runtime-db';
+import { attachRunSessionOwner, settleRunSessionOwner } from '../runtime/mission-run/run-session-owner-store';
+import { createRun, readRun } from '../runtime/mission-run/run-store';
+import { importLegacySessionCompatibilityWindow } from './session-import';
+import { readMissionRunDbRow } from './session-import-test-support';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

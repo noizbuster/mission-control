@@ -1,4 +1,4 @@
-import { OmoPersistenceError } from './paths.js';
+import { OmoPersistenceError } from './paths';
 import { readFile } from 'node:fs/promises';
 
 /**

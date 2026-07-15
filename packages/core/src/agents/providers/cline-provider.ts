@@ -5,8 +5,8 @@
  * {@linkcode scanAgentMarkdownDir} helper.
  */
 import type { AgentDefinition } from '@mission-control/protocol';
-import type { AgentPluginProvider, LoadContext } from '../capability/types.js';
-import { scanAgentMarkdownDir } from './scan-agent-dir.js';
+import type { AgentPluginProvider, LoadContext } from '../capability/types';
+import { scanAgentMarkdownDir } from './scan-agent-dir';
 import { join } from 'node:path';
 
 async function loadAgents(ctx: LoadContext): Promise<readonly AgentDefinition[]> {

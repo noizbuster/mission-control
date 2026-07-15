@@ -3,14 +3,14 @@ import type {
     OpenAICompatibleChoice,
     OpenAICompatibleStreamEvent,
     OpenAICompatibleUsage,
-} from './openai-compatible-event-schemas.js';
-import { ErrorEventSchema, OpenAICompatibleStreamEventSchema } from './openai-compatible-event-schemas.js';
+} from './openai-compatible-event-schemas';
+import { ErrorEventSchema, OpenAICompatibleStreamEventSchema } from './openai-compatible-event-schemas';
 
 export type {
     OpenAICompatibleChoice,
     OpenAICompatibleStreamEvent,
     OpenAICompatibleUsage,
-} from './openai-compatible-event-schemas.js';
+} from './openai-compatible-event-schemas';
 
 export function parseOpenAICompatibleStreamEvent(value: unknown): OpenAICompatibleStreamEvent {
     const error = ErrorEventSchema.safeParse(value);

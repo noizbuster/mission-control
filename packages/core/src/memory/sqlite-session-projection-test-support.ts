@@ -1,5 +1,5 @@
 import type { AgentEvent, AgentEventEnvelope } from '@mission-control/protocol';
-import { openLocalLibsqlDb } from '../db/local-libsql-db.js';
+import { openLocalLibsqlDb } from '../db/local-libsql-db';
 import {
     approvalEvent,
     diffAppliedEvent,
@@ -10,8 +10,8 @@ import {
     runEvent,
     sessionStoppedEvent,
     toolFailedEvent,
-} from '../session-replay-coding-test-support.js';
-import { createSqliteSessionProjectionStore, type SqliteSessionProjectionStore } from './sqlite-session-projection.js';
+} from '../session-replay-coding-test-support';
+import { createSqliteSessionProjectionStore, type SqliteSessionProjectionStore } from './sqlite-session-projection';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

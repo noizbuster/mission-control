@@ -1,4 +1,4 @@
-import { omoDirPath, omoFilePath } from './paths.js';
+import { omoDirPath, omoFilePath } from './paths';
 import type { Stats } from 'node:fs';
 import { type FileHandle, lstat, open, readdir, realpath } from 'node:fs/promises';
 import { join } from 'node:path';

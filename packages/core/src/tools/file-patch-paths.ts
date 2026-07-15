@@ -1,5 +1,5 @@
-import { filePatchFailure } from './file-patch-errors.js';
-import { matchesWorkspaceDenylist, toPosixPath } from './read-tools-paths.js';
+import { filePatchFailure } from './file-patch-errors';
+import { matchesWorkspaceDenylist, toPosixPath } from './read-tools-paths';
 import type { Stats } from 'node:fs';
 import { lstat, realpath, stat } from 'node:fs/promises';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';

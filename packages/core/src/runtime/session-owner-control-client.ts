@@ -10,26 +10,26 @@ import {
     type SessionStopReceiptContract,
     SessionStopReceiptSchema,
 } from '@mission-control/protocol';
-import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db.js';
-import { readSessionControlLease } from './session-control-lease.js';
+import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db';
+import { readSessionControlLease } from './session-control-lease';
 import {
     assertSessionControlRegistryMatchesLease,
     resolveAuthenticatedPosixSessionControlOwner,
     SessionControlOwnerError,
-} from './session-control-owner-posix.js';
-import { sessionControlTransportForPlatform } from './session-control-platform.js';
-import { resolveWindowsSessionControlPaths } from './session-control-proxy-windows.js';
-import type { SessionControlRegistry } from './session-control-registry-file.js';
-import { readSessionControlRegistry } from './session-control-registry-file.js';
+} from './session-control-owner-posix';
+import { sessionControlTransportForPlatform } from './session-control-platform';
+import { resolveWindowsSessionControlPaths } from './session-control-proxy-windows';
+import type { SessionControlRegistry } from './session-control-registry-file';
+import { readSessionControlRegistry } from './session-control-registry-file';
 import {
     type ResolvePosixSessionControlPathsInput,
     resolvePosixSessionControlPaths,
-} from './session-control-registry-paths.js';
+} from './session-control-registry-paths';
 import {
     attachSessionOwnerControlFrameReader,
     encodeSessionOwnerControlFrame,
     parseSessionOwnerControlFrame,
-} from './session-owner-control-framing.js';
+} from './session-owner-control-framing';
 import { randomUUID } from 'node:crypto';
 import { createConnection, type Socket } from 'node:net';
 

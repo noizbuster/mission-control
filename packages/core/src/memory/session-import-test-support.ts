@@ -1,11 +1,11 @@
 import type { Client } from '@libsql/client';
 import type { AgentEvent, AgentEventEnvelope } from '@mission-control/protocol';
-import { type LocalLibsqlDb, openLocalLibsqlDb } from '../db/local-libsql-db.js';
+import { type LocalLibsqlDb, openLocalLibsqlDb } from '../db/local-libsql-db';
 import {
     createJsonlSessionEventRecord,
     createJsonlSessionLogHeader,
     serializeJsonlRecord,
-} from './jsonl-session-records.js';
+} from './jsonl-session-records';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 

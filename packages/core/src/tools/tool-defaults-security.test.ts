@@ -1,8 +1,8 @@
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { type CommandExecutionResult, registerCommandRunTool } from './command-run.js';
-import { resolveFilePatchOptions } from './file-patch-schemas.js';
-import { ToolRegistry } from './tool-registry.js';
+import { type CommandExecutionResult, registerCommandRunTool } from './command-run';
+import { resolveFilePatchOptions } from './file-patch-schemas';
+import { ToolRegistry } from './tool-registry';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

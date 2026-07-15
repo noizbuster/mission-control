@@ -21,18 +21,18 @@
 
 import type { ProtocolError } from '@mission-control/protocol';
 import { z } from 'zod';
-import { redactCredentialText } from '../providers/credential-resolver.js';
-import { type ToolAdvertisement, ToolExecutionError, type ToolRegistration, ToolRegistry } from './tool-registry.js';
-import type { ToolExecutionContext } from './tool-registry-types.js';
-import { truncateOutput } from './truncate.js';
+import { redactCredentialText } from '../providers/credential-resolver';
+import { type ToolAdvertisement, ToolExecutionError, type ToolRegistration, ToolRegistry } from './tool-registry';
+import type { ToolExecutionContext } from './tool-registry-types';
+import { truncateOutput } from './truncate';
 import {
     collectVisionSecrets,
     resolveVisionProviderChain,
     type VisionHttpRequest,
     type VisionImage,
     type VisionProvider,
-} from './vision-providers.js';
-import { type VisionProviderId, visionCredentialHint } from './vision-schemas.js';
+} from './vision-providers';
+import { type VisionProviderId, visionCredentialHint } from './vision-schemas';
 import { readFileSync, statSync } from 'node:fs';
 import { basename, extname } from 'node:path';
 import { pathToFileURL } from 'node:url';

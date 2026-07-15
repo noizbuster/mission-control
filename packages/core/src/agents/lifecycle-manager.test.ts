@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AgentDisposer, AgentReviver } from './lifecycle-manager.js';
-import { AgentLifecycleManager } from './lifecycle-manager.js';
-import type { AgentRef, AgentRefInput } from './runtime-registry.js';
-import { MAIN_AGENT_ID, RuntimeAgentRegistry } from './runtime-registry.js';
+import type { AgentDisposer, AgentReviver } from './lifecycle-manager';
+import { AgentLifecycleManager } from './lifecycle-manager';
+import type { AgentRef, AgentRefInput } from './runtime-registry';
+import { MAIN_AGENT_ID, RuntimeAgentRegistry } from './runtime-registry';
 
 function makeRefInput(id: string, overrides: Partial<AgentRefInput> = {}): AgentRefInput {
     return {

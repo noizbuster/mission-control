@@ -1,10 +1,10 @@
 import { modelProviderCatalog } from '@mission-control/config';
 import { describe, expect, it } from 'vitest';
-import { providerAdapterContractRegistrations } from './provider-adapter-contract-registrations.js';
+import { providerAdapterContractRegistrations } from './provider-adapter-contract-registrations';
 import {
     findExecutableProviderContractGaps,
     type ProviderAdapterContractCatalogEntry,
-} from './provider-adapter-contract-test-support.js';
+} from './provider-adapter-contract-test-support';
 
 describe('provider adapter contract coverage', () => {
     it('covers every executable provider in the catalog', () => {

@@ -1,4 +1,4 @@
-import { commandRunFailure } from './command-run-errors.js';
+import { commandRunFailure } from './command-run-errors';
 import { basename } from 'node:path';
 
 const forbiddenControlCharacters = new Set(['&', '|', ';', '<', '>', '(', ')', '{', '}']);

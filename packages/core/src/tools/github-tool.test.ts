@@ -1,8 +1,8 @@
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { CommandExecutionRequest, CommandExecutionResult } from './command-run-executor.js';
-import { buildGhArgs, type GithubInput, registerGithubTool } from './github-tool.js';
-import { type ToolInvocationSettlement, ToolRegistry } from './tool-registry.js';
+import type { CommandExecutionRequest, CommandExecutionResult } from './command-run-executor';
+import { buildGhArgs, type GithubInput, registerGithubTool } from './github-tool';
+import { type ToolInvocationSettlement, ToolRegistry } from './tool-registry';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

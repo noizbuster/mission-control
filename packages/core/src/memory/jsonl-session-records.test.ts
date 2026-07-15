@@ -5,7 +5,7 @@ import {
     createJsonlSessionLogHeader,
     parseJsonlSessionLog,
     serializeJsonlRecord,
-} from './jsonl-session-records.js';
+} from './jsonl-session-records';
 
 describe('parseJsonlSessionLog', () => {
     it('rejects corrupt JSONL records', () => {

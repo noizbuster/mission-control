@@ -1,9 +1,9 @@
 import { defaultModelProviderSelection } from '@mission-control/config';
 import { describe, expect, it } from 'vitest';
-import { createDesktopSessionCommandService } from './desktop-session-commands.js';
-import { fixedNow, readReplay } from './desktop-session-commands-test-support.js';
-import { createDeterministicProvider } from './providers/deterministic-provider.js';
-import type { ProviderAdapter, ProviderTurnRequest } from './providers/provider-turn-types.js';
+import { createDesktopSessionCommandService } from './desktop-session-commands';
+import { fixedNow, readReplay } from './desktop-session-commands-test-support';
+import { createDeterministicProvider } from './providers/deterministic-provider';
+import type { ProviderAdapter, ProviderTurnRequest } from './providers/provider-turn-types';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

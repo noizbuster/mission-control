@@ -1,5 +1,5 @@
 import type { AgentEventEnvelope } from '@mission-control/protocol';
-import type { SessionBranchNode, SessionBranchSummary, SessionBranchTree } from './session-replay-types.js';
+import type { SessionBranchNode, SessionBranchSummary, SessionBranchTree } from './session-replay-types';
 
 type MutableBranchNode = {
     readonly eventId: string;

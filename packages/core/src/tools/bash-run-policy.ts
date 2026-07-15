@@ -1,10 +1,10 @@
-import type { CommandChain } from './bash-run-command-guard.js';
+import type { CommandChain } from './bash-run-command-guard';
 import {
     parseTrustedCommandChain,
     parseTrustedCommandLine,
     parseTrustedCommandPipeline,
-} from './bash-run-command-guard.js';
-import { commandRunFailure } from './command-run-errors.js';
+} from './bash-run-command-guard';
+import { commandRunFailure } from './command-run-errors';
 import { realpath, stat } from 'node:fs/promises';
 import { isAbsolute, relative, resolve } from 'node:path';
 

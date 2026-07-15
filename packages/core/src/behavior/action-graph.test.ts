@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { createActionGraph } from './action-graph.js';
-import { createAuthorableAbgGraph, resolveAbgNodeModel } from './authorable-graph.js';
-import { AbgGraphValidationError, compileAbgRule } from './rule-compiler.js';
+import { createActionGraph } from './action-graph';
+import { createAuthorableAbgGraph, resolveAbgNodeModel } from './authorable-graph';
+import { AbgGraphValidationError, compileAbgRule } from './rule-compiler';
 
 describe('ActionGraph', () => {
     it('keeps createActionGraph compatibility baseline before authorable ABG graph support', () => {

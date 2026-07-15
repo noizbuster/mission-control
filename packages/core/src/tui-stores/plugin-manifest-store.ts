@@ -8,8 +8,8 @@ import {
     TuiPluginManifestSchema,
 } from '@mission-control/protocol';
 import { z } from 'zod';
-import { resolveMissionControlDataDir } from '../memory/data-dir.js';
-import { atomicWriteTextFile, jsonText, parseJsonText, readOptionalTextFile } from './store-file-io.js';
+import { resolveMissionControlDataDir } from '../memory/data-dir';
+import { atomicWriteTextFile, jsonText, parseJsonText, readOptionalTextFile } from './store-file-io';
 import { join } from 'node:path';
 
 export const TUI_PLUGIN_MANIFEST_MAX_ENTRIES = 200;

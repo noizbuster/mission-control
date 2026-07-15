@@ -1,6 +1,6 @@
-import { truncateToValidUtf8Boundary } from '../providers/stream-decoder.js';
-import type { SessionControlEpoch } from '../runtime/session-control-cancellation.js';
-import type { ChainOperator } from './bash-run-command-guard.js';
+import { truncateToValidUtf8Boundary } from '../providers/stream-decoder';
+import type { SessionControlEpoch } from '../runtime/session-control-cancellation';
+import type { ChainOperator } from './bash-run-command-guard';
 import { type ChildProcess, spawn } from 'node:child_process';
 
 const forceColorEnvKey = 'FORCE_COLOR';

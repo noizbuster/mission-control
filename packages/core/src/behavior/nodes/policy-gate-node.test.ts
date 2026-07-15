@@ -1,6 +1,6 @@
 import type { AbgPolicySpec, AbgSignal } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { runPolicyGateNode } from './policy-gate-node.js';
+import { runPolicyGateNode } from './policy-gate-node';
 
 async function collectSignals(signals: AsyncIterable<AbgSignal>): Promise<readonly AbgSignal[]> {
     const collected: AbgSignal[] = [];

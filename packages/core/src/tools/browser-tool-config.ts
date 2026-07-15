@@ -1,11 +1,11 @@
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
-import { type ProjectTrustReader, ProjectTrustStore } from '../trust/project-trust-store.js';
-import { type BrowserConnectFn, type BrowserToolAdvertisement, registerBrowserTool } from './browser-tool.js';
-import { browserEndpointRedactionSecrets } from './browser-tool-url.js';
-import { resolveUserConfigPath } from './mcp/config-paths.js';
-import { readUserConfig } from './mcp/config-readers.js';
-import type { LoadMcpConfigOptions } from './mcp/config-types.js';
-import type { ToolRegistry } from './tool-registry.js';
+import { type ProjectTrustReader, ProjectTrustStore } from '../trust/project-trust-store';
+import { type BrowserConnectFn, type BrowserToolAdvertisement, registerBrowserTool } from './browser-tool';
+import { browserEndpointRedactionSecrets } from './browser-tool-url';
+import { resolveUserConfigPath } from './mcp/config-paths';
+import { readUserConfig } from './mcp/config-readers';
+import type { LoadMcpConfigOptions } from './mcp/config-types';
+import type { ToolRegistry } from './tool-registry';
 
 export type RegisterConfiguredBrowserToolOptions = LoadMcpConfigOptions & {
     readonly workspaceRoot: string;

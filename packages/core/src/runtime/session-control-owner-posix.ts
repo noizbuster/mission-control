@@ -1,7 +1,7 @@
-import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db.js';
-import { SessionControlOwnerError } from './session-control-owner-error.js';
+import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db';
+import { SessionControlOwnerError } from './session-control-owner-error';
 
-export { SessionControlOwnerError } from './session-control-owner-error.js';
+export { SessionControlOwnerError } from './session-control-owner-error';
 
 import {
     acquireSessionControlLease,
@@ -9,35 +9,35 @@ import {
     readSessionControlLease,
     renewSessionControlLease,
     type SessionControlLease,
-} from './session-control-lease.js';
-import { releaseSessionControlOwnerLease } from './session-control-owner-posix-release.js';
+} from './session-control-lease';
+import { releaseSessionControlOwnerLease } from './session-control-owner-posix-release';
 import {
     cleanVerifiedStaleOwner,
     refuseUntrackedArtifacts,
     removeOwnedRegistry,
-} from './session-control-owner-posix-stale.js';
+} from './session-control-owner-posix-stale';
 import {
     currentSessionControlProcessIdentity,
     probeSessionControlProcess,
     type SessionControlProcessIdentity,
     type SessionControlProcessState,
-} from './session-control-process.js';
+} from './session-control-process';
 import {
     type AuthenticatedSessionControlServer,
     authenticateSessionControlEndpoint,
     createAuthenticatedSessionControlServer,
     generateSessionControlNonce,
     sessionControlNonceHash,
-} from './session-control-registry-auth.js';
+} from './session-control-registry-auth';
 import {
     publishSessionControlRegistry,
     readSessionControlRegistry,
     type SessionControlRegistry,
-} from './session-control-registry-file.js';
+} from './session-control-registry-file';
 import {
     type ResolvePosixSessionControlPathsInput,
     resolvePosixSessionControlPaths,
-} from './session-control-registry-paths.js';
+} from './session-control-registry-paths';
 import type { Duplex } from 'node:stream';
 
 export type PosixSessionControlOwner = {

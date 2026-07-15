@@ -22,7 +22,7 @@ export {
     TeamToolNotImplementedError,
     type TeamToolRuntime,
     teamModeEnabled,
-} from './team-context.js';
+} from './team-context';
 export {
     createTeamApproveShutdownTool,
     createTeamCreateTool,
@@ -34,23 +34,23 @@ export {
     TEAM_DELETE_TOOL_NAME,
     TEAM_REJECT_SHUTDOWN_TOOL_NAME,
     TEAM_SHUTDOWN_REQUEST_TOOL_NAME,
-} from './team-lifecycle-tools.js';
+} from './team-lifecycle-tools';
 export {
     createTeamSendMessageTool,
     TEAM_SEND_MESSAGE_TOOL_NAME,
-} from './team-messaging-tools.js';
+} from './team-messaging-tools';
 export {
     createTeamListTool,
     createTeamStatusTool,
     TEAM_LIST_TOOL_NAME,
     TEAM_STATUS_TOOL_NAME,
-} from './team-query-tools.js';
+} from './team-query-tools';
 export {
     type BuildTeamToolsOptions,
     buildTeamToolRegistrations,
     TEAM_TOOL_COUNT,
     TEAM_TOOL_NAMES,
-} from './team-registry.js';
+} from './team-registry';
 export {
     DEFAULT_TEAM_MODE_CONFIG,
     type MemberRuntime,
@@ -64,7 +64,7 @@ export {
     type TeamTask,
     teamModeConfigSchema,
     teamSpecSchema,
-} from './team-schemas.js';
+} from './team-schemas';
 export {
     buildInitialState,
     createTask,
@@ -83,7 +83,7 @@ export {
     updateTask,
     writeConfig,
     writeState,
-} from './team-store.js';
+} from './team-store';
 export {
     createTeamTaskCreateTool,
     createTeamTaskGetTool,
@@ -93,4 +93,4 @@ export {
     TEAM_TASK_GET_TOOL_NAME,
     TEAM_TASK_LIST_TOOL_NAME,
     TEAM_TASK_UPDATE_TOOL_NAME,
-} from './team-task-tools.js';
+} from './team-task-tools';

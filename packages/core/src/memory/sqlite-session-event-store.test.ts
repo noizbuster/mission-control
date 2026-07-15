@@ -1,16 +1,16 @@
 import { createClient } from '@libsql/client';
 import { afterEach, describe, expect, it } from 'vitest';
-import { SqlAgentJobMirror } from '../agents/agent-job-sql-mirror.js';
-import { localRuntimeDbUrl } from '../runtime/local-runtime-db.js';
-import { SqlSessionInputDelivery } from '../runtime/session-input-delivery-sql.js';
+import { SqlAgentJobMirror } from '../agents/agent-job-sql-mirror';
+import { localRuntimeDbUrl } from '../runtime/local-runtime-db';
+import { SqlSessionInputDelivery } from '../runtime/session-input-delivery-sql';
 import {
     approvalEvent,
     runEvent,
     sessionStoppedEvent,
     toolCompletedEvent,
-} from '../session-replay-coding-test-support.js';
-import { JsonlSessionEventStore } from './jsonl-session-event-store.js';
-import { replayParityEvents, replayParitySummary } from './session-replay-parity-fixtures.js';
+} from '../session-replay-coding-test-support';
+import { JsonlSessionEventStore } from './jsonl-session-event-store';
+import { replayParityEvents, replayParitySummary } from './session-replay-parity-fixtures';
 import {
     cleanupSqliteSessionEventStoreTestDirs,
     createSqliteSessionEventStoreTestDbUrl,
@@ -19,8 +19,8 @@ import {
     openSqliteSessionEventStoreForTests,
     sessionStartedEvent,
     taskCompletedEvent,
-} from './sqlite-session-event-store-test-support.js';
-import { openSqliteSessionProjectionStoreForTests } from './sqlite-session-projection-test-support.js';
+} from './sqlite-session-event-store-test-support';
+import { openSqliteSessionProjectionStoreForTests } from './sqlite-session-projection-test-support';
 
 afterEach(async () => {
     await cleanupSqliteSessionEventStoreTestDirs();

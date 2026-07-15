@@ -1,12 +1,12 @@
 import type { AgentMessage, ProviderStreamChunk, ToolDefinition } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { createStaticProviderCredentialResolver } from '../credential-resolver.js';
-import type { ProviderTurnRequest } from '../provider-turn-types.js';
+import { createStaticProviderCredentialResolver } from '../credential-resolver';
+import type { ProviderTurnRequest } from '../provider-turn-types';
 import {
     createOpenAIResponsesProvider,
     type OpenAIResponsesTransport,
     type OpenAIResponsesTransportRequest,
-} from './openai-responses-provider.js';
+} from './openai-responses-provider';
 
 describe('OpenAI Responses provider adapter', () => {
     it('streams text chunks and disables OpenAI response storage by default', async () => {

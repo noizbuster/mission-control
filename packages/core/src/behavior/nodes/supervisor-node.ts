@@ -17,9 +17,9 @@
  * graph each time the target fails and re-enters the supervisor — and config from `node.config`.
  */
 import type { AbgNodeSpec, AbgSignal } from '@mission-control/protocol';
-import type { Blackboard } from '../../memory/blackboard.js';
-import { createAbgEmitSignal } from '../abg-emit.js';
-import type { AbgNodeRunContext, AbgNodeRunner } from '../node-registry.js';
+import type { Blackboard } from '../../memory/blackboard';
+import { createAbgEmitSignal } from '../abg-emit';
+import type { AbgNodeRunContext, AbgNodeRunner } from '../node-registry';
 
 export type SupervisorConfig = {
     readonly target: string;

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { prepareSessionCompaction, projectApprovalContinuationMessages } from './desktop-approval-transcript.js';
-import { JsonlSessionEventStore } from './memory/jsonl-session-event-store.js';
+import { prepareSessionCompaction, projectApprovalContinuationMessages } from './desktop-approval-transcript';
+import { JsonlSessionEventStore } from './memory/jsonl-session-event-store';
 import {
     compacted,
     envelope,
@@ -9,8 +9,8 @@ import {
     providerCompleted,
     sessionCompactionTestSessionId as sessionId,
     validReplayContents,
-} from './session-compaction-test-support.js';
-import { projectJsonlSessionReplayPrefix } from './session-replay.js';
+} from './session-compaction-test-support';
+import { projectJsonlSessionReplayPrefix } from './session-replay';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

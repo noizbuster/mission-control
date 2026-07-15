@@ -1,5 +1,5 @@
 import type { ProviderStreamChunk } from '@mission-control/protocol';
-import type { ObservabilityRedactor, ObservabilityTextStream } from './observability-redactor.js';
+import type { ObservabilityRedactor, ObservabilityTextStream } from './observability-redactor';
 
 type TextDelta = Extract<ProviderStreamChunk, { readonly kind: 'text_delta' }>;
 type ReasoningDelta = Extract<ProviderStreamChunk, { readonly kind: 'reasoning_delta' }>;

@@ -7,8 +7,8 @@ import type {
     ProviderStreamChunk,
     ToolDefinition,
 } from '@mission-control/protocol';
-import type { SessionControlEpoch } from '../runtime/session-control-cancellation.js';
-import type { ObservabilityRedactor } from './observability-redactor.js';
+import type { SessionControlEpoch } from '../runtime/session-control-cancellation';
+import type { ObservabilityRedactor } from './observability-redactor';
 
 export type { ProviderStreamChunk };
 

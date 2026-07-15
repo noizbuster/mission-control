@@ -1,17 +1,17 @@
 import { defaultModelProviderSelection } from '@mission-control/config';
 import type { AgentEvent } from '@mission-control/protocol';
 import { expect } from 'vitest';
-import { createDesktopSessionCommandService } from './desktop-session-commands.js';
-import { filePatchCall, fixedNow, readReplay } from './desktop-session-commands-test-support.js';
+import { createDesktopSessionCommandService } from './desktop-session-commands';
+import { filePatchCall, fixedNow, readReplay } from './desktop-session-commands-test-support';
 import {
     createAbortableProvider,
     createBlockedThenContinuationProvider,
     createReleasingProvider,
     deferred,
     requestMessageContents,
-} from './desktop-session-run-owner-provider.test-support.js';
-import { createDeterministicProvider } from './providers/deterministic-provider.js';
-import type { ProviderTurnRequest } from './providers/provider-turn-types.js';
+} from './desktop-session-run-owner-provider.test-support';
+import { createDeterministicProvider } from './providers/deterministic-provider';
+import type { ProviderTurnRequest } from './providers/provider-turn-types';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

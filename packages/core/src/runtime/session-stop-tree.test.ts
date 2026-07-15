@@ -5,10 +5,10 @@ import {
     SESSION_STOP_TREE_MAX_TIMEOUT_MS,
     SESSION_STOP_TREE_RETRY_DELAY_MS,
     stopSessionTree,
-} from './session-stop-tree.js';
-import { SESSION_STOP_TREE_SHARED_FIXTURES } from './session-stop-tree-fixtures.js';
-import { resolveCanonicalSessionTree } from './session-stop-tree-resolver.js';
-import { createSessionStopTreeHarness as createHarness } from './session-stop-tree-test-support.js';
+} from './session-stop-tree';
+import { SESSION_STOP_TREE_SHARED_FIXTURES } from './session-stop-tree-fixtures';
+import { resolveCanonicalSessionTree } from './session-stop-tree-resolver';
+import { createSessionStopTreeHarness as createHarness } from './session-stop-tree-test-support';
 
 describe('canonical session stop tree', () => {
     it('shares stable parent fixtures and ignores root metadata and provenance relations', () => {

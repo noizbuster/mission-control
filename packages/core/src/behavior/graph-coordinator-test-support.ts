@@ -1,5 +1,5 @@
 import type { AbgNodeSpec, AbgSignal, AgentEvent } from '@mission-control/protocol';
-import type { AbgNodeRunContext, AbgNodeRunner } from './node-registry.js';
+import type { AbgNodeRunContext, AbgNodeRunner } from './node-registry';
 
 export function approvalGraph(id: string) {
     return {

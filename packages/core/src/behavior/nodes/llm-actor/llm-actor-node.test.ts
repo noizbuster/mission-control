@@ -22,20 +22,20 @@ import { stepCountIs, streamText } from 'ai';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { assembleSystemPrompt } from '../../../context/system-prompt.js';
-import { wrapFlatProviderAsSdkModel } from '../../../providers/ai-sdk/flat-provider-bridge.js';
-import { createDeterministicProvider } from '../../../providers/deterministic-provider.js';
-import { ToolRegistry } from '../../../tools/tool-registry.js';
-import type { ToolRegistration } from '../../../tools/tool-registry-types.js';
+import { assembleSystemPrompt } from '../../../context/system-prompt';
+import { wrapFlatProviderAsSdkModel } from '../../../providers/ai-sdk/flat-provider-bridge';
+import { createDeterministicProvider } from '../../../providers/deterministic-provider';
+import { ToolRegistry } from '../../../tools/tool-registry';
+import type { ToolRegistration } from '../../../tools/tool-registry-types';
 import {
     AbgToolBridgeError,
     bridgeAdvertisementsToAiSdk,
     bridgeAdvertisementToAiSdk,
     createAbgToolSettlementLedger,
     type PolicyGateFn,
-} from './abg-tool-bridge.js';
-import { abgSignalsFromStreamPart, type StreamPartAdapterContext } from './ai-sdk-adapter.js';
-import { type LlmActorModel, runLlmActor } from './llm-actor-node.js';
+} from './abg-tool-bridge';
+import { abgSignalsFromStreamPart, type StreamPartAdapterContext } from './ai-sdk-adapter';
+import { type LlmActorModel, runLlmActor } from './llm-actor-node';
 
 const NOW = '2026-06-16T00:00:00.000Z';
 const tick = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));

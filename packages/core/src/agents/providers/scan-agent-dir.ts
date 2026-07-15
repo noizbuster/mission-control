@@ -13,7 +13,7 @@
  *   diagnostics.
  */
 import { type AgentDefinition, type AgentSource } from '@mission-control/protocol';
-import { parseAgentFile } from '../agent-parser.js';
+import { parseAgentFile } from '../agent-parser';
 import type { Dirent } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';

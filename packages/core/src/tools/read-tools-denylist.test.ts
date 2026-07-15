@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { registerReadOnlyRepoTools } from './read-tools.js';
-import { createWorkspaceGuard } from './read-tools-paths.js';
-import { ToolRegistry } from './tool-registry.js';
+import { registerReadOnlyRepoTools } from './read-tools';
+import { createWorkspaceGuard } from './read-tools-paths';
+import { ToolRegistry } from './tool-registry';
 import { spawn } from 'node:child_process';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

@@ -5,7 +5,7 @@ import type {
     PermissionReply,
     PermissionRequest,
 } from '@mission-control/protocol';
-import { type ApprovalTerminalState, PermissionGateError } from './approval-gate.js';
+import { type ApprovalTerminalState, PermissionGateError } from './approval-gate';
 
 export type ApprovalEventType = Extract<
     AgentEvent['type'],

@@ -10,17 +10,17 @@ import {
     runEvent,
     sessionStoppedEvent,
     toolFailedEvent,
-} from '../session-replay-coding-test-support.js';
+} from '../session-replay-coding-test-support';
 import {
     createJsonlSessionEventRecord,
     createJsonlSessionLogHeader,
     parseJsonlSessionLog,
     serializeJsonlRecord,
-} from './jsonl-session-records.js';
-import { importLegacySessionCompatibilityWindow } from './session-import.js';
-import { writeLegacyLog } from './session-import-regression-test-support.js';
-import { listLegacySessionImportLedger } from './session-import-sql.js';
-import { countRows, openMigratedTestDb } from './session-import-test-support.js';
+} from './jsonl-session-records';
+import { importLegacySessionCompatibilityWindow } from './session-import';
+import { writeLegacyLog } from './session-import-regression-test-support';
+import { listLegacySessionImportLedger } from './session-import-sql';
+import { countRows, openMigratedTestDb } from './session-import-test-support';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 

@@ -1,8 +1,8 @@
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { type CommandExecutionRequest, type CommandExecutionResult, registerCommandRunTool } from './command-run.js';
-import { COMMAND_RUN_POLICY_PROFILES, defaultCommandRunPolicyProfile } from './command-run-policy.js';
-import { type ToolInvocationSettlement, ToolRegistry } from './tool-registry.js';
+import { type CommandExecutionRequest, type CommandExecutionResult, registerCommandRunTool } from './command-run';
+import { COMMAND_RUN_POLICY_PROFILES, defaultCommandRunPolicyProfile } from './command-run-policy';
+import { type ToolInvocationSettlement, ToolRegistry } from './tool-registry';
 
 const allowedHarnessArgs = ['--eval', "console.log('mission-control command.run harness ok')"] as const;
 

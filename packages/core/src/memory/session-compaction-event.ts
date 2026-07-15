@@ -1,6 +1,6 @@
 import { type AgentEvent, AgentEventSchema } from '@mission-control/protocol';
-import type { SessionCompactionRecordInput } from './memory-store.js';
-import { sanitizeCompactionSummary } from './session-compaction-summary.js';
+import type { SessionCompactionRecordInput } from './memory-store';
+import { sanitizeCompactionSummary } from './session-compaction-summary';
 
 export function createSessionCompactionEvent(input: SessionCompactionRecordInput): AgentEvent {
     const summary = sanitizeCompactionSummary(input.summary);

@@ -6,7 +6,7 @@ import type {
     PermissionReply,
     PermissionRequest,
 } from '@mission-control/protocol';
-import type { ApprovalEventType } from './approval-gate-helpers.js';
+import type { ApprovalEventType } from './approval-gate-helpers';
 
 export type PermissionGateContext = {
     readonly sessionId: string;

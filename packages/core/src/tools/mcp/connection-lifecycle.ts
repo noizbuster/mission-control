@@ -1,4 +1,4 @@
-import type { McpConfigScope } from './config.js';
+import type { McpConfigScope } from './config';
 
 export class McpConnectionLifecycle {
     private connectionPromise: Promise<void> | undefined;

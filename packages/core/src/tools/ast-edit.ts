@@ -33,8 +33,8 @@ import {
     type NativeAstReplaceChange,
     type NativeAstRewriteOptions,
     type NativesClient,
-} from '../native/natives-client.js';
-import { defaultAstSearchFileCollector } from './ast-grep-runner.js';
+} from '../native/natives-client';
+import { defaultAstSearchFileCollector } from './ast-grep-runner';
 import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { relative } from 'node:path';
@@ -46,7 +46,7 @@ export {
     astEditInputSchema,
     astEditOutputSchema,
     astEditParametersJsonSchema,
-} from './ast-edit-schemas.js';
+} from './ast-edit-schemas';
 
 import {
     type AstEditInput,
@@ -55,17 +55,17 @@ import {
     astEditInputSchema,
     astEditOutputSchema,
     astEditParametersJsonSchema,
-} from './ast-edit-schemas.js';
-import { filePatchFailure } from './file-patch-errors.js';
-import { isDirtyTrackedTarget } from './file-patch-git.js';
-import { createPatchWorkspaceGuard, type PatchTarget } from './file-patch-paths.js';
+} from './ast-edit-schemas';
+import { filePatchFailure } from './file-patch-errors';
+import { isDirtyTrackedTarget } from './file-patch-git';
+import { createPatchWorkspaceGuard, type PatchTarget } from './file-patch-paths';
 import {
     type StagedPreviewAction,
     type StagedPreviewChange,
     type StagedPreviewRegistry,
-} from './staged-preview-registry.js';
-import { permissionRequest, requestToolPermission } from './tool-permissions.js';
-import { type ToolAdvertisement, ToolExecutionError, type ToolRegistration, ToolRegistry } from './tool-registry.js';
+} from './staged-preview-registry';
+import { permissionRequest, requestToolPermission } from './tool-permissions';
+import { type ToolAdvertisement, ToolExecutionError, type ToolRegistration, ToolRegistry } from './tool-registry';
 
 const AST_EDIT_TOOL_NAME = 'ast_edit';
 const STALE_PREVIEW_MESSAGE =

@@ -1,7 +1,7 @@
-import { resolveMissionControlDataDir } from '../memory/data-dir.js';
-import { missionControlDbUrl } from '../memory/local-session-store-paths.js';
-import type { LocalLibsqlDb } from './local-libsql-db.js';
-import { openLocalLibsqlDb } from './local-libsql-db.js';
+import { resolveMissionControlDataDir } from '../memory/data-dir';
+import { missionControlDbUrl } from '../memory/local-session-store-paths';
+import type { LocalLibsqlDb } from './local-libsql-db';
+import { openLocalLibsqlDb } from './local-libsql-db';
 import { mkdir } from 'node:fs/promises';
 
 export type OpenMissionControlDbOptions = {

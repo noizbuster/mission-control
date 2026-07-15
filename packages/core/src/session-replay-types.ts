@@ -10,7 +10,7 @@ import type {
     SessionTreeSource,
     ToolResult,
 } from '@mission-control/protocol';
-import type { AbgTimelineEntry } from './behavior/timeline.js';
+import type { AbgTimelineEntry } from './behavior/timeline';
 
 export type SessionBranchNode = {
     readonly eventId: string;

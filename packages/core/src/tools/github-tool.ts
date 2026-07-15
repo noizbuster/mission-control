@@ -20,11 +20,11 @@
  */
 import type { PermissionDecision, PermissionRequest, ProtocolError } from '@mission-control/protocol';
 import { z } from 'zod';
-import { redactCredentialText } from '../providers/credential-resolver.js';
-import { type CommandExecutionRequest, type CommandExecutionResult, executeCommand } from './command-run-executor.js';
-import { permissionRequest, requestToolPermission } from './tool-permissions.js';
-import { type ToolAdvertisement, ToolExecutionError, type ToolRegistration, ToolRegistry } from './tool-registry.js';
-import type { ToolExecutionContext } from './tool-registry-types.js';
+import { redactCredentialText } from '../providers/credential-resolver';
+import { type CommandExecutionRequest, type CommandExecutionResult, executeCommand } from './command-run-executor';
+import { permissionRequest, requestToolPermission } from './tool-permissions';
+import { type ToolAdvertisement, ToolExecutionError, type ToolRegistration, ToolRegistry } from './tool-registry';
+import type { ToolExecutionContext } from './tool-registry-types';
 import { spawnSync } from 'node:child_process';
 import { realpath } from 'node:fs/promises';
 

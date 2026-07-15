@@ -5,7 +5,7 @@ import {
     type AbgRuntimeError,
     type AbgSignal,
 } from '@mission-control/protocol';
-import { type ToolActionFingerprint, toolActionFromEmit } from './loop-safety.js';
+import { type ToolActionFingerprint, toolActionFromEmit } from './loop-safety';
 
 export function rememberProposedInput(
     eventType: string,

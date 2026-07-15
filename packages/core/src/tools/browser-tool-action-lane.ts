@@ -1,5 +1,5 @@
-import { createBrowserAbortScope, raceBrowserOperation } from './browser-tool-deadline.js';
-import { browserFailure } from './browser-tool-output.js';
+import { createBrowserAbortScope, raceBrowserOperation } from './browser-tool-deadline';
+import { browserFailure } from './browser-tool-output';
 
 export class BrowserActionLane {
     readonly #shutdownController = new AbortController();

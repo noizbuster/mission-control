@@ -1,8 +1,8 @@
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import { registerBashRunTool } from './bash-run.js';
-import type { CommandChainStep, CommandExecutionRequest, CommandExecutionResult } from './command-run-executor.js';
-import { type ToolInvocationSettlement, ToolRegistry } from './tool-registry.js';
+import { registerBashRunTool } from './bash-run';
+import type { CommandChainStep, CommandExecutionRequest, CommandExecutionResult } from './command-run-executor';
+import { type ToolInvocationSettlement, ToolRegistry } from './tool-registry';
 import { mkdir, mkdtemp, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

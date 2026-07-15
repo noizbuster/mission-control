@@ -12,7 +12,7 @@ import type {
     AgentEvent,
     ApprovalRecord,
 } from '@mission-control/protocol';
-import { redactCredentialText } from '../providers/credential-resolver.js';
+import { redactCredentialText } from '../providers/credential-resolver';
 
 export type RunState = 'idle' | 'running' | 'completed' | 'failed' | 'interrupted' | 'blocked_on_approval';
 

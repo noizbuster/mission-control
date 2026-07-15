@@ -20,7 +20,7 @@ import {
     createSdkModelResolver,
     packContext,
     runAbgGraph,
-} from './index.js';
+} from './index';
 
 describe('ABG phase contract (Phases 1–8 additions are real + wired)', () => {
     it('AbgSignalSchema parses the escalate/fallback signals added in Phase 1', () => {

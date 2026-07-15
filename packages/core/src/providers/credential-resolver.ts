@@ -1,5 +1,5 @@
 import type { ProviderCredential, ProviderCredentialSummary, RedactionMetadata } from '@mission-control/protocol';
-import { credentialRedactionsForText, redactCredentialText } from './redaction-handler.js';
+import { credentialRedactionsForText, redactCredentialText } from './redaction-handler';
 
 export {
     createCredentialRedactions,
@@ -8,7 +8,7 @@ export {
     type RedactedCredentialLine,
     redactCredentialLines,
     redactCredentialText,
-} from './redaction-handler.js';
+} from './redaction-handler';
 
 export type ProviderCredentialResolveInput = {
     readonly providerID: string;

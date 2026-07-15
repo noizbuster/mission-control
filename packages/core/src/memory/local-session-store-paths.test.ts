@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { missionControlDbPath as coreMissionControlDbPath } from '../index.js';
-import { missionControlDataDirEnvKey } from './data-dir.js';
-import { missionControlDbPath as memoryMissionControlDbPath } from './index.js';
+import { missionControlDbPath as coreMissionControlDbPath } from '../index';
+import { missionControlDataDirEnvKey } from './data-dir';
+import { missionControlDbPath as memoryMissionControlDbPath } from './index';
 import {
     localSessionDbPath,
     localSessionDbUrl,
     missionControlDbPath,
     missionControlDbUrl,
-} from './local-session-store-paths.js';
+} from './local-session-store-paths';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 

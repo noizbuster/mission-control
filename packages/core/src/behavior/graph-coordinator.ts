@@ -1,26 +1,26 @@
 // allow: SIZE_OK -- HEAD 410 -> current 406 pure LOC; one bounded graph execution state machine after run-context extraction.
 import type { AbgNodeSpec, AbgPolicyDecision, AbgSignal, AgentEvent } from '@mission-control/protocol';
-import { type AuthorableAbgGraph, createAuthorableAbgGraph } from './authorable-graph.js';
+import { type AuthorableAbgGraph, createAuthorableAbgGraph } from './authorable-graph';
 import {
     type CoordinatorState,
     createCoordinatorState,
     edgePriorityDescending,
     hasNode,
     nodeModel,
-} from './graph-coordinator-helpers.js';
-import { runQueuedNode } from './graph-coordinator-node-runner.js';
-import { scheduleQueuedNodes } from './graph-coordinator-scheduler.js';
-import type { AbgGraphRunnerInput, AbgGraphRunResult, AbgGraphTerminalError } from './graph-runner.js';
-import { graphEvent } from './graph-runner-events.js';
+} from './graph-coordinator-helpers';
+import { runQueuedNode } from './graph-coordinator-node-runner';
+import { scheduleQueuedNodes } from './graph-coordinator-scheduler';
+import type { AbgGraphRunnerInput, AbgGraphRunResult, AbgGraphTerminalError } from './graph-runner';
+import { graphEvent } from './graph-runner-events';
 import {
     createLoopSafetyNodeState,
     type LoopSafetyTrip,
     recordFailureTurn,
     recordToolTurn,
     type ToolActionFingerprint,
-} from './loop-safety.js';
-import { createDefaultAbgNodeRegistry } from './node-registry.js';
-import { projectAbgSignalToEvent } from './signals.js';
+} from './loop-safety';
+import { createDefaultAbgNodeRegistry } from './node-registry';
+import { projectAbgSignalToEvent } from './signals';
 
 export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<AbgGraphRunResult> {
     const graph = createAuthorableAbgGraph(input.graph, input.agentModelLookup);

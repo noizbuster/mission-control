@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { trackSessionOwnerControlStopResponse } from './session-owner-control-response.js';
+import { trackSessionOwnerControlStopResponse } from './session-owner-control-response';
 import { EventEmitter } from 'node:events';
 
 describe('session owner control stop response tracking', () => {

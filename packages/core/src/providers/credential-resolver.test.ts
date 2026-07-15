@@ -1,14 +1,14 @@
 import type { AgentEvent, ProviderAuthFile, ProviderCredential } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import { JsonlSessionEventStore } from '../memory/jsonl-session-event-store.js';
+import { JsonlSessionEventStore } from '../memory/jsonl-session-event-store';
 import {
     createCredentialRedactions,
     createStaticProviderCredentialResolver,
     ProviderCredentialResolutionError,
     redactCredentialText,
     summarizeResolvedProviderCredential,
-} from './credential-resolver.js';
-import { redactProviderAuthStoreCredentialText } from './provider-auth-resolver.js';
+} from './credential-resolver';
+import { redactProviderAuthStoreCredentialText } from './provider-auth-resolver';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

@@ -2,10 +2,10 @@ import type { LanguageModelV3StreamPart } from '@ai-sdk/provider';
 import type { AbgGraphSpec, AgentEvent } from '@mission-control/protocol';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
-import { AgentRuntime } from './agent-runtime.js';
-import { createCodingAgentGraph } from './behavior/coding-agent-graph.js';
-import { createCodingAgentNodeRegistry } from './behavior/coding-agent-registry.js';
-import { createObservabilityRedactor } from './providers/observability-redactor.js';
+import { AgentRuntime } from './agent-runtime';
+import { createCodingAgentGraph } from './behavior/coding-agent-graph';
+import { createCodingAgentNodeRegistry } from './behavior/coding-agent-registry';
+import { createObservabilityRedactor } from './providers/observability-redactor';
 
 describe('AgentRuntime graph redaction', () => {
     it('redacts token-like graph identifiers from the public result and runtime event log', async () => {

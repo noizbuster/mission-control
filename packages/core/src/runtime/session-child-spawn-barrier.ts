@@ -1,12 +1,12 @@
-import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db.js';
-import type { SessionControlLease } from './session-control-lease.js';
+import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db';
+import type { SessionControlLease } from './session-control-lease';
 import {
     completeSessionControlOperation,
     createSessionControlOperation,
     type SessionControlOperationTimer,
     startSessionControlOperationDeadline,
     timeoutSessionControlOperation,
-} from './session-control-operation.js';
+} from './session-control-operation';
 
 export type SessionChildSpawnBarrier = {
     readonly release: () => Promise<void>;

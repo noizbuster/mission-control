@@ -4,9 +4,9 @@ import {
     cleanupAgentJobMirrorTests,
     insertAgentJobTestSession,
     withAgentJobMirror,
-} from './agent-job-sql-mirror-test-support.js';
-import { AsyncJobManager } from './async-job-manager.js';
-import { RuntimeAgentRegistry } from './runtime-registry.js';
+} from './agent-job-sql-mirror-test-support';
+import { AsyncJobManager } from './async-job-manager';
+import { RuntimeAgentRegistry } from './runtime-registry';
 
 const testNow = agentJobTestNow;
 const withMirror = withAgentJobMirror;

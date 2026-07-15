@@ -8,8 +8,8 @@
  * Unrelated MCP server output is NOT scrubbed here: it is untrusted external DATA, bounded by
  * the tool's output cap. Only the secrets mission-control itself injected are masked.
  */
-import { createObservabilityRedactor } from '../../providers/observability-redactor.js';
-import { REDACTED_CREDENTIAL } from '../../providers/redaction-handler.js';
+import { createObservabilityRedactor } from '../../providers/observability-redactor';
+import { REDACTED_CREDENTIAL } from '../../providers/redaction-handler';
 
 export const MCP_REDACTED_SECRET = REDACTED_CREDENTIAL;
 

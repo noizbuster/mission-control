@@ -5,9 +5,9 @@ import type {
     ProviderToolCallTranscript,
     ToolDefinition,
 } from '@mission-control/protocol';
-import { ProviderCredentialResolutionError, type ProviderCredentialResolver } from '../credential-resolver.js';
-import { ProviderTurnError, type ProviderTurnRequest } from '../provider-turn-types.js';
-import { createVariantLookup } from '../shared/variant-cache.js';
+import { ProviderCredentialResolutionError, type ProviderCredentialResolver } from '../credential-resolver';
+import { ProviderTurnError, type ProviderTurnRequest } from '../provider-turn-types';
+import { createVariantLookup } from '../shared/variant-cache';
 import {
     defaultGeminiGenerateContentBaseEndpoint,
     type GeminiContent,
@@ -16,7 +16,7 @@ import {
     type GeminiGenerateContentRequestBody,
     type GeminiGenerateContentTransportRequest,
     type GeminiPart,
-} from './gemini-generate-content-transport.js';
+} from './gemini-generate-content-transport';
 
 const API_KEY_FIELD = 'apiKey';
 const GOOGLE_PROVIDER_ID = 'google';

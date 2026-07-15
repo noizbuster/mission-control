@@ -4,12 +4,12 @@ import {
     type BrowserOutput,
     browserEndpointValue,
     type ResolvedBrowserToolOptions,
-} from './browser-tool-contract.js';
-import { redactBrowserToolError } from './browser-tool-error-redaction.js';
-import type { BrowserPageSeam } from './browser-tool-puppeteer.js';
-import { browserPermissionPattern, observableBrowserEndpoint, observableBrowserUrl } from './browser-tool-url.js';
-import { permissionRequest, requestToolPermission } from './tool-permissions.js';
-import { ToolExecutionError } from './tool-registry-types.js';
+} from './browser-tool-contract';
+import { redactBrowserToolError } from './browser-tool-error-redaction';
+import type { BrowserPageSeam } from './browser-tool-puppeteer';
+import { browserPermissionPattern, observableBrowserEndpoint, observableBrowserUrl } from './browser-tool-url';
+import { permissionRequest, requestToolPermission } from './tool-permissions';
+import { ToolExecutionError } from './tool-registry-types';
 
 const BASE64_SAFETY_MARGIN = 1.5;
 

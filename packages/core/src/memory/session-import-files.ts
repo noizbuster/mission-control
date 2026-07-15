@@ -1,4 +1,4 @@
-import type { LegacySessionSourceKind } from './session-import-sql.js';
+import type { LegacySessionSourceKind } from './session-import-sql';
 import { createHash } from 'node:crypto';
 import { type FileHandle, lstat, open, readdir } from 'node:fs/promises';
 import { join } from 'node:path';

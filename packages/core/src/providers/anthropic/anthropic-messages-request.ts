@@ -1,8 +1,8 @@
 import { modelProviderCatalog } from '@mission-control/config';
 import type { AgentMessage, ProviderCredential, ToolDefinition } from '@mission-control/protocol';
-import { ProviderCredentialResolutionError, type ProviderCredentialResolver } from '../credential-resolver.js';
-import { ProviderTurnError, type ProviderTurnRequest } from '../provider-turn-types.js';
-import { createVariantLookup } from '../shared/variant-cache.js';
+import { ProviderCredentialResolutionError, type ProviderCredentialResolver } from '../credential-resolver';
+import { ProviderTurnError, type ProviderTurnRequest } from '../provider-turn-types';
+import { createVariantLookup } from '../shared/variant-cache';
 import {
     type AnthropicContentBlock,
     type AnthropicMessagesRequestBody,
@@ -14,7 +14,7 @@ import {
     defaultAnthropicMaxTokens,
     defaultAnthropicMessagesEndpoint,
     defaultAnthropicVersion,
-} from './anthropic-messages-transport.js';
+} from './anthropic-messages-transport';
 
 const API_KEY_FIELD = 'apiKey';
 

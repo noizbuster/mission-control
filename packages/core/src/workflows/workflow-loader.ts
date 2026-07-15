@@ -12,9 +12,9 @@
  * read-tools denylist so `temp/ref-repos` / generated-dir guards apply.
  */
 import { type WorkflowDiscoveryDiagnostic, type WorkflowSpec, WorkflowSpecSchema } from '@mission-control/protocol';
-import { resolveUserConfigDir } from '../skills/skill-loader.js';
-import { defaultReadOnlyRepoToolDenylist, toPosixPath } from '../tools/read-tools-paths.js';
-import { stripJsoncComments } from './jsonc-parser.js';
+import { resolveUserConfigDir } from '../skills/skill-loader';
+import { defaultReadOnlyRepoToolDenylist, toPosixPath } from '../tools/read-tools-paths';
+import { stripJsoncComments } from './jsonc-parser';
 import type { Dirent } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { basename, join } from 'node:path';

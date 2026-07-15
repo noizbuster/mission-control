@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import type { WebSearchInput } from './web-search-schemas.js';
+import type { WebSearchInput } from './web-search-schemas';
 import {
     executeWebSearch,
     type WebSearchTransportOptions,
-} from './web-search-transport.js';
+} from './web-search-transport';
 
 const ALL_PROVIDER_KEYS: Array<[string, string]> = [
     ['EXA_API_KEY', 'exa-key'],

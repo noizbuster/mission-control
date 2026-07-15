@@ -5,7 +5,7 @@ import {
     type DesktopApprovalEffect,
     type DesktopApprovalEffectExecutingRecord,
     type DesktopApprovalEffectRecord,
-} from '../desktop-approval-effect.js';
+} from '../desktop-approval-effect';
 
 const identityRowSchema = z.object({
     session_id: z.string(),

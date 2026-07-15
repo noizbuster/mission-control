@@ -1,7 +1,7 @@
 import type { PolicyEffectRule, PolicyEffectRuleSet } from '@mission-control/protocol';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { type EvaluationResult, evaluateRules } from './rule-evaluator.js';
-import { _testRegexCacheSize, _testResetRegexCache, wildcardMatch } from './wildcard-match.js';
+import { type EvaluationResult, evaluateRules } from './rule-evaluator';
+import { _testRegexCacheSize, _testResetRegexCache, wildcardMatch } from './wildcard-match';
 
 describe('wildcardMatch', () => {
     describe('single-segment *', () => {

@@ -1,6 +1,6 @@
-export { projectSessionAdmission, SessionAdmissionProjectionError } from './session-admission-projection.js';
-export type { SessionAdmissionServiceOptions } from './session-admission-service.js';
-export { SessionAdmissionError, SessionAdmissionService } from './session-admission-service.js';
+export { projectSessionAdmission, SessionAdmissionProjectionError } from './session-admission-projection';
+export type { SessionAdmissionServiceOptions } from './session-admission-service';
+export { SessionAdmissionError, SessionAdmissionService } from './session-admission-service';
 export type {
     AdmitPromptInput,
     ModelVisibleTranscriptMessage,
@@ -13,4 +13,4 @@ export type {
     SessionAdmissionProjection,
     TranscriptBranchNode,
     TranscriptBranchTree,
-} from './session-admission-types.js';
+} from './session-admission-types';

@@ -8,7 +8,7 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { ToolExecutionContext, ToolRegistration } from '../tool-registry-types.js';
+import type { ToolExecutionContext, ToolRegistration } from '../tool-registry-types';
 import {
     buildTeamToolRegistrations,
     createDefaultTeamToolRuntime,
@@ -18,7 +18,7 @@ import {
     TEAM_TOOL_NAMES,
     type TeamModeConfig,
     type TeamToolRuntime,
-} from './index.js';
+} from './index';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

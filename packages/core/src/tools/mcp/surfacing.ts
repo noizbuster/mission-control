@@ -17,19 +17,19 @@
 
 import type { PermissionDecision, PermissionRequest, ProtocolError } from '@mission-control/protocol';
 import { z } from 'zod';
-import type { ObservabilityRedactor } from '../../providers/observability-redactor.js';
-import { type ProjectTrustReader, resolveProjectTrustDecision } from '../../trust/project-trust-store.js';
-import type { McpToolInfo } from '../mcp-tool.js';
-import { permissionRequest, requestToolPermission } from '../tool-permissions.js';
-import { type ToolRegistry } from '../tool-registry.js';
-import { ToolExecutionError, type ToolRegistration } from '../tool-registry-types.js';
-import { truncateOutput, withContinuationHint } from '../truncate.js';
-import type { McpConfigScope } from './config.js';
-import { type ManagedMcpClient, McpConnectionManager } from './connection-manager.js';
-import { requireMcpLiveAuthority } from './live-authority.js';
-import { mcpToolName, uniqueMcpRegistrationName } from './surfacing-names.js';
+import type { ObservabilityRedactor } from '../../providers/observability-redactor';
+import { type ProjectTrustReader, resolveProjectTrustDecision } from '../../trust/project-trust-store';
+import type { McpToolInfo } from '../mcp-tool';
+import { permissionRequest, requestToolPermission } from '../tool-permissions';
+import { type ToolRegistry } from '../tool-registry';
+import { ToolExecutionError, type ToolRegistration } from '../tool-registry-types';
+import { truncateOutput, withContinuationHint } from '../truncate';
+import type { McpConfigScope } from './config';
+import { type ManagedMcpClient, McpConnectionManager } from './connection-manager';
+import { requireMcpLiveAuthority } from './live-authority';
+import { mcpToolName, uniqueMcpRegistrationName } from './surfacing-names';
 
-export { mcpToolName, sanitizeMcpName } from './surfacing-names.js';
+export { mcpToolName, sanitizeMcpName } from './surfacing-names';
 
 const DEFAULT_MCP_OUTPUT_LIMIT = 8000;
 

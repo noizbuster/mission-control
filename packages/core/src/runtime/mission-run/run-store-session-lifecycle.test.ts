@@ -2,10 +2,10 @@ import { createClient } from '@libsql/client';
 import { RunSchema } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { SqliteSessionEventStore } from '../../memory/sqlite-session-event-store.js';
-import { localRuntimeDbUrl } from '../local-runtime-db.js';
-import { makeTempRoot, seedOmoRoot } from './mission-run-test-support.js';
-import { createRun, updateRunStatus } from './run-store.js';
+import { SqliteSessionEventStore } from '../../memory/sqlite-session-event-store';
+import { localRuntimeDbUrl } from '../local-runtime-db';
+import { makeTempRoot, seedOmoRoot } from './mission-run-test-support';
+import { createRun, updateRunStatus } from './run-store';
 
 const statusRowSchema = z.object({ status: z.string() });
 const metadataRowSchema = z.object({ metadata_json: z.string() });

@@ -1,7 +1,7 @@
 import type { DiffFile, DiffLine } from '@mission-control/protocol';
-import { type FuzzyReplaceResult, replace as fuzzyReplace } from './file-edit-fuzzy.js';
-import type { FileEditInput } from './file-edit-schemas.js';
-import { filePatchFailure } from './file-patch-errors.js';
+import { type FuzzyReplaceResult, replace as fuzzyReplace } from './file-edit-fuzzy';
+import type { FileEditInput } from './file-edit-schemas';
+import { filePatchFailure } from './file-patch-errors';
 
 type MatchRange = { readonly start: number; readonly end: number };
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { BrowserHarness, createRegistration } from './browser-tool-lifecycle-test-support.js';
-import { ToolRegistry } from './tool-registry.js';
+import { BrowserHarness, createRegistration } from './browser-tool-lifecycle-test-support';
+import { ToolRegistry } from './tool-registry';
 
 describe('browser screenshot observability', () => {
     it('keeps capped base64 private while preserving it in structured output', async () => {

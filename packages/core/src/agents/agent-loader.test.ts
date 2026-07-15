@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { DEFAULT_MAX_AGENT_FILE_BYTES, discoverAgents } from './agent-loader.js';
-import { BUNDLED_AGENT_TEMPLATES } from './bundled/index.js';
+import { DEFAULT_MAX_AGENT_FILE_BYTES, discoverAgents } from './agent-loader';
+import { BUNDLED_AGENT_TEMPLATES } from './bundled/index';
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

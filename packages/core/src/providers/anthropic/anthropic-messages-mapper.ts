@@ -1,6 +1,6 @@
 import type { ProviderStreamChunk } from '@mission-control/protocol';
-import { type AnthropicMessagesErrorRedactor, protocolErrorFromAnthropicError } from './anthropic-messages-errors.js';
-import { parseAnthropicMessagesStreamEvent, parseAnthropicToolUseContentBlock } from './anthropic-messages-events.js';
+import { type AnthropicMessagesErrorRedactor, protocolErrorFromAnthropicError } from './anthropic-messages-errors';
+import { parseAnthropicMessagesStreamEvent, parseAnthropicToolUseContentBlock } from './anthropic-messages-events';
 import {
     type AnthropicMessagesMappingState,
     completedText,
@@ -11,7 +11,7 @@ import {
     providerToolCallMessageFields,
     toolArgumentsJson,
     updateUsage,
-} from './anthropic-messages-state.js';
+} from './anthropic-messages-state';
 
 export { type AnthropicMessagesMappingState, createAnthropicMessagesMappingState };
 

@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { openLocalLibsqlDb } from '../db/local-libsql-db.js';
-import { SqliteSessionEventStore } from '../memory/sqlite-session-event-store.js';
+import { openLocalLibsqlDb } from '../db/local-libsql-db';
+import { SqliteSessionEventStore } from '../memory/sqlite-session-event-store';
 import {
     cleanupSqliteSessionEventStoreTestDirs,
     createSqliteSessionEventStoreTestDbUrl,
     openSqliteSessionEventStoreForTests,
-} from '../memory/sqlite-session-event-store-test-support.js';
-import { SqlAgentJobMirror } from './agent-job-sql-mirror.js';
+} from '../memory/sqlite-session-event-store-test-support';
+import { SqlAgentJobMirror } from './agent-job-sql-mirror';
 
 const sessionRowSchema = z.object({ status: z.string(), metadata_json: z.string().nullable() });
 const countRowSchema = z.object({ count: z.number() });

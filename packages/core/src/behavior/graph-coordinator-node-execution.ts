@@ -1,8 +1,8 @@
 import type { AbgNodeModelOptions, AbgNodeSpec, AbgPolicyDecision, AbgSignal } from '@mission-control/protocol';
-import { redactAbgSignalForObservability } from '../providers/observability-redactor.js';
-import type { AuthorableAbgGraph } from './authorable-graph.js';
-import { type CoordinatorState, nodeModel, nodeStatusForSignal } from './graph-coordinator-helpers.js';
-import { runContext } from './graph-coordinator-run-context.js';
+import { redactAbgSignalForObservability } from '../providers/observability-redactor';
+import type { AuthorableAbgGraph } from './authorable-graph';
+import { type CoordinatorState, nodeModel, nodeStatusForSignal } from './graph-coordinator-helpers';
+import { runContext } from './graph-coordinator-run-context';
 import {
     extractPolicyDecision,
     extractTurnText,
@@ -12,12 +12,12 @@ import {
     isToolApprovalBlockedError,
     rememberProposedInput,
     toolActionFromEmitWithProposedInput,
-} from './graph-coordinator-node-signals.js';
-import type { AbgGraphRunnerInput } from './graph-runner.js';
-import { modelCallEvent, toolLifecycleEvent } from './graph-runner-events.js';
-import type { ToolActionFingerprint } from './loop-safety.js';
-import { type AbgNodeRegistry, runAbgNode } from './node-registry.js';
-import { projectAbgSignalToEvent } from './signals.js';
+} from './graph-coordinator-node-signals';
+import type { AbgGraphRunnerInput } from './graph-runner';
+import { modelCallEvent, toolLifecycleEvent } from './graph-runner-events';
+import type { ToolActionFingerprint } from './loop-safety';
+import { type AbgNodeRegistry, runAbgNode } from './node-registry';
+import { projectAbgSignalToEvent } from './signals';
 import { randomUUID } from 'node:crypto';
 
 export type NodeRunResult = {

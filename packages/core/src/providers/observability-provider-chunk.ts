@@ -1,6 +1,6 @@
 import { type ProtocolError, type ProviderStreamChunk, ProviderStreamChunkSchema } from '@mission-control/protocol';
-import type { ObservabilityRedactor } from './observability-value-redactor.js';
-import { redactProviderChunk } from './provider-turn-events.js';
+import type { ObservabilityRedactor } from './observability-value-redactor';
+import { redactProviderChunk } from './provider-turn-events';
 
 const PROVIDER_CHUNK_REDACTION_FAILURE = 'Provider stream chunk could not be redacted';
 

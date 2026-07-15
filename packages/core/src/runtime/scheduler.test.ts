@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MockAgentScheduler } from './scheduler.js';
+import { MockAgentScheduler } from './scheduler';
 
 describe('MockAgentScheduler', () => {
     it('returns TaskHandle and supports cancel placeholder', async () => {

@@ -21,11 +21,11 @@
 import type { AbgSignal } from '@mission-control/protocol';
 import type { ModelMessage, ToolSet } from 'ai';
 import { stepCountIs, streamText } from 'ai';
-import { createObservabilityRedactor, type ObservabilityRedactor } from '../../../providers/observability-redactor.js';
-import { errorToString } from '../../../util/error-to-string.js';
-import { createAbgEmitSignal } from '../../abg-emit.js';
-import type { AbgToolSettlementLedger } from './abg-tool-bridge.js';
-import { abgSignalsFromStreamPart, createStreamPartObservabilityState } from './ai-sdk-adapter.js';
+import { createObservabilityRedactor, type ObservabilityRedactor } from '../../../providers/observability-redactor';
+import { errorToString } from '../../../util/error-to-string';
+import { createAbgEmitSignal } from '../../abg-emit';
+import type { AbgToolSettlementLedger } from './abg-tool-bridge';
+import { abgSignalsFromStreamPart, createStreamPartObservabilityState } from './ai-sdk-adapter';
 import {
     approvalBlockFailure,
     extractProviderErrorCode,
@@ -34,7 +34,7 @@ import {
     extractToolCallId,
     firstApprovalBlockedSettlementInProposalOrder,
     terminalToolFailure,
-} from './llm-actor-settlements.js';
+} from './llm-actor-settlements';
 
 type StreamTextParameters = Parameters<typeof streamText>[0];
 

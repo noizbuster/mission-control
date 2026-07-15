@@ -7,8 +7,8 @@ import {
     type ApprovalRecord,
 } from '@mission-control/protocol';
 import { z } from 'zod';
-import type { AbgGraphRunnerInput } from './graph-runner.js';
-import { approvalLifecycleEvent, graphEvent, permissionEvent, policyBlockedEvent } from './graph-runner-events.js';
+import type { AbgGraphRunnerInput } from './graph-runner';
+import { approvalLifecycleEvent, graphEvent, permissionEvent, policyBlockedEvent } from './graph-runner-events';
 
 const approvalReasonKey = 'reason';
 const observedApprovalPayloadSchema = z

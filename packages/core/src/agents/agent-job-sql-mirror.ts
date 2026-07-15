@@ -1,28 +1,28 @@
 import type { Client } from '@libsql/client';
-import { type LocalLibsqlWriteTarget, runLocalLibsqlWrite } from '../db/local-libsql-db.js';
-import { runLocalLibsqlClientTransaction } from '../db/local-libsql-transaction.js';
-import type { SessionBackgroundJob, SessionPendingWait } from '../memory/session-status-derivation.js';
+import { type LocalLibsqlWriteTarget, runLocalLibsqlWrite } from '../db/local-libsql-db';
+import { runLocalLibsqlClientTransaction } from '../db/local-libsql-transaction';
+import type { SessionBackgroundJob, SessionPendingWait } from '../memory/session-status-derivation';
 import {
     activeJobStatuses,
     backgroundJobFrom,
     cancelRecoveredJob,
     selectJobColumns,
-} from './agent-job-sql-mirror-handles.js';
+} from './agent-job-sql-mirror-handles';
 import {
     recordJobWithLifecycle,
     resolveSubagentWaitWithJob,
     startSubagentWaitWithJob,
-} from './agent-job-sql-mirror-lifecycle.js';
-import { upsertRuntimeAgentRow } from './agent-job-sql-mirror-persist.js';
-import { parseAgentRef, parseJob, parsePendingWait } from './agent-job-sql-mirror-rows.js';
-import { initializeAgentJobSchema } from './agent-job-sql-mirror-sql.js';
+} from './agent-job-sql-mirror-lifecycle';
+import { upsertRuntimeAgentRow } from './agent-job-sql-mirror-persist';
+import { parseAgentRef, parseJob, parsePendingWait } from './agent-job-sql-mirror-rows';
+import { initializeAgentJobSchema } from './agent-job-sql-mirror-sql';
 import type {
     AgentJobRecoveryReport,
     ResolveSubagentWaitInput,
     StartSubagentWaitInput,
-} from './agent-job-sql-mirror-types.js';
-import type { BackgroundJobHandle } from './async-job-manager.js';
-import type { AgentRef, RuntimeAgentPersistenceMirror } from './runtime-registry.js';
+} from './agent-job-sql-mirror-types';
+import type { BackgroundJobHandle } from './async-job-manager';
+import type { AgentRef, RuntimeAgentPersistenceMirror } from './runtime-registry';
 
 export type { AgentJobRecoveryReport, ResolveSubagentWaitInput, StartSubagentWaitInput };
 

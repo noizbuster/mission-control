@@ -1,15 +1,15 @@
-import type { CommandChain } from '../tools/bash-run-command-guard.js';
-import { assertAllowedCommandChain } from '../tools/bash-run-policy.js';
-import { bashRunInputSchema } from '../tools/bash-run-schemas.js';
-import { buildPermissionPatterns } from '../tools/command-run-policy.js';
-import { commandRunInputSchema } from '../tools/command-run-schemas.js';
-import { fileEditInputSchema } from '../tools/file-edit-schemas.js';
-import { parseUnifiedPatch, targetPath } from '../tools/file-patch-parser.js';
-import { filePatchInputSchema } from '../tools/file-patch-schemas.js';
-import { fileWriteInputSchema } from '../tools/file-write-schemas.js';
-import { globInputSchema } from '../tools/glob-tool.js';
-import { listInputSchema, readInputSchema, searchInputSchema } from '../tools/read-tools-schemas.js';
-import { ToolExecutionError } from '../tools/tool-registry-types.js';
+import type { CommandChain } from '../tools/bash-run-command-guard';
+import { assertAllowedCommandChain } from '../tools/bash-run-policy';
+import { bashRunInputSchema } from '../tools/bash-run-schemas';
+import { buildPermissionPatterns } from '../tools/command-run-policy';
+import { commandRunInputSchema } from '../tools/command-run-schemas';
+import { fileEditInputSchema } from '../tools/file-edit-schemas';
+import { parseUnifiedPatch, targetPath } from '../tools/file-patch-parser';
+import { filePatchInputSchema } from '../tools/file-patch-schemas';
+import { fileWriteInputSchema } from '../tools/file-write-schemas';
+import { globInputSchema } from '../tools/glob-tool';
+import { listInputSchema, readInputSchema, searchInputSchema } from '../tools/read-tools-schemas';
+import { ToolExecutionError } from '../tools/tool-registry-types';
 import { relative, resolve, sep } from 'node:path';
 
 export type PolicyResource = {

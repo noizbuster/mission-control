@@ -1,5 +1,5 @@
 import type { AbgNodeSpec, AbgSignal } from '@mission-control/protocol';
-import type { AbgNodeRunContext } from '../node-registry.js';
+import type { AbgNodeRunContext } from '../node-registry';
 
 export function started(node: AbgNodeSpec, context: AbgNodeRunContext): AbgSignal {
     return {

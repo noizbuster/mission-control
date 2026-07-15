@@ -9,8 +9,8 @@ import type {
     SessionAwaitingDetails,
     ToolResult,
 } from '@mission-control/protocol';
-import type { ToolOutcomeStatus } from '../session-replay-types.js';
-import type { JsonlSessionEventStoreErrorCode } from './jsonl-errors.js';
+import type { ToolOutcomeStatus } from '../session-replay-types';
+import type { JsonlSessionEventStoreErrorCode } from './jsonl-errors';
 
 export type SessionProjectionSessionRecord = {
     readonly kind: 'session';

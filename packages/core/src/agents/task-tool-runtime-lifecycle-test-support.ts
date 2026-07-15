@@ -2,19 +2,19 @@ import type { AgentDefinition } from '@mission-control/protocol';
 import {
     cleanupSessionOwnerControlFixtures,
     createSessionOwnerControlFixture,
-} from '../runtime/session-owner-control-test-support.js';
-import type { ChildSpawnRequest } from '../tools/task/task-tool.js';
-import { ToolRegistry } from '../tools/tool-registry.js';
-import { AgentIndex } from './agent-registry.js';
-import { AsyncJobManager, type AsyncJobPersistenceMirror } from './async-job-manager.js';
-import { AgentLifecycleManager } from './lifecycle-manager.js';
-import { RuntimeAgentRegistry } from './runtime-registry.js';
+} from '../runtime/session-owner-control-test-support';
+import type { ChildSpawnRequest } from '../tools/task/task-tool';
+import { ToolRegistry } from '../tools/tool-registry';
+import { AgentIndex } from './agent-registry';
+import { AsyncJobManager, type AsyncJobPersistenceMirror } from './async-job-manager';
+import { AgentLifecycleManager } from './lifecycle-manager';
+import { RuntimeAgentRegistry } from './runtime-registry';
 import {
     ConcreteTaskToolRuntime,
     type SpawnFn,
     type TaskToolRuntimeServices,
     type TaskToolSubagentMirror,
-} from './task-tool-runtime.js';
+} from './task-tool-runtime';
 
 type OwnerFixture = Awaited<ReturnType<typeof createSessionOwnerControlFixture>>;
 

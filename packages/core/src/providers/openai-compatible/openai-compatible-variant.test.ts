@@ -1,12 +1,12 @@
 import type { ProviderStreamChunk } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { createStaticProviderCredentialResolver } from '../credential-resolver.js';
-import type { ProviderTurnRequest } from '../provider-turn-types.js';
+import { createStaticProviderCredentialResolver } from '../credential-resolver';
+import type { ProviderTurnRequest } from '../provider-turn-types';
 import {
     createOpenAICompatibleProvider,
     type OpenAICompatibleTransport,
     type OpenAICompatibleTransportRequest,
-} from './openai-compatible-provider.js';
+} from './openai-compatible-provider';
 
 describe('OpenAI-compatible provider reasoning variants', () => {
     it.each([

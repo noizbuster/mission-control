@@ -1,8 +1,8 @@
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ProjectTrustStore } from '../../trust/project-trust-store.js';
-import { ToolRegistry } from '../tool-registry.js';
-import { registerNamespacedMcpTools } from './surfacing.js';
+import { ProjectTrustStore } from '../../trust/project-trust-store';
+import { ToolRegistry } from '../tool-registry';
+import { registerNamespacedMcpTools } from './surfacing';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

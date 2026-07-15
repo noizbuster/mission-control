@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { projectSessionReplay } from '../session-replay.js';
-import { envelope, providerFailedEvent } from '../session-replay-coding-test-support.js';
+import { projectSessionReplay } from '../session-replay';
+import { envelope, providerFailedEvent } from '../session-replay-coding-test-support';
 
 describe('runtime replay processor', () => {
     it('projects provider response failure distinctly', () => {

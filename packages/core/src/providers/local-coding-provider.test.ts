@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { createDefaultWorkflowGraph } from '../behavior/default-workflow-graph.js';
-import { createLocalCodingProvider } from './local-coding-provider.js';
-import type { ProviderTurnRequest } from './provider-turn-types.js';
+import { createDefaultWorkflowGraph } from '../behavior/default-workflow-graph';
+import { createLocalCodingProvider } from './local-coding-provider';
+import type { ProviderTurnRequest } from './provider-turn-types';
 
 const SYSTEM_PROMPT_KEY = 'systemPrompt';
 

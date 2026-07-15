@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createStaticProviderCredentialResolver } from '../credential-resolver.js';
+import { createStaticProviderCredentialResolver } from '../credential-resolver';
 import {
     createGeminiGenerateContentProvider,
     type GeminiGenerateContentTransportRequest,
-} from './gemini-generate-content-provider.js';
+} from './gemini-generate-content-provider';
 import {
     captureError,
     collectChunks,
@@ -12,7 +12,7 @@ import {
     searchToolDefinition,
     transportFromEvents,
     transportFromTurnEvents,
-} from './gemini-generate-content-test-support.js';
+} from './gemini-generate-content-test-support';
 
 describe('Gemini GenerateContent function calling', () => {
     it('maps functionCall parts to provider-neutral tool calls and transcript metadata', async () => {

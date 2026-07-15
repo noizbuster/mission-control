@@ -1,20 +1,20 @@
-import type { ProviderCredentialResolver } from '../credential-resolver.js';
-import { type ProviderAdapter, ProviderTurnError } from '../provider-turn-types.js';
-import { mapAnthropicProviderError } from './anthropic-messages-errors.js';
-import { createAnthropicMessagesMappingState, mapAnthropicMessagesStreamEvent } from './anthropic-messages-mapper.js';
+import type { ProviderCredentialResolver } from '../credential-resolver';
+import { type ProviderAdapter, ProviderTurnError } from '../provider-turn-types';
+import { mapAnthropicProviderError } from './anthropic-messages-errors';
+import { createAnthropicMessagesMappingState, mapAnthropicMessagesStreamEvent } from './anthropic-messages-mapper';
 import {
     apiKeyForAnthropicCredential,
     createAnthropicMessagesTransportRequest,
     resolveAnthropicCredential,
-} from './anthropic-messages-request.js';
+} from './anthropic-messages-request';
 import {
     type AnthropicMessagesTransport,
     AnthropicMessagesTransportError,
     type AnthropicMessagesTransportRequest,
     defaultAnthropicMessagesEndpoint,
-} from './anthropic-messages-transport.js';
+} from './anthropic-messages-transport';
 
-export { createNodeAnthropicMessagesTransport } from './anthropic-messages-http-transport.js';
+export { createNodeAnthropicMessagesTransport } from './anthropic-messages-http-transport';
 export type { AnthropicMessagesTransport, AnthropicMessagesTransportRequest };
 export { AnthropicMessagesTransportError };
 

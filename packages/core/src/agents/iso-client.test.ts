@@ -6,7 +6,7 @@ import {
     resolveViaFallback,
     type SidecarIsoInvoker,
     type SidecarResolvePayload,
-} from './iso-client.js';
+} from './iso-client';
 import { existsSync } from 'node:fs';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

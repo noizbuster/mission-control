@@ -1,5 +1,5 @@
 import type { AgentEvent, ApprovalRecord, ModelProviderSelection, ToolCall } from '@mission-control/protocol';
-import { currentBlockedToolAuthority, findToolCallBefore } from './desktop-tool-approval-authority.js';
+import { currentBlockedToolAuthority, findToolCallBefore } from './desktop-tool-approval-authority';
 
 export type PendingApprovalContext = {
     readonly record: ApprovalRecord;

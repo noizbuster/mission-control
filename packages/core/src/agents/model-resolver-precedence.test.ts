@@ -1,7 +1,7 @@
 import type { AgentDefinition } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import type { ModelPattern, ResolveAgentModelInput } from './model-resolver.js';
-import { resolveAgentModel } from './model-resolver.js';
+import type { ModelPattern, ResolveAgentModelInput } from './model-resolver';
+import { resolveAgentModel } from './model-resolver';
 
 const MODELS = {
     concrete: { providerID: 'concrete', modelID: 'concrete-model' },

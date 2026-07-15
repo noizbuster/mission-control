@@ -10,7 +10,7 @@ import {
     type TuiPluginSlotDescriptor,
     TuiPluginSlotDescriptorSchema,
 } from '@mission-control/protocol';
-import { type ProjectTrustLookup, ProjectTrustStore } from '../trust/project-trust-store.js';
+import { type ProjectTrustLookup, ProjectTrustStore } from '../trust/project-trust-store';
 
 export type TuiPluginSource = 'user' | 'project' | 'bundled';
 

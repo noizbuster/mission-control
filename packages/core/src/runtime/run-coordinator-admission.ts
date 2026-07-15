@@ -1,5 +1,5 @@
 import type { AgentEvent, RunCoordinatorEventMetadata } from '@mission-control/protocol';
-import type { AdmitPromptInput, PromptDeliveryMode, PromptInputState } from '../session-admission-types.js';
+import type { AdmitPromptInput, PromptDeliveryMode, PromptInputState } from '../session-admission-types';
 
 export type RunCoordinatorAdmissionProjection = {
     readonly pendingInputs: readonly PromptInputState[];

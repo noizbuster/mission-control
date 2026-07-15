@@ -5,9 +5,9 @@ import {
     JsonCompatibilityFileError,
     listCompatibilityJsonRecordIds,
     readCompatibilityJsonFile,
-} from '../../persistence/json-compatibility-file.js';
-import { OmoPersistenceError } from '../../persistence/paths.js';
-import { runWithoutSessionOwnerAuthority } from './run-session-owner-authority.js';
+} from '../../persistence/json-compatibility-file';
+import { OmoPersistenceError } from '../../persistence/paths';
+import { runWithoutSessionOwnerAuthority } from './run-session-owner-authority';
 
 const RUNS_DIR = 'runs';
 

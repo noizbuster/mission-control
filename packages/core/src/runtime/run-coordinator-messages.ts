@@ -1,8 +1,8 @@
 import type { AgentMessage } from '@mission-control/protocol';
-import { prependProjectContextMessages } from '../context/project-context-messages.js';
-import { projectSessionAdmission } from '../session-admission.js';
-import { projectApprovalContinuationMessages } from '../session-continuation-projection.js';
-import type { SessionRunCoordinatorOptions } from './run-coordinator-types.js';
+import { prependProjectContextMessages } from '../context/project-context-messages';
+import { projectSessionAdmission } from '../session-admission';
+import { projectApprovalContinuationMessages } from '../session-continuation-projection';
+import type { SessionRunCoordinatorOptions } from './run-coordinator-types';
 
 export async function readRunCoordinatorMessages(
     options: Pick<SessionRunCoordinatorOptions, 'projectContext' | 'readMessages' | 'sessionId' | 'store'>,

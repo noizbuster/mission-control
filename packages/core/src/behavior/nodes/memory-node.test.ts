@@ -5,9 +5,9 @@
 import type { AbgNodeSpec, AbgSignal } from '@mission-control/protocol';
 import type { ModelMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
-import { createBlackboard } from '../../memory/blackboard.js';
-import type { AbgNodeRunContext } from '../node-registry.js';
-import { runMemoryNode } from './memory-node.js';
+import { createBlackboard } from '../../memory/blackboard';
+import type { AbgNodeRunContext } from '../node-registry';
+import { runMemoryNode } from './memory-node';
 
 async function collectSignals(signals: AsyncIterable<AbgSignal>): Promise<readonly AbgSignal[]> {
     const collected: AbgSignal[] = [];

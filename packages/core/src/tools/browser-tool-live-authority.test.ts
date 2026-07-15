@@ -1,8 +1,8 @@
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { describe, expect, it, vi } from 'vitest';
-import type { ProjectTrustDecision, ProjectTrustLookup, ProjectTrustReader } from '../trust/project-trust-store.js';
-import { createBrowserToolRegistration } from './browser-tool.js';
-import { BrowserHarness, toolContext } from './browser-tool-lifecycle-test-support.js';
+import type { ProjectTrustDecision, ProjectTrustLookup, ProjectTrustReader } from '../trust/project-trust-store';
+import { createBrowserToolRegistration } from './browser-tool';
+import { BrowserHarness, toolContext } from './browser-tool-lifecycle-test-support';
 
 type MutableTrustState = {
     decision: ProjectTrustDecision;

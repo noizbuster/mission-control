@@ -5,14 +5,14 @@ import type {
     SessionStopErrorCode,
     SessionStopOutcome,
 } from '@mission-control/protocol';
-import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db.js';
-import type { ObservabilityRedactor } from '../providers/observability-redactor.js';
-import type { SessionControlAttachedHandle } from './session-control-host.js';
-import { SessionControlFencedError } from './session-control-host.js';
-import { settleSessionControlOperationHandle } from './session-control-operation.js';
-import { appendFencedSessionStopEvent } from './session-stop-event-writer.js';
-import { refreshStoppedSession, type StopMutationResult } from './session-stop-mutation.js';
-import type { ExactSessionStopInput, SessionStopReceipt } from './session-stop-service.js';
+import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db';
+import type { ObservabilityRedactor } from '../providers/observability-redactor';
+import type { SessionControlAttachedHandle } from './session-control-host';
+import { SessionControlFencedError } from './session-control-host';
+import { settleSessionControlOperationHandle } from './session-control-operation';
+import { appendFencedSessionStopEvent } from './session-stop-event-writer';
+import { refreshStoppedSession, type StopMutationResult } from './session-stop-mutation';
+import type { ExactSessionStopInput, SessionStopReceipt } from './session-stop-service';
 
 export const EMPTY_STOP_AFFECTED: SessionAbortAffectedCounts = {
     runs: 0,

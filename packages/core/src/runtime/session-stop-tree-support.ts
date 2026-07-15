@@ -1,6 +1,6 @@
 import type { SessionStopErrorCode, SessionStopReceiptContract } from '@mission-control/protocol';
-import type { SessionStopTreeResult, SessionStopTreeSessionResult, StopSessionTreeInput } from './session-stop-tree.js';
-import type { CanonicalSessionTreeDescendant, CanonicalSessionTreeResult } from './session-stop-tree-resolver.js';
+import type { SessionStopTreeResult, SessionStopTreeSessionResult, StopSessionTreeInput } from './session-stop-tree';
+import type { CanonicalSessionTreeDescendant, CanonicalSessionTreeResult } from './session-stop-tree-resolver';
 
 const emptyAffected = {
     runs: 0,

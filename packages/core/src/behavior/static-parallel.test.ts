@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { collectSignals, createCompositeNodeTestContext } from './composite-node-test-helpers.js';
-import { type AbgNodeRunContext, type AbgNodeRunner, runAbgNode } from './node-registry.js';
+import { collectSignals, createCompositeNodeTestContext } from './composite-node-test-helpers';
+import { type AbgNodeRunContext, type AbgNodeRunner, runAbgNode } from './node-registry';
 
 const CHILD_IDS: readonly string[] = ['child-0', 'child-1', 'child-2', 'child-3', 'child-4'];
 

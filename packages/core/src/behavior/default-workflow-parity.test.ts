@@ -22,11 +22,11 @@ import { AbgGraphSpecSchema, type AbgNodeSpec, type AbgRuleSpec } from '@mission
 import type { ModelMessage } from 'ai';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
-import { createBlackboard } from '../memory/blackboard.js';
-import { collectSignals, createCompositeNodeTestContext } from './composite-node-test-helpers.js';
-import { createDefaultWorkflowGraph, DEFAULT_WORKFLOW_STRIKE_BUDGET } from './default-workflow-graph.js';
-import type { AbgNodeRunContext } from './node-registry.js';
-import { runLlmActorNode } from './nodes/llm-actor/llm-actor-node-runner.js';
+import { createBlackboard } from '../memory/blackboard';
+import { collectSignals, createCompositeNodeTestContext } from './composite-node-test-helpers';
+import { createDefaultWorkflowGraph, DEFAULT_WORKFLOW_STRIKE_BUDGET } from './default-workflow-graph';
+import type { AbgNodeRunContext } from './node-registry';
+import { runLlmActorNode } from './nodes/llm-actor/llm-actor-node-runner';
 
 const INTENT_CLASSES = [
     'trivial',

@@ -18,7 +18,7 @@
  * The default persona is provider-agnostic; a per-family template can be supplied via
  * `persona` (Phase 2 wires per-model-family templates from `prompt/*.txt`).
  */
-import { formatProjectContext, type ProjectInstructionResource } from './project-context-messages.js';
+import { formatProjectContext, type ProjectInstructionResource } from './project-context-messages';
 
 export type SystemPromptEnvironment = {
     readonly modelId?: string;

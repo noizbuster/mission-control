@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { openLocalLibsqlDb } from '../db/local-libsql-db.js';
+import { openLocalLibsqlDb } from '../db/local-libsql-db';
 import {
     deleteLocalSessionRows,
     localSessionDbUrl,
     openLocalSessionEventStore,
     readLocalSessionReplay,
-} from './local-session-store.js';
-import { seedSessionScopedSqlRows, sessionReferenceCounts } from './local-session-store-delete-test-support.js';
-import { CREATED_AT, sessionStartedEvent, tempDataDir, UPDATED_AT } from './local-session-store-test-support.js';
+} from './local-session-store';
+import { seedSessionScopedSqlRows, sessionReferenceCounts } from './local-session-store-delete-test-support';
+import { CREATED_AT, sessionStartedEvent, tempDataDir, UPDATED_AT } from './local-session-store-test-support';
 
 describe('local session store delete cleanup', () => {
     it('deletes SQLite-native session-scoped rows before the same session id is recreated', async () => {

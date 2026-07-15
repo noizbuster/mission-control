@@ -6,8 +6,8 @@ import {
     type SessionSummary,
     type SessionToolsOptions,
     summarizeProjection,
-} from './session-tools-shared.js';
-import type { ToolRegistration } from './tool-registry-types.js';
+} from './session-tools-shared';
+import type { ToolRegistration } from './tool-registry-types';
 
 const OUTPUT_LIMIT_CHARS = 6000;
 const DEFAULT_LIMIT = 50;

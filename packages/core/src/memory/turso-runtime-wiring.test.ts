@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { LocalDbConfigError, LocalDbInitializationError, openLocalLibsqlDb } from '../db/local-libsql-db.js';
-import type { PersistentMemoryStore } from './persistent-memory-store.js';
-import { createPersistentStore } from './persistent-store-factory.js';
-import { TursoPersistentStore } from './turso-persistent-store.js';
+import { LocalDbConfigError, LocalDbInitializationError, openLocalLibsqlDb } from '../db/local-libsql-db';
+import type { PersistentMemoryStore } from './persistent-memory-store';
+import { createPersistentStore } from './persistent-store-factory';
+import { TursoPersistentStore } from './turso-persistent-store';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

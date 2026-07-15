@@ -13,7 +13,7 @@
  * single clear human reason. Rejection is terminal for the run path: the graph
  * routes a rejected plan to `plan-rejected-terminal`, never to `delegate-wave`.
  */
-import { parsePlanChecklistText } from '../persistence/plan-store.js';
+import { parsePlanChecklistText } from '../persistence/plan-store';
 
 /**
  * Scaffold section headers the runner admission gate requires a plan to carry.

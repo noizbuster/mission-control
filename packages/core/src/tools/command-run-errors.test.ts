@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type CommandRunFailureCode, commandRunFailure } from './command-run-errors.js';
+import { type CommandRunFailureCode, commandRunFailure } from './command-run-errors';
 
 describe('commandRunFailure retryable mapping', () => {
     it('marks command_failed (nonzero exit) as retryable so a single failing command does not kill the run', () => {

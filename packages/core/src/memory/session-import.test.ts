@@ -1,12 +1,12 @@
 import { RunSchema } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import { parseJsonlSessionLog } from './jsonl-session-records.js';
+import { parseJsonlSessionLog } from './jsonl-session-records';
 import {
     exportLegacySessionJsonl,
     importLegacySessionCompatibilityWindow,
     listLegacySessionImportLedger,
-} from './session-import.js';
-import { importMissionRunRow } from './session-import-run-sql.js';
+} from './session-import';
+import { importMissionRunRow } from './session-import-run-sql';
 import {
     countRows,
     openMigratedTestDb,
@@ -14,7 +14,7 @@ import {
     readSourceBytes,
     SESSION_IMPORT_TEST_SESSION_ID,
     writeLegacyFixture,
-} from './session-import-test-support.js';
+} from './session-import-test-support';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 

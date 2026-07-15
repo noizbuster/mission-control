@@ -1,12 +1,12 @@
 import type { AgentEvent, ApprovalRecord, ModelProviderSelection, ToolCall } from '@mission-control/protocol';
 
-export { currentBlockedToolAuthority as blockedToolAuthority } from './desktop-tool-approval-authority.js';
+export { currentBlockedToolAuthority as blockedToolAuthority } from './desktop-tool-approval-authority';
 
 import {
     matchesApprovalRecord,
     matchesPermissionRequest,
     requestIdForToolCall,
-} from './desktop-tool-approval-events.js';
+} from './desktop-tool-approval-events';
 
 export function hasRuntimeOwnedPermissionRequest(
     events: readonly AgentEvent[],

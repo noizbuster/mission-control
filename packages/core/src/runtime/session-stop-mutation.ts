@@ -1,9 +1,9 @@
 import type { Client } from '@libsql/client';
 import type { SessionAbortAffectedCounts } from '@mission-control/protocol';
 import { z } from 'zod';
-import { refreshSessionAwaitingFromPendingWaits } from '../memory/session-awaiting-sql.js';
-import type { ObservabilityRedactor } from '../providers/observability-redactor.js';
-import { updateRunStatusWithClient } from './mission-run/run-store.js';
+import { refreshSessionAwaitingFromPendingWaits } from '../memory/session-awaiting-sql';
+import type { ObservabilityRedactor } from '../providers/observability-redactor';
+import { updateRunStatusWithClient } from './mission-run/run-store';
 
 const inputRowSchema = z.object({ input_id: z.string(), delivery: z.enum(['steer', 'queue']) });
 const approvalRowSchema = z.object({ approval_id: z.string() });

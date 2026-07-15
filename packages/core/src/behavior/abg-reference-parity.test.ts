@@ -20,22 +20,22 @@ import { AbgGraphSpecSchema, type AbgNodeSpec, WorkflowSpecSchema } from '@missi
 import type { ModelMessage } from 'ai';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
-import { createBlackboard } from '../memory/blackboard.js';
-import { evaluateRules } from '../permissions/rule-evaluator.js';
-import { parsePlanChecklistText } from '../persistence/plan-store.js';
-import { materializeWorkflow } from '../workflows/materialize-workflow.js';
-import { collectSignals, createCompositeNodeTestContext } from './composite-node-test-helpers.js';
-import { createDefaultWorkflowGraph } from './default-workflow-graph.js';
-import { autopilotMode } from './modes/autopilot-mode.js';
-import { applyMode } from './modes/mode-application.js';
-import { type AbgNodeRunContext, runAbgNode } from './node-registry.js';
-import { runLlmActorNode } from './nodes/llm-actor/llm-actor-node-runner.js';
+import { createBlackboard } from '../memory/blackboard';
+import { evaluateRules } from '../permissions/rule-evaluator';
+import { parsePlanChecklistText } from '../persistence/plan-store';
+import { materializeWorkflow } from '../workflows/materialize-workflow';
+import { collectSignals, createCompositeNodeTestContext } from './composite-node-test-helpers';
+import { createDefaultWorkflowGraph } from './default-workflow-graph';
+import { autopilotMode } from './modes/autopilot-mode';
+import { applyMode } from './modes/mode-application';
+import { type AbgNodeRunContext, runAbgNode } from './node-registry';
+import { runLlmActorNode } from './nodes/llm-actor/llm-actor-node-runner';
 import {
     createPlannerWorkflowGraph,
     PLANNER_READONLY_MODE,
     PLANNER_READONLY_POLICIES,
-} from './planner-workflow-graph.js';
-import { createRunnerWorkflowGraph } from './runner-workflow-graph.js';
+} from './planner-workflow-graph';
+import { createRunnerWorkflowGraph } from './runner-workflow-graph';
 
 /**
  * Read a string-typed value from an AbgNodeSpec config under strict indexing.

@@ -10,12 +10,12 @@ export {
     materializeWorkflow,
     resolveDefaultWorkflowSpec,
     type WorkflowLookup,
-} from './materialize-workflow.js';
+} from './materialize-workflow';
 export {
     DEFAULT_MAX_WORKFLOW_FILE_BYTES,
     DEFAULT_MAX_WORKFLOWS,
     type DiscoverWorkflowsOptions,
     type DiscoverWorkflowsResult,
     discoverWorkflows,
-} from './workflow-loader.js';
-export { WorkflowRegistry } from './workflow-registry.js';
+} from './workflow-loader';
+export { WorkflowRegistry } from './workflow-registry';

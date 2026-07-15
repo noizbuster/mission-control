@@ -1,7 +1,7 @@
 import type { AbgSignal } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { createAbgEmitSignal } from './abg-emit.js';
-import { projectAbgSignalToEvent } from './signals.js';
+import { createAbgEmitSignal } from './abg-emit';
+import { projectAbgSignalToEvent } from './signals';
 
 const NOW = '2026-06-16T00:00:00.000Z';
 

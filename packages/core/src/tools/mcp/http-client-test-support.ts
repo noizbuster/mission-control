@@ -5,7 +5,7 @@ import {
     type RemoteClientFactory,
     RemoteMcpClient,
     type RemoteTransportFactory,
-} from './http-client.js';
+} from './http-client';
 
 type TransportBehavior = {
     readonly startError?: Error;

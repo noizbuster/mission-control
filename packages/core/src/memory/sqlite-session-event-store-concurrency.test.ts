@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { openLocalLibsqlDb, runWithLocalLibsqlWriteLock } from '../db/local-libsql-db.js';
-import { SqliteSessionEventStoreError } from './sqlite-session-event-store.js';
+import { openLocalLibsqlDb, runWithLocalLibsqlWriteLock } from '../db/local-libsql-db';
+import { SqliteSessionEventStoreError } from './sqlite-session-event-store';
 import {
     cleanupSqliteSessionEventStoreTestDirs,
     createSqliteSessionEventStoreTestDbUrl,
@@ -9,7 +9,7 @@ import {
     openSqliteSessionEventStoreForTests,
     sessionStartedEvent,
     taskCompletedEvent,
-} from './sqlite-session-event-store-test-support.js';
+} from './sqlite-session-event-store-test-support';
 
 afterEach(async () => {
     await cleanupSqliteSessionEventStoreTestDirs();

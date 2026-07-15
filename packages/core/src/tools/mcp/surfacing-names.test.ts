@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mcpToolName, sanitizeMcpName } from './surfacing.js';
+import { mcpToolName, sanitizeMcpName } from './surfacing';
 
 describe('sanitizeMcpName', () => {
     it('keeps alphanumeric and underscores unchanged', () => {

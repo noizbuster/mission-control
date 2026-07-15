@@ -1,5 +1,5 @@
-import { openLocalLibsqlDb } from '../db/local-libsql-db.js';
-import { SqlAgentJobMirror } from './agent-job-sql-mirror.js';
+import { openLocalLibsqlDb } from '../db/local-libsql-db';
+import { SqlAgentJobMirror } from './agent-job-sql-mirror';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

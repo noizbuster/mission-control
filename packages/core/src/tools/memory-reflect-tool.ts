@@ -7,9 +7,9 @@
  * question over the bank rather than return raw matches.
  */
 import { z } from 'zod';
-import { isMemoryBackendActive, MEMORY_BACKEND_NOT_CONFIGURED, type MemoryBackend } from './memory-backend.js';
-import { ToolRegistry } from './tool-registry.js';
-import type { ToolAdvertisement, ToolRegistration } from './tool-registry-types.js';
+import { isMemoryBackendActive, MEMORY_BACKEND_NOT_CONFIGURED, type MemoryBackend } from './memory-backend';
+import { ToolRegistry } from './tool-registry';
+import type { ToolAdvertisement, ToolRegistration } from './tool-registry-types';
 
 export const REFLECT_TOOL_NAME = 'reflect';
 

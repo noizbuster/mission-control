@@ -1,6 +1,6 @@
 import type { Client } from '@libsql/client';
 import type { AgentEventEnvelope } from '@mission-control/protocol';
-import { envelopeFromPayloadRow } from './sqlite-session-event-store-rows.js';
+import { envelopeFromPayloadRow } from './sqlite-session-event-store-rows';
 
 export async function readSqliteSessionEnvelopes(input: {
     readonly client: Client;

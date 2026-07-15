@@ -13,10 +13,10 @@
  */
 import { type AbgPolicySpec, type PolicyEffectRuleSet, WorkflowSpecSchema } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { registerBuiltinWorkflows, WorkflowRegistry } from '../index.js';
-import { evaluateRules } from '../permissions/rule-evaluator.js';
-import { materializeMission } from '../runtime/mission-run/mission-run-service.js';
-import { materializeWorkflow } from '../workflows/materialize-workflow.js';
+import { registerBuiltinWorkflows, WorkflowRegistry } from '../index';
+import { evaluateRules } from '../permissions/rule-evaluator';
+import { materializeMission } from '../runtime/mission-run/mission-run-service';
+import { materializeWorkflow } from '../workflows/materialize-workflow';
 import { readFile } from 'node:fs/promises';
 
 const workflowJsonPath = `${process.cwd()}/examples/abg/planner.workflow.json`;

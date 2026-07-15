@@ -4,11 +4,11 @@ import {
     fileMutationDiffEvents,
     partialFileMutationAppliedEvents,
     preflightTextFileMutationTargets,
-} from './file-mutation.js';
-import { applyParsedPatch } from './file-patch-apply.js';
-import { filePatchFailure } from './file-patch-errors.js';
-import { type ParsedPatchFile, parseUnifiedPatch, targetPath, toDiffFiles } from './file-patch-parser.js';
-import { createPatchWorkspaceGuard, type PatchTarget } from './file-patch-paths.js';
+} from './file-mutation';
+import { applyParsedPatch } from './file-patch-apply';
+import { filePatchFailure } from './file-patch-errors';
+import { type ParsedPatchFile, parseUnifiedPatch, targetPath, toDiffFiles } from './file-patch-parser';
+import { createPatchWorkspaceGuard, type PatchTarget } from './file-patch-paths';
 import {
     diffFileOutput,
     type FilePatchInput,
@@ -20,13 +20,13 @@ import {
     filePatchParametersJsonSchema,
     type ResolvedFilePatchToolOptions,
     resolveFilePatchOptions,
-} from './file-patch-schemas.js';
-import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './tool-registry.js';
+} from './file-patch-schemas';
+import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './tool-registry';
 import { constants } from 'node:fs';
 import { mkdir, open, rm } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
-export type { FilePatchToolOptions } from './file-patch-schemas.js';
+export type { FilePatchToolOptions } from './file-patch-schemas';
 
 export async function registerFilePatchTool(
     registry: ToolRegistry,

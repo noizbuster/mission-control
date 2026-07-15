@@ -5,7 +5,7 @@ import {
     NotepadGuardError,
     type NotepadGuardErrorCode,
     type NotepadGuardInput,
-} from './notepad-guard.js';
+} from './notepad-guard';
 import { join } from 'node:path';
 
 const WORKSPACE = '/test-workspace';

@@ -1,5 +1,5 @@
 import type { DiffFile, DiffLine } from '@mission-control/protocol';
-import { filePatchFailure } from './file-patch-errors.js';
+import { filePatchFailure } from './file-patch-errors';
 
 export type ParsedPatchFile = {
     readonly oldPath?: string;

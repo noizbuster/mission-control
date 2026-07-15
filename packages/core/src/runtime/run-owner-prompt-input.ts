@@ -1,4 +1,4 @@
-import type { RunCoordinatorPromptInput } from './run-coordinator-types.js';
+import type { RunCoordinatorPromptInput } from './run-coordinator-types';
 
 export function promptInput(input: RunCoordinatorPromptInput): RunCoordinatorPromptInput {
     return {

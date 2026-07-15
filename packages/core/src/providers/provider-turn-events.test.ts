@@ -1,6 +1,6 @@
 import type { ProviderStreamChunk } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { redactProviderChunk } from './provider-turn-events.js';
+import { redactProviderChunk } from './provider-turn-events';
 
 describe('redactProviderChunk idempotency', () => {
     // Redacting an already-redacted chunk must be a fixed point:

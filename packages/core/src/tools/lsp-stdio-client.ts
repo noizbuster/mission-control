@@ -33,8 +33,8 @@ import type {
     LspTextDocumentEdit,
     LspTextEdit,
     LspWorkspaceEdit,
-} from './lsp-tool.js';
-import { ToolExecutionError } from './tool-registry-types.js';
+} from './lsp-tool';
+import { ToolExecutionError } from './tool-registry-types';
 import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';

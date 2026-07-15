@@ -13,12 +13,12 @@ import {
     runBlockedEvent,
     runCompletedEvent,
     runStartedEvent,
-} from './desktop-tool-approval-test-support.js';
+} from './desktop-tool-approval-test-support';
 import {
     ensurePendingToolApprovalForCurrentBlockedRun,
     ensureRuntimeOwnedPermissionRequestForBlockedToolCall,
     settleDesktopApproval,
-} from './desktop-tool-approvals.js';
+} from './desktop-tool-approvals';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

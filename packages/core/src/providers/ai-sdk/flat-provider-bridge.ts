@@ -45,8 +45,8 @@ import type {
     ProviderUsage,
     ToolDefinition,
 } from '@mission-control/protocol';
-import { closeProviderChunkIterator, nextProviderChunk } from '../provider-turn-timeout.js';
-import { type ProviderAdapter, ProviderTurnError, type ProviderTurnRequest } from '../provider-turn-types.js';
+import { closeProviderChunkIterator, nextProviderChunk } from '../provider-turn-timeout';
+import { type ProviderAdapter, ProviderTurnError, type ProviderTurnRequest } from '../provider-turn-types';
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 const DEFAULT_RETRY_LIMIT = 7;

@@ -1,6 +1,6 @@
 import { defaultModelProviderSelection } from '@mission-control/config';
 import type { ModelProviderSelection } from '@mission-control/protocol';
-import type { ApprovalTerminalState } from './approval-gate.js';
+import type { ApprovalTerminalState } from './approval-gate';
 import {
     type DesktopApprovalEffect,
     type DesktopApprovalEffectClaimInput,
@@ -9,23 +9,23 @@ import {
     type DesktopApprovalEffectResolutionInput,
     type DesktopApprovalEffectSettlementInput,
     desktopApprovalEffect,
-} from './desktop-approval-effect.js';
-import { withDesktopApprovalSettlementLock } from './desktop-approval-settlement-lock.js';
-import type { DesktopApprovalBackfillStore } from './desktop-tool-approval-backfill.js';
+} from './desktop-approval-effect';
+import { withDesktopApprovalSettlementLock } from './desktop-approval-settlement-lock';
+import type { DesktopApprovalBackfillStore } from './desktop-tool-approval-backfill';
 import {
     approvalEvent,
     decidedRecord,
     hasTerminalRunAfterApproval,
     pendingApprovalContextForCurrentRun,
-} from './desktop-tool-approval-events.js';
-import { executeApprovedDesktopTool } from './desktop-tool-approval-execution.js';
-import type { CommandExecutionRequest, CommandExecutionResult } from './tools/command-run.js';
+} from './desktop-tool-approval-events';
+import { executeApprovedDesktopTool } from './desktop-tool-approval-execution';
+import type { CommandExecutionRequest, CommandExecutionResult } from './tools/command-run';
 import { randomUUID } from 'node:crypto';
 
 export {
     ensurePendingToolApprovalForCurrentBlockedRun,
     ensureRuntimeOwnedPermissionRequestForBlockedToolCall,
-} from './desktop-tool-approval-backfill.js';
+} from './desktop-tool-approval-backfill';
 
 const DEFAULT_DESKTOP_APPROVAL_EFFECT_LEASE_MS = 300_000;
 

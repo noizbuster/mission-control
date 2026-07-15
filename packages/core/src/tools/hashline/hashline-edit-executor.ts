@@ -4,7 +4,7 @@
 // expression copied). License classification is recorded in
 // .omo/evidence/license-matrix.md.
 
-import { applyHashlineEditsWithReport, type HashlineEdit, normalizeEdits } from './edit-operations.js';
+import { applyHashlineEditsWithReport, type HashlineEdit, normalizeEdits } from './edit-operations';
 
 export interface RawHashlineEdit {
     readonly [key: string]: unknown;

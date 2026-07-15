@@ -4,8 +4,8 @@
 // expression copied). License classification is recorded in
 // .omo/evidence/license-matrix.md.
 
-import type { LineRef } from './validation.js';
-import { parseLineRef } from './validation.js';
+import type { LineRef } from './validation';
+import { parseLineRef } from './validation';
 
 // The three operations every edit must use. `replace` swaps a single line or a
 // pos..end range; `append` inserts after an anchor (or at EOF when no anchor);

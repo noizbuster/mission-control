@@ -1,5 +1,5 @@
 import type { PermissionDecision, PermissionKind, PermissionRequest } from '@mission-control/protocol';
-import { PermissionGateError } from '../approval-gate.js';
+import { PermissionGateError } from '../approval-gate';
 
 export function permissionRequest(input: {
     readonly toolCallId: string;

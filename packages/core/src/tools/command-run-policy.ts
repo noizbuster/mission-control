@@ -1,5 +1,5 @@
-import { extractPermissionPaths } from './bash-path-extraction.js';
-import { commandRunFailure } from './command-run-errors.js';
+import { extractPermissionPaths } from './bash-path-extraction';
+import { commandRunFailure } from './command-run-errors';
 
 export const COMMAND_RUN_POLICY_PROFILES = ['fixed-harness'] as const;
 export type CommandRunPolicyProfile = (typeof COMMAND_RUN_POLICY_PROFILES)[number];

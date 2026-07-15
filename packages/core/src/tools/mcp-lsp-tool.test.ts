@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createLspToolRegistration, InProcessLspClient, type LspDiagnostic } from './lsp-tool.js';
-import { createMcpToolRegistration, InProcessMcpClient } from './mcp-tool.js';
+import { createLspToolRegistration, InProcessLspClient, type LspDiagnostic } from './lsp-tool';
+import { createMcpToolRegistration, InProcessMcpClient } from './mcp-tool';
 
 const ctx = { toolCallId: 'c1', toolName: 'mcp', signal: new AbortController().signal };
 const lspCtx = { toolCallId: 'c1', toolName: 'lsp', signal: new AbortController().signal };

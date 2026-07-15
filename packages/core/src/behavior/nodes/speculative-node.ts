@@ -17,8 +17,8 @@
  * scores do; ties break by declaration order).
  */
 import type { AbgNodeSpec, AbgSignal } from '@mission-control/protocol';
-import type { AbgNodeRunContext, AbgNodeRunner } from '../node-registry.js';
-import { failure, isFailureSignal, readStringConfig, started, success } from './composite-node-utils.js';
+import type { AbgNodeRunContext, AbgNodeRunner } from '../node-registry';
+import { failure, isFailureSignal, readStringConfig, started, success } from './composite-node-utils';
 
 export type SpeculativeRankBy = 'first' | 'score';
 

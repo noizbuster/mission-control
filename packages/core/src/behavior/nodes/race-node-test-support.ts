@@ -1,7 +1,7 @@
 import type { AbgNodeSpec, AbgSignal } from '@mission-control/protocol';
-import { collectSignals } from '../composite-node-test-helpers.js';
-import type { AbgNodeRunContext } from '../node-registry.js';
-import { createRaceNodeRunner } from './race-node.js';
+import { collectSignals } from '../composite-node-test-helpers';
+import type { AbgNodeRunContext } from '../node-registry';
+import { createRaceNodeRunner } from './race-node';
 
 const GRAPH_ID = 'graph_race_cleanup';
 export const CLEANUP_TIMEOUT_MS = 25;

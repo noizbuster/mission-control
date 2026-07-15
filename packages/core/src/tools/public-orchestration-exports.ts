@@ -7,7 +7,7 @@ export {
     type PlanExitSwitchOutcome,
     type PlanExitToolOptions,
     registerPlanExitTool,
-} from './plan-exit-tool.js';
+} from './plan-exit-tool';
 export {
     type AssemblePtyFramesOptions,
     assemblePtyFrames,
@@ -17,12 +17,12 @@ export {
     type PtyAssembledOutput,
     type PtySendStreamOpen,
     type PtySessionTransport,
-} from './pty-client.js';
+} from './pty-client';
 export {
     createReadOnlyRepoToolRegistrations,
     type ReadOnlyRepoToolOptions,
     registerReadOnlyRepoTools,
-} from './read-tools.js';
+} from './read-tools';
 export {
     createReportFindingToolRegistration,
     FINDING_PRIORITIES,
@@ -34,7 +34,7 @@ export {
     type ReportFindingOutput,
     type ReportFindingToolOptions,
     registerReportFindingTool,
-} from './report-finding-tool.js';
+} from './report-finding-tool';
 export {
     createReportToolIssueToolRegistration,
     REPORT_TOOL_ISSUE_TOOL_NAME,
@@ -44,7 +44,7 @@ export {
     type ReportToolIssueStatus,
     type ReportToolIssueToolOptions,
     registerReportToolIssueTool,
-} from './report-tool-issue-tool.js';
+} from './report-tool-issue-tool';
 export {
     createResolveToolRegistration,
     RESOLVE_TOOL_NAME,
@@ -53,7 +53,7 @@ export {
     type ResolveToolOptions,
     resolveInputSchema,
     resolveOutputSchema,
-} from './resolve/resolve-tool.js';
+} from './resolve/resolve-tool';
 export {
     type AgentOutputEntry,
     type AgentOutputStore,
@@ -79,7 +79,7 @@ export {
     type SchemeWriteContext,
     type SkillSchemeBackend,
     type SkillSchemeEntry,
-} from './scheme-resolver.js';
+} from './scheme-resolver';
 export {
     createShellSessionToolRegistration,
     registerShellSessionTool,
@@ -91,7 +91,7 @@ export {
     shellSessionInputSchema,
     shellSessionModelOutput,
     shellSessionOutputSchema,
-} from './shell-session.js';
+} from './shell-session';
 export {
     createSkillToolRegistration,
     formatSkillInstructions,
@@ -101,7 +101,7 @@ export {
     type SkillToolInput,
     type SkillToolOptions,
     type SkillToolOutput,
-} from './skill-tool.js';
+} from './skill-tool';
 export {
     createSshToolRegistration,
     registerSshTool,
@@ -110,18 +110,18 @@ export {
     type SshToolOptions,
     sshInputSchema,
     sshOutputSchema,
-} from './ssh-tool.js';
+} from './ssh-tool';
 export {
     type StagedPreviewAction,
     type StagedPreviewChange,
     StagedPreviewRegistry,
     type StagedPreviewSummary,
-} from './staged-preview-registry.js';
+} from './staged-preview-registry';
 export {
     BUILTIN_CATEGORIES,
     type CategoryDefinition,
     getCategory,
-} from './task/category-catalog.js';
+} from './task/category-catalog';
 export {
     batchTaskItemSchema,
     type ChildSpawnRequest,
@@ -133,7 +133,7 @@ export {
     type TaskToolResult,
     type TaskToolRuntime,
     taskToolBaseObjectSchema,
-} from './task/task-tool.js';
+} from './task/task-tool';
 export {
     type CreateTaskToolInput,
     createChildToolRegistry,
@@ -142,19 +142,19 @@ export {
     type TaskInput,
     type TaskOutput,
     type TaskSpawnFn,
-} from './task-tool.js';
+} from './task-tool';
 export {
     createTaskSpawnFn,
     createTaskToolRegistrationForCli,
     registerTaskTool,
     type TaskToolOptions,
     type TaskToolSpawnContext,
-} from './task-tool-factory.js';
+} from './task-tool-factory';
 export {
     createFullParityTaskToolRegistrationForCli,
     type FullParityTaskToolOptions,
     registerFullParityTaskTool,
-} from './task-tool-full-parity-factory.js';
+} from './task-tool-full-parity-factory';
 export {
     type BuildTeamToolsOptions,
     buildInitialState,
@@ -218,4 +218,4 @@ export {
     updateTask,
     writeConfig,
     writeState,
-} from './team/index.js';
+} from './team/index';

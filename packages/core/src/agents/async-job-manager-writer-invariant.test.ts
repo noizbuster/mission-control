@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { createSessionControlOperation, readSessionControlOperation } from '../runtime/session-control-operation.js';
-import { createSessionControlCallbackFence } from '../runtime/session-control-operation-settlement.js';
+import { createSessionControlOperation, readSessionControlOperation } from '../runtime/session-control-operation';
+import { createSessionControlCallbackFence } from '../runtime/session-control-operation-settlement';
 import {
     acquireOperationTestLease,
     cleanupOperationTestRuntimes,
     createOperationTestRuntime,
-} from '../runtime/session-control-operation-test-support.js';
-import { AsyncJobManager, type AsyncJobPersistenceMirror } from './async-job-manager.js';
+} from '../runtime/session-control-operation-test-support';
+import { AsyncJobManager, type AsyncJobPersistenceMirror } from './async-job-manager';
 
 afterEach(cleanupOperationTestRuntimes);
 

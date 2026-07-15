@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { type LocalLibsqlDb, openLocalLibsqlDb, runWithLocalLibsqlWriteLock } from '../db/local-libsql-db.js';
-import { deferred } from '../db/local-libsql-registry-test-support.js';
-import { TursoPersistentStore } from './turso-persistent-store.js';
+import { type LocalLibsqlDb, openLocalLibsqlDb, runWithLocalLibsqlWriteLock } from '../db/local-libsql-db';
+import { deferred } from '../db/local-libsql-registry-test-support';
+import { TursoPersistentStore } from './turso-persistent-store';
 
 const runtimes: LocalLibsqlDb[] = [];
 

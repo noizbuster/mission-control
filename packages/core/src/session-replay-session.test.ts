@@ -1,6 +1,6 @@
 import type { AgentEvent } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { deriveReplaySession } from './session-replay-session.js';
+import { deriveReplaySession } from './session-replay-session';
 
 const SESSION_ID = 'session_replay_abort_marker';
 

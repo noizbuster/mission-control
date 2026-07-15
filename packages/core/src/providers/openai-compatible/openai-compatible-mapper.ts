@@ -2,9 +2,9 @@ import type { ProviderStreamChunk, ProviderToolCallTranscript, ToolCall } from '
 import {
     type OpenAICompatibleErrorRedactor,
     protocolErrorFromOpenAICompatibleError,
-} from './openai-compatible-errors.js';
-import type { OpenAICompatibleToolCallDelta, OpenAICompatibleUsage } from './openai-compatible-event-schemas.js';
-import { parseOpenAICompatibleStreamEvent } from './openai-compatible-events.js';
+} from './openai-compatible-errors';
+import type { OpenAICompatibleToolCallDelta, OpenAICompatibleUsage } from './openai-compatible-event-schemas';
+import { parseOpenAICompatibleStreamEvent } from './openai-compatible-events';
 
 export type OpenAICompatibleMappingState = {
     readonly requestId: string;

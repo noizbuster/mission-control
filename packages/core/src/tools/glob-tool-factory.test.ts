@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { createNativesClient } from '../native/natives-client.js';
-import { registerGlobTool } from './glob-tool-factory.js';
-import { ToolRegistry } from './tool-registry.js';
+import { createNativesClient } from '../native/natives-client';
+import { registerGlobTool } from './glob-tool-factory';
+import { ToolRegistry } from './tool-registry';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

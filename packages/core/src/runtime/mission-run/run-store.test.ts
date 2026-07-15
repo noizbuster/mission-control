@@ -1,10 +1,10 @@
 // allow: SIZE_OK -- HEAD 334 -> current 449 pure LOC; one durable Run-store transition and compatibility-import state-machine matrix.
 import { type Run, RunSchema } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { createObservabilityRedactor } from '../../providers/observability-redactor.js';
-import { readRunFromDb, writeRunToDb } from './mission-run-db.js';
-import type { MissionRunStoreLocation } from './mission-run-store-location.js';
-import { makeTempRoot, seedOmoRoot } from './mission-run-test-support.js';
+import { createObservabilityRedactor } from '../../providers/observability-redactor';
+import { readRunFromDb, writeRunToDb } from './mission-run-db';
+import type { MissionRunStoreLocation } from './mission-run-store-location';
+import { makeTempRoot, seedOmoRoot } from './mission-run-test-support';
 import {
     ALLOWED_RUN_TRANSITIONS,
     createRun,
@@ -15,7 +15,7 @@ import {
     readRun,
     runFilePath,
     updateRunStatus,
-} from './run-store.js';
+} from './run-store';
 import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 

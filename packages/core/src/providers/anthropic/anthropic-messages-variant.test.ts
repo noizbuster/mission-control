@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { createStaticProviderCredentialResolver } from '../credential-resolver.js';
-import type { ProviderTurnRequest } from '../provider-turn-types.js';
+import { createStaticProviderCredentialResolver } from '../credential-resolver';
+import type { ProviderTurnRequest } from '../provider-turn-types';
 import {
     type AnthropicMessagesTransportRequest,
     createAnthropicMessagesProvider,
-} from './anthropic-messages-provider.js';
-import { anthropicCredential, collectChunks, transportFromEvents } from './anthropic-messages-test-support.js';
+} from './anthropic-messages-provider';
+import { anthropicCredential, collectChunks, transportFromEvents } from './anthropic-messages-test-support';
 
 const defaultModelID = 'claude-sonnet-4-6';
 

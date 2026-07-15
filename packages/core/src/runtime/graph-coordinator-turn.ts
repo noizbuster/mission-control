@@ -21,19 +21,19 @@ import type {
     ProtocolErrorCode,
 } from '@mission-control/protocol';
 import { ProtocolErrorCodeSchema } from '@mission-control/protocol';
-import type { PricingTable } from '../behavior/budget/cost-ledger.js';
-import { type AbgGraphRunResult, runAbgGraph } from '../behavior/graph-runner.js';
-import type { AbgNodeRegistry } from '../behavior/node-registry.js';
-import type { LlmActorModel } from '../behavior/nodes/llm-actor/llm-actor-node.js';
-import type { ProjectInstructionResource } from '../context/project-context-messages.js';
-import type { SystemPromptEnvironment } from '../context/system-prompt.js';
-import { createObservabilityRedactor, type ObservabilityRedactor } from '../providers/observability-redactor.js';
-import type { ToolRegistry } from '../tools/tool-registry.js';
-import { agentMessagesToSeedModelMessages } from './graph-coordinator-turn-messages.js';
-import type { RunCoordinatorProviderTurnResult } from './run-coordinator-lifecycle.js';
-import type { RunCoordinatorTurnRunner } from './run-coordinator-types.js';
+import type { PricingTable } from '../behavior/budget/cost-ledger';
+import { type AbgGraphRunResult, runAbgGraph } from '../behavior/graph-runner';
+import type { AbgNodeRegistry } from '../behavior/node-registry';
+import type { LlmActorModel } from '../behavior/nodes/llm-actor/llm-actor-node';
+import type { ProjectInstructionResource } from '../context/project-context-messages';
+import type { SystemPromptEnvironment } from '../context/system-prompt';
+import { createObservabilityRedactor, type ObservabilityRedactor } from '../providers/observability-redactor';
+import type { ToolRegistry } from '../tools/tool-registry';
+import { agentMessagesToSeedModelMessages } from './graph-coordinator-turn-messages';
+import type { RunCoordinatorProviderTurnResult } from './run-coordinator-lifecycle';
+import type { RunCoordinatorTurnRunner } from './run-coordinator-types';
 
-export { agentMessagesToSeedModelMessages } from './graph-coordinator-turn-messages.js';
+export { agentMessagesToSeedModelMessages } from './graph-coordinator-turn-messages';
 
 /**
  * Static graph wiring, closed over when the runner is built. The per-turn inputs (`initialMessages`

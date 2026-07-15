@@ -1,12 +1,12 @@
 import type { ProviderStreamChunk } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { createStaticProviderCredentialResolver } from '../credential-resolver.js';
-import type { ProviderTurnRequest } from '../provider-turn-types.js';
+import { createStaticProviderCredentialResolver } from '../credential-resolver';
+import type { ProviderTurnRequest } from '../provider-turn-types';
 import {
     createGeminiGenerateContentProvider,
     type GeminiGenerateContentTransport,
     type GeminiGenerateContentTransportRequest,
-} from './gemini-generate-content-provider.js';
+} from './gemini-generate-content-provider';
 
 describe('Gemini GenerateContent provider variants', () => {
     it('maps the thinking-high variant into generationConfig.thinkingConfig', async () => {

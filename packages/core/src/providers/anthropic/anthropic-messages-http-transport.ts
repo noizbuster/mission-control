@@ -1,9 +1,9 @@
-import { parseSseFrames, readSseStream } from '../shared/sse-stream-transport.js';
+import { parseSseFrames, readSseStream } from '../shared/sse-stream-transport';
 import {
     type AnthropicMessagesTransport,
     AnthropicMessagesTransportError,
     type AnthropicMessagesTransportRequest,
-} from './anthropic-messages-transport.js';
+} from './anthropic-messages-transport';
 
 export function createNodeAnthropicMessagesTransport(): AnthropicMessagesTransport {
     return {

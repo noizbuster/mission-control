@@ -1,7 +1,7 @@
 import type { Skill } from '@mission-control/core';
 import { ToolExecutionError, ToolRegistry } from '@mission-control/core';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createSkillToolRegistration } from './skill-tool.js';
+import { createSkillToolRegistration } from './skill-tool';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';

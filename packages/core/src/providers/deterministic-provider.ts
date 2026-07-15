@@ -4,7 +4,7 @@ import {
     type ProviderAdapterContext,
     ProviderTurnError,
     type ProviderTurnRequest,
-} from './provider-turn-types.js';
+} from './provider-turn-types';
 
 export type DeterministicProviderStep =
     | {

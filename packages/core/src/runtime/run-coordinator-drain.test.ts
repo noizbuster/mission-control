@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { drainCoordinatorRun } from './run-coordinator-drain.js';
+import { drainCoordinatorRun } from './run-coordinator-drain';
 
 describe('drainCoordinatorRun interruption finalizer', () => {
     it('emits interrupted instead of idle when an operator abort wins before the first turn', async () => {

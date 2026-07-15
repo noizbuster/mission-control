@@ -1,8 +1,8 @@
 import type { AbgGraphSnapshot, AgentEvent, AgentEventEnvelope } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { projectSessionReplay } from '../session-replay.js';
-import { createAuthorableAbgGraph } from './authorable-graph.js';
-import { runAbgGraph } from './graph-runner.js';
+import { projectSessionReplay } from '../session-replay';
+import { createAuthorableAbgGraph } from './authorable-graph';
+import { runAbgGraph } from './graph-runner';
 import { readFile } from 'node:fs/promises';
 
 const root = process.cwd();

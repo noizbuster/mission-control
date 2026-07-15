@@ -5,7 +5,7 @@ import {
     type SessionArchiveManifest,
     type SessionTreeEventMetadata,
 } from '@mission-control/protocol';
-import type { SessionReplayProjection } from '../session-replay.js';
+import type { SessionReplayProjection } from '../session-replay';
 
 export const REPLAY_PARITY_SESSION_ID = 'session_replay_parity';
 

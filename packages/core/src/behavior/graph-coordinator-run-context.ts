@@ -1,16 +1,16 @@
 import type { AbgNodeModelOptions, AbgNodeSpec, AbgPolicySpec, AgentEvent } from '@mission-control/protocol';
-import type { ProjectInstructionResource } from '../context/project-context-messages.js';
-import type { SystemPromptEnvironment } from '../context/system-prompt.js';
-import type { Blackboard } from '../memory/blackboard.js';
-import { redactAgentEventForObservability } from '../providers/observability-redactor.js';
-import type { SessionControlEpoch } from '../runtime/session-control-cancellation.js';
-import type { ToolRegistry } from '../tools/tool-registry.js';
-import type { AuthorableAbgGraph } from './authorable-graph.js';
-import type { CostLedger } from './budget/cost-ledger.js';
-import type { CoordinatorState } from './graph-coordinator-helpers.js';
-import type { AbgGraphRunnerInput } from './graph-runner.js';
-import type { AbgNodeRegistry, AbgObservedGraphEvent } from './node-registry.js';
-import type { LlmActorModel } from './nodes/llm-actor/llm-actor-node.js';
+import type { ProjectInstructionResource } from '../context/project-context-messages';
+import type { SystemPromptEnvironment } from '../context/system-prompt';
+import type { Blackboard } from '../memory/blackboard';
+import { redactAgentEventForObservability } from '../providers/observability-redactor';
+import type { SessionControlEpoch } from '../runtime/session-control-cancellation';
+import type { ToolRegistry } from '../tools/tool-registry';
+import type { AuthorableAbgGraph } from './authorable-graph';
+import type { CostLedger } from './budget/cost-ledger';
+import type { CoordinatorState } from './graph-coordinator-helpers';
+import type { AbgGraphRunnerInput } from './graph-runner';
+import type { AbgNodeRegistry, AbgObservedGraphEvent } from './node-registry';
+import type { LlmActorModel } from './nodes/llm-actor/llm-actor-node';
 
 export function runContext(
     graph: AuthorableAbgGraph,

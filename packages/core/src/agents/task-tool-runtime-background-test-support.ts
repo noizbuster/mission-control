@@ -1,14 +1,14 @@
 import type { AgentDefinition } from '@mission-control/protocol';
 import { z } from 'zod';
-import type { ChildSpawnRequest } from '../tools/task/task-tool.js';
-import { ToolRegistry } from '../tools/tool-registry.js';
-import type { ToolRegistration } from '../tools/tool-registry-types.js';
-import { AgentIndex } from './agent-registry.js';
-import { AsyncJobManager } from './async-job-manager.js';
-import { AgentLifecycleManager } from './lifecycle-manager.js';
-import { RuntimeAgentRegistry } from './runtime-registry.js';
-import type { TaskToolRuntimeServices } from './task-tool-runtime.js';
-import { ConcreteTaskToolRuntime } from './task-tool-runtime.js';
+import type { ChildSpawnRequest } from '../tools/task/task-tool';
+import { ToolRegistry } from '../tools/tool-registry';
+import type { ToolRegistration } from '../tools/tool-registry-types';
+import { AgentIndex } from './agent-registry';
+import { AsyncJobManager } from './async-job-manager';
+import { AgentLifecycleManager } from './lifecycle-manager';
+import { RuntimeAgentRegistry } from './runtime-registry';
+import type { TaskToolRuntimeServices } from './task-tool-runtime';
+import { ConcreteTaskToolRuntime } from './task-tool-runtime';
 
 type Empty = Record<string, never>;
 

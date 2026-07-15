@@ -1,5 +1,5 @@
 import { expect, vi } from 'vitest';
-import { missionControlDataDirEnvKey } from '../memory/data-dir.js';
+import { missionControlDataDirEnvKey } from '../memory/data-dir';
 import { mkdir, mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';

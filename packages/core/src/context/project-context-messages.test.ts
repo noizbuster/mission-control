@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ProjectTrustStore } from '../trust/project-trust-store.js';
-import { loadProjectContextMessages } from './project-context-messages.js';
+import { ProjectTrustStore } from '../trust/project-trust-store';
+import { loadProjectContextMessages } from './project-context-messages';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

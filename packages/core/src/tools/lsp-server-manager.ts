@@ -17,9 +17,9 @@
  *   re-probe.
  */
 
-import type { StdioLspClientOptions } from './lsp-stdio-client.js';
-import { StdioLspClient } from './lsp-stdio-client.js';
-import type { LspInstallDecisionValue, LspServerStatusEntry } from './lsp-tool.js';
+import type { StdioLspClientOptions } from './lsp-stdio-client';
+import { StdioLspClient } from './lsp-stdio-client';
+import type { LspInstallDecisionValue, LspServerStatusEntry } from './lsp-tool';
 import { execFile } from 'node:child_process';
 
 // ---------------------------------------------------------------------------

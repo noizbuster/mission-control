@@ -1,5 +1,5 @@
 import type { ProviderStreamChunk, ProviderToolCallTranscript } from '@mission-control/protocol';
-import { type OpenAIFunctionCallItem, parseOpenAIFunctionCallItem } from './openai-responses-events.js';
+import { type OpenAIFunctionCallItem, parseOpenAIFunctionCallItem } from './openai-responses-events';
 
 type ToolCallState = {
     toolCallId: string;

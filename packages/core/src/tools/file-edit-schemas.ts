@@ -1,7 +1,7 @@
 import type { DiffFile, PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { DiffFileSchema } from '@mission-control/protocol';
 import { z } from 'zod';
-import { diffFileOutput } from './file-patch-schemas.js';
+import { diffFileOutput } from './file-patch-schemas';
 
 export const fileEditInputSchema = z
     .object({

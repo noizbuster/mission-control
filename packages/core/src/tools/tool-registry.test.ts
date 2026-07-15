@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { ToolRegistry } from './tool-registry.js';
-import type { ToolRegistration } from './tool-registry-types.js';
+import { ToolRegistry } from './tool-registry';
+import type { ToolRegistration } from './tool-registry-types';
 
 describe('ToolRegistry', () => {
     it('advertises schema-validated tools with stable version hashes', () => {

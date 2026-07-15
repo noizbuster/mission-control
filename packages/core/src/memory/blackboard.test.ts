@@ -1,6 +1,6 @@
 import type { ModelMessage } from 'ai';
 import { describe, expect, it, vi } from 'vitest';
-import { Blackboard, createBlackboard } from './blackboard.js';
+import { Blackboard, createBlackboard } from './blackboard';
 
 // Characterization test pinning the Blackboard contract that the toRecord() cache
 // (workflow-runtime-perf-fixes todo 2) relies on. Scope is intentionally narrow:

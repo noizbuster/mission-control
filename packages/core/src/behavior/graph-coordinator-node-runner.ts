@@ -1,13 +1,13 @@
 import type { AbgNodeSpec, AbgPolicyDecision, AbgSignal } from '@mission-control/protocol';
-import type { AuthorableAbgGraph } from './authorable-graph.js';
-import { evaluateApprovalGate } from './graph-approval-gates.js';
-import { type CoordinatorState, findBlockingPolicy, nextAttempt, nodeModel } from './graph-coordinator-helpers.js';
-import { runApprovedHumanApprovalNode, runNodeAttempt } from './graph-coordinator-node-execution.js';
-import { attemptFailureError } from './graph-coordinator-node-signals.js';
-import type { AbgGraphRunnerInput } from './graph-runner.js';
-import { attemptEvent } from './graph-runner-events.js';
-import type { ToolActionFingerprint } from './loop-safety.js';
-import type { AbgNodeRegistry } from './node-registry.js';
+import type { AuthorableAbgGraph } from './authorable-graph';
+import { evaluateApprovalGate } from './graph-approval-gates';
+import { type CoordinatorState, findBlockingPolicy, nextAttempt, nodeModel } from './graph-coordinator-helpers';
+import { runApprovedHumanApprovalNode, runNodeAttempt } from './graph-coordinator-node-execution';
+import { attemptFailureError } from './graph-coordinator-node-signals';
+import type { AbgGraphRunnerInput } from './graph-runner';
+import { attemptEvent } from './graph-runner-events';
+import type { ToolActionFingerprint } from './loop-safety';
+import type { AbgNodeRegistry } from './node-registry';
 
 export type QueuedNodeResult =
     | {

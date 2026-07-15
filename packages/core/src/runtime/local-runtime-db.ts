@@ -1,17 +1,17 @@
-import type { LocalLibsqlDb } from '../db/local-libsql-db.js';
-import { openMissionControlDb } from '../db/mission-control-db.js';
-import { resolveMissionControlDataDir } from '../memory/data-dir.js';
-import { missionControlDbPath, missionControlDbUrl } from '../memory/local-session-store-paths.js';
+import type { LocalLibsqlDb } from '../db/local-libsql-db';
+import { openMissionControlDb } from '../db/mission-control-db';
+import { resolveMissionControlDataDir } from '../memory/data-dir';
+import { missionControlDbPath, missionControlDbUrl } from '../memory/local-session-store-paths';
 import {
     recoverExpiredSessionControlOperations,
     type SessionControlOperationTimer,
     startSessionControlOperationGc,
-} from './session-control-operation.js';
+} from './session-control-operation';
 import {
     resolveSessionStoreIdentity,
     type SessionStoreIdentity,
     type SessionStoreIdentityPath,
-} from './session-store-identity.js';
+} from './session-store-identity';
 import { dirname } from 'node:path';
 
 type ScheduledCallback = () => void | Promise<void>;

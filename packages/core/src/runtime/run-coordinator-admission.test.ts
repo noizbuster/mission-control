@@ -1,6 +1,6 @@
 import type { AgentEvent } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { projectRunCoordinatorAdmission } from './run-coordinator-admission.js';
+import { projectRunCoordinatorAdmission } from './run-coordinator-admission';
 
 const SESSION_ID = 'session_run_admission_cancelled';
 

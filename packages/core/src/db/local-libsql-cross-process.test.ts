@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { runLocalLibsqlWrite } from './local-libsql-db.js';
-import { openMissionControlDb } from './mission-control-db.js';
+import { runLocalLibsqlWrite } from './local-libsql-db';
+import { openMissionControlDb } from './mission-control-db';
 import { spawn } from 'node:child_process';
 import { EventEmitter, once } from 'node:events';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { InMemoryPersistentStore } from './persistent-memory-store.js';
+import { InMemoryPersistentStore } from './persistent-memory-store';
 
 describe('InMemoryPersistentStore (Phase 8 working-memory contract)', () => {
     it('round-trips a value under a namespace', async () => {

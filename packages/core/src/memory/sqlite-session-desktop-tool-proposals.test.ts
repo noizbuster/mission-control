@@ -1,8 +1,8 @@
 import { AgentEventEnvelopeSchema } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { fileWriteToolCall, providerToolCallEvent } from '../desktop-tool-approval-test-support.js';
-import { openLocalSessionEventStore } from './local-session-store.js';
-import { tempDataDir } from './local-session-store-test-support.js';
+import { fileWriteToolCall, providerToolCallEvent } from '../desktop-tool-approval-test-support';
+import { openLocalSessionEventStore } from './local-session-store';
+import { tempDataDir } from './local-session-store-test-support';
 
 const CREATED_AT = '2026-07-15T00:00:00.000Z';
 

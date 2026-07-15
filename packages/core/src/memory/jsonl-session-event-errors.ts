@@ -1,4 +1,4 @@
-import { type JsonlSessionEventStoreError, jsonlStoreError } from './jsonl-errors.js';
+import { type JsonlSessionEventStoreError, jsonlStoreError } from './jsonl-errors';
 
 export function sessionMismatch(sessionId: string, filePath: string): JsonlSessionEventStoreError {
     return jsonlStoreError({

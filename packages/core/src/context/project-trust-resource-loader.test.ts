@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { ProjectTrustStore } from '../trust/project-trust-store.js';
-import { loadProjectResources } from './project-resource-loader.js';
+import { ProjectTrustStore } from '../trust/project-trust-store';
+import { loadProjectResources } from './project-resource-loader';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

@@ -1,7 +1,7 @@
-import { type SystemPromptSkill } from '../../../context/system-prompt.js';
-import type { Blackboard } from '../../../memory/blackboard.js';
-import { discoverSkills, resolveUserConfigDir } from '../../../skills/skill-loader.js';
-import { defaultReadOnlyRepoToolDenylist, toPosixPath } from '../../../tools/read-tools-paths.js';
+import { type SystemPromptSkill } from '../../../context/system-prompt';
+import type { Blackboard } from '../../../memory/blackboard';
+import { discoverSkills, resolveUserConfigDir } from '../../../skills/skill-loader';
+import { defaultReadOnlyRepoToolDenylist, toPosixPath } from '../../../tools/read-tools-paths';
 import type { Dirent } from 'node:fs';
 import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';

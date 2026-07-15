@@ -11,16 +11,16 @@
  * path and in noninteractive `--no-tui` runs.
  */
 import type { PermissionDecision, PermissionRequest, ProtocolError } from '@mission-control/protocol';
-import type { NativesClient } from '../native/natives-client.js';
-import type { SchemeResolver } from './scheme-resolver.js';
-import { permissionRequest, requestToolPermission } from './tool-permissions.js';
-import { type ToolAdvertisement, ToolExecutionError, type ToolRegistration, ToolRegistry } from './tool-registry.js';
+import type { NativesClient } from '../native/natives-client';
+import type { SchemeResolver } from './scheme-resolver';
+import { permissionRequest, requestToolPermission } from './tool-permissions';
+import { type ToolAdvertisement, ToolExecutionError, type ToolRegistration, ToolRegistry } from './tool-registry';
 import {
     fetchWebfetchOutput,
     type WebfetchInput,
     type WebfetchOutput,
     webfetchToolRegistration,
-} from './webfetch-tool.js';
+} from './webfetch-tool';
 
 export type WebfetchToolOptions = {
     readonly workspaceRoot: string;

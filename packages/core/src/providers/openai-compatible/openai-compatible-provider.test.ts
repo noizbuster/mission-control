@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { createStaticProviderCredentialResolver } from '../credential-resolver.js';
+import { createStaticProviderCredentialResolver } from '../credential-resolver';
 import {
     createOpenAICompatibleProvider,
     OPENAI_COMPATIBLE_PROVIDER_SPECS,
     OpenAICompatibleTransportError,
     type OpenAICompatibleTransportRequest,
-} from './openai-compatible-provider.js';
+} from './openai-compatible-provider';
 import {
     collectChunks,
     createProviderContext,
@@ -13,7 +13,7 @@ import {
     readToolDefinition,
     transportFromTurns,
     turnRequest,
-} from './openai-compatible-test-support.js';
+} from './openai-compatible-test-support';
 
 const compatibleProviderCases = OPENAI_COMPATIBLE_PROVIDER_SPECS.map(
     (spec) => [spec.providerID, spec.endpoint] as const,

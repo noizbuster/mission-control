@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { collectSignals, createCompositeNodeTestContext } from './composite-node-test-helpers.js';
-import { runAbgNode } from './node-registry.js';
+import { collectSignals, createCompositeNodeTestContext } from './composite-node-test-helpers';
+import { runAbgNode } from './node-registry';
 
 describe('ABG join node', () => {
     it('collects parallel results before joining evidence', async () => {

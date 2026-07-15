@@ -1,13 +1,13 @@
 import type { Client } from '@libsql/client';
 import type { AgentEvent, AgentEventEnvelope } from '@mission-control/protocol';
-import { SqliteSessionEventStoreError } from './sqlite-session-event-store-errors.js';
-import { replaceSqliteSessionProjection } from './sqlite-session-event-store-projection.js';
-import { readSqliteSessionEnvelopes } from './sqlite-session-event-store-read.js';
+import { SqliteSessionEventStoreError } from './sqlite-session-event-store-errors';
+import { replaceSqliteSessionProjection } from './sqlite-session-event-store-projection';
+import { readSqliteSessionEnvelopes } from './sqlite-session-event-store-read';
 import {
     hasSqliteEventId,
     insertSqliteSessionEnvelope,
     updateSqliteSessionAfterAppend,
-} from './sqlite-session-event-store-sql.js';
+} from './sqlite-session-event-store-sql';
 
 export async function appendParsedSqliteEnvelope(input: {
     readonly client: Client;

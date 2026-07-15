@@ -4,7 +4,7 @@
 // expression copied). License classification is recorded in
 // .omo/evidence/license-matrix.md.
 
-import { computeLegacyLineHash, computeLineHash, HASHLINE_REF_PATTERN } from './hash-computation.js';
+import { computeLegacyLineHash, computeLineHash, HASHLINE_REF_PATTERN } from './hash-computation';
 
 export interface LineRef {
     readonly line: number;

@@ -7,7 +7,7 @@ import {
     askUserOutputSchema,
     askUserParametersJsonSchema,
     askUserQuestionSchema,
-} from './ask-user-schemas.js';
+} from './ask-user-schemas';
 
 describe('ask_user schemas', () => {
     describe('askUserInputSchema — single-question (legacy) mode', () => {

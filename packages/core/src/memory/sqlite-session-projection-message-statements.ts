@@ -1,7 +1,7 @@
 import type { InStatement } from '@libsql/client';
 import type { AgentEventEnvelope } from '@mission-control/protocol';
-import { projectSessionReplay } from '../session-replay.js';
-import type { CodingReplayStep } from '../session-replay-types.js';
+import { projectSessionReplay } from '../session-replay';
+import type { CodingReplayStep } from '../session-replay-types';
 
 export function messageProjectionStatements(envelopes: readonly AgentEventEnvelope[]): readonly InStatement[] {
     const projection = projectSessionReplay({ sessionId: envelopes[0]?.sessionId ?? 'missing', envelopes });

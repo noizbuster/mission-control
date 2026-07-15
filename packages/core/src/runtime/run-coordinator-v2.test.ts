@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { coalesceDemand, RunCoordinatorV2 } from './run-coordinator-v2.js';
-import { SessionInputDelivery } from './session-input-delivery.js';
+import { coalesceDemand, RunCoordinatorV2 } from './run-coordinator-v2';
+import { SessionInputDelivery } from './session-input-delivery';
 
 function makeTestDeferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
     const ref: { resolve: ((value: T) => void) | undefined } = { resolve: undefined };

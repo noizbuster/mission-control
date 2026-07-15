@@ -15,9 +15,9 @@
  */
 import { type AbgSignal, WorkflowSpecSchema } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { createBlackboard } from '../memory/blackboard.js';
-import type { AbgNodeRunContext } from './node-registry.js';
-import { createVerificationNodeRunner, type VerificationVerdict } from './nodes/verification-node.js';
+import { createBlackboard } from '../memory/blackboard';
+import type { AbgNodeRunContext } from './node-registry';
+import { createVerificationNodeRunner, type VerificationVerdict } from './nodes/verification-node';
 import { readFile } from 'node:fs/promises';
 
 const workflowJsonPath = `${process.cwd()}/examples/abg/runner.workflow.json`;

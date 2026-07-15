@@ -7,7 +7,7 @@ export {
     askUserOutputSchema,
     createAskUserToolRegistration,
     registerAskUserTool,
-} from './ask-user-tool.js';
+} from './ask-user-tool';
 export {
     type AstEditInput,
     type AstEditOutput,
@@ -20,20 +20,20 @@ export {
     createAstEditToolRegistration,
     createDefaultAstRewriter,
     registerAstEditTool,
-} from './ast-edit.js';
+} from './ast-edit';
 export {
     type AstGrepInput,
     type AstGrepOutput,
     astGrepInputSchema,
     astGrepOutputSchema,
     astGrepParametersJsonSchema,
-} from './ast-grep-schemas.js';
+} from './ast-grep-schemas';
 export {
     type AstGrepRunnerFn,
     type AstGrepToolOptions,
     createAstGrepToolRegistration,
     registerAstGrepTool,
-} from './ast-grep-tool.js';
+} from './ast-grep-tool';
 export {
     expandHome,
     extractFilePaths,
@@ -42,8 +42,8 @@ export {
     globPrefix,
     isDynamic,
     unquote,
-} from './bash-path-extraction.js';
-export { type BashRunToolOptions, createBashRunToolRegistration, registerBashRunTool } from './bash-run.js';
+} from './bash-path-extraction';
+export { type BashRunToolOptions, createBashRunToolRegistration, registerBashRunTool } from './bash-run';
 export {
     type BrowserConnectFn,
     type BrowserConnectionSeam,
@@ -60,18 +60,18 @@ export {
     createBrowserToolRegistration,
     createPuppeteerCoreConnector,
     registerBrowserTool,
-} from './browser-tool.js';
+} from './browser-tool';
 export {
     type RegisterConfiguredBrowserToolOptions,
     registerConfiguredBrowserTool,
-} from './browser-tool-config.js';
+} from './browser-tool-config';
 export {
     type CommandExecutionRequest,
     type CommandExecutionResult,
     type CommandRunToolOptions,
     createCommandRunToolRegistration,
     registerCommandRunTool,
-} from './command-run.js';
+} from './command-run';
 export {
     createDebugToolRegistration,
     DEBUG_TOOL_NAME,
@@ -79,13 +79,13 @@ export {
     type DebugOutput,
     type DebugToolOptions,
     registerDebugTool,
-} from './debug-tool.js';
+} from './debug-tool';
 export {
     EvalContextManager,
     type EvalContextManagerOptions,
     type EvalRunOptions,
     type EvalRunResult,
-} from './eval-context-manager.js';
+} from './eval-context-manager';
 export {
     createPythonProcessTreeTerminator,
     EvalPythonKernel,
@@ -97,7 +97,7 @@ export {
     PythonProcessTreeTerminationError,
     type PythonSpawnFn,
     pythonSpawnOptionsFor,
-} from './eval-python-kernel.js';
+} from './eval-python-kernel';
 export {
     type EvalCell,
     type EvalCellResult,
@@ -110,25 +110,25 @@ export {
     evalLanguageSchema,
     evalOutputSchema,
     evalParametersJsonSchema,
-} from './eval-schemas.js';
+} from './eval-schemas';
 export {
     createEvalToolRegistration,
     type EvalContextManagerFactory,
     type EvalToolOptions,
     registerEvalTool,
-} from './eval-tool.js';
+} from './eval-tool';
 export {
     createEvalToolBridge,
     type EvalToolBridge,
     type EvalToolBridgeOptions,
-} from './eval-tool-bridge.js';
-export { createFileEditToolRegistration, type FileEditToolOptions, registerFileEditTool } from './file-edit.js';
+} from './eval-tool-bridge';
+export { createFileEditToolRegistration, type FileEditToolOptions, registerFileEditTool } from './file-edit';
 export {
     registerFsCacheInvalidator,
     wireNativesFsCacheInvalidator,
-} from './file-mutation.js';
-export { createFilePatchToolRegistration, type FilePatchToolOptions, registerFilePatchTool } from './file-patch.js';
-export { createFileWriteToolRegistration, type FileWriteToolOptions, registerFileWriteTool } from './file-write.js';
+} from './file-mutation';
+export { createFilePatchToolRegistration, type FilePatchToolOptions, registerFilePatchTool } from './file-patch';
+export { createFileWriteToolRegistration, type FileWriteToolOptions, registerFileWriteTool } from './file-write';
 export {
     createEnvImageCredentialResolver,
     createGenerateImageToolRegistration,
@@ -140,7 +140,7 @@ export {
     noImageCredentialMessage,
     type ResolvedImageCredential,
     registerGenerateImageTool,
-} from './generate-image-tool.js';
+} from './generate-image-tool';
 export {
     buildGhArgs,
     createGithubToolRegistration,
@@ -153,13 +153,13 @@ export {
     githubOutputSchema,
     githubParametersJsonSchema,
     registerGithubTool,
-} from './github-tool.js';
-export { type GlobToolInput, type GlobToolOutput, globToolRegistration } from './glob-tool.js';
+} from './github-tool';
+export { type GlobToolInput, type GlobToolOutput, globToolRegistration } from './glob-tool';
 export {
     createGlobToolRegistration,
     type GlobToolFactoryOptions,
     registerGlobTool,
-} from './glob-tool-factory.js';
+} from './glob-tool-factory';
 export {
     type CreateGoalArgs,
     createGoalToolRegistration,
@@ -174,12 +174,12 @@ export {
     type GoalToolOptions,
     type GoalToolOutput,
     registerGoalTool,
-} from './goal-tool.js';
+} from './goal-tool';
 export {
     createHashlineEditToolRegistration,
     type HashlineEditToolOptions,
     registerHashlineEditTool,
-} from './hashline-edit.js';
+} from './hashline-edit';
 export {
     createInspectImageToolRegistration,
     type InspectImageInput,
@@ -188,7 +188,7 @@ export {
     inspectImageInputSchema,
     inspectImageOutputSchema,
     registerInspectImageTool,
-} from './inspect-image-tool.js';
+} from './inspect-image-tool';
 export {
     createInteractiveBashToolRegistration,
     findSubcommandIndex,
@@ -201,4 +201,4 @@ export {
     isTmuxAvailable,
     registerInteractiveBashTool,
     tokenizeTmuxCommand,
-} from './interactive-bash-tool.js';
+} from './interactive-bash-tool';

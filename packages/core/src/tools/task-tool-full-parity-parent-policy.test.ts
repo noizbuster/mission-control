@@ -3,8 +3,8 @@ import type { AgentDefinition, PermissionDecision, PermissionRequest } from '@mi
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { createFullParityTaskToolRegistrationForCli } from './task-tool-full-parity-factory.js';
-import { ToolRegistry } from './tool-registry.js';
+import { createFullParityTaskToolRegistrationForCli } from './task-tool-full-parity-factory';
+import { ToolRegistry } from './tool-registry';
 
 const allowAll = (request: PermissionRequest): PermissionDecision => ({
     requestId: request.id,

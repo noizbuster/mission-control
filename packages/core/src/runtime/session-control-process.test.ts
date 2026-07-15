@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { probeSessionControlProcess } from './session-control-process.js';
+import { probeSessionControlProcess } from './session-control-process';
 
 describe('session control process identity', () => {
     it('proves a macOS or BSD prior owner stale from process start evidence without signaling it', async () => {

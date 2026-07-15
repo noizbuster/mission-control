@@ -1,13 +1,13 @@
 import type { AgentEventEnvelope, ProviderCredentialSummary } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { createStaticProviderCredentialResolver, type ProviderCredentialResolver } from '../credential-resolver.js';
-import { ProviderTurnRunner } from '../provider-turn-runner.js';
-import { ProviderTurnError, type ProviderTurnRequest } from '../provider-turn-types.js';
+import { createStaticProviderCredentialResolver, type ProviderCredentialResolver } from '../credential-resolver';
+import { ProviderTurnRunner } from '../provider-turn-runner';
+import { ProviderTurnError, type ProviderTurnRequest } from '../provider-turn-types';
 import {
     createOpenAIResponsesProvider,
     type OpenAIResponsesTransport,
     OpenAIResponsesTransportError,
-} from './openai-responses-provider.js';
+} from './openai-responses-provider';
 
 describe('OpenAI Responses provider adapter errors', () => {
     it('maps auth failures without exposing raw credentials', async () => {

@@ -1,10 +1,10 @@
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import type { ProjectTrustDecision, ProjectTrustReader } from '../trust/project-trust-store.js';
-import type { EvalRunOptions, EvalRunResult } from './eval-context-manager.js';
-import type { EvalInput } from './eval-schemas.js';
-import { createEvalToolRegistration, type EvalContextManagerFactory } from './eval-tool.js';
-import { ToolExecutionError } from './tool-registry-types.js';
+import type { ProjectTrustDecision, ProjectTrustReader } from '../trust/project-trust-store';
+import type { EvalRunOptions, EvalRunResult } from './eval-context-manager';
+import type { EvalInput } from './eval-schemas';
+import { createEvalToolRegistration, type EvalContextManagerFactory } from './eval-tool';
+import { ToolExecutionError } from './tool-registry-types';
 
 type RuntimeProbe = {
     created: number;

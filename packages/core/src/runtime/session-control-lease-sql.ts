@@ -1,8 +1,8 @@
 import type { Client } from '@libsql/client';
 import { z } from 'zod';
-import { type LocalLibsqlWriteTarget, runLocalLibsqlWrite } from '../db/local-libsql-db.js';
-import { runLocalLibsqlClientTransaction } from '../db/local-libsql-transaction.js';
-import type { SessionControlLease } from './session-control-lease.js';
+import { type LocalLibsqlWriteTarget, runLocalLibsqlWrite } from '../db/local-libsql-db';
+import { runLocalLibsqlClientTransaction } from '../db/local-libsql-transaction';
+import type { SessionControlLease } from './session-control-lease';
 
 const leaseRowSchema = z.object({
     db_identity: z.string(),

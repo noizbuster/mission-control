@@ -1,7 +1,7 @@
-import type { SubAgent } from './sub-agent.js';
+import type { SubAgent } from './sub-agent';
 
 /**
- * @deprecated Use AgentIndex from './agent-registry.js' instead. This class is scaffold and will be removed in v3.
+ * @deprecated Use AgentIndex from './agent-registry' instead. This class is scaffold and will be removed in v3.
  */
 export class SubAgentRegistry {
     private readonly agents = new Map<string, SubAgent>();

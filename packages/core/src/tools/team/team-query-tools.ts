@@ -7,16 +7,16 @@
  * declared/active team listing are reimplemented fresh.
  */
 import { z } from 'zod';
-import type { ToolRegistration } from '../tool-registry-types.js';
-import { ToolExecutionError } from '../tool-registry-types.js';
-import { type TeamToolContext, type TeamToolFactoryOptions, teamModeEnabled } from './team-context.js';
+import type { ToolRegistration } from '../tool-registry-types';
+import { ToolExecutionError } from '../tool-registry-types';
+import { type TeamToolContext, type TeamToolFactoryOptions, teamModeEnabled } from './team-context';
 import {
     type TeamListInput,
     type TeamStatusInput,
     teamListInputSchema,
     teamStatusInputSchema,
-} from './team-schemas.js';
-import { listTeams, mailboxCounts, readState, readTasks } from './team-store.js';
+} from './team-schemas';
+import { listTeams, mailboxCounts, readState, readTasks } from './team-store';
 
 const OUTPUT_LIMIT = { maxModelOutputChars: 8000 } as const;
 const CAPABILITY_CLASSES = ['team'] as const;

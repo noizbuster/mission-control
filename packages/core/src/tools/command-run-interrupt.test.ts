@@ -1,8 +1,8 @@
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { describe, expect, it, vi } from 'vitest';
-import { type CommandExecutionResult, registerCommandRunTool } from './command-run.js';
-import { executeCommand, executeCommandPipeline } from './command-run-executor.js';
-import { type ToolInvocationSettlement, ToolRegistry } from './tool-registry.js';
+import { type CommandExecutionResult, registerCommandRunTool } from './command-run';
+import { executeCommand, executeCommandPipeline } from './command-run-executor';
+import { type ToolInvocationSettlement, ToolRegistry } from './tool-registry';
 import { access, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

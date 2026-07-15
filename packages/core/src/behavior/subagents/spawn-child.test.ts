@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { AskUserQuestionRequest } from '../../tools/ask-user-schemas.js';
-import { ASK_USER_BLOCKED_ANSWER } from '../../tools/ask-user-tool.js';
-import { ToolRegistry } from '../../tools/tool-registry.js';
-import type { ToolInvocationSettlement } from '../../tools/tool-registry-types.js';
-import { type ChildHostCallbacks, registerChildAskUserTool } from './spawn-child.js';
+import type { AskUserQuestionRequest } from '../../tools/ask-user-schemas';
+import { ASK_USER_BLOCKED_ANSWER } from '../../tools/ask-user-tool';
+import { ToolRegistry } from '../../tools/tool-registry';
+import type { ToolInvocationSettlement } from '../../tools/tool-registry-types';
+import { type ChildHostCallbacks, registerChildAskUserTool } from './spawn-child';
 
 describe('registerChildAskUserTool', () => {
     it('returns the blocked sentinel when no host surface is attached', async () => {

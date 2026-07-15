@@ -16,8 +16,8 @@ import {
     type ConversationSummary,
     heuristicCompactionStrategy,
     renderSummary,
-} from './compaction.js';
-import { estimateMessagesTokens, estimateMessageTokens } from './token-count.js';
+} from './compaction';
+import { estimateMessagesTokens, estimateMessageTokens } from './token-count';
 
 export const DEFAULT_CONTEXT_BUDGET_TOKENS = 100_000;
 export const DEFAULT_TAIL_RESERVE_TOKENS = 20_000;

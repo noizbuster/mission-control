@@ -1,7 +1,7 @@
 import type { DiffFile, DiffLine } from '@mission-control/protocol';
-import { executeFileMutation, fileMutationDiffEvents, preflightTextFileMutationTargets } from './file-mutation.js';
-import { filePatchFailure } from './file-patch-errors.js';
-import { createPatchWorkspaceGuard, type PatchTarget } from './file-patch-paths.js';
+import { executeFileMutation, fileMutationDiffEvents, preflightTextFileMutationTargets } from './file-mutation';
+import { filePatchFailure } from './file-patch-errors';
+import { createPatchWorkspaceGuard, type PatchTarget } from './file-patch-paths';
 import {
     type FileWriteInput,
     type FileWriteOutput,
@@ -13,14 +13,14 @@ import {
     fileWriteParametersJsonSchema,
     type ResolvedFileWriteToolOptions,
     resolveFileWriteOptions,
-} from './file-write-schemas.js';
-import { isBinarySample } from './read-tools-paths.js';
-import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './tool-registry.js';
+} from './file-write-schemas';
+import { isBinarySample } from './read-tools-paths';
+import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './tool-registry';
 import { constants } from 'node:fs';
 import { mkdir, open } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
-export type { FileWriteToolOptions } from './file-write-schemas.js';
+export type { FileWriteToolOptions } from './file-write-schemas';
 
 export async function registerFileWriteTool(
     registry: ToolRegistry,

@@ -1,8 +1,8 @@
 import type { AbgNodeSpec, AbgSignal } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { createBlackboard } from '../../memory/blackboard.js';
-import type { AbgNodeRunContext } from '../node-registry.js';
-import { computeExponentialBackoffDelayMs, decideSupervisorAction, runSupervisorNode } from './supervisor-node.js';
+import { createBlackboard } from '../../memory/blackboard';
+import type { AbgNodeRunContext } from '../node-registry';
+import { computeExponentialBackoffDelayMs, decideSupervisorAction, runSupervisorNode } from './supervisor-node';
 
 const config = {
     target: 'llm-actor',

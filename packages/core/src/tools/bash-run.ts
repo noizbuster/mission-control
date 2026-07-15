@@ -4,7 +4,7 @@ import type {
     PermissionDecision,
     PermissionRequest,
 } from '@mission-control/protocol';
-import type { CommandChain } from './bash-run-command-guard.js';
+import type { CommandChain } from './bash-run-command-guard';
 import {
     assertAllowedCommandChain,
     assertTrustedWorkspace,
@@ -12,7 +12,7 @@ import {
     defaultBashEnvAllowlist,
     defaultBashRunTimeoutMs,
     resolveBashCwd,
-} from './bash-run-policy.js';
+} from './bash-run-policy';
 import {
     type BashRunInput,
     type BashRunOutput,
@@ -22,8 +22,8 @@ import {
     commandRunModelOutput,
     commandRunOutputSchema,
     type ResolvedBashRunToolOptions,
-} from './bash-run-schemas.js';
-import { commandRunFailure } from './command-run-errors.js';
+} from './bash-run-schemas';
+import { commandRunFailure } from './command-run-errors';
 import {
     type CommandChainStep,
     type CommandExecutionRequest,
@@ -31,13 +31,13 @@ import {
     executeCommand,
     executeCommandChain,
     executeCommandPipeline,
-} from './command-run-executor.js';
-import { interruptedBeforeSpawnResult } from './command-run-interruption.js';
-import { buildPermissionPatterns } from './command-run-policy.js';
-import { commandRunOutput } from './command-run-schemas.js';
-import { permissionRequest, requestToolPermission } from './tool-permissions.js';
-import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './tool-registry.js';
-import type { ToolExecutionContext } from './tool-registry-types.js';
+} from './command-run-executor';
+import { interruptedBeforeSpawnResult } from './command-run-interruption';
+import { buildPermissionPatterns } from './command-run-policy';
+import { commandRunOutput } from './command-run-schemas';
+import { permissionRequest, requestToolPermission } from './tool-permissions';
+import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './tool-registry';
+import type { ToolExecutionContext } from './tool-registry-types';
 import { realpath } from 'node:fs/promises';
 
 const defaultBashRunOutputBytes = 64 * 1024;

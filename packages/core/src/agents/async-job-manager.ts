@@ -12,9 +12,9 @@
  */
 
 import type { Client } from '@libsql/client';
-import type { SessionControlEpoch } from '../runtime/session-control-cancellation.js';
-import type { SessionControlAttachment, SessionControlHost } from '../runtime/session-control-host.js';
-import { LifecycleCleanupError } from './lifecycle-cleanup-error.js';
+import type { SessionControlEpoch } from '../runtime/session-control-cancellation';
+import type { SessionControlAttachment, SessionControlHost } from '../runtime/session-control-host';
+import { LifecycleCleanupError } from './lifecycle-cleanup-error';
 import { randomBytes } from 'node:crypto';
 
 export interface BackgroundJobHandle {

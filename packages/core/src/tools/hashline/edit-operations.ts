@@ -4,10 +4,10 @@
 // expression copied). License classification is recorded in
 // .omo/evidence/license-matrix.md.
 
-import { collectLineRefs, compareEditsBottomUp, detectOverlappingRanges, type HashlineEdit } from './edit-ordering.js';
-import { parseLineRef, validateLineRefs } from './validation.js';
+import { collectLineRefs, compareEditsBottomUp, detectOverlappingRanges, type HashlineEdit } from './edit-ordering';
+import { parseLineRef, validateLineRefs } from './validation';
 
-export type { HashlineEdit } from './edit-ordering.js';
+export type { HashlineEdit } from './edit-ordering';
 
 // Raw edit shape coming from the tool schema: every field is unknown until
 // normalized. Named properties (not an index signature) so dot access compiles

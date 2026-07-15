@@ -11,7 +11,7 @@ import {
     type ObservabilityRedactor,
     redactAbgSignalForObservability,
     redactAgentEventForObservability,
-} from '../providers/observability-redactor.js';
+} from '../providers/observability-redactor';
 
 export type AbgSignalProjectionInput = {
     readonly graphId: string;

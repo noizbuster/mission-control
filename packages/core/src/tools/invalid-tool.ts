@@ -12,8 +12,8 @@
  * tool only reflects its inputs.
  */
 import { z } from 'zod';
-import { ToolRegistry } from './tool-registry.js';
-import type { ToolAdvertisement, ToolRegistration } from './tool-registry-types.js';
+import { ToolRegistry } from './tool-registry';
+import type { ToolAdvertisement, ToolRegistration } from './tool-registry-types';
 
 /** The canonical tool name so registry lookups avoid magic strings. */
 export const INVALID_TOOL_NAME = 'invalid';

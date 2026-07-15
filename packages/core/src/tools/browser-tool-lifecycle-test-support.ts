@@ -5,9 +5,9 @@ import {
     type BrowserToolOptions,
     type BrowserWaitUntil,
     createBrowserToolRegistration,
-} from './browser-tool.js';
-import { projectTrustReader } from './browser-tool-test-support.js';
-import type { ToolExecutionError } from './tool-registry-types.js';
+} from './browser-tool';
+import { projectTrustReader } from './browser-tool-test-support';
+import type { ToolExecutionError } from './tool-registry-types';
 
 export type BrowserHarnessOptions = {
     readonly actionToolErrors?: Readonly<Partial<Record<'extract' | 'navigate' | 'screenshot', ToolExecutionError>>>;

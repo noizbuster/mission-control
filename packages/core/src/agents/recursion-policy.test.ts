@@ -4,7 +4,7 @@ import {
     DEFAULT_MAX_RECURSION_DEPTH,
     HARD_RECURSION_CAP,
     RecursionTracker,
-} from './recursion-policy.js';
+} from './recursion-policy';
 
 describe('module constants', () => {
     it('ships the oh-my-pi default recursion depth of 2', () => {

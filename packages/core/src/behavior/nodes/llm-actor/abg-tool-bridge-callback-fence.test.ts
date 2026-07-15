@@ -2,19 +2,19 @@ import type { AgentEvent } from '@mission-control/protocol';
 import type { ModelMessage } from 'ai';
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { expireSessionControlLease } from '../../../runtime/session-control-lease.js';
+import { expireSessionControlLease } from '../../../runtime/session-control-lease';
 import {
     createSessionControlCallbackFence,
     createSessionControlOperation,
     readSessionControlOperation,
-} from '../../../runtime/session-control-operation.js';
+} from '../../../runtime/session-control-operation';
 import {
     acquireOperationTestLease,
     cleanupOperationTestRuntimes,
     createOperationTestRuntime,
-} from '../../../runtime/session-control-operation-test-support.js';
-import { ToolRegistry } from '../../../tools/tool-registry.js';
-import { bridgeAdvertisementToAiSdk, createAbgToolSettlementLedger } from './abg-tool-bridge.js';
+} from '../../../runtime/session-control-operation-test-support';
+import { ToolRegistry } from '../../../tools/tool-registry';
+import { bridgeAdvertisementToAiSdk, createAbgToolSettlementLedger } from './abg-tool-bridge';
 
 afterEach(cleanupOperationTestRuntimes);
 

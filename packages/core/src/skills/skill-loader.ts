@@ -20,8 +20,8 @@
  */
 import { appName } from '@mission-control/config';
 import { parse as parseYaml } from 'yaml';
-import { defaultReadOnlyRepoToolDenylist, toPosixPath } from '../tools/read-tools-paths.js';
-import { type SkillMetadata, SkillMetadataSchema, validateSkillMetadata } from './skill-metadata.js';
+import { defaultReadOnlyRepoToolDenylist, toPosixPath } from '../tools/read-tools-paths';
+import { type SkillMetadata, SkillMetadataSchema, validateSkillMetadata } from './skill-metadata';
 import type { Dirent } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';

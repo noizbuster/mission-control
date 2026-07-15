@@ -4,9 +4,9 @@ import {
     openLocalLibsqlDb,
     runLocalLibsqlWrite,
     runWithLocalLibsqlWriteLock,
-} from '../db/local-libsql-db.js';
-import { deferred } from '../db/local-libsql-registry-test-support.js';
-import { SqlAgentJobMirror } from './agent-job-sql-mirror.js';
+} from '../db/local-libsql-db';
+import { deferred } from '../db/local-libsql-registry-test-support';
+import { SqlAgentJobMirror } from './agent-job-sql-mirror';
 
 const runtimes: LocalLibsqlDb[] = [];
 const now = '2026-07-12T00:00:00.000Z';

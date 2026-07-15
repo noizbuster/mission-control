@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MockSidecarClient } from './mock-sidecar-client.js';
+import { MockSidecarClient } from './mock-sidecar-client';
 
 describe('MockSidecarClient', () => {
     it('mock client returns deterministic demo task output', async () => {

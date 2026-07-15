@@ -6,9 +6,9 @@
  * are preserved unchanged.
  */
 
-import type { BackgroundJobHandle } from './async-job-manager.js';
-import { loadPersistedJobs, persistJob } from './job-persistence.js';
-import { formatSalvageSnippet } from './runaway-guard.js';
+import type { BackgroundJobHandle } from './async-job-manager';
+import { loadPersistedJobs, persistJob } from './job-persistence';
+import { formatSalvageSnippet } from './runaway-guard';
 
 export interface RecoveryReport {
     readonly recovered: number;

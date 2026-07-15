@@ -1,9 +1,9 @@
 import type { AbgSignal } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { collectSignals, createCompositeNodeTestContext } from '../composite-node-test-helpers.js';
-import { type AbgNodeRunContext, runAbgNode } from '../node-registry.js';
-import { createRaceNodeRunner } from './race-node.js';
-import { DONE, deferred, iterable } from './race-node-test-support.js';
+import { collectSignals, createCompositeNodeTestContext } from '../composite-node-test-helpers';
+import { type AbgNodeRunContext, runAbgNode } from '../node-registry';
+import { createRaceNodeRunner } from './race-node';
+import { DONE, deferred, iterable } from './race-node-test-support';
 
 function raceContext(implementation: string, children: readonly string[], runner: AbgNodeRunContext['registry']) {
     const baseContext = createCompositeNodeTestContext();

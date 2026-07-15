@@ -1,9 +1,9 @@
 import type { ProviderStreamChunk } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { createStaticProviderCredentialResolver } from '../credential-resolver.js';
-import type { ProviderTurnRequest } from '../provider-turn-types.js';
-import { createNodeOpenAICompatibleTransport } from './openai-compatible-http-transport.js';
-import { createOpenAICompatibleProvider } from './openai-compatible-provider.js';
+import { createStaticProviderCredentialResolver } from '../credential-resolver';
+import type { ProviderTurnRequest } from '../provider-turn-types';
+import { createNodeOpenAICompatibleTransport } from './openai-compatible-http-transport';
+import { createOpenAICompatibleProvider } from './openai-compatible-provider';
 
 const { MCTRL_OPENAI_COMPATIBLE_LIVE, MCTRL_OPENAI_COMPATIBLE_LIVE_MODEL, OPENROUTER_API_KEY } = process.env;
 const liveEnabled = MCTRL_OPENAI_COMPATIBLE_LIVE === '1' && OPENROUTER_API_KEY !== undefined;

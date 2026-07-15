@@ -4,7 +4,7 @@ import {
     type PythonChildProcess,
     type PythonProcessTreeTerminateFn,
     type PythonSpawnFn,
-} from './eval-python-kernel.js';
+} from './eval-python-kernel';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 

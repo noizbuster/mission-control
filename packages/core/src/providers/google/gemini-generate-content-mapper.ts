@@ -4,8 +4,8 @@ import {
     parseGeminiGenerateContentEvent,
     parseGeminiTextPart,
     parseGeminiThoughtFlag,
-} from './gemini-generate-content-events.js';
-import type { GeminiGenerateContentMappingState, GeminiToolCallState } from './gemini-generate-content-state.js';
+} from './gemini-generate-content-events';
+import type { GeminiGenerateContentMappingState, GeminiToolCallState } from './gemini-generate-content-state';
 import {
     addToolCall,
     createGeminiGenerateContentMappingState,
@@ -13,7 +13,7 @@ import {
     providerResponseId,
     providerToolCallMessageFields,
     usageFromState,
-} from './gemini-generate-content-state.js';
+} from './gemini-generate-content-state';
 
 export { createGeminiGenerateContentMappingState, type GeminiGenerateContentMappingState };
 

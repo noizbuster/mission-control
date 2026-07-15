@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { localSessionDbPath } from '../memory/local-session-store-paths.js';
-import { SqlContextEpochStore } from './system-context-epoch-store.js';
+import { localSessionDbPath } from '../memory/local-session-store-paths';
+import { SqlContextEpochStore } from './system-context-epoch-store';
 import { existsSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

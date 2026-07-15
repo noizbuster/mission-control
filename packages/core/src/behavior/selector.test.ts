@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { collectSignals, createCompositeNodeTestContext } from './composite-node-test-helpers.js';
-import { runAbgNode } from './node-registry.js';
+import { collectSignals, createCompositeNodeTestContext } from './composite-node-test-helpers';
+import { runAbgNode } from './node-registry';
 
 describe('ABG selector node', () => {
     it('returns a successful none selection when no child matches', async () => {

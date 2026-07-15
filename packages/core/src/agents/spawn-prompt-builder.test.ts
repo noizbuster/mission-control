@@ -1,6 +1,6 @@
 import type { AgentDefinition } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { buildChildSystemPrompt, SUBAGENT_BASE_DIRECTIVE } from './spawn-prompt-builder.js';
+import { buildChildSystemPrompt, SUBAGENT_BASE_DIRECTIVE } from './spawn-prompt-builder';
 
 const baseAgent: AgentDefinition = {
     name: 'worker',

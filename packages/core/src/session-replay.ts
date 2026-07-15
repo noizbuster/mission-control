@@ -4,24 +4,24 @@ import {
     AgentEventEnvelopeSchema,
     AgentEventLogSchema,
 } from '@mission-control/protocol';
-import { deriveAbgGraphSnapshot } from './behavior/graph-state.js';
-import { projectAbgTimeline } from './behavior/timeline.js';
+import { deriveAbgGraphSnapshot } from './behavior/graph-state';
+import { projectAbgTimeline } from './behavior/timeline';
 import {
     JSONL_SESSION_EVENT_RECORD_KIND,
     JSONL_SESSION_LOG_HEADER_KIND,
     JSONL_SESSION_LOG_RECORD_VERSION,
-} from './memory/jsonl-session-records.js';
-import { projectSessionTree } from './memory/session-tree-projection.js';
-import { projectBranchSummaries, projectSessionBranchTree } from './session-branch-projection.js';
-import { SessionEventLog } from './session-log.js';
-import { projectCodingSteps, projectReplayDiagnostics } from './session-replay-coding.js';
-import { projectApprovals, projectToolOutcomes } from './session-replay-event-projections.js';
-import { deriveReplaySession } from './session-replay-session.js';
+} from './memory/jsonl-session-records';
+import { projectSessionTree } from './memory/session-tree-projection';
+import { projectBranchSummaries, projectSessionBranchTree } from './session-branch-projection';
+import { SessionEventLog } from './session-log';
+import { projectCodingSteps, projectReplayDiagnostics } from './session-replay-coding';
+import { projectApprovals, projectToolOutcomes } from './session-replay-event-projections';
+import { deriveReplaySession } from './session-replay-session';
 import type {
     JsonlSessionReplayPrefixProjection,
     ReplayDiagnostic,
     SessionReplayProjection,
-} from './session-replay-types.js';
+} from './session-replay-types';
 
 export type {
     ApprovalProjection,
@@ -40,7 +40,7 @@ export type {
     SessionTreeProjectionDiagnostic,
     ToolOutcomeProjection,
     ToolOutcomeStatus,
-} from './session-replay-types.js';
+} from './session-replay-types';
 
 export function projectSessionReplay(input: {
     readonly sessionId: string;

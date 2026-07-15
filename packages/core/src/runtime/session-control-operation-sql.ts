@@ -1,9 +1,9 @@
 import type { Client, Row } from '@libsql/client';
 import { z } from 'zod';
-import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db.js';
-import type { SessionControlLease } from './session-control-lease.js';
-import { runSessionControlLeaseImmediate } from './session-control-lease-sql.js';
-import type { SessionControlOperation } from './session-control-operation-types.js';
+import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db';
+import type { SessionControlLease } from './session-control-lease';
+import { runSessionControlLeaseImmediate } from './session-control-lease-sql';
+import type { SessionControlOperation } from './session-control-operation-types';
 
 const operationRowSchema = z.object({
     db_identity: z.string(),

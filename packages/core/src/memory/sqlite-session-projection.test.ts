@@ -1,6 +1,6 @@
 import { createClient } from '@libsql/client';
 import { afterEach, describe, expect, it } from 'vitest';
-import { projectSessionEventsToSqlite, type SqliteSessionProjectionStore } from './sqlite-session-projection.js';
+import { projectSessionEventsToSqlite, type SqliteSessionProjectionStore } from './sqlite-session-projection';
 import {
     CREATED_AT,
     cleanupSqliteSessionProjectionTestDirs,
@@ -8,7 +8,7 @@ import {
     openSqliteSessionProjectionStoreForTests,
     SESSION_ID,
     tempDbUrl,
-} from './sqlite-session-projection-test-support.js';
+} from './sqlite-session-projection-test-support';
 
 describe('sqlite session projection', () => {
     afterEach(async () => {

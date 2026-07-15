@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseStructuredOutput, SUPPORTED_OUTPUT_KEYS } from './structured-blackboard.js';
+import { parseStructuredOutput, SUPPORTED_OUTPUT_KEYS } from './structured-blackboard';
 
 describe('parseStructuredOutput', () => {
     describe('bare JSON', () => {

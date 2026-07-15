@@ -1,6 +1,6 @@
-import type { SessionOwnerControlClient } from './session-owner-control-client.js';
-import type { StopSessionTreeInput } from './session-stop-tree.js';
-import { resolveCanonicalSessionTree } from './session-stop-tree-resolver.js';
+import type { SessionOwnerControlClient } from './session-owner-control-client';
+import type { StopSessionTreeInput } from './session-stop-tree';
+import { resolveCanonicalSessionTree } from './session-stop-tree-resolver';
 
 const emptyAffected = {
     runs: 0,

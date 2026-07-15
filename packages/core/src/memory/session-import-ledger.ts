@@ -1,13 +1,13 @@
 import type { Client } from '@libsql/client';
-import { type LocalLibsqlWriteTarget, runLocalLibsqlWrite } from '../db/local-libsql-db.js';
-import { checksumFor, type FoundLegacySource } from './session-import-files.js';
-import type { ImportAccumulator } from './session-import-sources.js';
+import { type LocalLibsqlWriteTarget, runLocalLibsqlWrite } from '../db/local-libsql-db';
+import { checksumFor, type FoundLegacySource } from './session-import-files';
+import type { ImportAccumulator } from './session-import-sources';
 import {
     hasLegacyImport,
     type LegacySessionImportDiagnostic,
     type LegacySessionImportLedgerEntry,
     recordLegacyImport,
-} from './session-import-sql.js';
+} from './session-import-sql';
 
 export async function skipImported(input: {
     readonly client: Client;

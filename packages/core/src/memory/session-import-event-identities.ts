@@ -1,7 +1,7 @@
 import type { Client } from '@libsql/client';
 import type { AgentEventEnvelope } from '@mission-control/protocol';
-import { LegacySessionImportConflictError } from './session-import-conflict.js';
-import { type StoredEventRow, storedEnvelope, storedEventRowSchema } from './session-import-event-read.js';
+import { LegacySessionImportConflictError } from './session-import-conflict';
+import { type StoredEventRow, storedEnvelope, storedEventRowSchema } from './session-import-event-read';
 
 const EVENT_ID_QUERY_CHUNK_SIZE = 500;
 

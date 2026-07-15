@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentRef } from './runtime-registry.js';
-import { getRuntimeRegistry, MAIN_AGENT_ID, RuntimeAgentRegistry } from './runtime-registry.js';
+import type { AgentRef } from './runtime-registry';
+import { getRuntimeRegistry, MAIN_AGENT_ID, RuntimeAgentRegistry } from './runtime-registry';
 
 type AdoptInput = Omit<AgentRef, 'createdAt' | 'lastActivity'>;
 

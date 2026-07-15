@@ -23,10 +23,10 @@
  * document-open + sync separately. LSP positions are 0-indexed (line + character start at 0).
  */
 import { z } from 'zod';
-import { LspDiagnosticsLedger } from './lsp-diagnostics-ledger.js';
-import type { ToolRegistration } from './tool-registry-types.js';
-import { ToolExecutionError } from './tool-registry-types.js';
-import { truncateOutput, withContinuationHint } from './truncate.js';
+import { LspDiagnosticsLedger } from './lsp-diagnostics-ledger';
+import type { ToolRegistration } from './tool-registry-types';
+import { ToolExecutionError } from './tool-registry-types';
+import { truncateOutput, withContinuationHint } from './truncate';
 
 export type LspDiagnostic = {
     readonly message: string;

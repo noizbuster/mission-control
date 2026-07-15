@@ -1,13 +1,13 @@
 import { createClient } from '@libsql/client';
 import { afterEach, describe, expect, it } from 'vitest';
-import { localSessionDbPath } from '../memory/local-session-store-paths.js';
-import { openSqliteSessionProjectionStore } from '../memory/sqlite-session-projection.js';
-import { localRuntimeDbUrl } from './local-runtime-db.js';
+import { localSessionDbPath } from '../memory/local-session-store-paths';
+import { openSqliteSessionProjectionStore } from '../memory/sqlite-session-projection';
+import { localRuntimeDbUrl } from './local-runtime-db';
 import {
     SessionInputDelivery,
     SqlSessionInputDelivery,
     type SqlSessionInputDeliveryRecord,
-} from './session-input-delivery.js';
+} from './session-input-delivery';
 import { existsSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

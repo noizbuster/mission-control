@@ -1,22 +1,22 @@
 import { SessionStopReceiptSchema } from '@mission-control/protocol';
-import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db.js';
-import type { LocalSessionEventStore } from '../memory/local-session-store.js';
-import { SessionControlFencedError, type SessionControlHost } from './session-control-host.js';
+import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db';
+import type { LocalSessionEventStore } from '../memory/local-session-store';
+import { SessionControlFencedError, type SessionControlHost } from './session-control-host';
 import {
     completeSessionControlOperation,
     createSessionControlOperation,
     failSessionControlOperation,
     startSessionControlOperationDeadline,
     timeoutSessionControlOperation,
-} from './session-control-operation.js';
-import { readSessionTerminalStatus } from './session-stop-mutation.js';
+} from './session-control-operation';
+import { readSessionTerminalStatus } from './session-stop-mutation';
 import {
     EMPTY_STOP_AFFECTED,
     failedStopReceipt,
     stopReceipt,
     validateExactStopInput,
-} from './session-stop-service-support.js';
-import type { ExactSessionStopAcquisition, ExactSessionStopInput, SessionStopReceipt } from './session-stop-types.js';
+} from './session-stop-service-support';
+import type { ExactSessionStopAcquisition, ExactSessionStopInput, SessionStopReceipt } from './session-stop-types';
 
 export class SessionStopAcquisitionController {
     private readonly runtime: LocalLibsqlWriteTarget;

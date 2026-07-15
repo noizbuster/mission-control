@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { openLocalLibsqlDb, runWithLocalLibsqlWriteLock } from './local-libsql-db.js';
-import { acquireLocalLibsqlFileLease } from './local-libsql-registry.js';
-import { deferred, TestInitializationError } from './local-libsql-registry-test-support.js';
+import { openLocalLibsqlDb, runWithLocalLibsqlWriteLock } from './local-libsql-db';
+import { acquireLocalLibsqlFileLease } from './local-libsql-registry';
+import { deferred, TestInitializationError } from './local-libsql-registry-test-support';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

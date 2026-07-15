@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { runSqliteSessionWriteTransaction } from '../memory/sqlite-session-event-store-transaction.js';
-import { LocalDbConfigError, localDbConfigErrorCodes, openLocalLibsqlDb } from './local-libsql-db.js';
+import { runSqliteSessionWriteTransaction } from '../memory/sqlite-session-event-store-transaction';
+import { LocalDbConfigError, localDbConfigErrorCodes, openLocalLibsqlDb } from './local-libsql-db';
 import { access, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { encodeLspMessage, LspMessageDecoder, type LspTransport, StdioLspClient } from './lsp-stdio-client.js';
-import { ToolExecutionError } from './tool-registry-types.js';
+import { encodeLspMessage, LspMessageDecoder, type LspTransport, StdioLspClient } from './lsp-stdio-client';
+import { ToolExecutionError } from './tool-registry-types';
 
 const WORKSPACE_ROOT = '/workspace';
 const SAMPLE_URI = 'file:///workspace/src/sample.ts';

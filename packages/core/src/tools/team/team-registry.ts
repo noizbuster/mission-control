@@ -7,30 +7,30 @@
  * returns an empty array and nothing is registered. Each factory also
  * self-gates on the same flag, so wiring is safe to call unconditionally.
  */
-import type { ToolRegistration } from '../tool-registry-types.js';
+import type { ToolRegistration } from '../tool-registry-types';
 import {
     createDefaultTeamToolRuntime,
     type TeamIrcBridge,
     type TeamToolContext,
     type TeamToolRuntime,
-} from './team-context.js';
+} from './team-context';
 import {
     createTeamApproveShutdownTool,
     createTeamCreateTool,
     createTeamDeleteTool,
     createTeamRejectShutdownTool,
     createTeamShutdownRequestTool,
-} from './team-lifecycle-tools.js';
-import { createTeamSendMessageTool } from './team-messaging-tools.js';
-import { createTeamListTool, createTeamStatusTool } from './team-query-tools.js';
-import type { TeamModeConfig } from './team-schemas.js';
-import { teamModeConfigSchema } from './team-schemas.js';
+} from './team-lifecycle-tools';
+import { createTeamSendMessageTool } from './team-messaging-tools';
+import { createTeamListTool, createTeamStatusTool } from './team-query-tools';
+import type { TeamModeConfig } from './team-schemas';
+import { teamModeConfigSchema } from './team-schemas';
 import {
     createTeamTaskCreateTool,
     createTeamTaskGetTool,
     createTeamTaskListTool,
     createTeamTaskUpdateTool,
-} from './team-task-tools.js';
+} from './team-task-tools';
 
 export interface BuildTeamToolsOptions {
     /** Workspace root backing `.omo/teams/`. Required when enabled. */

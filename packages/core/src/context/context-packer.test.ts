@@ -1,8 +1,8 @@
 import type { ModelMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
-import { renderSummary, summarizeHead } from './compaction.js';
-import { packContext } from './context-packer.js';
-import { estimateMessagesTokens } from './token-count.js';
+import { renderSummary, summarizeHead } from './compaction';
+import { packContext } from './context-packer';
+import { estimateMessagesTokens } from './token-count';
 
 function user(text: string): ModelMessage {
     return { role: 'user', content: text };

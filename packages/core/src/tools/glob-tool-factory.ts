@@ -9,7 +9,7 @@
  * the read tools use, and stays read-class. The tool name stays `glob`.
  */
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
-import type { NativesClient } from '../native/natives-client.js';
+import type { NativesClient } from '../native/natives-client';
 import {
     formatGlobModelOutput,
     type GlobToolInput,
@@ -20,11 +20,11 @@ import {
     globParametersJsonSchema,
     globToRegExp,
     safeReaddirRecursive,
-} from './glob-tool.js';
-import { repoToolFailure } from './read-tools-errors.js';
-import { createWorkspaceGuard, defaultReadOnlyRepoToolDenylist, type WorkspaceGuard } from './read-tools-paths.js';
-import { permissionRequest, requestToolPermission } from './tool-permissions.js';
-import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './tool-registry.js';
+} from './glob-tool';
+import { repoToolFailure } from './read-tools-errors';
+import { createWorkspaceGuard, defaultReadOnlyRepoToolDenylist, type WorkspaceGuard } from './read-tools-paths';
+import { permissionRequest, requestToolPermission } from './tool-permissions';
+import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './tool-registry';
 import { realpath } from 'node:fs/promises';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 

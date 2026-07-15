@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import type { BackgroundJobHandle } from './async-job-manager.js';
-import { loadPersistedJobs, persistJob } from './job-persistence.js';
+import type { BackgroundJobHandle } from './async-job-manager';
+import { loadPersistedJobs, persistJob } from './job-persistence';
 import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

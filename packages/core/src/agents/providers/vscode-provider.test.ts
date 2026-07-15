@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { LoadContext } from '../capability/types.js';
-import { vscodeProvider } from './vscode-provider.js';
+import type { LoadContext } from '../capability/types';
+import { vscodeProvider } from './vscode-provider';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

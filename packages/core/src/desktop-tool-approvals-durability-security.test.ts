@@ -14,10 +14,10 @@ import {
     providerToolCallEvent,
     runBlockedEvent,
     runCompletedEvent,
-} from './desktop-tool-approval-test-support.js';
-import { ensurePendingToolApprovalForCurrentBlockedRun, settleDesktopApproval } from './desktop-tool-approvals.js';
-import { openLocalSessionEventStore } from './memory/local-session-store-open.js';
-import { createObservabilityRedactor } from './providers/observability-redactor.js';
+} from './desktop-tool-approval-test-support';
+import { ensurePendingToolApprovalForCurrentBlockedRun, settleDesktopApproval } from './desktop-tool-approvals';
+import { openLocalSessionEventStore } from './memory/local-session-store-open';
+import { createObservabilityRedactor } from './providers/observability-redactor';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

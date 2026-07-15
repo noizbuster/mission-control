@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createNativesClient, type NativesClient } from '../native/natives-client.js';
+import { createNativesClient, type NativesClient } from '../native/natives-client';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

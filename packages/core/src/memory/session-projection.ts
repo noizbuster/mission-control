@@ -1,15 +1,15 @@
-import { projectSessionReplay } from '../session-replay.js';
-import type { CodingReplayStep, SessionReplayProjection } from '../session-replay-types.js';
-import { JsonlSessionEventStoreError } from './jsonl-errors.js';
-import { parseJsonlSessionLog } from './jsonl-session-records.js';
-import { isProviderAbortedFailure } from './session-projection-provider-failure.js';
+import { projectSessionReplay } from '../session-replay';
+import type { CodingReplayStep, SessionReplayProjection } from '../session-replay-types';
+import { JsonlSessionEventStoreError } from './jsonl-errors';
+import { parseJsonlSessionLog } from './jsonl-session-records';
+import { isProviderAbortedFailure } from './session-projection-provider-failure';
 import type {
     SessionProjectionDiagnostic,
     SessionProjectionProviderFailureRecord,
     SessionProjectionRecord,
     SessionProjectionRunRecord,
     SessionProjectionSessionRecord,
-} from './session-projection-types.js';
+} from './session-projection-types';
 
 export type SessionProjectionResult = {
     readonly records: readonly SessionProjectionRecord[];

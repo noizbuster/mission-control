@@ -7,7 +7,7 @@
  * calls so tests can mock member spawning; the live runtime wires this to the
  * agent/session layer (mirrors the `TaskToolRuntime` pattern).
  */
-import type { MemberSpec, TeamModeConfig } from './team-schemas.js';
+import type { MemberSpec, TeamModeConfig } from './team-schemas';
 
 /** The workspace root that backs the `.omo/teams/` directory. */
 export interface TeamToolContext {

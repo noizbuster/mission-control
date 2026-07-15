@@ -5,8 +5,8 @@ import type {
     ProviderToolCallTranscript,
     RedactionMetadata,
 } from '@mission-control/protocol';
-import { credentialRedactionsForText, redactCredentialText } from './credential-resolver.js';
-import type { ProviderTurnRunInput } from './provider-turn-types.js';
+import { credentialRedactionsForText, redactCredentialText } from './credential-resolver';
+import type { ProviderTurnRunInput } from './provider-turn-types';
 
 export function eventForProviderChunk(
     input: ProviderTurnRunInput,

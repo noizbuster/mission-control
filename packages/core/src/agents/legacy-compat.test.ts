@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { taskToolInputSchema } from '../tools/task/task-tool.js';
-import { adaptLegacyCategoryInput, adaptLegacySimpleInput } from './legacy-compat.js';
+import { taskToolInputSchema } from '../tools/task/task-tool';
+import { adaptLegacyCategoryInput, adaptLegacySimpleInput } from './legacy-compat';
 
 describe('legacy-compat', () => {
     describe('adaptLegacyCategoryInput', () => {

@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import type { NativesClient } from '../native/natives-client.js';
-import { repoToolFailure } from './read-tools-errors.js';
-import { isBinarySample, type WorkspaceGuard, type WorkspacePath } from './read-tools-paths.js';
+import type { NativesClient } from '../native/natives-client';
+import { repoToolFailure } from './read-tools-errors';
+import { isBinarySample, type WorkspaceGuard, type WorkspacePath } from './read-tools-paths';
 import { spawn } from 'node:child_process';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';

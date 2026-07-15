@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import type { MemoryEntry, MemoryQuery } from './persistent-memory-store.js';
+import type { MemoryEntry, MemoryQuery } from './persistent-memory-store';
 import {
     deserializeValue,
     entryMatchesQuery,
@@ -7,7 +7,7 @@ import {
     isSqliteAvailable,
     SqlitePersistentStore,
     serializeValue,
-} from './sqlite-persistent-store.js';
+} from './sqlite-persistent-store';
 
 const entry = (overrides: Partial<MemoryEntry> = {}): MemoryEntry => ({
     key: 'k',

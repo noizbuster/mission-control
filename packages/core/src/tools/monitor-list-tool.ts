@@ -8,9 +8,9 @@
 // surface them.
 
 import { z } from 'zod';
-import type { MonitorCounters, MonitorManager, MonitorMode, MonitorStatus } from './monitor-manager.js';
-import type { MonitorToolsConfig } from './monitor-start-tool.js';
-import type { ToolAdvertisement, ToolRegistration } from './tool-registry.js';
+import type { MonitorCounters, MonitorManager, MonitorMode, MonitorStatus } from './monitor-manager';
+import type { MonitorToolsConfig } from './monitor-start-tool';
+import type { ToolAdvertisement, ToolRegistration } from './tool-registry';
 
 export const MONITOR_LIST_TOOL_NAME = 'monitor_list';
 const MONITOR_LIST_OUTPUT_LIMIT = { maxModelOutputChars: 4000 } as const;

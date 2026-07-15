@@ -6,7 +6,7 @@ import {
     ToolResultSchema,
 } from '@mission-control/protocol';
 import { z } from 'zod';
-import type { ToolOutcomeStatus } from '../session-replay-types.js';
+import type { ToolOutcomeStatus } from '../session-replay-types';
 import type {
     SessionProjectionApprovalRecord,
     SessionProjectionDiagnostic,
@@ -14,7 +14,7 @@ import type {
     SessionProjectionRunRecord,
     SessionProjectionSessionRecord,
     SessionProjectionToolRecord,
-} from './session-projection-types.js';
+} from './session-projection-types';
 import {
     approvalRowSchema,
     diagnosticRowSchema,
@@ -22,7 +22,7 @@ import {
     runRowSchema,
     sessionRowSchema,
     toolRowSchema,
-} from './sqlite-session-projection-row-schemas.js';
+} from './sqlite-session-projection-row-schemas';
 
 export function sessionRecordFromRow(row: z.infer<typeof sessionRowSchema>): SessionProjectionSessionRecord {
     const metadata = sessionMetadata(row.metadata_json);

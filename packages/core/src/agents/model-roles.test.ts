@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ModelRole } from './model-roles.js';
+import type { ModelRole } from './model-roles';
 import {
     formatModelAlias,
     LEGACY_CATEGORY_MODEL_ALIASES,
@@ -7,7 +7,7 @@ import {
     MODEL_ROLE_IDS,
     MODEL_ROLES,
     parseModelAlias,
-} from './model-roles.js';
+} from './model-roles';
 
 describe('model-roles', () => {
     describe('parseModelAlias', () => {

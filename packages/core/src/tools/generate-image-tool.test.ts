@@ -7,9 +7,9 @@ import {
     type GenerateImageToolOptions,
     type GenerateImageTransport,
     registerGenerateImageTool,
-} from './generate-image-tool.js';
-import { ToolExecutionError, ToolRegistry } from './tool-registry.js';
-import { createTtsToolRegistration, registerTtsTool, type TtsToolOptions, type TtsTransport } from './tts-tool.js';
+} from './generate-image-tool';
+import { ToolExecutionError, ToolRegistry } from './tool-registry';
+import { createTtsToolRegistration, registerTtsTool, type TtsToolOptions, type TtsTransport } from './tts-tool';
 import { randomUUID } from 'node:crypto';
 import { access, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

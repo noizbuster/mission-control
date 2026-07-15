@@ -1,13 +1,13 @@
 import type { DiffFile, DiffLine, ProtocolError } from '@mission-control/protocol';
-import { executeFileMutation, fileMutationDiffEvents, preflightTextFileMutationTargets } from './file-mutation.js';
-import { filePatchFailure } from './file-patch-errors.js';
-import { createPatchWorkspaceGuard, type PatchTarget } from './file-patch-paths.js';
+import { executeFileMutation, fileMutationDiffEvents, preflightTextFileMutationTargets } from './file-mutation';
+import { filePatchFailure } from './file-patch-errors';
+import { createPatchWorkspaceGuard, type PatchTarget } from './file-patch-paths';
 import {
     executeHashlineEdits,
     type HashlineEditOutcome,
     type RawHashlineEdit,
-} from './hashline/hashline-edit-executor.js';
-import { HashlineMismatchError } from './hashline/validation.js';
+} from './hashline/hashline-edit-executor';
+import { HashlineMismatchError } from './hashline/validation';
 import {
     type HashlineEditInput,
     type HashlineEditOutput,
@@ -19,12 +19,12 @@ import {
     hashlineEditParametersJsonSchema,
     type ResolvedHashlineEditToolOptions,
     resolveHashlineEditOptions,
-} from './hashline-edit-schemas.js';
-import { type ToolAdvertisement, ToolExecutionError, type ToolRegistration, ToolRegistry } from './tool-registry.js';
+} from './hashline-edit-schemas';
+import { type ToolAdvertisement, ToolExecutionError, type ToolRegistration, ToolRegistry } from './tool-registry';
 import { constants } from 'node:fs';
 import { open, rm } from 'node:fs/promises';
 
-export type { HashlineEditToolOptions } from './hashline-edit-schemas.js';
+export type { HashlineEditToolOptions } from './hashline-edit-schemas';
 
 export async function registerHashlineEditTool(
     registry: ToolRegistry,

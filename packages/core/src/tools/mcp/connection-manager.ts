@@ -17,12 +17,12 @@
  *   processes or HTTP connections) so no MCP server leaks on `stop()`.
  */
 
-import { createObservabilityRedactor, type ObservabilityRedactor } from '../../providers/observability-redactor.js';
-import type { ProjectTrustDecision } from '../../trust/project-trust-store.js';
-import type { McpToolInfo } from '../mcp-tool.js';
-import { loadRuntimeMcpConfig, type McpConfigScope, type ResolvedMcpServer } from './config.js';
-import { McpConnectionLifecycle } from './connection-lifecycle.js';
-import { createDefaultMcpClient } from './default-client.js';
+import { createObservabilityRedactor, type ObservabilityRedactor } from '../../providers/observability-redactor';
+import type { ProjectTrustDecision } from '../../trust/project-trust-store';
+import type { McpToolInfo } from '../mcp-tool';
+import { loadRuntimeMcpConfig, type McpConfigScope, type ResolvedMcpServer } from './config';
+import { McpConnectionLifecycle } from './connection-lifecycle';
+import { createDefaultMcpClient } from './default-client';
 
 /** Cap total namespaced MCP tools so the model context is not exhausted. */
 const MAX_TOTAL_NAMESPACED_TOOLS = 50;

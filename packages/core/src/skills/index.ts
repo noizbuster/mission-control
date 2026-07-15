@@ -23,11 +23,11 @@ export {
     type SkillScopeId,
     type SkillSourceInfo,
     skillsConfigDirEnvKey,
-} from './skill-loader.js';
+} from './skill-loader';
 export {
     SKILL_DESCRIPTION_MAX_LENGTH,
     SKILL_NAME_MAX_LENGTH,
     type SkillMetadata,
     SkillMetadataSchema,
     validateSkillMetadata,
-} from './skill-metadata.js';
+} from './skill-metadata';

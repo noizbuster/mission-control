@@ -1,8 +1,8 @@
 import { createClient } from '@libsql/client';
 import { afterEach, describe, expect, it } from 'vitest';
-import { envelope } from '../session-replay-coding-test-support.js';
-import { refreshSessionAwaitingFromPendingWaits } from './session-awaiting-sql.js';
-import { projectSessionEventsToSqlite } from './sqlite-session-projection.js';
+import { envelope } from '../session-replay-coding-test-support';
+import { refreshSessionAwaitingFromPendingWaits } from './session-awaiting-sql';
+import { projectSessionEventsToSqlite } from './sqlite-session-projection';
 import {
     CREATED_AT,
     cleanupSqliteSessionProjectionTestDirs,
@@ -11,7 +11,7 @@ import {
     SESSION_ID,
     sessionStartedEvent,
     tempDbUrl,
-} from './sqlite-session-projection-test-support.js';
+} from './sqlite-session-projection-test-support';
 
 describe('sqlite session projection boundary cases', () => {
     afterEach(async () => {

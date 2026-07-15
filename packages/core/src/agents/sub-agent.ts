@@ -1,4 +1,4 @@
-import type { AgentExecutionContext } from '../runtime/execution-context.js';
+import type { AgentExecutionContext } from '../runtime/execution-context';
 
 export type SubAgentRunInput = {
     readonly prompt: string;

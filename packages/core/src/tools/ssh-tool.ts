@@ -21,14 +21,14 @@ import type {
     SshHostConfig,
 } from '@mission-control/protocol';
 import { z } from 'zod';
-import { redactCredentialText } from '../providers/credential-resolver.js';
-import { assertTrustedWorkspace } from './bash-run-policy.js';
-import { commandRunFailure } from './command-run-errors.js';
-import { assemblePtyFrames, type PtySessionTransport } from './pty-client.js';
-import { permissionRequest, requestToolPermission } from './tool-permissions.js';
-import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './tool-registry.js';
-import type { ToolExecutionContext } from './tool-registry-types.js';
-import { truncateOutput } from './truncate.js';
+import { redactCredentialText } from '../providers/credential-resolver';
+import { assertTrustedWorkspace } from './bash-run-policy';
+import { commandRunFailure } from './command-run-errors';
+import { assemblePtyFrames, type PtySessionTransport } from './pty-client';
+import { permissionRequest, requestToolPermission } from './tool-permissions';
+import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './tool-registry';
+import type { ToolExecutionContext } from './tool-registry-types';
+import { truncateOutput } from './truncate';
 import { randomUUID } from 'node:crypto';
 
 const SSH_TOOL_NAME = 'ssh';

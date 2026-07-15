@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { runWithLocalLibsqlWriteLock } from '../db/local-libsql-db.js';
-import { openCanonicalRuntimeDb } from './local-runtime-db.js';
-import { acquireSessionControlLease } from './session-control-lease.js';
-import { createSessionControlOperation, readSessionControlOperation } from './session-control-operation.js';
+import { runWithLocalLibsqlWriteLock } from '../db/local-libsql-db';
+import { openCanonicalRuntimeDb } from './local-runtime-db';
+import { acquireSessionControlLease } from './session-control-lease';
+import { createSessionControlOperation, readSessionControlOperation } from './session-control-operation';
 import { createHash } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

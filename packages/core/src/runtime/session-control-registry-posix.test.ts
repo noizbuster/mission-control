@@ -4,17 +4,17 @@ import {
     createAuthenticatedSessionControlServer,
     generateSessionControlNonce,
     matchesSessionControlNonce,
-} from './session-control-registry-auth.js';
+} from './session-control-registry-auth';
 import {
     publishSessionControlRegistry,
     readSessionControlRegistry,
     serializeSessionControlRegistry,
-} from './session-control-registry-file.js';
+} from './session-control-registry-file';
 import {
     resolvePosixSessionControlPaths,
     SessionControlRegistryError,
     sessionControlRegistryFileName,
-} from './session-control-registry-paths.js';
+} from './session-control-registry-paths';
 import { chmod, lstat, mkdir, mkdtemp, readFile, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

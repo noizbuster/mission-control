@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { runAbgGraph } from './graph-runner.js';
-import { createDefaultAbgNodeRegistry } from './node-registry.js';
+import { runAbgGraph } from './graph-runner';
+import { createDefaultAbgNodeRegistry } from './node-registry';
 
 const baseInput = {
     sessionId: 'session_graph_coordinator',

@@ -4,15 +4,15 @@ import type { AgentDefinition } from '@mission-control/protocol';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { createObservabilityRedactor } from '../providers/observability-redactor.js';
-import type { ChildSpawnRequest } from '../tools/task/task-tool.js';
-import { ToolRegistry } from '../tools/tool-registry.js';
-import type { ToolRegistration } from '../tools/tool-registry-types.js';
-import { ToolExecutionError } from '../tools/tool-registry-types.js';
-import { AgentIndex } from './agent-registry.js';
-import { deriveChildPathPolicies, evaluatePathPolicies } from './path-policy-derive.js';
-import type { ChildSpawnContext, SpawnFn } from './task-tool-runtime.js';
-import { ConcreteTaskToolRuntime } from './task-tool-runtime.js';
+import { createObservabilityRedactor } from '../providers/observability-redactor';
+import type { ChildSpawnRequest } from '../tools/task/task-tool';
+import { ToolRegistry } from '../tools/tool-registry';
+import type { ToolRegistration } from '../tools/tool-registry-types';
+import { ToolExecutionError } from '../tools/tool-registry-types';
+import { AgentIndex } from './agent-registry';
+import { deriveChildPathPolicies, evaluatePathPolicies } from './path-policy-derive';
+import type { ChildSpawnContext, SpawnFn } from './task-tool-runtime';
+import { ConcreteTaskToolRuntime } from './task-tool-runtime';
 
 type Empty = Record<string, never>;
 

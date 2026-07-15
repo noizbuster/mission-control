@@ -1,8 +1,8 @@
 import type { AbgGraphSnapshot, AgentEvent, AgentSession, AgentSnapshot } from '@mission-control/protocol';
-import type { AbgTimelineEntry } from '../behavior/timeline.js';
-import { SessionEventLog } from '../session-log.js';
-import type { MemoryStore, SessionCompactionRecordInput } from './memory-store.js';
-import { createSessionCompactionEvent } from './session-compaction-event.js';
+import type { AbgTimelineEntry } from '../behavior/timeline';
+import { SessionEventLog } from '../session-log';
+import type { MemoryStore, SessionCompactionRecordInput } from './memory-store';
+import { createSessionCompactionEvent } from './session-compaction-event';
 
 export class InMemoryEventStore implements MemoryStore {
     private readonly logs = new Map<string, SessionEventLog>();

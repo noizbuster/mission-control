@@ -1,4 +1,4 @@
-import { OmoPersistenceError } from '../../persistence/paths.js';
+import { OmoPersistenceError } from '../../persistence/paths';
 import { isAbsolute, normalize, relative, resolve } from 'node:path';
 
 const OMO_DIR_NAME = '.omo';

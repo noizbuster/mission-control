@@ -3,17 +3,17 @@ import {
     createInspectImageToolRegistration,
     type InspectImageInput,
     type InspectImageOutput,
-} from './inspect-image-tool.js';
+} from './inspect-image-tool';
 import {
     createLookAtToolRegistration,
     defaultVisionFetch,
     type LookAtInput,
     type LookAtOutput,
     type VisionFetchFn,
-} from './look-at-tool.js';
-import { ToolExecutionError, ToolRegistry } from './tool-registry.js';
-import { resolveVisionProviderChain } from './vision-providers.js';
-import { visionCredentialHint } from './vision-schemas.js';
+} from './look-at-tool';
+import { ToolExecutionError, ToolRegistry } from './tool-registry';
+import { resolveVisionProviderChain } from './vision-providers';
+import { visionCredentialHint } from './vision-schemas';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -452,8 +452,8 @@ describe('vision tools (look_at + inspect_image)', () => {
 
         it('registers both tools into a registry under their names', async () => {
             const registry = new ToolRegistry();
-            await import('./look-at-tool.js').then((module) => module.registerLookAtTool(registry));
-            await import('./inspect-image-tool.js').then((module) => module.registerInspectImageTool(registry));
+            await import('./look-at-tool').then((module) => module.registerLookAtTool(registry));
+            await import('./inspect-image-tool').then((module) => module.registerInspectImageTool(registry));
             const names = registry.advertise().map((tool) => tool.name);
             expect(names).toContain('look_at');
             expect(names).toContain('inspect_image');

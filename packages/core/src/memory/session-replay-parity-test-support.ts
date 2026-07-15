@@ -4,9 +4,9 @@ import {
     AgentEventEnvelopeSchema,
     AgentEventSchema,
 } from '@mission-control/protocol';
-import { projectSessionReplay, type SessionReplayProjection } from '../session-replay.js';
-import { JsonlSessionEventStore } from './jsonl-session-event-store.js';
-import { parseJsonlSessionLog } from './jsonl-session-records.js';
+import { projectSessionReplay, type SessionReplayProjection } from '../session-replay';
+import { JsonlSessionEventStore } from './jsonl-session-event-store';
+import { parseJsonlSessionLog } from './jsonl-session-records';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 

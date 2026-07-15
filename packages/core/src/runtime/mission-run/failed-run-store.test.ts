@@ -1,7 +1,7 @@
 import { RunSchema } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { NormalizedMissionRunStoreLocation } from './mission-run-store-location.js';
-import { findMostRecentFailedRun } from './run-store.js';
+import type { NormalizedMissionRunStoreLocation } from './mission-run-store-location';
+import { findMostRecentFailedRun } from './run-store';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

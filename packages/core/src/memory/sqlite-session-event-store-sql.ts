@@ -1,6 +1,6 @@
 import type { Client } from '@libsql/client';
 import type { AgentEvent, AgentEventEnvelope } from '@mission-control/protocol';
-import { nextSequenceFrom } from './sqlite-session-event-store-rows.js';
+import { nextSequenceFrom } from './sqlite-session-event-store-rows';
 
 type SessionSqlInput = {
     readonly client: Client;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { collectSignals, createCompositeNodeTestContext as context } from './composite-node-test-helpers.js';
-import { runAbgNode } from './node-registry.js';
+import { collectSignals, createCompositeNodeTestContext as context } from './composite-node-test-helpers';
+import { runAbgNode } from './node-registry';
 
 describe('ABG watch and statechart nodes', () => {
     it('watch redirects on matching events', async () => {

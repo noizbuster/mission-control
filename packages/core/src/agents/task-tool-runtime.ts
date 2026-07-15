@@ -1,23 +1,23 @@
 import type { AgentDefinition } from '@mission-control/protocol';
-import type { ChildHostCallbacks } from '../behavior/subagents/spawn-child.js';
-import type { SessionControlEpoch } from '../runtime/session-control-cancellation.js';
+import type { ChildHostCallbacks } from '../behavior/subagents/spawn-child';
+import type { SessionControlEpoch } from '../runtime/session-control-cancellation';
 import type {
     ChildSpawnRequest,
     ChildSpawnResult,
     TaskToolBackgroundHandle,
     TaskToolRuntime,
-} from '../tools/task/task-tool.js';
-import { ToolRegistry } from '../tools/tool-registry.js';
-import type { AgentIndex } from './agent-registry.js';
-import { getRuntimeRegistry, MAIN_AGENT_ID, type RuntimeAgentRegistry } from './runtime-registry.js';
+} from '../tools/task/task-tool';
+import { ToolRegistry } from '../tools/tool-registry';
+import type { AgentIndex } from './agent-registry';
+import { getRuntimeRegistry, MAIN_AGENT_ID, type RuntimeAgentRegistry } from './runtime-registry';
 import {
     assertAgentSpawnAllowed,
     childDisplayName,
     childResumeError,
     type PreparedChildSpawnAuthority,
     prepareChildSpawnAuthority,
-} from './task-tool-runtime-authority.js';
-import { startBackgroundChildSession } from './task-tool-runtime-background.js';
+} from './task-tool-runtime-authority';
+import { startBackgroundChildSession } from './task-tool-runtime-background';
 import {
     type ChildSpawnContext,
     type ConcreteTaskToolRuntimeOptions,
@@ -25,9 +25,9 @@ import {
     resolveTaskToolSpawnFn,
     type SpawnFn,
     type TaskToolRuntimeServices,
-} from './task-tool-runtime-contract.js';
-import { runForegroundChildSession } from './task-tool-runtime-foreground.js';
-import type { TaskToolSubagentMirror } from './task-tool-runtime-types.js';
+} from './task-tool-runtime-contract';
+import { runForegroundChildSession } from './task-tool-runtime-foreground';
+import type { TaskToolSubagentMirror } from './task-tool-runtime-types';
 import { randomBytes } from 'node:crypto';
 
 export type {

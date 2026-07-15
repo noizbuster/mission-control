@@ -28,7 +28,7 @@ import {
     type LanguageModelV3TextPart,
     UnsupportedFunctionalityError,
 } from '@ai-sdk/provider';
-import { localOutputForSystemContract } from '../local-output-contract.js';
+import { localOutputForSystemContract } from '../local-output-contract';
 
 export type LocalEchoSdkModelOptions = {
     readonly provider?: string;

@@ -10,27 +10,27 @@ export type {
     AgentJobRecoveryReport,
     ResolveSubagentWaitInput,
     StartSubagentWaitInput,
-} from './agent-job-sql-mirror.js';
-export type { AgentDiscoveryDiagnostic, DiscoverAgentsOptions, DiscoverAgentsResult } from './agent-loader.js';
-export { discoverAgents } from './agent-loader.js';
-export { AgentParseError, parseAgentFile } from './agent-parser.js';
-export { AgentIndex } from './agent-registry.js';
+} from './agent-job-sql-mirror';
+export type { AgentDiscoveryDiagnostic, DiscoverAgentsOptions, DiscoverAgentsResult } from './agent-loader';
+export { discoverAgents } from './agent-loader';
+export { AgentParseError, parseAgentFile } from './agent-parser';
+export { AgentIndex } from './agent-registry';
 export {
     AsyncJobCleanupError,
     AsyncJobManager,
     type BackgroundJobHandle,
     type JobExecuteFn,
     type StartJobInput,
-} from './async-job-manager.js';
-export { BUNDLED_AGENT_TEMPLATES } from './bundled/index.js';
+} from './async-job-manager';
+export { BUNDLED_AGENT_TEMPLATES } from './bundled/index';
 export {
     type AgentDisposer,
     AgentLifecycleManager,
     type AgentReviver,
     type LifecycleAdoptOptions,
     type PersistedSubagentReviverFactory,
-} from './lifecycle-manager.js';
-export type { ModelPattern } from './model-resolver.js';
+} from './lifecycle-manager';
+export type { ModelPattern } from './model-resolver';
 export {
     type AdoptOptions,
     type AgentKind,
@@ -43,12 +43,12 @@ export {
     type RuntimeAgentPersistenceMirror,
     RuntimeAgentRegistry,
     type RuntimeAgentRegistryOptions,
-} from './runtime-registry.js';
+} from './runtime-registry';
 export {
     createSqlTaskRuntimeServices,
     type SqlTaskRuntimeServices,
     type SqlTaskRuntimeServicesOptions,
-} from './sql-task-runtime-services.js';
+} from './sql-task-runtime-services';
 export {
     type ChildSpawnContext,
     ConcreteTaskToolRuntime,
@@ -57,4 +57,4 @@ export {
     type SpawnFn,
     type TaskToolRuntimeServices,
     type TaskToolSubagentMirror,
-} from './task-tool-runtime.js';
+} from './task-tool-runtime';

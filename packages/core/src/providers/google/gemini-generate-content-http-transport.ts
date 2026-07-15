@@ -1,9 +1,9 @@
-import { parseSseFrames, readSseStream } from '../shared/sse-stream-transport.js';
+import { parseSseFrames, readSseStream } from '../shared/sse-stream-transport';
 import {
     type GeminiGenerateContentTransport,
     GeminiGenerateContentTransportError,
     type GeminiGenerateContentTransportRequest,
-} from './gemini-generate-content-transport.js';
+} from './gemini-generate-content-transport';
 
 const ERROR_FIELD = 'error';
 const STATUS_FIELD = 'status';

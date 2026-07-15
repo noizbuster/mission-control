@@ -10,9 +10,9 @@ export {
     type DiscoverPluginsResult,
     discoverPlugins,
     loadPluginManifest,
-} from './plugin-loader.js';
-export { PluginManager, type PluginManagerOptions } from './plugin-manager.js';
-export { ensurePluginDirs, pluginHomeEnvKey, resolvePluginDir, resolvePluginHome } from './plugin-paths.js';
+} from './plugin-loader';
+export { PluginManager, type PluginManagerOptions } from './plugin-manager';
+export { ensurePluginDirs, pluginHomeEnvKey, resolvePluginDir, resolvePluginHome } from './plugin-paths';
 export {
     type TuiPluginHostApi,
     TuiPluginHostRegistry,
@@ -21,4 +21,4 @@ export {
     type TuiPluginLoadResult,
     type TuiPluginRegistrationHandle,
     type TuiPluginSource,
-} from './tui-plugin-host.js';
+} from './tui-plugin-host';

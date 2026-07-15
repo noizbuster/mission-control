@@ -17,10 +17,10 @@
  * deterministically without touching disk.
  */
 
-import { LocalDbConfigError, LocalDbInitializationError } from '../db/local-libsql-db.js';
-import { openMissionControlDb } from '../db/mission-control-db.js';
-import type { PersistentMemoryStore } from './persistent-memory-store.js';
-import { isTursoAvailable, TursoPersistentStore } from './turso-persistent-store.js';
+import { LocalDbConfigError, LocalDbInitializationError } from '../db/local-libsql-db';
+import { openMissionControlDb } from '../db/mission-control-db';
+import type { PersistentMemoryStore } from './persistent-memory-store';
+import { isTursoAvailable, TursoPersistentStore } from './turso-persistent-store';
 
 export type PersistentStoreOpener = (dataDir: string) => Promise<PersistentMemoryStore>;
 

@@ -23,22 +23,22 @@ import type {
 } from '@mission-control/protocol';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createCodingAgentGraph } from '../behavior/coding-agent-graph.js';
-import { createCodingAgentNodeRegistry } from '../behavior/coding-agent-registry.js';
-import { approvalGraph } from '../behavior/graph-coordinator-test-support.js';
-import { createObservabilityRedactor } from '../providers/observability-redactor.js';
-import { ToolRegistry } from '../tools/tool-registry.js';
+import { createCodingAgentGraph } from '../behavior/coding-agent-graph';
+import { createCodingAgentNodeRegistry } from '../behavior/coding-agent-registry';
+import { approvalGraph } from '../behavior/graph-coordinator-test-support';
+import { createObservabilityRedactor } from '../providers/observability-redactor';
+import { ToolRegistry } from '../tools/tool-registry';
 import {
     agentMessagesToSeedModelMessages,
     createGraphTurnRunner,
     mapGraphTurnResult,
-} from './graph-coordinator-turn.js';
-import { type RunCoordinatorTurnContext, SessionRunCoordinator } from './run-coordinator.js';
+} from './graph-coordinator-turn';
+import { type RunCoordinatorTurnContext, SessionRunCoordinator } from './run-coordinator';
 import {
     cleanupCoordinatorContexts,
     openCoordinatorContext,
     providerFromRequests,
-} from './run-coordinator-test-support.js';
+} from './run-coordinator-test-support';
 
 const NOW = '2026-06-16T00:00:00.000Z';
 const MODEL_SELECTION: ModelProviderSelection = { providerID: 'anthropic', modelID: 'claude-fable-5' };

@@ -4,7 +4,7 @@ import type {
     SidecarTaskInput,
     SidecarTaskOutput,
 } from '@mission-control/protocol';
-import type { SidecarClient } from './sidecar-client.js';
+import type { SidecarClient } from './sidecar-client';
 
 export class MockSidecarClient implements SidecarClient {
     status(): NativeSidecarStatus {

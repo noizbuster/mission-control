@@ -9,9 +9,9 @@
  * by a schema refine before execution).
  */
 import { z } from 'zod';
-import { isMemoryBackendActive, type MemoryBackend } from './memory-backend.js';
-import { ToolRegistry } from './tool-registry.js';
-import type { ToolAdvertisement, ToolRegistration } from './tool-registry-types.js';
+import { isMemoryBackendActive, type MemoryBackend } from './memory-backend';
+import { ToolRegistry } from './tool-registry';
+import type { ToolAdvertisement, ToolRegistration } from './tool-registry-types';
 
 export const MANAGE_SKILL_TOOL_NAME = 'manage_skill';
 

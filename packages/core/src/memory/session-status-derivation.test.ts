@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { projectSessionReplay } from '../session-replay.js';
-import { envelope, runEvent, sessionStoppedEvent } from '../session-replay-coding-test-support.js';
+import { projectSessionReplay } from '../session-replay';
+import { envelope, runEvent, sessionStoppedEvent } from '../session-replay-coding-test-support';
 import type {
     SessionBackgroundJob,
     SessionLifecycleDerivationInput,
     SessionPendingWait,
-} from './session-status-derivation.js';
-import { deriveSessionLifecycle } from './session-status-derivation.js';
+} from './session-status-derivation';
+import { deriveSessionLifecycle } from './session-status-derivation';
 
 const SESSION_ID = 'session_status_derivation';
 

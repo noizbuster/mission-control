@@ -1,9 +1,9 @@
-import { parseSseFrames, readSseStream } from '../shared/sse-stream-transport.js';
+import { parseSseFrames, readSseStream } from '../shared/sse-stream-transport';
 import {
     type OpenAICompatibleTransport,
     OpenAICompatibleTransportError,
     type OpenAICompatibleTransportRequest,
-} from './openai-compatible-transport.js';
+} from './openai-compatible-transport';
 
 export function createNodeOpenAICompatibleTransport(): OpenAICompatibleTransport {
     return {

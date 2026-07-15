@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { expireSessionControlLease } from './session-control-lease.js';
+import { expireSessionControlLease } from './session-control-lease';
 import {
     completeSessionControlOperation,
     createSessionControlOperation,
@@ -11,14 +11,14 @@ import {
     SESSION_CONTROL_SETTLED_RETENTION_MS,
     settleSessionControlOperationHandle,
     startSessionControlOperationGc,
-} from './session-control-operation.js';
+} from './session-control-operation';
 import {
     acquireOperationTestLease,
     cleanupOperationTestRuntimes,
     createOperationTestRuntime,
     TEST_DB_IDENTITY,
     TEST_SESSION_ID,
-} from './session-control-operation-test-support.js';
+} from './session-control-operation-test-support';
 
 afterEach(cleanupOperationTestRuntimes);
 

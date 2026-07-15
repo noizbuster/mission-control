@@ -1,8 +1,8 @@
 import type { Mode, WorkflowSpec } from '@mission-control/protocol';
-import { createDefaultWorkflowGraph } from './default-workflow-graph.js';
-import { autopilotMode } from './modes/autopilot-mode.js';
-import { createPlannerWorkflowGraph, PLANNER_READONLY_MODE } from './planner-workflow-graph.js';
-import { createRunnerWorkflowGraph } from './runner-workflow-graph.js';
+import { createDefaultWorkflowGraph } from './default-workflow-graph';
+import { autopilotMode } from './modes/autopilot-mode';
+import { createPlannerWorkflowGraph, PLANNER_READONLY_MODE } from './planner-workflow-graph';
+import { createRunnerWorkflowGraph } from './runner-workflow-graph';
 
 export const BUILTIN_WORKFLOWS: readonly WorkflowSpec[] = [
     {

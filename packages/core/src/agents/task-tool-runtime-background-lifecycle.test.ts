@@ -6,7 +6,7 @@ import {
     createLifecycleHost,
     lifecycleRequest,
     makeLifecycleServices,
-} from './task-tool-runtime-lifecycle-test-support.js';
+} from './task-tool-runtime-lifecycle-test-support';
 
 afterEach(async () => {
     vi.restoreAllMocks();

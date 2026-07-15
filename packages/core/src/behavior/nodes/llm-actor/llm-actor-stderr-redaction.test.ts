@@ -1,7 +1,7 @@
 import type { AbgSignal } from '@mission-control/protocol';
 import { MockLanguageModelV3 } from 'ai/test';
 import { describe, expect, it, vi } from 'vitest';
-import { runLlmActor } from './llm-actor-node.js';
+import { runLlmActor } from './llm-actor-node';
 
 const NOW = '2026-07-13T00:00:00.000Z';
 

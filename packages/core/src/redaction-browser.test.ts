@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createObservabilityRedactor } from './redaction.js';
+import { createObservabilityRedactor } from './redaction';
 import { readFile } from 'node:fs/promises';
 
 describe('browser redaction export', () => {

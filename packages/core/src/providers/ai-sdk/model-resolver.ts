@@ -20,10 +20,10 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
 import type { AbgNodeModelOptions, ProviderCredential } from '@mission-control/protocol';
-import type { LlmActorModel } from '../../behavior/nodes/llm-actor/llm-actor-node.js';
-import type { ProviderCredentialResolver } from '../credential-resolver.js';
-import { openAICompatibleProviderSpec } from '../openai-compatible/openai-compatible-specs.js';
-import { createLocalEchoSdkModel } from './local-echo-sdk-model.js';
+import type { LlmActorModel } from '../../behavior/nodes/llm-actor/llm-actor-node';
+import type { ProviderCredentialResolver } from '../credential-resolver';
+import { openAICompatibleProviderSpec } from '../openai-compatible/openai-compatible-specs';
+import { createLocalEchoSdkModel } from './local-echo-sdk-model';
 
 export type SdkModelResolver = (options: AbgNodeModelOptions) => LlmActorModel;
 

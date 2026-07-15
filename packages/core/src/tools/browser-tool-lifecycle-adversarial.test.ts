@@ -1,9 +1,9 @@
 import type { PermissionDecision } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { type BrowserConnectFn, createBrowserToolRegistration } from './browser-tool.js';
-import { BrowserHarness, createRegistration, toolContext } from './browser-tool-lifecycle-test-support.js';
-import { projectTrustReader } from './browser-tool-test-support.js';
-import { ToolExecutionError } from './tool-registry-types.js';
+import { type BrowserConnectFn, createBrowserToolRegistration } from './browser-tool';
+import { BrowserHarness, createRegistration, toolContext } from './browser-tool-lifecycle-test-support';
+import { projectTrustReader } from './browser-tool-test-support';
+import { ToolExecutionError } from './tool-registry-types';
 
 describe('browser tool adversarial lifecycle', () => {
     afterEach(() => vi.useRealTimers());

@@ -1,7 +1,7 @@
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { z } from 'zod';
-import type { NativesClient } from '../native/natives-client.js';
-import type { SchemeResolver } from './scheme-resolver.js';
+import type { NativesClient } from '../native/natives-client';
+import type { SchemeResolver } from './scheme-resolver';
 
 export const readInputSchema = z
     .object({

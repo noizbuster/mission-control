@@ -9,8 +9,8 @@ import {
     type ToolModelOutput,
     type ToolRegistration,
     type ToolRegistrationMetadata,
-} from './tool-registry-types.js';
-import { completedToolEvent, failedToolEvent } from './tool-settlement-events.js';
+} from './tool-registry-types';
+import { completedToolEvent, failedToolEvent } from './tool-settlement-events';
 import { createHash } from 'node:crypto';
 
 const neverAbortSignal = new AbortController().signal;

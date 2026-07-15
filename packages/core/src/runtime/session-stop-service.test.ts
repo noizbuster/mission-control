@@ -1,24 +1,24 @@
 // allow: SIZE_OK -- HEAD 330 -> current 447 pure LOC; one operator-stop fencing and settlement state-machine integration matrix.
 import { type AgentEvent, RunSchema } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { type LocalLibsqlDb, openLocalLibsqlDb } from '../db/local-libsql-db.js';
+import { type LocalLibsqlDb, openLocalLibsqlDb } from '../db/local-libsql-db';
 import {
     type LocalSessionEventStore,
     missionControlDbUrl,
     openLocalSessionEventStore,
-} from '../memory/local-session-store.js';
-import { createObservabilityRedactor } from '../providers/observability-redactor.js';
-import { readRunFromDb, writeRunToDb } from './mission-run/mission-run-db.js';
-import { SessionRunOwner } from './run-owner.js';
-import { SessionControlHost, type SessionControlHostPublisher } from './session-control-host.js';
+} from '../memory/local-session-store';
+import { createObservabilityRedactor } from '../providers/observability-redactor';
+import { readRunFromDb, writeRunToDb } from './mission-run/mission-run-db';
+import { SessionRunOwner } from './run-owner';
+import { SessionControlHost, type SessionControlHostPublisher } from './session-control-host';
 import {
     acquireSessionControlLease,
     expireSessionControlLease,
     readSessionControlLease,
-} from './session-control-lease.js';
-import { readSessionControlOperation } from './session-control-operation.js';
-import { appendFencedSessionStopEvent } from './session-stop-event-writer.js';
-import { SessionStopService } from './session-stop-service.js';
+} from './session-control-lease';
+import { readSessionControlOperation } from './session-control-operation';
+import { appendFencedSessionStopEvent } from './session-stop-event-writer';
+import { SessionStopService } from './session-stop-service';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

@@ -1,11 +1,11 @@
 import type { PolicyEffectRule } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { buildChildPermissions } from '../tools/task/task-tool-routing.js';
+import { buildChildPermissions } from '../tools/task/task-tool-routing';
 import {
     buildRuntimeWithServices,
     makeBackgroundRequest,
     makeTaskRuntimeServices,
-} from './task-tool-runtime-background-test-support.js';
+} from './task-tool-runtime-background-test-support';
 import {
     advertisedChildToolNames,
     allowAllChildPermissions,
@@ -13,7 +13,7 @@ import {
     makePermissionAgent,
     makePermissionRequest,
     makePermissionTool,
-} from './task-tool-runtime-permissions-test-support.js';
+} from './task-tool-runtime-permissions-test-support';
 
 describe('ConcreteTaskToolRuntime child authority', () => {
     it('enforces the parent agent spawn allowlist', async () => {

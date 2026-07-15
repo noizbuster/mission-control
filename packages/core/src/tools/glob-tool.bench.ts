@@ -1,7 +1,7 @@
 import { bench, describe } from 'vitest';
-import { createNativesClient } from '../native/natives-client.js';
-import { createGlobToolRegistration } from './glob-tool-factory.js';
-import { createWorkspaceGuard, defaultReadOnlyRepoToolDenylist } from './read-tools-paths.js';
+import { createNativesClient } from '../native/natives-client';
+import { createGlobToolRegistration } from './glob-tool-factory';
+import { createWorkspaceGuard, defaultReadOnlyRepoToolDenylist } from './read-tools-paths';
 import { existsSync, rmSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

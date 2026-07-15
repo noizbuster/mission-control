@@ -8,9 +8,9 @@
 // redacted and byte-capped at retention time.
 
 import { z } from 'zod';
-import type { MonitorCounters, MonitorManager, MonitorStream } from './monitor-manager.js';
-import type { MonitorToolsConfig } from './monitor-start-tool.js';
-import type { ToolAdvertisement, ToolRegistration } from './tool-registry.js';
+import type { MonitorCounters, MonitorManager, MonitorStream } from './monitor-manager';
+import type { MonitorToolsConfig } from './monitor-start-tool';
+import type { ToolAdvertisement, ToolRegistration } from './tool-registry';
 
 export const MONITOR_OUTPUT_TOOL_NAME = 'monitor_output';
 const MONITOR_OUTPUT_LIMIT = { maxModelOutputChars: 16_000 } as const;

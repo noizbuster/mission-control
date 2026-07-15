@@ -1,8 +1,8 @@
 import type { PermissionKind, PolicyEffectRule, ProtocolError } from '@mission-control/protocol';
-import { evaluateRules } from '../permissions/rule-evaluator.js';
-import { wildcardMatch } from '../permissions/wildcard-match.js';
-import type { ToolAdvertisement, ToolInvocationPolicy } from '../tools/tool-registry.js';
-import { childPolicyResourceValue, resourcesForChildInvocation } from './child-tool-resources.js';
+import { evaluateRules } from '../permissions/rule-evaluator';
+import { wildcardMatch } from '../permissions/wildcard-match';
+import type { ToolAdvertisement, ToolInvocationPolicy } from '../tools/tool-registry';
+import { childPolicyResourceValue, resourcesForChildInvocation } from './child-tool-resources';
 
 export type ChildToolRuleGroups = readonly (readonly PolicyEffectRule[])[];
 

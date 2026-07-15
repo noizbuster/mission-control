@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { type BoulderState, writeBoulder } from '../../persistence/boulder-store.js';
+import { type BoulderState, writeBoulder } from '../../persistence/boulder-store';
 import {
     ContinuationRuntime,
     type ContinuationState,
     type GraphRunContinuationResult,
-} from './continuation-runtime.js';
+} from './continuation-runtime';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

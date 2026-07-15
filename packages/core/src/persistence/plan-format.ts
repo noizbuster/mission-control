@@ -1,5 +1,5 @@
-import { OmoPersistenceError } from './paths.js';
-import { type PlanChecklist, parsePlanChecklistText } from './plan-store.js';
+import { OmoPersistenceError } from './paths';
+import { type PlanChecklist, parsePlanChecklistText } from './plan-store';
 
 /**
  * Slug must be lowercase alphanumeric with single-hyphen separators.

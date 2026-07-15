@@ -1,7 +1,7 @@
 import { type WorkflowSpec, WorkflowSpecSchema } from '@mission-control/protocol';
 import { afterEach, vi } from 'vitest';
-import { missionControlDataDirEnvKey } from '../../memory/data-dir.js';
-import type { NormalizedMissionRunStoreLocation } from './mission-run-store-location.js';
+import { missionControlDataDirEnvKey } from '../../memory/data-dir';
+import type { NormalizedMissionRunStoreLocation } from './mission-run-store-location';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

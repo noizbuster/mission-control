@@ -1,17 +1,17 @@
 import { defaultModelProviderSelection } from '@mission-control/config';
 import type { ProviderStreamChunk } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { createDesktopSessionCommandService } from './desktop-session-commands.js';
-import { commandRunCall, filePatchCall, fixedNow, readReplay } from './desktop-session-commands-test-support.js';
+import { createDesktopSessionCommandService } from './desktop-session-commands';
+import { commandRunCall, filePatchCall, fixedNow, readReplay } from './desktop-session-commands-test-support';
 import {
     assertAttachesToExistingRunOwner,
     assertDoesNotStartSecondActiveRun,
     assertInterruptPreservesApprovalDiagnostics,
     assertResumesBlockedWorkAfterReopeningStore,
-} from './desktop-session-run-owner-scenarios.test-support.js';
-import { JsonlSessionEventStore } from './memory/jsonl-session-event-store.js';
-import { createDeterministicProvider } from './providers/deterministic-provider.js';
-import type { ProviderAdapter, ProviderTurnRequest } from './providers/provider-turn-types.js';
+} from './desktop-session-run-owner-scenarios.test-support';
+import { JsonlSessionEventStore } from './memory/jsonl-session-event-store';
+import { createDeterministicProvider } from './providers/deterministic-provider';
+import type { ProviderAdapter, ProviderTurnRequest } from './providers/provider-turn-types';
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

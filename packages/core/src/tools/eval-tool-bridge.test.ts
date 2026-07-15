@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createEvalToolBridge } from './eval-tool-bridge.js';
+import { createEvalToolBridge } from './eval-tool-bridge';
 
 describe('eval tool bridge', () => {
     it('allows read-only tools and blocks eval/task/mcp__', () => {

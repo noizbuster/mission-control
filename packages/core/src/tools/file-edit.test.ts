@@ -1,8 +1,8 @@
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import { type FileEditToolOptions, registerFileEditTool } from './file-edit.js';
-import { fileEditInputSchema } from './file-edit-schemas.js';
-import { ToolRegistry } from './tool-registry.js';
+import { type FileEditToolOptions, registerFileEditTool } from './file-edit';
+import { fileEditInputSchema } from './file-edit-schemas';
+import { ToolRegistry } from './tool-registry';
 import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

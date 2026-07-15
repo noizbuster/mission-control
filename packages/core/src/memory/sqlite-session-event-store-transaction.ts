@@ -1,6 +1,6 @@
-import type { LocalLibsqlDb } from '../db/local-libsql-db.js';
-import { runWithLocalLibsqlWriteLock } from '../db/local-libsql-db.js';
-import { runLocalLibsqlClientTransaction } from '../db/local-libsql-transaction.js';
+import type { LocalLibsqlDb } from '../db/local-libsql-db';
+import { runWithLocalLibsqlWriteLock } from '../db/local-libsql-db';
+import { runLocalLibsqlClientTransaction } from '../db/local-libsql-transaction';
 
 export async function runSqliteSessionWriteTransaction<T>(input: {
     readonly runtime: LocalLibsqlDb;

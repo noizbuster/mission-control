@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { ProjectTrustDecision, ProjectTrustLookup } from '../../trust/project-trust-store.js';
-import { ToolRegistry } from '../tool-registry.js';
-import type { ResolvedMcpServer } from './config.js';
+import type { ProjectTrustDecision, ProjectTrustLookup } from '../../trust/project-trust-store';
+import { ToolRegistry } from '../tool-registry';
+import type { ResolvedMcpServer } from './config';
 import {
     type ManagedMcpClient,
     McpConnectionManager,
     type McpConnectionManagerDependencies,
-} from './connection-manager.js';
-import { registerNamespacedMcpTools } from './surfacing.js';
+} from './connection-manager';
+import { registerNamespacedMcpTools } from './surfacing';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

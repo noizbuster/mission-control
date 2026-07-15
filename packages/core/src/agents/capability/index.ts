@@ -1,6 +1,6 @@
 import type { AgentDefinition } from '@mission-control/protocol';
-import type { AgentDiscoveryDiagnostic, DiscoverAgentsResult } from '../agent-loader.js';
-import type { AgentPluginProvider, LoadContext } from './types.js';
+import type { AgentDiscoveryDiagnostic, DiscoverAgentsResult } from '../agent-loader';
+import type { AgentPluginProvider, LoadContext } from './types';
 
 /**
  * Priority-based registry of cross-harness agent providers. Providers register with a
@@ -73,4 +73,4 @@ export class CapabilityRegistry {
     }
 }
 
-export type { AgentPluginProvider, LoadContext } from './types.js';
+export type { AgentPluginProvider, LoadContext } from './types';

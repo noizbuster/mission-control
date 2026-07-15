@@ -1,5 +1,5 @@
 import { type ModelMessage, modelMessageSchema } from 'ai';
-import { OBSERVABILITY_TRUNCATED, type ObservabilityRedactor } from './observability-redactor.js';
+import { OBSERVABILITY_TRUNCATED, type ObservabilityRedactor } from './observability-redactor';
 import { createHash } from 'node:crypto';
 
 export function redactModelMessagesForObservability(

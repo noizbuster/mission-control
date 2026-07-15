@@ -7,7 +7,7 @@
 
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createMonitorListToolRegistration, type MonitorListOutput } from './monitor-list-tool.js';
+import { createMonitorListToolRegistration, type MonitorListOutput } from './monitor-list-tool';
 import {
     DEFAULT_MONITOR_MANAGER_CONFIG,
     MonitorManager,
@@ -17,16 +17,16 @@ import {
     type MonitorProcessLine,
     type MonitorProcessSpawner,
     type MonitorSpawnRequest,
-} from './monitor-manager.js';
-import { createMonitorOutputToolRegistration, type MonitorOutputOutput } from './monitor-output-tool.js';
+} from './monitor-manager';
+import { createMonitorOutputToolRegistration, type MonitorOutputOutput } from './monitor-output-tool';
 import {
     createMonitorStartToolRegistration,
     DEFAULT_MONITOR_TOOLS_CONFIG,
     type MonitorStartOutput,
     type MonitorToolsConfig,
-} from './monitor-start-tool.js';
-import { createMonitorStopToolRegistration, type MonitorStopOutput } from './monitor-stop-tool.js';
-import { type ToolInvocationSettlement, ToolRegistry } from './tool-registry.js';
+} from './monitor-start-tool';
+import { createMonitorStopToolRegistration, type MonitorStopOutput } from './monitor-stop-tool';
+import { type ToolInvocationSettlement, ToolRegistry } from './tool-registry';
 import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

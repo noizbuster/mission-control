@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { assertValidPlanSlug, isValidPlanSlug, type PlanContent, PlanFormatError, writePlan } from './plan-format.js';
-import { parsePlanChecklistText } from './plan-store.js';
+import { assertValidPlanSlug, isValidPlanSlug, type PlanContent, PlanFormatError, writePlan } from './plan-format';
+import { parsePlanChecklistText } from './plan-store';
 
 function sampleContent(overrides: Partial<PlanContent> = {}): PlanContent {
     return {

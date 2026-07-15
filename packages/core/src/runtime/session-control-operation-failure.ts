@@ -1,11 +1,11 @@
-import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db.js';
-import type { SessionControlLease } from './session-control-lease.js';
+import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db';
+import type { SessionControlLease } from './session-control-lease';
 import {
     isLiveOperationLease,
     runSessionControlOperationImmediate,
     selectSessionControlOperation,
-} from './session-control-operation-sql.js';
-import { assertOperationWallTime, SESSION_CONTROL_SETTLED_RETENTION_MS } from './session-control-operation-types.js';
+} from './session-control-operation-sql';
+import { assertOperationWallTime, SESSION_CONTROL_SETTLED_RETENTION_MS } from './session-control-operation-types';
 
 export async function failSessionControlOperation(input: {
     readonly runtime: LocalLibsqlWriteTarget;

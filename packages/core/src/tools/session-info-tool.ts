@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { readSessionProjection, type SessionToolsOptions, summarizeProjection } from './session-tools-shared.js';
-import type { ToolRegistration } from './tool-registry-types.js';
+import { readSessionProjection, type SessionToolsOptions, summarizeProjection } from './session-tools-shared';
+import type { ToolRegistration } from './tool-registry-types';
 
 const OUTPUT_LIMIT_CHARS = 4000;
 

@@ -1,7 +1,7 @@
 import { type AgentEventEnvelope, AgentEventEnvelopeSchema } from '@mission-control/protocol';
 import { describe, expect, it, vi } from 'vitest';
-import { JsonlSessionEventStore } from './jsonl-session-event-store.js';
-import { createTempDataDir, readJsonlRecords, sessionStartedEvent } from './jsonl-session-event-store-test-support.js';
+import { JsonlSessionEventStore } from './jsonl-session-event-store';
+import { createTempDataDir, readJsonlRecords, sessionStartedEvent } from './jsonl-session-event-store-test-support';
 import { join } from 'node:path';
 
 describe('JsonlSessionEventStore append', () => {

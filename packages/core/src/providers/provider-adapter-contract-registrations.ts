@@ -1,5 +1,5 @@
-import { OPENAI_COMPATIBLE_PROVIDER_SPECS } from './openai-compatible/openai-compatible-specs.js';
-import type { ProviderAdapterContractRegistration } from './provider-adapter-contract-test-support.js';
+import { OPENAI_COMPATIBLE_PROVIDER_SPECS } from './openai-compatible/openai-compatible-specs';
+import type { ProviderAdapterContractRegistration } from './provider-adapter-contract-test-support';
 
 const runnerProofs = {
     abort: 'provider-turn-runner.test.ts > emits typed abort and context overflow failures as replayable durable events',

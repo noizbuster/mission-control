@@ -1,25 +1,25 @@
-import { type LocalLibsqlWriteTarget, runLocalLibsqlWrite } from '../db/local-libsql-db.js';
-import { ensureLocalDbSchema } from '../db/local-libsql-schema.js';
+import { type LocalLibsqlWriteTarget, runLocalLibsqlWrite } from '../db/local-libsql-db';
+import { ensureLocalDbSchema } from '../db/local-libsql-schema';
 import {
     createObservabilityRedactor,
     type ObservabilityRedactor,
     redactAgentEventEnvelopeForObservability,
-} from '../providers/observability-redactor.js';
+} from '../providers/observability-redactor';
 import {
     createJsonlSessionEventRecord,
     createJsonlSessionLogHeader,
     serializeJsonlRecord,
-} from './jsonl-session-records.js';
-import { markSessionExported, readExportEnvelopes } from './session-import-event-sql.js';
-import { jsonlSourcePaths, runSourcePaths } from './session-import-files.js';
-import { type ImportAccumulator, importJsonlSource, importRunSource } from './session-import-sources.js';
-import type { LegacySessionImportDiagnostic } from './session-import-sql.js';
+} from './jsonl-session-records';
+import { markSessionExported, readExportEnvelopes } from './session-import-event-sql';
+import { jsonlSourcePaths, runSourcePaths } from './session-import-files';
+import { type ImportAccumulator, importJsonlSource, importRunSource } from './session-import-sources';
+import type { LegacySessionImportDiagnostic } from './session-import-sql';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-export type { LegacySessionImportConflictCode } from './session-import-conflict.js';
-export { LegacySessionImportConflictError } from './session-import-conflict.js';
-export { listLegacySessionImportLedger } from './session-import-sql.js';
+export type { LegacySessionImportConflictCode } from './session-import-conflict';
+export { LegacySessionImportConflictError } from './session-import-conflict';
+export { listLegacySessionImportLedger } from './session-import-sql';
 
 export type LegacySessionImportResult = {
     readonly importedEventCount: number;

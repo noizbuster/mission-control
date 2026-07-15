@@ -14,9 +14,9 @@
  */
 
 import type { AbgNodeSpec, AbgSignal } from '@mission-control/protocol';
-import type { ToolInvocationInput } from '../../tools/tool-registry.js';
-import { createAbgEmitSignal } from '../abg-emit.js';
-import type { AbgNodeRunContext, AbgNodeRunner } from '../node-registry.js';
+import type { ToolInvocationInput } from '../../tools/tool-registry';
+import { createAbgEmitSignal } from '../abg-emit';
+import type { AbgNodeRunContext, AbgNodeRunner } from '../node-registry';
 import { randomUUID } from 'node:crypto';
 
 function nodeError(code: string, message: string): { code: string; message: string } {

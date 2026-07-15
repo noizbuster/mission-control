@@ -1,7 +1,7 @@
-import type { SessionBackgroundJob } from '../memory/session-status-derivation.js';
-import type { ResolveSubagentWaitInput } from './agent-job-sql-mirror-types.js';
-import type { BackgroundJobHandle } from './async-job-manager.js';
-import { formatSalvageSnippet } from './runaway-guard.js';
+import type { SessionBackgroundJob } from '../memory/session-status-derivation';
+import type { ResolveSubagentWaitInput } from './agent-job-sql-mirror-types';
+import type { BackgroundJobHandle } from './async-job-manager';
+import { formatSalvageSnippet } from './runaway-guard';
 
 export const activeJobStatuses: ReadonlySet<BackgroundJobHandle['status']> = new Set(['queued', 'running']);
 

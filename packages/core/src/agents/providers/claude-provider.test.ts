@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { LoadContext } from '../capability/types.js';
-import { CLAUDE_TOOL_NAME_MAP, convertClaudeFrontmatter, loadClaudeCompatibleAgents } from './_claude-compatible.js';
-import { claudeCodeAgentProvider } from './claude-provider.js';
+import type { LoadContext } from '../capability/types';
+import { CLAUDE_TOOL_NAME_MAP, convertClaudeFrontmatter, loadClaudeCompatibleAgents } from './_claude-compatible';
+import { claudeCodeAgentProvider } from './claude-provider';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

@@ -1,5 +1,5 @@
-import { filePatchFailure } from './file-patch-errors.js';
-import type { ParsedPatchFile } from './file-patch-parser.js';
+import { filePatchFailure } from './file-patch-errors';
+import type { ParsedPatchFile } from './file-patch-parser';
 
 export function applyParsedPatch(file: ParsedPatchFile, original: string): string {
     const originalLines = splitLines(original);

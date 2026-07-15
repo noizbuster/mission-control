@@ -5,10 +5,10 @@
 import type { AbgNodeSpec, AbgSignal } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { ToolRegistry } from '../../tools/tool-registry.js';
-import type { ToolRegistration } from '../../tools/tool-registry-types.js';
-import type { AbgNodeRunContext } from '../node-registry.js';
-import { runToolActorNode } from './tool-actor-node.js';
+import { ToolRegistry } from '../../tools/tool-registry';
+import type { ToolRegistration } from '../../tools/tool-registry-types';
+import type { AbgNodeRunContext } from '../node-registry';
+import { runToolActorNode } from './tool-actor-node';
 
 async function collectSignals(signals: AsyncIterable<AbgSignal>): Promise<readonly AbgSignal[]> {
     const collected: AbgSignal[] = [];

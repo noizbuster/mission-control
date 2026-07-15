@@ -1,5 +1,5 @@
 import { appName } from '@mission-control/config';
-import type { LoadMcpConfigOptions } from './config-types.js';
+import type { LoadMcpConfigOptions } from './config-types';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';

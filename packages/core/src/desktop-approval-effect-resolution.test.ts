@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { DesktopApprovalEffect } from './desktop-approval-effect.js';
-import { createDesktopSessionCommandService } from './desktop-session-commands.js';
-import { openLocalSessionEventStore } from './memory/local-session-store.js';
-import { tempDataDir } from './memory/local-session-store-test-support.js';
-import { createDeterministicProvider } from './providers/deterministic-provider.js';
+import type { DesktopApprovalEffect } from './desktop-approval-effect';
+import { createDesktopSessionCommandService } from './desktop-session-commands';
+import { openLocalSessionEventStore } from './memory/local-session-store';
+import { tempDataDir } from './memory/local-session-store-test-support';
+import { createDeterministicProvider } from './providers/deterministic-provider';
 
 const STARTED_AT = '2026-07-15T03:00:00.000Z';
 const EXPIRED_AT = '2026-07-15T03:01:00.000Z';

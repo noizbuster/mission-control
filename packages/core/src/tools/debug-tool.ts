@@ -16,8 +16,8 @@
  */
 import { BUILTIN_DAP_ADAPTERS, type DapAdapter } from '@mission-control/protocol';
 import { z } from 'zod';
-import { ToolRegistry } from './tool-registry.js';
-import type { ToolAdvertisement, ToolRegistration } from './tool-registry-types.js';
+import { ToolRegistry } from './tool-registry';
+import type { ToolAdvertisement, ToolRegistration } from './tool-registry-types';
 
 export const DEBUG_TOOL_NAME = 'debug';
 

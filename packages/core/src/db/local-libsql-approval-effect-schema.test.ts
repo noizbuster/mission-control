@@ -1,9 +1,9 @@
 import { createClient } from '@libsql/client';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { localSessionDbUrl } from '../memory/local-session-store.js';
-import { tempDataDir } from '../memory/local-session-store-test-support.js';
-import { openLocalLibsqlDb } from './local-libsql-db.js';
+import { localSessionDbUrl } from '../memory/local-session-store';
+import { tempDataDir } from '../memory/local-session-store-test-support';
+import { openLocalLibsqlDb } from './local-libsql-db';
 
 const LEGACY_TIME = '2026-07-15T02:00:00.000Z';
 const columnNameSchema = z.object({ name: z.string() });

@@ -1,12 +1,12 @@
 import type { Client } from '@libsql/client';
 import { type AgentEvent, AgentEventEnvelopeSchema } from '@mission-control/protocol';
-import { appendParsedSqliteEnvelope } from '../memory/sqlite-session-event-store-append.js';
-import { ensureSqliteSessionRows, readSqliteNextSequence } from '../memory/sqlite-session-event-store-sql.js';
+import { appendParsedSqliteEnvelope } from '../memory/sqlite-session-event-store-append';
+import { ensureSqliteSessionRows, readSqliteNextSequence } from '../memory/sqlite-session-event-store-sql';
 import {
     createObservabilityRedactor,
     type ObservabilityRedactor,
     redactAgentEventEnvelopeForObservability,
-} from '../providers/observability-redactor.js';
+} from '../providers/observability-redactor';
 import { randomUUID } from 'node:crypto';
 
 export async function appendFencedSessionStopEvent(input: {

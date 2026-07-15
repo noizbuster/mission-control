@@ -1,6 +1,6 @@
 import type { AgentMessage, ProviderStreamChunk, ToolDefinition } from '@mission-control/protocol';
-import type { ProviderTurnRequest } from '../provider-turn-types.js';
-import type { AnthropicMessagesTransport, AnthropicMessagesTransportRequest } from './anthropic-messages-provider.js';
+import type { ProviderTurnRequest } from '../provider-turn-types';
+import type { AnthropicMessagesTransport, AnthropicMessagesTransportRequest } from './anthropic-messages-provider';
 
 export function anthropicCredential(providerID: string, apiKey: string) {
     return {

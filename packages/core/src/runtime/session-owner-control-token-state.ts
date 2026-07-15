@@ -3,9 +3,9 @@ import type {
     SessionOwnerControlToken,
     SessionStopBarrierKind,
 } from '@mission-control/protocol';
-import type { SessionChildSpawnBarrier } from './session-child-spawn-barrier.js';
-import { SessionOwnerControlServerError } from './session-owner-control-token.js';
-import type { ExactSessionStopAcquisition } from './session-stop-service.js';
+import type { SessionChildSpawnBarrier } from './session-child-spawn-barrier';
+import { SessionOwnerControlServerError } from './session-owner-control-token';
+import type { ExactSessionStopAcquisition } from './session-stop-service';
 
 export type SessionOwnerControlTokenState = {
     readonly token: SessionOwnerControlToken;

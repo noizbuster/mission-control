@@ -9,12 +9,12 @@
  * is the registry-layer guard that backs the spawn safety contract.
  */
 import type { AbgNodeModelOptions } from '@mission-control/protocol';
-import { spawnChildCodingAgent } from '../behavior/subagents/spawn-child.js';
-import type { SdkModelResolver } from '../providers/ai-sdk/model-resolver.js';
-import { createObservabilityRedactor } from '../providers/observability-redactor.js';
-import type { ChildSpawnResult } from '../tools/task/task-tool.js';
-import { createYieldToolRegistration } from '../tools/yield-tool/yield-tool.js';
-import type { ChildSpawnContext } from './task-tool-runtime.js';
+import { spawnChildCodingAgent } from '../behavior/subagents/spawn-child';
+import type { SdkModelResolver } from '../providers/ai-sdk/model-resolver';
+import { createObservabilityRedactor } from '../providers/observability-redactor';
+import type { ChildSpawnResult } from '../tools/task/task-tool';
+import { createYieldToolRegistration } from '../tools/yield-tool/yield-tool';
+import type { ChildSpawnContext } from './task-tool-runtime';
 
 /**
  * Capability classes ALWAYS dropped from child tool surfaces, regardless of path

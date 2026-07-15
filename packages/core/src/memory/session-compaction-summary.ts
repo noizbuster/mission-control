@@ -1,4 +1,4 @@
-import { REDACTED_CREDENTIAL, redactCredentialText } from '../providers/credential-resolver.js';
+import { REDACTED_CREDENTIAL, redactCredentialText } from '../providers/credential-resolver';
 
 const COMPACTION_SUMMARY_PATTERNS: readonly {
     readonly pattern: RegExp;

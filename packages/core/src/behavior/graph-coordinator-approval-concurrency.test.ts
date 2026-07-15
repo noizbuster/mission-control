@@ -6,9 +6,9 @@ import {
     drainMicrotasks,
     fanOutGraph,
     waitingMessages,
-} from './graph-coordinator-test-support.js';
-import { runAbgGraph } from './graph-runner.js';
-import { createDefaultAbgNodeRegistry } from './node-registry.js';
+} from './graph-coordinator-test-support';
+import { runAbgGraph } from './graph-runner';
+import { createDefaultAbgNodeRegistry } from './node-registry';
 
 const baseInput = {
     sessionId: 'session_graph_approval_concurrency',

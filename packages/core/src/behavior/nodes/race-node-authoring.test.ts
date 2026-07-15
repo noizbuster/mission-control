@@ -1,9 +1,9 @@
 import type { AbgNodeSpec, AbgSignal } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { collectSignals } from '../composite-node-test-helpers.js';
-import { MAX_RACE_CLEANUP_TIMEOUT_MS } from './race-cleanup.js';
-import { createRaceNodeRunner, MAX_RACE_CHILDREN } from './race-node.js';
-import { raceNode, runContext, validWinner } from './race-node-test-support.js';
+import { collectSignals } from '../composite-node-test-helpers';
+import { MAX_RACE_CLEANUP_TIMEOUT_MS } from './race-cleanup';
+import { createRaceNodeRunner, MAX_RACE_CHILDREN } from './race-node';
+import { raceNode, runContext, validWinner } from './race-node-test-support';
 
 describe('Race authoring bounds', () => {
     it('rejects child count above the Race cap before starting a branch', async () => {

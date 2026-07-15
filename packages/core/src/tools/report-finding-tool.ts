@@ -12,8 +12,8 @@
  * are not part of the core tool surface.
  */
 import { z } from 'zod';
-import { ToolRegistry } from './tool-registry.js';
-import type { ToolAdvertisement, ToolRegistration } from './tool-registry-types.js';
+import { ToolRegistry } from './tool-registry';
+import type { ToolAdvertisement, ToolRegistration } from './tool-registry-types';
 
 /** The canonical tool name so registry lookups avoid magic strings. */
 export const REPORT_FINDING_TOOL_NAME = 'report_finding';

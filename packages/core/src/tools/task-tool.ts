@@ -7,11 +7,11 @@
  * registration. Production CLI roots use the full-parity task runtime.
  */
 import { z } from 'zod';
-import { isChildSafeCapability } from '../behavior/subagents/child-policy.js';
-import type { ToolRegistry } from './tool-registry.js';
-import type { ToolRegistration } from './tool-registry-types.js';
-import { ToolExecutionError } from './tool-registry-types.js';
-import { truncateOutput, withContinuationHint } from './truncate.js';
+import { isChildSafeCapability } from '../behavior/subagents/child-policy';
+import type { ToolRegistry } from './tool-registry';
+import type { ToolRegistration } from './tool-registry-types';
+import { ToolExecutionError } from './tool-registry-types';
+import { truncateOutput, withContinuationHint } from './truncate';
 
 const DEFAULT_SUMMARY_LIMIT = 4000;
 

@@ -14,9 +14,9 @@
  */
 import { type WorkflowSpec, WorkflowSpecSchema } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { WorkflowRegistry } from '../workflows/workflow-registry.js';
-import { ToolRegistry } from './tool-registry.js';
-import { createWorkflowToolRegistration } from './workflow-tool/workflow-tool.js';
+import { WorkflowRegistry } from '../workflows/workflow-registry';
+import { ToolRegistry } from './tool-registry';
+import { createWorkflowToolRegistration } from './workflow-tool/workflow-tool';
 import { readFile } from 'node:fs/promises';
 
 async function loadSpec(filePath: string): Promise<WorkflowSpec> {

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { openLocalLibsqlDb, runLocalLibsqlWrite } from './local-libsql-db.js';
-import { runLocalLibsqlClientTransaction } from './local-libsql-transaction.js';
+import { openLocalLibsqlDb, runLocalLibsqlWrite } from './local-libsql-db';
+import { runLocalLibsqlClientTransaction } from './local-libsql-transaction';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

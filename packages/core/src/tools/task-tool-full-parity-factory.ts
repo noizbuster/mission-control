@@ -20,28 +20,28 @@ import type {
     ProtocolError,
 } from '@mission-control/protocol';
 import { z } from 'zod';
-import { AgentParseError, parseAgentFile } from '../agents/agent-parser.js';
-import { AgentIndex } from '../agents/agent-registry.js';
-import { BUNDLED_AGENT_TEMPLATES } from '../agents/bundled/index.js';
+import { AgentParseError, parseAgentFile } from '../agents/agent-parser';
+import { AgentIndex } from '../agents/agent-registry';
+import { BUNDLED_AGENT_TEMPLATES } from '../agents/bundled/index';
 import {
     DEFAULT_ROLE_CONFIG,
     type ModelPattern,
     type ResolveAgentModelInput,
     resolveAgentModel,
-} from '../agents/model-resolver.js';
-import type { ModelRole } from '../agents/model-roles.js';
-import { ConcreteTaskToolRuntime, type TaskToolRuntimeServices } from '../agents/task-tool-runtime.js';
-import type { ChildHostCallbacks } from '../behavior/subagents/spawn-child.js';
-import type { SdkModelResolver } from '../providers/ai-sdk/model-resolver.js';
+} from '../agents/model-resolver';
+import type { ModelRole } from '../agents/model-roles';
+import { ConcreteTaskToolRuntime, type TaskToolRuntimeServices } from '../agents/task-tool-runtime';
+import type { ChildHostCallbacks } from '../behavior/subagents/spawn-child';
+import type { SdkModelResolver } from '../providers/ai-sdk/model-resolver';
 import {
     createFullParityTaskToolRegistration,
     type TaskToolParams,
     type TaskToolResult,
     taskToolInputSchema,
-} from './task/task-tool.js';
-import { permissionRequest, requestToolPermission } from './tool-permissions.js';
-import type { ToolAdvertisement } from './tool-registry.js';
-import { ToolExecutionError, type ToolRegistration, ToolRegistry } from './tool-registry.js';
+} from './task/task-tool';
+import { permissionRequest, requestToolPermission } from './tool-permissions';
+import type { ToolAdvertisement } from './tool-registry';
+import { ToolExecutionError, type ToolRegistration, ToolRegistry } from './tool-registry';
 
 export type FullParityTaskToolOptions = {
     readonly workspaceRoot: string;

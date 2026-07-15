@@ -1,6 +1,6 @@
-import type { ChildSpawnRequest, ChildSpawnResult } from '../tools/task/task-tool.js';
-import type { RuntimeAgentRegistry } from './runtime-registry.js';
-import type { TaskToolRuntimeServices } from './task-tool-runtime-contract.js';
+import type { ChildSpawnRequest, ChildSpawnResult } from '../tools/task/task-tool';
+import type { RuntimeAgentRegistry } from './runtime-registry';
+import type { TaskToolRuntimeServices } from './task-tool-runtime-contract';
 import {
     attachChildControl,
     type ChildControlPrimaryFailure,
@@ -8,7 +8,7 @@ import {
     disposeChildControl,
     rethrowAfterChildCleanup,
     settleChildCompletion,
-} from './task-tool-runtime-control.js';
+} from './task-tool-runtime-control';
 
 type ForegroundChildIdentity = {
     readonly sessionId: string;

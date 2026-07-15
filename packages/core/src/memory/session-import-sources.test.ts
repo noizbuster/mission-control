@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { type ImportAccumulator, importJsonlSource } from './session-import-sources.js';
-import { countRows, openMigratedTestDb, writeLegacyFixture } from './session-import-test-support.js';
+import { type ImportAccumulator, importJsonlSource } from './session-import-sources';
+import { countRows, openMigratedTestDb, writeLegacyFixture } from './session-import-test-support';
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 

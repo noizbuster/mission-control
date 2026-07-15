@@ -1,17 +1,17 @@
 import type { Client } from '@libsql/client';
 import { afterEach, describe, expect, it } from 'vitest';
-import { expireSessionControlLease } from '../runtime/session-control-lease.js';
+import { expireSessionControlLease } from '../runtime/session-control-lease';
 import {
     createSessionControlCallbackFence,
     createSessionControlOperation,
     readSessionControlOperation,
-} from '../runtime/session-control-operation.js';
+} from '../runtime/session-control-operation';
 import {
     acquireOperationTestLease,
     cleanupOperationTestRuntimes,
     createOperationTestRuntime,
-} from '../runtime/session-control-operation-test-support.js';
-import { AsyncJobManager, type AsyncJobPersistenceMirror, type BackgroundJobHandle } from './async-job-manager.js';
+} from '../runtime/session-control-operation-test-support';
+import { AsyncJobManager, type AsyncJobPersistenceMirror, type BackgroundJobHandle } from './async-job-manager';
 
 afterEach(cleanupOperationTestRuntimes);
 

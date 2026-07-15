@@ -4,10 +4,10 @@ import type {
     PermissionDecision,
     PermissionRequest,
 } from '@mission-control/protocol';
-import { commandOperatorAborted, commandRunFailure } from './command-run-errors.js';
-import { executeCommand } from './command-run-executor.js';
-import { interruptedBeforeSpawnResult, runCommandWithTimeout } from './command-run-interruption.js';
-import { buildPermissionPatterns, defaultCommandRunPolicyProfile, isAllowlistedCommand } from './command-run-policy.js';
+import { commandOperatorAborted, commandRunFailure } from './command-run-errors';
+import { executeCommand } from './command-run-executor';
+import { interruptedBeforeSpawnResult, runCommandWithTimeout } from './command-run-interruption';
+import { buildPermissionPatterns, defaultCommandRunPolicyProfile, isAllowlistedCommand } from './command-run-policy';
 import {
     type CommandRunInput,
     type CommandRunOutput,
@@ -18,16 +18,16 @@ import {
     commandRunOutputSchema,
     commandRunParametersJsonSchema,
     type ResolvedCommandRunToolOptions,
-} from './command-run-schemas.js';
-import { permissionRequest, requestToolPermission } from './tool-permissions.js';
-import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './tool-registry.js';
-import type { ToolExecutionContext } from './tool-registry-types.js';
+} from './command-run-schemas';
+import { permissionRequest, requestToolPermission } from './tool-permissions';
+import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './tool-registry';
+import type { ToolExecutionContext } from './tool-registry-types';
 import { realpath } from 'node:fs/promises';
 
 const defaultCommandRunTimeoutMs = 120_000;
 
-export type { CommandExecutionRequest, CommandExecutionResult } from './command-run-executor.js';
-export type { CommandRunToolOptions } from './command-run-schemas.js';
+export type { CommandExecutionRequest, CommandExecutionResult } from './command-run-executor';
+export type { CommandRunToolOptions } from './command-run-schemas';
 
 export async function registerCommandRunTool(
     registry: ToolRegistry,
@@ -131,7 +131,7 @@ async function runCommand(
     options: ResolvedCommandRunToolOptions,
     command: readonly string[],
     signal: AbortSignal,
-    controlEpoch?: import('../runtime/session-control-cancellation.js').SessionControlEpoch,
+    controlEpoch?: import('../runtime/session-control-cancellation').SessionControlEpoch,
 ) {
     try {
         return await runCommandWithTimeout(options, command, signal, controlEpoch);

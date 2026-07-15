@@ -17,9 +17,9 @@ import {
     type PluginManifest,
     PluginManifestSchema,
 } from '@mission-control/protocol';
-import { defaultReadOnlyRepoToolDenylist, toPosixPath } from '../tools/read-tools-paths.js';
-import { stripJsoncComments } from '../workflows/jsonc-parser.js';
-import { pluginHomeEnvKey, resolvePluginHome } from './plugin-paths.js';
+import { defaultReadOnlyRepoToolDenylist, toPosixPath } from '../tools/read-tools-paths';
+import { stripJsoncComments } from '../workflows/jsonc-parser';
+import { pluginHomeEnvKey, resolvePluginHome } from './plugin-paths';
 import type { Dirent } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';

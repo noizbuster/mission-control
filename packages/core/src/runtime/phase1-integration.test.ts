@@ -19,23 +19,23 @@ import {
     packSystemContextSource,
     SystemContextRegistry,
     stringContextCodec,
-} from '../context/system-context-source.js';
-import { assembleSystemPrompt } from '../context/system-prompt.js';
-import { evaluateRules } from '../permissions/rule-evaluator.js';
-import { type BoulderState, readBoulder, writeBoulder } from '../persistence/boulder-store.js';
-import { parsePlanChecklist } from '../persistence/plan-store.js';
+} from '../context/system-context-source';
+import { assembleSystemPrompt } from '../context/system-prompt';
+import { evaluateRules } from '../permissions/rule-evaluator';
+import { type BoulderState, readBoulder, writeBoulder } from '../persistence/boulder-store';
+import { parsePlanChecklist } from '../persistence/plan-store';
 import {
     type ChildSpawnRequest,
     createFullParityTaskToolRegistration,
     type TaskToolRuntime,
     taskToolInputSchema,
-} from '../tools/task/task-tool.js';
-import type { ToolExecutionContext } from '../tools/tool-registry-types.js';
-import { ContinuationRuntime } from './continuation/continuation-runtime.js';
-import { completeRun, materializeMission, startRun } from './mission-run/mission-run-service.js';
-import { createMission, readMission } from './mission-run/mission-store.js';
-import { RunCoordinatorV2 } from './run-coordinator-v2.js';
-import { SessionInputDelivery } from './session-input-delivery.js';
+} from '../tools/task/task-tool';
+import type { ToolExecutionContext } from '../tools/tool-registry-types';
+import { ContinuationRuntime } from './continuation/continuation-runtime';
+import { completeRun, materializeMission, startRun } from './mission-run/mission-run-service';
+import { createMission, readMission } from './mission-run/mission-store';
+import { RunCoordinatorV2 } from './run-coordinator-v2';
+import { SessionInputDelivery } from './session-input-delivery';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';

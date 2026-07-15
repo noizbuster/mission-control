@@ -1,13 +1,13 @@
 import { AbgGraphSpecSchema, type PolicyEffectRuleSet, WorkflowSpecSchema } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { evaluateRules } from '../permissions/rule-evaluator.js';
+import { evaluateRules } from '../permissions/rule-evaluator';
 import {
     createPlannerWorkflowGraph,
     PLANNER_READONLY_MODE,
     PLANNER_READONLY_MODE_ID,
     PLANNER_READONLY_POLICIES,
     PLANNER_WORKFLOW_GRAPH_ID,
-} from './planner-workflow-graph.js';
+} from './planner-workflow-graph';
 import { readFile } from 'node:fs/promises';
 
 const workflowJsonPath = `${process.cwd()}/examples/abg/planner.workflow.json`;

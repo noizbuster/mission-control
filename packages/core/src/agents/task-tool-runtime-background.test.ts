@@ -4,7 +4,7 @@ import {
     buildRuntimeWithServices,
     makeBackgroundRequest,
     makeTaskRuntimeServices,
-} from './task-tool-runtime-background-test-support.js';
+} from './task-tool-runtime-background-test-support';
 
 describe('ConcreteTaskToolRuntime.startBackgroundSession', () => {
     describe('with injected services', () => {

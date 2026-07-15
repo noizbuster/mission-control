@@ -1,6 +1,6 @@
 import type { ModelCatalogEntry, ModelProviderCatalogEntry } from '@mission-control/config';
 import { describe, expect, it, vi } from 'vitest';
-import { createVariantLookup } from './variant-cache.js';
+import { createVariantLookup } from './variant-cache';
 
 describe('createVariantLookup', () => {
     it('reports configured variants and rejects unknown ones', () => {

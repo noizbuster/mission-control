@@ -1,9 +1,9 @@
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import type { SessionControlEpoch } from '../runtime/session-control-cancellation.js';
-import { registerCommandRunTool } from './command-run.js';
-import type { CommandExecutionRequest, CommandExecutionResult } from './command-run-executor.js';
-import { ToolRegistry } from './tool-registry.js';
+import type { SessionControlEpoch } from '../runtime/session-control-cancellation';
+import { registerCommandRunTool } from './command-run';
+import type { CommandExecutionRequest, CommandExecutionResult } from './command-run-executor';
+import { ToolRegistry } from './tool-registry';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

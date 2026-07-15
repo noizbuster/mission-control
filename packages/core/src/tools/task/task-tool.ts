@@ -17,9 +17,9 @@
  * Schema enforces XOR between batch and single-spawn; children run in parallel
  * via Promise.all; `context` propagates as `parentContext` to every child.
  */
-import { TASK_TOOL_NAME } from '../task-tool.js';
-import type { ToolRegistration } from '../tool-registry-types.js';
-import { ToolExecutionError } from '../tool-registry-types.js';
+import { TASK_TOOL_NAME } from '../task-tool';
+import type { ToolRegistration } from '../tool-registry-types';
+import { ToolExecutionError } from '../tool-registry-types';
 import {
     type BatchResultItem,
     type BatchTaskItem,
@@ -30,14 +30,14 @@ import {
     type TaskToolRuntime,
     taskToolInputSchema,
     taskToolOutputSchema,
-} from './task-tool-contract.js';
+} from './task-tool-contract';
 import {
     buildBatchRequest,
     buildChildPermissions,
     buildRequest,
     resolveRouting,
     resolveRoutingFromAgent,
-} from './task-tool-routing.js';
+} from './task-tool-routing';
 
 export type {
     BatchResultItem,
@@ -49,8 +49,8 @@ export type {
     TaskToolParams,
     TaskToolResult,
     TaskToolRuntime,
-} from './task-tool-contract.js';
-export { batchTaskItemSchema, taskToolBaseObjectSchema, taskToolInputSchema } from './task-tool-contract.js';
+} from './task-tool-contract';
+export { batchTaskItemSchema, taskToolBaseObjectSchema, taskToolInputSchema } from './task-tool-contract';
 
 const OUTPUT_LIMIT = { maxModelOutputChars: 8000 } as const;
 
@@ -191,7 +191,7 @@ async function executeBatch(
     tasks: readonly BatchTaskItem[],
     context: string | undefined,
     runtime: TaskToolRuntime,
-    toolContext: import('../tool-registry-types.js').ToolExecutionContext,
+    toolContext: import('../tool-registry-types').ToolExecutionContext,
 ): Promise<TaskToolResult> {
     const items: BatchResultItem[] = [];
     for (let waveStart = 0; waveStart < tasks.length; waveStart += 4) {

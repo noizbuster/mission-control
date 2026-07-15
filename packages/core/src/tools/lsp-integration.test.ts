@@ -22,9 +22,9 @@
  */
 
 import { afterEach, describe, expect, it } from 'vitest';
-import type { LspTransport, LspTransportFactory, StdioLspClientDeps } from './lsp-stdio-client.js';
-import { decodeLspFrame, encodeLspMessage, StdioLspClient } from './lsp-stdio-client.js';
-import type { LspDiagnostic } from './lsp-tool.js';
+import type { LspTransport, LspTransportFactory, StdioLspClientDeps } from './lsp-stdio-client';
+import { decodeLspFrame, encodeLspMessage, StdioLspClient } from './lsp-stdio-client';
+import type { LspDiagnostic } from './lsp-tool';
 import type { ChildProcess } from 'node:child_process';
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';

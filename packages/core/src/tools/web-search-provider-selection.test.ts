@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { noProviderMessage, selectWebSearchProvider } from './web-search-transport.js';
+import { noProviderMessage, selectWebSearchProvider } from './web-search-transport';
 
 const keys = ['EXA_API_KEY', 'PARALLEL_API_KEY'] as const;
 const previous: Record<string, string | undefined> = {};

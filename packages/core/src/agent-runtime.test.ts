@@ -1,7 +1,7 @@
 import type { AgentEvent, PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { AgentRuntime } from './agent-runtime.js';
-import { createObservabilityRedactor } from './providers/observability-redactor.js';
+import { AgentRuntime } from './agent-runtime';
+import { createObservabilityRedactor } from './providers/observability-redactor';
 
 describe('AgentRuntime', () => {
     it('runDemoTask emits start/progress/completed events and snapshot', async () => {

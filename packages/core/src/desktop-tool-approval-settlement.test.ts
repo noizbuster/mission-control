@@ -1,6 +1,6 @@
 import { defaultModelProviderSelection } from '@mission-control/config';
 import { describe, expect, it } from 'vitest';
-import { fixedNow } from './desktop-session-commands-test-support.js';
+import { fixedNow } from './desktop-session-commands-test-support';
 import {
     approvalDecision,
     approvalOptions,
@@ -17,8 +17,8 @@ import {
     providerToolCallEvent,
     runBlockedEvent,
     runFailedEvent,
-} from './desktop-tool-approval-test-support.js';
-import { settleDesktopApproval } from './desktop-tool-approvals.js';
+} from './desktop-tool-approval-test-support';
+import { settleDesktopApproval } from './desktop-tool-approvals';
 import { execFile } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

@@ -1,7 +1,7 @@
 import type { AgentDefinition } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { AgentParseError } from '../agents/agent-parser.js';
-import { buildBundledAgentIndexFromTemplates } from './task-tool-full-parity-factory.js';
+import { AgentParseError } from '../agents/agent-parser';
+import { buildBundledAgentIndexFromTemplates } from './task-tool-full-parity-factory';
 
 describe('buildBundledAgentIndexFromTemplates', () => {
     it('records recoverable bundled agent parse failures and keeps valid agents', () => {

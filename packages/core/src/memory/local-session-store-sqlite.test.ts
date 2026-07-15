@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { createObservabilityRedactor } from '../providers/observability-redactor.js';
-import { openCanonicalRuntimeDb } from '../runtime/local-runtime-db.js';
+import { createObservabilityRedactor } from '../providers/observability-redactor';
+import { openCanonicalRuntimeDb } from '../runtime/local-runtime-db';
 import {
     openLocalSessionEventStore,
     openLocalSessionProjectionStore,
     readLocalSessionReplay,
-} from './local-session-store.js';
+} from './local-session-store';
 import {
     CREATED_AT,
     jsonlFor,
@@ -13,8 +13,8 @@ import {
     sessionStoppedEvent,
     tempDataDir,
     writeLegacySource,
-} from './local-session-store-test-support.js';
-import { createSessionArchive } from './session-archive-file.js';
+} from './local-session-store-test-support';
+import { createSessionArchive } from './session-archive-file';
 import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
 

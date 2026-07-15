@@ -1,14 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
-import { openMissionControlDb } from '../db/mission-control-db.js';
-import { missionControlDataDirEnvKey } from '../memory/data-dir.js';
+import { openMissionControlDb } from '../db/mission-control-db';
+import { missionControlDataDirEnvKey } from '../memory/data-dir';
 import {
     localSessionDbPath,
     localSessionDbUrl,
     missionControlDbPath,
     missionControlDbUrl,
-} from '../memory/local-session-store-paths.js';
-import { localRuntimeDbPath, localRuntimeDbUrl, openRuntimeLocalDb } from './local-runtime-db.js';
-import { sessionStoreIdentityFromCanonicalDatabasePath } from './session-store-identity.js';
+} from '../memory/local-session-store-paths';
+import { localRuntimeDbPath, localRuntimeDbUrl, openRuntimeLocalDb } from './local-runtime-db';
+import { sessionStoreIdentityFromCanonicalDatabasePath } from './session-store-identity';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

@@ -11,7 +11,7 @@
  * network calls here. This keeps them trivially unit-testable via mocked
  * `fetch` and lets the transport own the timeout/redaction boundary.
  */
-import type { WebSearchInput, WebSearchProviderId, WebSearchRecency, WebSearchResult } from './web-search-schemas.js';
+import type { WebSearchInput, WebSearchProviderId, WebSearchRecency, WebSearchResult } from './web-search-schemas';
 
 /** Resolved input with defaults applied (pure; no validation side effects). */
 export type ResolvedSearchInput = {

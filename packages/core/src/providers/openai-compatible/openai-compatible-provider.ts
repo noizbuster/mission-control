@@ -1,20 +1,20 @@
-import type { ProviderCredentialResolver } from '../credential-resolver.js';
-import { type ProviderAdapter, ProviderTurnError } from '../provider-turn-types.js';
-import { mapOpenAICompatibleProviderError } from './openai-compatible-errors.js';
-import { createOpenAICompatibleMappingState, mapOpenAICompatibleStreamEvent } from './openai-compatible-mapper.js';
+import type { ProviderCredentialResolver } from '../credential-resolver';
+import { type ProviderAdapter, ProviderTurnError } from '../provider-turn-types';
+import { mapOpenAICompatibleProviderError } from './openai-compatible-errors';
+import { createOpenAICompatibleMappingState, mapOpenAICompatibleStreamEvent } from './openai-compatible-mapper';
 import {
     bearerTokenForOpenAICompatibleCredential,
     createOpenAICompatibleTransportRequest,
     resolveOpenAICompatibleCredential,
-} from './openai-compatible-request.js';
-import { OPENAI_COMPATIBLE_PROVIDER_SPECS, type OpenAICompatibleProviderSpec } from './openai-compatible-specs.js';
+} from './openai-compatible-request';
+import { OPENAI_COMPATIBLE_PROVIDER_SPECS, type OpenAICompatibleProviderSpec } from './openai-compatible-specs';
 import {
     type OpenAICompatibleTransport,
     OpenAICompatibleTransportError,
     type OpenAICompatibleTransportRequest,
-} from './openai-compatible-transport.js';
+} from './openai-compatible-transport';
 
-export { createNodeOpenAICompatibleTransport } from './openai-compatible-http-transport.js';
+export { createNodeOpenAICompatibleTransport } from './openai-compatible-http-transport';
 export type { OpenAICompatibleProviderSpec, OpenAICompatibleTransport, OpenAICompatibleTransportRequest };
 export { OPENAI_COMPATIBLE_PROVIDER_SPECS, OpenAICompatibleTransportError };
 

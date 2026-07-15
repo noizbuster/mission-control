@@ -1,5 +1,5 @@
 import type { BrowserConfig } from '@mission-control/protocol';
-import { browserEndpointValue } from './browser-tool-contract.js';
+import { browserEndpointValue } from './browser-tool-contract';
 import { createHash } from 'node:crypto';
 
 export function observableBrowserUrl(rawUrl: string): string {

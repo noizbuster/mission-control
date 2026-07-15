@@ -2,7 +2,7 @@ import { describe, it } from 'vitest';
 import {
     expectBlockedApprovalAndResumedRunProjection,
     expectInterruptedAndFailedRunProjection,
-} from './session-replay-run-state-test-support.js';
+} from './session-replay-run-state-test-support';
 
 describe('session replay run state projections', () => {
     it('projects blocked approval and resumed run', () => {

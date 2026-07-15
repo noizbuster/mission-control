@@ -1,5 +1,5 @@
 import type { InStatement } from '@libsql/client';
-import type { SessionProjectionSessionRecord } from './session-projection-types.js';
+import type { SessionProjectionSessionRecord } from './session-projection-types';
 
 export function insertSessionStatement(record: SessionProjectionSessionRecord): InStatement {
     return {

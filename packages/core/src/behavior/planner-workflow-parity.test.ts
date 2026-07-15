@@ -22,20 +22,20 @@ import { type AbgNodeSpec, WorkflowSpecSchema } from '@mission-control/protocol'
 import type { ModelMessage } from 'ai';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createBlackboard } from '../memory/blackboard.js';
-import { evaluateRules } from '../permissions/rule-evaluator.js';
-import { materializeWorkflow } from '../workflows/materialize-workflow.js';
-import { collectSignals, createCompositeNodeTestContext } from './composite-node-test-helpers.js';
-import { applyMode } from './modes/mode-application.js';
-import type { AbgNodeRunContext } from './node-registry.js';
-import { runLlmActorNode } from './nodes/llm-actor/llm-actor-node-runner.js';
+import { createBlackboard } from '../memory/blackboard';
+import { evaluateRules } from '../permissions/rule-evaluator';
+import { materializeWorkflow } from '../workflows/materialize-workflow';
+import { collectSignals, createCompositeNodeTestContext } from './composite-node-test-helpers';
+import { applyMode } from './modes/mode-application';
+import type { AbgNodeRunContext } from './node-registry';
+import { runLlmActorNode } from './nodes/llm-actor/llm-actor-node-runner';
 import {
     createPlannerWorkflowGraph,
     PLANNER_READONLY_CHILD_CONTEXT,
     PLANNER_READONLY_MODE,
     PLANNER_READONLY_POLICIES,
     PLANNER_SCAFFOLD_HEADERS,
-} from './planner-workflow-graph.js';
+} from './planner-workflow-graph';
 import { readFile } from 'node:fs/promises';
 
 const WORKFLOW_FIXTURE_PATH = `${process.cwd()}/examples/abg/planner.workflow.json`;

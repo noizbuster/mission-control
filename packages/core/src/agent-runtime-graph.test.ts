@@ -1,6 +1,6 @@
 import type { AbgGraphSpec } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { AgentRuntime } from './agent-runtime.js';
+import { AgentRuntime } from './agent-runtime';
 
 describe('AgentRuntime graph execution', () => {
     it('runGraph emits graph and node lifecycle events', async () => {

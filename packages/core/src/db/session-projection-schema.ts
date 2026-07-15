@@ -1,2 +1,2 @@
-export * from './session-await-schema.js';
-export * from './session-record-schema.js';
+export * from './session-await-schema';
+export * from './session-record-schema';

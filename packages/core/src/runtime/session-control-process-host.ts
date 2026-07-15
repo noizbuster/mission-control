@@ -1,7 +1,7 @@
-import type { LocalLibsqlDb } from '../db/local-libsql-db.js';
-import { resolveMissionControlDataDir } from '../memory/data-dir.js';
-import { openCanonicalRuntimeDb } from './local-runtime-db.js';
-import { SessionControlHost } from './session-control-host.js';
+import type { LocalLibsqlDb } from '../db/local-libsql-db';
+import { resolveMissionControlDataDir } from '../memory/data-dir';
+import { openCanonicalRuntimeDb } from './local-runtime-db';
+import { SessionControlHost } from './session-control-host';
 import { resolve } from 'node:path';
 
 type ProcessHostResource = { readonly host: SessionControlHost; readonly runtime: LocalLibsqlDb };

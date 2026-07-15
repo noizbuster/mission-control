@@ -5,7 +5,7 @@ import {
     parseSessionOwnerControlFrame,
     SESSION_OWNER_CONTROL_MAX_FRAME_BYTES,
     SessionOwnerControlFrameError,
-} from './session-owner-control-framing.js';
+} from './session-owner-control-framing';
 
 describe('session owner control NDJSON framing', () => {
     it('emits one compact UTF-8 JSON value followed by one newline', () => {

@@ -12,8 +12,8 @@
 
 import type { AbgNodeSpec, AbgSignal } from '@mission-control/protocol';
 import type { ModelMessage } from 'ai';
-import { createAbgEmitSignal } from '../abg-emit.js';
-import type { AbgNodeRunContext, AbgNodeRunner } from '../node-registry.js';
+import { createAbgEmitSignal } from '../abg-emit';
+import type { AbgNodeRunContext, AbgNodeRunner } from '../node-registry';
 
 function protocolError(code: string, message: string): { code: string; message: string } {
     return { code, message };

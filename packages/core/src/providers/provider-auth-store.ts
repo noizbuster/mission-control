@@ -6,7 +6,7 @@ import {
     type ProviderCredential,
     type ProviderCredentialSummary,
 } from '@mission-control/protocol';
-import type { ModelRole } from '../agents/model-roles.js';
+import type { ModelRole } from '../agents/model-roles';
 import { randomUUID } from 'node:crypto';
 import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';

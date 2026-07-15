@@ -1,5 +1,5 @@
 import type { ProtocolError } from '@mission-control/protocol';
-import { ToolExecutionError } from './tool-registry-types.js';
+import { ToolExecutionError } from './tool-registry-types';
 
 export type RepoToolFailureCode =
     | 'workspace_escape'

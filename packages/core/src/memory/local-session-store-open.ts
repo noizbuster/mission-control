@@ -6,14 +6,14 @@ import type {
     DesktopApprovalEffectRecord,
     DesktopApprovalEffectResolutionInput,
     DesktopApprovalEffectSettlementInput,
-} from '../desktop-approval-effect.js';
-import type { ObservabilityRedactor } from '../providers/observability-redactor.js';
-import { resolveMissionControlDataDir } from './data-dir.js';
-import type { JsonlSessionEventIdFactory } from './jsonl-session-event-store.js';
-import { openEnsuredLocalSessionDatabase } from './local-session-store-database.js';
-import { parseLocalSessionId } from './local-session-store-paths.js';
-import type { MemoryStore } from './memory-store.js';
-import { SqliteSessionEventStore } from './sqlite-session-event-store.js';
+} from '../desktop-approval-effect';
+import type { ObservabilityRedactor } from '../providers/observability-redactor';
+import { resolveMissionControlDataDir } from './data-dir';
+import type { JsonlSessionEventIdFactory } from './jsonl-session-event-store';
+import { openEnsuredLocalSessionDatabase } from './local-session-store-database';
+import { parseLocalSessionId } from './local-session-store-paths';
+import type { MemoryStore } from './memory-store';
+import { SqliteSessionEventStore } from './sqlite-session-event-store';
 
 export type LocalSessionEventStore = MemoryStore & {
     readonly sessionId: string;

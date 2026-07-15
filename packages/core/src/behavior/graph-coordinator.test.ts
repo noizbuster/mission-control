@@ -1,11 +1,11 @@
 // allow: SIZE_OK -- HEAD 732 -> current 732 pure LOC; one graph-coordinator state-machine matrix with shared deterministic fixtures.
 import type { AbgNodeSpec, AbgSignal, AgentEvent } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { createAbgEmitSignal } from './abg-emit.js';
-import { runAbgGraph } from './graph-runner.js';
-import { deriveAbgGraphSnapshot } from './graph-state.js';
-import type { AbgNodeRunContext } from './node-registry.js';
-import { createAbgNodeRegistry } from './node-registry.js';
+import { createAbgEmitSignal } from './abg-emit';
+import { runAbgGraph } from './graph-runner';
+import { deriveAbgGraphSnapshot } from './graph-state';
+import type { AbgNodeRunContext } from './node-registry';
+import { createAbgNodeRegistry } from './node-registry';
 
 const baseInput = {
     sessionId: 'session_graph_coordinator',

@@ -1,4 +1,4 @@
-import { createWorkspaceGuard, matchesWorkspaceDenylist, type WorkspaceGuard } from './read-tools-paths.js';
+import { createWorkspaceGuard, matchesWorkspaceDenylist, type WorkspaceGuard } from './read-tools-paths';
 import type { Dirent } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { relative, resolve } from 'node:path';

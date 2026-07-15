@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { ProjectTrustDecision, ProjectTrustLookup } from '../../trust/project-trust-store.js';
-import { ToolRegistry } from '../tool-registry.js';
-import type { ManagedMcpClient } from './connection-manager.js';
-import { McpConnectionManager } from './connection-manager.js';
-import { registerNamespacedMcpTools } from './surfacing.js';
+import type { ProjectTrustDecision, ProjectTrustLookup } from '../../trust/project-trust-store';
+import { ToolRegistry } from '../tool-registry';
+import type { ManagedMcpClient } from './connection-manager';
+import { McpConnectionManager } from './connection-manager';
+import { registerNamespacedMcpTools } from './surfacing';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

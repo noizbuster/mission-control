@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { type BoulderState, boulderFilePath, readBoulder, writeBoulder } from '../../persistence/boulder-store.js';
-import { ContinuationRuntime, type ContinuationState } from './continuation-runtime.js';
+import { type BoulderState, boulderFilePath, readBoulder, writeBoulder } from '../../persistence/boulder-store';
+import { ContinuationRuntime, type ContinuationState } from './continuation-runtime';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

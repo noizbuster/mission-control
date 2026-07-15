@@ -17,8 +17,8 @@
  * `yield` stays available to child agents.
  */
 import { z } from 'zod';
-import type { StagedPreviewChange, StagedPreviewRegistry } from '../staged-preview-registry.js';
-import { ToolExecutionError, type ToolRegistration } from '../tool-registry-types.js';
+import type { StagedPreviewChange, StagedPreviewRegistry } from '../staged-preview-registry';
+import { ToolExecutionError, type ToolRegistration } from '../tool-registry-types';
 
 export const RESOLVE_TOOL_NAME = 'resolve';
 

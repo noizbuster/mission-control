@@ -19,8 +19,8 @@
  */
 
 import { z } from 'zod';
-import { type BoulderWork, type RunnerStopMarker, readBoulder } from '../../persistence/boulder-store.js';
-import { mutateBoulderWork } from '../../persistence/boulder-work-mutation.js';
+import { type BoulderWork, type RunnerStopMarker, readBoulder } from '../../persistence/boulder-store';
+import { mutateBoulderWork } from '../../persistence/boulder-work-mutation';
 import { randomUUID } from 'node:crypto';
 
 const CONTINUATION_STATE_KEY = 'continuation_runtime';
