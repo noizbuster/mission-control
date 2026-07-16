@@ -47,6 +47,22 @@ describe('interactive chat command parser', () => {
         });
     });
 
+    it('treats a leading space before / or $ as an intentional escape', () => {
+        expect(parseChatInput(' /help')).toEqual({
+            type: 'prompt',
+            prompt: '/help',
+        });
+        expect(parseChatInput(' $planner draft')).toEqual({
+            type: 'prompt',
+            prompt: '$planner draft',
+        });
+        expect(parseChatInput('/help')).toEqual({
+            type: 'slash',
+            commandID: 'help',
+            argumentsText: '',
+        });
+    });
+
     it('rejects invalid skill identifiers', () => {
         expect(parseChatInput('$bad!skill run')).toEqual({
             type: 'invalid',

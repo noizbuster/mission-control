@@ -142,6 +142,49 @@ describe('chat command parser', () => {
         });
     });
 
+    it('treats a leading space before / as an intentional escape from slash commands', () => {
+        expect(parseChatLine(' /help')).toEqual({
+            kind: 'prompt',
+            prompt: '/help',
+        });
+        expect(parseChatLine(' /exit')).toEqual({
+            kind: 'prompt',
+            prompt: '/exit',
+        });
+        expect(parseChatLine(' /model local/local-echo')).toEqual({
+            kind: 'prompt',
+            prompt: '/model local/local-echo',
+        });
+        expect(parseChatLine('\t/help')).toEqual({
+            kind: 'prompt',
+            prompt: '/help',
+        });
+    });
+
+    it('still runs slash commands when / is at column 0', () => {
+        expect(parseChatLine('/help')).toEqual({ kind: 'help' });
+        expect(parseChatLine('/exit')).toEqual({ kind: 'exit' });
+    });
+
+    it('treats a leading space before $, #, and ! as an intentional escape', () => {
+        expect(parseChatLine(' $planner draft')).toEqual({
+            kind: 'prompt',
+            prompt: '$planner draft',
+        });
+        expect(parseChatLine(' #planner plan X')).toEqual({
+            kind: 'prompt',
+            prompt: '#planner plan X',
+        });
+        expect(parseChatLine(' !ls')).toEqual({
+            kind: 'prompt',
+            prompt: '!ls',
+        });
+        expect(parseChatLine(' !!echo hi')).toEqual({
+            kind: 'prompt',
+            prompt: '!!echo hi',
+        });
+    });
+
     it('parses exit as a no-argument slash command', () => {
         expect(parseChatLine('/exit')).toEqual({
             kind: 'exit',

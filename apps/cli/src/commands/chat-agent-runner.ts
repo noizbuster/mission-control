@@ -264,7 +264,7 @@ export function startChatAgentRunner(options: AgentRunnerOptions): AgentRunnerHa
 
                 await appendHistory(prompt);
 
-                const action = parseLine(prompt);
+                const action = parseLine(event.value);
                 if (action.kind === 'exit') {
                     activeTurn = await stopActiveTurn(activeTurn);
                     chatOutput.write('Exiting mission-control chat\n');

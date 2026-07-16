@@ -40,10 +40,12 @@ export function parseChatInput(input: string): ParsedChatInput {
     if (line.length === 0) {
         return { type: 'empty' };
     }
-    if (line.startsWith('/')) {
+    // Prefix commands only match at column 0. Leading whitespace escapes
+    // slash/skill invocation so the user can send literal `/...` or `$...`.
+    if (input.startsWith('/')) {
         return parseSlashInput(line.slice(1));
     }
-    if (line.startsWith('$')) {
+    if (input.startsWith('$')) {
         return parseSkillInput(line.slice(1));
     }
     return {

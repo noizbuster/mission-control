@@ -201,19 +201,22 @@ export function parseChatLine(value: string, options: ChatLineOptions = {}): Cha
     if (line.length === 0) {
         return { kind: 'empty' };
     }
-    if (line.startsWith('/')) {
+    // Prefix commands only match at column 0. A leading space (or other
+    // whitespace) is an intentional escape so the user can send literal text
+    // that starts with `/`, `$`, `#`, or `!` without invoking a command.
+    if (value.startsWith('/')) {
         return parseSlashCommand(line, options);
     }
-    if (line.startsWith('$')) {
+    if (value.startsWith('$')) {
         return parseSkillInvocation(line);
     }
-    if (line.startsWith('#')) {
+    if (value.startsWith('#')) {
         return parseWorkflowInvocation(line, options);
     }
-    if (line.startsWith('!!')) {
+    if (value.startsWith('!!')) {
         return parseBashInvocation(line.slice(2), 'bash-display-only');
     }
-    if (line.startsWith('!')) {
+    if (value.startsWith('!')) {
         return parseBashInvocation(line.slice(1), 'bash');
     }
     return { kind: 'prompt', prompt: line };

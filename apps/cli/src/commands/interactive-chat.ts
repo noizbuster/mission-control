@@ -663,7 +663,7 @@ export async function runInteractiveChatSession(
                 continue;
             }
 
-            const action = parseChatLine(prompt, {
+            const action = parseChatLine(event.value, {
                 modelChoices,
                 knownSkillNames,
                 knownWorkflowNames,
