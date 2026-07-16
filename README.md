@@ -51,6 +51,7 @@ pnpm dev:cli -- auth login --provider local --api-key <key>
 pnpm dev:cli -- auth login --provider anthropic --api-key <key>
 pnpm dev:cli -- auth login --provider openai --method oauth-headless
 pnpm dev:cli -- auth login --provider github-copilot --method oauth
+pnpm dev:cli -- auth login --provider xai --method oauth
 pnpm dev:cli -- auth login --provider cloudflare-ai-gateway --credential apiToken=<token> --credential accountId=<account> --credential gatewayId=<gateway>
 pnpm dev:cli -- auth login
 pnpm dev:cli -- auth list
@@ -199,6 +200,7 @@ mc auth login --provider local --api-key <key>
 mc auth login --provider anthropic --api-key <key>
 mc auth login --provider openai --method oauth-headless
 mc auth login --provider github-copilot --method oauth
+mc auth login --provider xai --method oauth
 mc auth login --provider cloudflare-ai-gateway --credential apiToken=<token> --credential accountId=<account> --credential gatewayId=<gateway>
 mc auth login --provider amazon-bedrock --credential region=<region> --credential accessKeyId=<key-id> --credential secretAccessKey=<secret>
 mc auth login
@@ -217,7 +219,7 @@ MCTRL_DATA_DIR=/tmp/mctrl-demo-data MISSION_CONTROL_AUTH_FILE=/tmp/mctrl-demo-au
 
 The vendored Models.dev snapshot is generated from `https://models.dev/api.json` and is stored under `packages/config/src/generated/`. Refresh it with `node --experimental-strip-types scripts/sync-models-dev-catalog.ts`. Normal CLI commands use the vendored file only; there is no runtime fetch to Models.dev.
 
-`mc auth login` supports credential setup for every vendored OpenCode provider. Single-secret providers can use `--api-key <key>` as an alias for their primary secret. Multi-field providers use repeatable `--credential FIELD=VALUE` flags. OAuth-capable providers expose OpenCode-style `--method` choices: OpenAI supports browser and headless ChatGPT OAuth plus API key login, and GitHub Copilot supports OAuth device login plus API key login. Missing credential fields are resolved from explicit CLI values, matching environment variables, existing stored values, and interactive prompts, in that order.
+`mc auth login` supports credential setup for every vendored OpenCode provider. Single-secret providers can use `--api-key <key>` as an alias for their primary secret. Multi-field providers use repeatable `--credential FIELD=VALUE` flags. OAuth-capable providers expose OpenCode-style `--method` choices: OpenAI supports browser and headless ChatGPT OAuth plus API key login, GitHub Copilot supports OAuth device login plus API key login, and xAI supports SuperGrok / X Premium+ OAuth device login plus API key login. Missing credential fields are resolved from explicit CLI values, matching environment variables, existing stored values, and interactive prompts, in that order.
 
 `mc auth login` can prompt interactively for provider, auth method, and credential fields when flags are omitted. Stored credentials configure the default provider/model for subsequent CLI runs, including coding-agent prompts, so a later `mc --no-tui` can use the saved default when no `--provider` or `--model` flag is passed.
 
@@ -231,7 +233,7 @@ Interactive `/model` choices are narrower than `mc models`: they first require a
 
 The desktop demo control surface exposes provider/model controls, an API key credential field, credential configured/missing state, and the active selection in the status area and event log. The Tauri desktop client saves and lists API-key credentials through the same auth file used by the CLI, and desktop prompt/resume/approval commands route through the core provider factory.
 
-Provider capability statuses separate executable adapters from catalog-only entries. `local`, `openai`, `anthropic`, `google`, `openrouter`, `groq`, `deepseek`, `mistral`, and `zai-coding-plan` can run coding-agent prompts through implemented adapters. Other catalog entries can be `model-discovery-only`, `auth-only`, or unsupported for prompt execution until they have adapter tests and an executable integration proof. Provider-backed coding commands require an executable adapter proof before a provider can run.
+Provider capability statuses separate executable adapters from catalog-only entries. `local`, `openai`, `anthropic`, `google`, `openrouter`, `groq`, `deepseek`, `mistral`, `zai-coding-plan`, and `xai` can run coding-agent prompts through implemented adapters. Other catalog entries can be `model-discovery-only`, `auth-only`, or unsupported for prompt execution until they have adapter tests and an executable integration proof. Provider-backed coding commands require an executable adapter proof before a provider can run.
 
 The legacy no-prompt demo uses provider/model selection only as observable event metadata and does not call an LLM. Coding-agent prompt runs use executable provider adapters or the AI-SDK graph resolver and can call real providers when configured.
 
@@ -382,7 +384,7 @@ Provider path:
 
 - The deterministic `local/local-echo` provider is available for offline tests and demos.
 - The OpenAI Responses adapter is implemented for real provider turns when OpenAI credentials are configured.
-- Anthropic Messages, Google Gemini, and OpenAI-compatible adapters are implemented for `anthropic`, `google`, `openrouter`, `groq`, `deepseek`, `mistral`, and `zai-coding-plan` when credentials are configured.
+- Anthropic Messages, Google Gemini, and OpenAI-compatible adapters are implemented for `anthropic`, `google`, `openrouter`, `groq`, `deepseek`, `mistral`, `zai-coding-plan`, and `xai` when credentials are configured.
 - Live provider smoke tests are opt-in only and are not required for CI.
 - Unsupported providers remain catalog/auth entries until an execution adapter is added.
 - Providers without execution adapters remain catalog/auth entries and must not be documented as executable.
