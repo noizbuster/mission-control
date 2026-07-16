@@ -267,6 +267,14 @@ export {
     type OpenAICompatibleTransportRequest,
 } from './providers/openai-compatible/openai-compatible-provider';
 export {
+    createOAuthRefreshingCredentialResolver,
+    DEFAULT_OAUTH_REFRESH_SKEW_MS,
+    type CreateOAuthRefreshingCredentialResolverInput,
+    type OAuthCredentialPersist,
+    type OAuthTokenRefresher,
+    oauthCredentialNeedsRefresh,
+} from './providers/oauth-credential-refresh';
+export {
     createProviderAuthStoreCredentialResolver,
     createProviderAuthStoreObservabilityRedactor,
     type ProviderAuthStoreCredentialResolverAuthStore,
