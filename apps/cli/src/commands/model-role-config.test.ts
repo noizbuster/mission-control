@@ -8,6 +8,7 @@ function makeStore(roles: Partial<Record<ModelRole, ModelProviderSelection>>): P
         authFilePath: '/tmp/mission-control-role-config-test.json',
         readAuthFile: async () => ({ $schema: 'https://mission-control.local/auth.schema.json', credentials: {} }),
         saveCredential: async () => {},
+        updateOAuthCredential: async () => {},
         setDefaultSelection: async () => {},
         deleteCredential: async () => {},
         listCredentialSummaries: async () => [],

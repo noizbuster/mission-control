@@ -23,6 +23,7 @@ function recordingAuthStore(): ProviderAuthStore & {
         authFilePath: '/tmp/mission-control-models-overlay-test.json',
         readAuthFile: async () => ({ $schema: 'https://mission-control.local/auth.schema.json', credentials: {} }),
         saveCredential: async () => {},
+        updateOAuthCredential: async () => {},
         setDefaultSelection: async () => {},
         deleteCredential: async () => {},
         listCredentialSummaries: async () => [],
