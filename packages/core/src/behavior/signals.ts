@@ -2,6 +2,7 @@ import type {
     AbgEmitMetadata,
     AbgNodeKind,
     AbgNodeModelOptions,
+    AbgRuntimeError,
     AbgSignal,
     AgentEvent,
 } from '@mission-control/protocol';
@@ -74,6 +75,7 @@ export function projectAbgSignalToEvent(input: AbgSignalProjectionInput): AgentE
             ...(input.model !== undefined ? { model: input.model } : {}),
             ...(input.attempt !== undefined ? { attempt: input.attempt } : {}),
             ...(input.maxAttempts !== undefined ? { maxAttempts: input.maxAttempts } : {}),
+            ...(errorMetadataForSignal(signal) ?? {}),
             ...(emitMetadataForSignal(signal) ?? {}),
         },
         ...(toolFieldsForEmit(signal) ?? {}),
@@ -96,6 +98,36 @@ function emitMetadataForSignal(signal: AbgSignal): { readonly emit: AbgEmitMetad
         emit: {
             type: signal.event.type,
             ...(signal.event.payload !== undefined ? { payload: signal.event.payload } : {}),
+        },
+    };
+}
+
+/**
+ * Persist structured failure codes (e.g. `invalid_structured_output`, provider codes) on
+ * `abg.error` so retrying/failed runs carry nodeId+code without inventing free-form emit types.
+ * Plain string errors stay message-only (no invented code).
+ */
+function errorMetadataForSignal(signal: AbgSignal): { readonly error: AbgRuntimeError } | undefined {
+    if (signal.type !== 'failure') {
+        return undefined;
+    }
+    const error = signal.error;
+    if (typeof error !== 'object' || error === null || !('code' in error)) {
+        return undefined;
+    }
+    const code = error.code;
+    if (typeof code !== 'string' || code.length === 0) {
+        return undefined;
+    }
+    const message =
+        'message' in error && typeof error.message === 'string' && error.message.length > 0 ? error.message : code;
+    const retryable =
+        'retryable' in error && typeof error.retryable === 'boolean' ? error.retryable : undefined;
+    return {
+        error: {
+            code,
+            message,
+            ...(retryable !== undefined ? { retryable } : {}),
         },
     };
 }
