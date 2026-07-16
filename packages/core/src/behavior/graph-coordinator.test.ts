@@ -906,7 +906,7 @@ describe('bounded ABG graph coordinator', () => {
         expect(
             result.events.some(
                 (event) =>
-                    event.message.includes('routing.dead_end') ||
+                    (typeof event.message === 'string' && event.message.includes('routing.dead_end')) ||
                     event.abg?.emit?.type === 'routing.dead_end' ||
                     event.abg?.error?.code === 'routing_dead_end',
             ),
