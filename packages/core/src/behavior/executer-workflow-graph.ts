@@ -1,4 +1,4 @@
-// allow: SIZE_OK -- HEAD 552 -> current 563 pure LOC; one declarative executer graph with inseparable retry and verdict routing tables.
+// allow: SIZE_OK -- HEAD 563 -> current 564 pure LOC; one declarative executer graph with inseparable retry and verdict routing tables.
 /**
  * The executer workflow graph: executes a plan produced by the planner workflow
  * (plan Task 3.4, ABG Round 8 decomposition).
@@ -452,6 +452,8 @@ export function createExecuterWorkflowGraph(options: ExecuterWorkflowGraphOption
                 config: {
                     systemPrompt: EXECUTER_FIX_LOOP_PROMPT,
                     outputKey: 'fix.route',
+                    // Equals-routed enum gate: applyEnumConstraint fails closed on any non-{retry,blocked} value, preventing a poisoned fix.route from silently completing or skipping blocked-escalation.
+                    outputEnum: ['retry', 'blocked'],
                     strikeKey: 'fix.strikes',
                     strikeBudget: EXECUTER_FINAL_STRIKE_BUDGET,
                     maxStrikes: EXECUTER_FINAL_STRIKE_BUDGET,

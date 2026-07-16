@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 173 -> current 278 pure LOC; one cohesive executer final-wave verdict + fix-loop routing + progress-contract enum/shape matrix and 3-strike regression guard.
 import type { AbgNodeSpec } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import {
@@ -24,6 +25,10 @@ function configNumber(node: AbgNodeSpec | undefined, key: string): number | unde
 function configArray(node: AbgNodeSpec | undefined, key: string): ReadonlyArray<unknown> | undefined {
     const value = node?.config?.[key];
     return Array.isArray(value) ? value : undefined;
+}
+
+function configValue(node: AbgNodeSpec | undefined, key: string): unknown {
+    return node?.config?.[key];
 }
 
 describe('runner final-wave verdict aggregation — aggregateFinalVerdict (all-approve gate)', () => {
@@ -218,5 +223,134 @@ describe('runner final-wave — end-to-end decision matrix over the pure contrac
 
     it('scenario D: third consecutive REJECT -> fix.route blocked -> blocked-escalation', () => {
         expect(routeFixLoop(3, EXECUTER_FINAL_STRIKE_BUDGET)).toBe('blocked');
+    });
+});
+
+// Progress-contract routing-key matrix (plan Task 7). Mirrors FIXER_EQUALS_ROUTED_LLM_GATES:
+// every EQUALS-routed llm output key declares a fail-closed shape/enum so a poisoned value cannot
+// silently complete the graph (applyEnumConstraint / parseStructuredOutput reject out-of-set values).
+//
+// verify.complete and checkbox.updated are excluded BY DESIGN (do NOT re-add outputShape 'boolean'):
+//   - verify.complete: per-task-verify is `implementation: 'critic'`; runVerificationResultCritic
+//     writes the critic's APPROVE/REJECT string verdict there (not a boolean) and never crosses
+//     parseStructuredOutput. A boolean shape would be factually wrong and inert. key.exists-routed.
+//   - checkbox.updated: key.exists-routed (checkbox-updated), an existence gate not a value gate;
+//     per the todo-plan (plan.todos) convention in the fixer matrix, existence keys stay shape-free.
+//   - delegate.complete / final.complete: written by parallel nodes (completionKey), not llm nodes.
+const EXECUTER_EQUALS_ROUTED_LLM_GATES = [
+    { nodeId: 'admit-plan', outputKey: 'plan.admitted', kind: 'boolean' as const },
+    { nodeId: 'next-wave', outputKey: 'wave.pending', kind: 'boolean' as const },
+    {
+        nodeId: 'fix-loop',
+        outputKey: 'fix.route',
+        kind: 'enum' as const,
+        outputEnum: ['retry', 'blocked'],
+    },
+] as const;
+
+describe('executer progress-contract routing key matrix', () => {
+    it.each(EXECUTER_EQUALS_ROUTED_LLM_GATES)(
+        '$nodeId declares fail-closed shape/enum for equals-routed $outputKey',
+        (gate) => {
+            const node = nodeById(gate.nodeId);
+            expect(configString(node, 'outputKey')).toBe(gate.outputKey);
+            if (gate.kind === 'boolean') {
+                expect(configString(node, 'outputShape')).toBe('boolean');
+            } else {
+                expect(configValue(node, 'outputEnum')).toEqual([...gate.outputEnum]);
+            }
+        },
+    );
+
+    it('each enum/boolean gate backs a blackboard.value.equals rule (no bare key.exists routing)', () => {
+        const graph = createExecuterWorkflowGraph();
+        for (const gate of EXECUTER_EQUALS_ROUTED_LLM_GATES) {
+            const matches = graph.rules.filter(
+                (rule) =>
+                    rule.when.kind === 'blackboard.value.equals' &&
+                    rule.when.key === gate.outputKey,
+            );
+            expect(matches.length, `${gate.outputKey} must be equals-routed`).toBeGreaterThan(0);
+        }
+    });
+});
+
+describe('executer final.verdict stays aggregateFinalVerdict (not an llm outputEnum)', () => {
+    const graph = createExecuterWorkflowGraph();
+
+    it('no llm node owns final.verdict as an outputKey (it is the parallel node verdictKey)', () => {
+        const verdictWriter = graph.nodes.find((node) => configString(node, 'outputKey') === 'final.verdict');
+        expect(verdictWriter, 'no llm node may own final.verdict as an outputKey').toBeUndefined();
+    });
+
+    it('the F1-F4 critics emit free-text APPROVE/REJECT without an outputEnum lock (aggregated, not enum-gated)', () => {
+        for (const criticId of ['f1', 'f2', 'f3', 'f4']) {
+            const critic = nodeById(criticId);
+            expect(critic?.kind).toBe('llm');
+            expect(configString(critic, 'outputKey')).toBe(`final.${criticId}`);
+            expect(configValue(critic, 'outputEnum'), `${criticId} must not enum-lock its verdict`).toBeUndefined();
+        }
+    });
+
+    it('final.verdict is written by the parallel node verdictStrategy (all-approve), not an llm outputKey', () => {
+        const finalWave = nodeById('final-verification-wave');
+        expect(finalWave?.kind).toBe('parallel');
+        expect(configString(finalWave, 'verdictKey')).toBe('final.verdict');
+        expect(configString(finalWave, 'verdictStrategy')).toBe('all-approve');
+    });
+
+    it('aggregateFinalVerdict is the APPROVE|REJECT authority and fails closed', () => {
+        expect(aggregateFinalVerdict(['APPROVE', 'APPROVE', 'APPROVE', 'APPROVE'])).toBe('APPROVE');
+        expect(aggregateFinalVerdict(['APPROVE', 'REJECT', 'APPROVE', 'APPROVE'])).toBe('REJECT');
+        expect(aggregateFinalVerdict(['APPROVE', undefined, 'APPROVE', 'APPROVE'])).toBe('REJECT');
+        expect(aggregateFinalVerdict([])).toBe('REJECT');
+    });
+
+    it('fix-loop is the only llm enum gate and locks fix.route to retry|blocked (not APPROVE|REJECT)', () => {
+        const fixLoop = nodeById('fix-loop');
+        expect(configValue(fixLoop, 'outputEnum')).toEqual(['retry', 'blocked']);
+        const enumGatedNodes = graph.nodes.filter(
+            (node) => node.kind === 'llm' && configValue(node, 'outputEnum') !== undefined,
+        );
+        expect(enumGatedNodes.map((node) => node.id)).toEqual(['fix-loop']);
+    });
+
+    it('per-task-verify writes a critic verdict string, not a boolean (verify.complete must stay shape-free)', () => {
+        const perTaskVerify = nodeById('per-task-verify');
+        expect(perTaskVerify?.implementation).toBe('critic');
+        expect(configString(perTaskVerify, 'outputKey')).toBe('verify.complete');
+        expect(configValue(perTaskVerify, 'outputShape'), 'critic verdict is APPROVE/REJECT, not boolean').toBeUndefined();
+        expect(configValue(perTaskVerify, 'outputEnum')).toBeUndefined();
+    });
+});
+
+describe('executer 3-strike fix-loop / blocked-escalation regression guard', () => {
+    const graph = createExecuterWorkflowGraph();
+
+    it('strike budget stays 3 on fix-loop and blocked-escalation', () => {
+        expect(EXECUTER_FINAL_STRIKE_BUDGET).toBe(3);
+        expect(configNumber(nodeById('fix-loop'), 'strikeBudget')).toBe(3);
+        expect(configNumber(nodeById('fix-loop'), 'maxStrikes')).toBe(3);
+        expect(configNumber(nodeById('blocked-escalation'), 'strikeBudget')).toBe(3);
+    });
+
+    it('routeFixLoop keeps strikes 1 and 2 retrying and strike 3 blocking', () => {
+        expect(routeFixLoop(1, EXECUTER_FINAL_STRIKE_BUDGET)).toBe('retry');
+        expect(routeFixLoop(2, EXECUTER_FINAL_STRIKE_BUDGET)).toBe('retry');
+        expect(routeFixLoop(3, EXECUTER_FINAL_STRIKE_BUDGET)).toBe('blocked');
+    });
+
+    it('fix-loop still routes retry -> next-wave and blocked -> blocked-escalation', () => {
+        const edges = graph.edges
+            .filter((edge) => edge.source === 'fix-loop' && edge.source !== edge.target)
+            .map((edge) => ({ target: edge.target, condition: edge.condition }));
+
+        expect(edges).toContainEqual({ target: 'next-wave', condition: 'fix-retry' });
+        expect(edges).toContainEqual({ target: 'blocked-escalation', condition: 'fix-blocked' });
+    });
+
+    it('blocked-escalation remains terminal (no outgoing edges back into the loop)', () => {
+        const outgoing = graph.edges.filter((edge) => edge.source === 'blocked-escalation');
+        expect(outgoing).toHaveLength(0);
     });
 });
