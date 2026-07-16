@@ -42,7 +42,7 @@ describe('abg-overlay-prefs-store', () => {
             scrollOffset: 42,
             liveOutput: false,
             showThinking: true,
-            toolOutputExpanded: false,
+            toolOutputExpanded: true,
         };
         await saveAbgOverlayPrefs(custom);
         const loaded = await loadAbgOverlayPrefs();

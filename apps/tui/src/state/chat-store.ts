@@ -328,7 +328,7 @@ export class ChatStore {
             generating: false,
             agentStatusText: '',
             showThinking: true,
-            toolOutputExpanded: false,
+            toolOutputExpanded: true,
             approvalLevel: options?.initialApprovalLevel,
             workflowNames: [],
             modelCycleChoices: [],

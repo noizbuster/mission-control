@@ -10,7 +10,7 @@ const DEFAULT_PREFS: AbgOverlayPrefs = {
     scrollOffset: 0,
     liveOutput: true,
     showThinking: false,
-    toolOutputExpanded: false,
+    toolOutputExpanded: true,
 };
 
 export async function loadAbgOverlayPrefs(): Promise<AbgOverlayPrefs> {
