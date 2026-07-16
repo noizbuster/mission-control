@@ -74,19 +74,24 @@ export function registerSkillTool(registry: ToolRegistry, options: SkillToolOpti
 /**
  * Read a discovered skill's SKILL.md body. Reused by the `skill` tool's
  * `execute` (todo 9) AND by the CLI `/skill-name` + `$skill` slash expansion
- * (todo 10) so both paths produce byte-identical framing. Throws a
- * non-retryable `ToolExecutionError` on unknown name or read failure.
+ * (todo 10) so both paths produce byte-identical framing.
+ *
+ * Error settlement:
+ * - Unknown name → retryable `ToolExecutionError` (fail-soft: list available
+ *   skills so the model can recover; `isTerminalFailedSettlement` will not
+ *   failGraph).
+ * - Known name + file read failure → non-retryable (terminal).
  */
 export async function loadSkillBody(skills: readonly Skill[], name: string): Promise<SkillToolOutput> {
     const match = skills.find((skill) => skill.name === name);
     if (match === undefined) {
-        throw skillError(`unknown skill: ${name}. Available skills: ${formatAvailableNames(skills)}`);
+        throw skillError(`unknown skill: ${name}. Available skills: ${formatAvailableNames(skills)}`, true);
     }
     let content: string;
     try {
         content = await readFile(match.filePath, 'utf8');
     } catch (error: unknown) {
-        throw skillError(`failed to read skill '${name}' at ${match.filePath}: ${instanceMessage(error)}`);
+        throw skillError(`failed to read skill '${name}' at ${match.filePath}: ${instanceMessage(error)}`, false);
     }
     return {
         name: match.name,
@@ -124,11 +129,11 @@ function formatAvailableNames(skills: readonly Skill[]): string {
         .join(', ');
 }
 
-function skillError(message: string): ToolExecutionError {
+function skillError(message: string, retryable: boolean): ToolExecutionError {
     const error: ProtocolError = {
         code: 'tool_failed',
         message,
-        retryable: false,
+        retryable,
     };
     return new ToolExecutionError(error);
 }

@@ -70,7 +70,7 @@ describe('skill tool', () => {
         expect(modelOutput).toContain('</skill-instruction>');
     });
 
-    it('throws a non-retryable ToolExecutionError for an unknown skill name', async () => {
+    it('throws a retryable ToolExecutionError for an unknown skill name (fail-soft)', async () => {
         const area = await makeTempArea();
         tempRoots.push(area.root);
         const filePath = await writeSkillFile(area.skillDir, 'demo-skill', 'A demo skill.', 'body');
@@ -83,9 +83,8 @@ describe('skill tool', () => {
         } catch (error: unknown) {
             expect(error).toBeInstanceOf(ToolExecutionError);
             const tee = error as ToolExecutionError;
-            expect(tee.error.retryable).toBe(false);
-            expect(tee.error.message).toContain('unknown skill');
-            expect(tee.error.message).toContain('nonexistent');
+            expect(tee.error.retryable).toBe(true);
+            expect(tee.error.message).toBe('unknown skill: nonexistent. Available skills: demo-skill');
         }
     });
 
@@ -153,8 +152,9 @@ describe('skill tool', () => {
         });
         expect(settlement.result.status).toBe('failed');
         if (settlement.result.status === 'failed' && settlement.result.error !== undefined) {
-            expect(settlement.result.error.retryable).toBe(false);
+            expect(settlement.result.error.retryable).toBe(true);
             expect(settlement.result.error.message).toContain('unknown skill');
+            expect(settlement.result.error.message).toContain('Available skills: (none discovered)');
         }
     });
 });
