@@ -103,4 +103,43 @@ describe('runAuthCommand auth login OAuth', () => {
         await expect(store.listCredentialSummaries()).resolves.toEqual([]);
         await rm(authFilePath, { force: true });
     });
+
+    it('logs in xAI through device-code OAuth and stores the credential', async () => {
+        const authFilePath = await useTempAuthFile();
+        const store = createProviderAuthStore();
+        const loginCalls: string[] = [];
+
+        const output = await runAuthCommand(
+            parseArgs(['auth', 'login', '--provider', 'xai', '--method', 'oauth-device']),
+            {
+                now: '2026-06-03T10:00:00.000Z',
+                store,
+                oauthClient: {
+                    login: async ({ providerID, methodID }) => {
+                        loginCalls.push(`${providerID}:${methodID}`);
+                        return {
+                            accessToken: 'xai_access_token',
+                            refreshToken: 'xai_refresh_token',
+                            expiresAt: '2026-06-03T11:00:00.000Z',
+                            accountLabel: 'grok@example.com',
+                        };
+                    },
+                },
+            },
+        );
+
+        const parsed = ProviderAuthFileSchema.parse(JSON.parse(await readFile(authFilePath, 'utf8')));
+        expect(loginCalls).toEqual(['xai:oauth-device']);
+        expect(output).toContain('Logged in xai');
+        expect(output).toContain('credential: OAuth (grok@example.com)');
+        expect(output).not.toContain('xai_access_token');
+        expect(parsed.credentials['xai']).toMatchObject({
+            providerID: 'xai',
+            type: 'oauth',
+            accessToken: 'xai_access_token',
+            refreshToken: 'xai_refresh_token',
+            accountLabel: 'grok@example.com',
+        });
+        await rm(authFilePath, { force: true });
+    });
 });

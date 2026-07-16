@@ -1,8 +1,10 @@
 export type DeviceCodeResponse = {
     readonly verificationUri: string;
+    readonly verificationUriComplete: string | undefined;
     readonly userCode: string;
     readonly deviceCode: string;
     readonly interval: number | undefined;
+    readonly expiresIn: number | undefined;
 };
 
 export type GitHubTokenPoll = {
@@ -35,9 +37,11 @@ export function parseDeviceCodeResponse(value: unknown): DeviceCodeResponse {
     const record = parseRecord(value, 'device code response');
     return {
         verificationUri: requiredURL(record, 'verification_uri'),
+        verificationUriComplete: optionalURL(record, 'verification_uri_complete'),
         userCode: requiredString(record, 'user_code'),
         deviceCode: requiredString(record, 'device_code'),
         interval: optionalPositiveNumber(record, 'interval'),
+        expiresIn: optionalPositiveNumber(record, 'expires_in'),
     };
 }
 
@@ -114,6 +118,21 @@ function isJsonRecord(value: unknown): value is JsonRecord {
 
 function requiredURL(record: JsonRecord, key: string): string {
     const value = requiredString(record, key);
+    try {
+        return new URL(value).href;
+    } catch (error: unknown) {
+        if (error instanceof TypeError) {
+            throw new OAuthParseError(`Invalid ${key}`);
+        }
+        throw error;
+    }
+}
+
+function optionalURL(record: JsonRecord, key: string): string | undefined {
+    const value = optionalString(record, key);
+    if (value === undefined) {
+        return undefined;
+    }
     try {
         return new URL(value).href;
     } catch (error: unknown) {

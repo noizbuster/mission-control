@@ -161,7 +161,7 @@ function resolveDiscoveryApiKey(
             return credential.fields[primarySecretField.id]?.value;
         }
         case 'oauth':
-            return undefined;
+            return credential.accessToken.length > 0 ? credential.accessToken : undefined;
         default:
             return assertNever(credential);
     }

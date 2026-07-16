@@ -17,8 +17,13 @@ import { setTimeout as sleep } from 'node:timers/promises';
 
 const openAIClientID = 'app_EMoamEEZ73f0CkXaXp7hrann';
 const githubCopilotClientID = 'Ov23li8tweQw6odWQebz';
+const xaiOAuthClientID = 'b1a00492-073a-47ea-816f-4c329264a828';
+const xaiOAuthScope = 'openid profile email offline_access grok-cli:access api:access';
+const xaiDeviceCodeGrantType = 'urn:ietf:params:oauth:grant-type:device_code';
 const openAICallbackPort = 1455;
 const maxOAuthWaitMs = 5 * 60 * 1000;
+const xaiDefaultDeviceCodeExpiresMs = 30 * 60 * 1000;
+const xaiMinPollIntervalMs = 1000;
 
 export type DefaultProviderOAuthClientOptions = {
     readonly browserOpener?: BrowserOpener;
@@ -36,6 +41,9 @@ export function createDefaultProviderOAuthClient(options: DefaultProviderOAuthCl
             }
             if (input.provider.id === 'github-copilot' && input.method.id === 'oauth-device') {
                 return loginGitHubCopilot(input);
+            }
+            if (input.provider.id === 'xai' && input.method.id === 'oauth-device') {
+                return loginXaiDeviceCode(input, options);
             }
             throw new Error(`OAuth method ${input.method.id} is not implemented for provider ${input.provider.id}`);
         },
@@ -57,6 +65,78 @@ async function loginGitHubCopilot(input: ProviderOAuthLoginInput): Promise<SaveP
         refreshToken: token,
         accountLabel: domain,
     };
+}
+
+async function loginXaiDeviceCode(
+    input: ProviderOAuthLoginInput,
+    options: DefaultProviderOAuthClientOptions,
+): Promise<SaveProviderOAuthCredentialInput> {
+    const deviceAuthorizationUrl = resolveXaiDeviceAuthorizationUrl();
+    const tokenUrl = resolveXaiTokenUrl();
+    const deviceResponse = await postForm(deviceAuthorizationUrl, {
+        client_id: xaiOAuthClientID,
+        scope: xaiOAuthScope,
+    });
+    const device = parseDeviceCodeResponse(deviceResponse);
+    const browserUrl = device.verificationUriComplete ?? device.verificationUri;
+    input.notify(`Go to: ${browserUrl}`);
+    input.notify(`Enter code: ${device.userCode}`);
+    input.notify('Complete authorization in your browser.');
+    await (options.browserOpener ?? openBrowserURL)(browserUrl).catch(() => undefined);
+    const tokens = await pollXaiDeviceCodeToken(tokenUrl, device);
+    return tokenResponseToCredential(tokens);
+}
+
+async function pollXaiDeviceCodeToken(tokenUrl: string, device: DeviceCodeResponse): Promise<OAuthTokenResponse> {
+    let delayMs = Math.max((device.interval ?? 5) * 1000, xaiMinPollIntervalMs);
+    const expiresMs = device.expiresIn === undefined ? xaiDefaultDeviceCodeExpiresMs : device.expiresIn * 1000;
+    const deadline = Date.now() + expiresMs;
+    while (Date.now() < deadline) {
+        await sleep(delayMs);
+        const response = await fetch(tokenUrl, {
+            method: 'POST',
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                grant_type: xaiDeviceCodeGrantType,
+                client_id: xaiOAuthClientID,
+                device_code: device.deviceCode,
+            }).toString(),
+        });
+        if (response.ok) {
+            return parseOAuthTokenResponse(await response.json());
+        }
+        const body = (await response.json().catch(() => ({}))) as Readonly<Record<string, unknown>>;
+        const error = typeof body['error'] === 'string' ? body['error'] : undefined;
+        if (error === 'authorization_pending') {
+            continue;
+        }
+        if (error === 'slow_down') {
+            const interval = typeof body['interval'] === 'number' && body['interval'] > 0 ? body['interval'] : undefined;
+            delayMs = interval === undefined ? delayMs + 5000 : Math.max(interval * 1000, delayMs + 5000);
+            continue;
+        }
+        if (error === 'expired_token') {
+            throw new Error('xAI OAuth device code expired');
+        }
+        if (error === 'access_denied') {
+            throw new Error('xAI OAuth access denied');
+        }
+        throw new Error(`xAI OAuth failed${error === undefined ? ` (${response.status})` : `: ${error}`}`);
+    }
+    throw new Error('xAI OAuth timed out');
+}
+
+function resolveXaiDeviceAuthorizationUrl(): string {
+    const { MISSION_CONTROL_XAI_OAUTH_DEVICE_URL } = process.env;
+    return (MISSION_CONTROL_XAI_OAUTH_DEVICE_URL ?? 'https://auth.x.ai/oauth2/device/code').replace(/\/+$/, '');
+}
+
+function resolveXaiTokenUrl(): string {
+    const { MISSION_CONTROL_XAI_OAUTH_TOKEN_URL } = process.env;
+    return (MISSION_CONTROL_XAI_OAUTH_TOKEN_URL ?? 'https://auth.x.ai/oauth2/token').replace(/\/+$/, '');
 }
 
 async function pollGitHubDeviceToken(domain: string, device: DeviceCodeResponse): Promise<string> {
@@ -162,6 +242,21 @@ async function postJson(url: string, body: Readonly<Record<string, string>>): Pr
             'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+        throw new Error(`OAuth request failed: ${response.status}`);
+    }
+    return response.json();
+}
+
+async function postForm(url: string, body: Readonly<Record<string, string>>): Promise<unknown> {
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams(body).toString(),
     });
     if (!response.ok) {
         throw new Error(`OAuth request failed: ${response.status}`);
