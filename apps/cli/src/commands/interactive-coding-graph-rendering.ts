@@ -13,6 +13,7 @@ import {
     structuredToolOutput,
 } from './interactive-coding-signal-payload';
 import { parseFileEditOutput, parseFilePatchOutput, renderToolPreview } from './interactive-coding-tool-preview';
+import { formatToolResultActivity } from './interactive-coding-tool-activity';
 import {
     describeRetryableFailure,
     formatNodeRetryStatus,
@@ -55,6 +56,13 @@ export function renderInteractiveGraphDurableEvent(
     state: ProviderRenderState,
     event: AgentEvent,
 ): void {
+    if (event.type === 'decision.selected') {
+        const message = typeof event.message === 'string' ? event.message.trim() : '';
+        if (message.length > 0) {
+            output.write(`→ ${message}\n`);
+        }
+        return;
+    }
     if (event.type === 'attempt.started') {
         const nodeId = event.abg?.nodeId;
         if (typeof nodeId === 'string' && nodeId.length > 0) {
@@ -109,6 +117,11 @@ export function renderInteractiveGraphDurableEvent(
         state.toolCount += 1;
         state.toolNames = [...state.toolNames, readStringField(emit.payload, 'toolName') ?? 'tool'];
         output.clearAgentStatus?.();
+        if (state.streamingText || state.streamingThinking) {
+            output.write('\n');
+            state.streamingText = false;
+            state.streamingThinking = false;
+        }
         renderGraphToolSettlement(output, emit.payload, emit.type === 'tool.completed' ? 'completed' : 'failed');
         return;
     }
@@ -214,16 +227,30 @@ function renderInteractiveGraphSignal(
 
 function renderGraphToolSettlement(output: ChatOutput, payload: unknown, status: 'completed' | 'failed'): void {
     const toolName = readStringField(payload, 'toolName') ?? 'tool';
-    if (output.isToolOutputExpanded?.() === false) return;
-    if (status === 'failed') {
-        output.write(`${toolName} failed: ${redactCredentialText(readErrorMessage(payload) ?? 'unknown error')}\n`);
-        return;
-    }
     const modelOutput = readStringField(payload, 'output');
     const structured = structuredToolOutput(payload);
+    output.write(
+        `${formatToolResultActivity(toolName, status, {
+            ...(modelOutput !== undefined ? { modelOutput } : {}),
+            ...(structured !== undefined ? { structuredOutput: structured } : {}),
+            ...(status === 'failed'
+                ? { errorMessage: readErrorMessage(payload) ?? 'unknown error' }
+                : {}),
+        })}\n`,
+    );
+    if (output.isToolOutputExpanded?.() === false) return;
+    if (status === 'failed') return;
+    if (toolName === 'command.run' || toolName === 'bash.run') {
+        if (modelOutput !== undefined && modelOutput.includes('\n')) {
+            output.write(`Command output for ${toolName}\n${modelOutput}\n`);
+        }
+        return;
+    }
     if (toolName === 'file.patch') {
         const parsed = structured === undefined ? undefined : parseFilePatchOutput(structured);
-        if (parsed !== undefined) output.write(`Applied patch: ${parsed.appliedFiles.join(', ')}\n`);
+        if (parsed !== undefined && parsed.appliedFiles.length > 1) {
+            output.write(`Applied patch: ${parsed.appliedFiles.join(', ')}\n`);
+        }
         return;
     }
     if (toolName === 'file.edit') {
@@ -236,14 +263,11 @@ function renderGraphToolSettlement(output: ChatOutput, payload: unknown, status:
     }
     if (toolName === 'file.write') {
         const parsed = structured === undefined ? undefined : parseFileWriteOutput(structured);
-        if (parsed !== undefined)
+        if (parsed !== undefined) {
             output.write(
                 `${parsed.operation === 'created' ? 'Created' : 'Replaced'} file: ${parsed.appliedFiles.join(', ')}\n`,
             );
-        return;
-    }
-    if (toolName === 'command.run' || toolName === 'bash.run') {
-        output.write(`Command output for ${toolName}\n${modelOutput ?? ''}\n`);
+        }
     }
 }
 

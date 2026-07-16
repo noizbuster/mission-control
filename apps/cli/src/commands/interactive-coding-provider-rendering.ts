@@ -4,6 +4,7 @@ import type { ChatOutput } from './interactive-chat-io';
 import { parseFileWriteOutput } from './interactive-coding-file-write-preview';
 import type { ProviderRenderState } from './interactive-coding-graph-rendering';
 import { parseCommandRunStatus } from './interactive-coding-signal-payload';
+import { formatToolResultActivity } from './interactive-coding-tool-activity';
 import { parseFileEditOutput, parseFilePatchOutput } from './interactive-coding-tool-preview';
 
 export function renderProviderEnvelope(
@@ -31,11 +32,21 @@ export function renderProviderEnvelope(
 }
 
 export function renderInteractiveToolSettlement(output: ChatOutput, settlement: ToolInvocationSettlement): void {
+    const status = settlement.result.status === 'failed' ? 'failed' : 'completed';
+    const modelOutput = settlement.modelOutput?.content;
+    output.write(
+        `${formatToolResultActivity(settlement.toolName, status, {
+            ...(modelOutput !== undefined ? { modelOutput } : {}),
+            ...(settlement.structuredOutput !== undefined
+                ? { structuredOutput: settlement.structuredOutput }
+                : {}),
+            ...(status === 'failed'
+                ? { errorMessage: settlement.result.error?.message ?? 'unknown error' }
+                : {}),
+        })}\n`,
+    );
     if (output.isToolOutputExpanded?.() === false) return;
-    if (settlement.result.status === 'failed') {
-        output.write(`${settlement.toolName} failed: ${settlement.result.error?.message ?? 'unknown error'}\n`);
-        return;
-    }
+    if (status === 'failed') return;
     if (settlement.toolName === 'file.patch') {
         const parsed = parseFilePatchOutput(settlement.structuredOutput);
         if (parsed !== undefined) output.write(`Applied patch: ${parsed.appliedFiles.join(', ')}\n`);
@@ -59,9 +70,11 @@ export function renderInteractiveToolSettlement(output: ChatOutput, settlement: 
     }
     if (settlement.toolName === 'command.run' || settlement.toolName === 'bash.run') {
         if (parseCommandRunStatus(settlement.structuredOutput) === 'failed') {
-            output.write(`${settlement.toolName} failed: command_failed\n`);
             return;
         }
-        output.write(`Command output for ${settlement.toolName}\n${settlement.modelOutput?.content ?? ''}\n`);
+        const content = settlement.modelOutput?.content ?? '';
+        if (content.includes('\n')) {
+            output.write(`Command output for ${settlement.toolName}\n${content}\n`);
+        }
     }
 }

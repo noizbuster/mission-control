@@ -168,7 +168,7 @@ describe('interactive coding tool preview', () => {
         expect(output.getOutput()).not.toContain('+++ b/linked/child.txt');
     });
 
-    it('writes nothing in collapsed mode (isToolOutputExpanded returns false)', async () => {
+    it('writes compact activity lines in collapsed mode without multi-line previews', async () => {
         const chunks: string[] = [];
         const collapsedOutput: ChatOutput = {
             write: (text: string) => {
@@ -186,7 +186,12 @@ describe('interactive coding tool preview', () => {
             collapsedOutput,
         );
 
-        expect(chunks.join('')).toBe('');
+        const text = chunks.join('');
+        expect(text).toContain('tool: file.patch');
+        expect(text).toContain('tool: command.run $ echo hi');
+        expect(text).not.toContain('Patch preview for file.patch');
+        expect(text).not.toContain('Command preview for command.run');
+        expect(text).not.toContain('hidden.txt');
     });
 });
 

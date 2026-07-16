@@ -6,8 +6,10 @@ import {
     parseFileWritePreviewValue,
     renderFileWritePreview,
 } from './interactive-coding-file-write-preview';
+import { formatToolCallActivity } from './interactive-coding-tool-activity';
 
 export async function renderToolPreview(toolCall: ToolCall, output: ChatOutput, workspaceRoot?: string): Promise<void> {
+    output.write(`${formatToolCallActivity(toolCall)}\n`);
     if (output.isToolOutputExpanded?.() === false) {
         return;
     }
