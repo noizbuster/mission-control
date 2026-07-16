@@ -5,7 +5,7 @@ import { createAbgEmitSignal } from './abg-emit';
 import { runAbgGraph } from './graph-runner';
 import { deriveAbgGraphSnapshot } from './graph-state';
 import type { AbgNodeRunContext } from './node-registry';
-import { createAbgNodeRegistry } from './node-registry';
+import { createAbgNodeRegistry, createDefaultAbgNodeRegistry } from './node-registry';
 
 const baseInput = {
     sessionId: 'session_graph_coordinator',
@@ -797,6 +797,175 @@ describe('bounded ABG graph coordinator', () => {
             },
         });
         expect(deriveAbgGraphSnapshot(result.events, 'blocked-approval').status).toBe('blocked');
+    });
+
+    it('completes when a successful node is an intentional terminal sink (zero outbound)', async () => {
+        // Given: present / complete / blocked-escalation style sink — zero authored edges
+        // When: the sink node succeeds
+        // Then: graph completes (intentional terminal, not dead-end)
+        const result = await runAbgGraph({
+            ...baseInput,
+            graph: {
+                id: 'intentional-sink',
+                entryNodeId: 'present',
+                nodes: [{ id: 'present', kind: 'action' }],
+                edges: [],
+                rules: [],
+                policies: [],
+            },
+        });
+
+        expect(result.status).toBe('completed');
+        expect(result.events.at(-1)?.type).toBe('graph.completed');
+    });
+
+    /**
+     * P1 / routing dead-end RED lock (todo 3).
+     *
+     * Pure gate succeeds after writing a non-enum blob to a routing key that only
+     * has conditional `blackboard.value.equals` outbound edges. Desired post-todo-5
+     * behavior: status !== 'completed' (routing_dead_end re-admit/fail or
+     * invalid_structured_output). Current coordinator silently empties the queue and
+     * emits graph.completed — this assertion FAILS until todo 5 wires classifyRoutingProgress.
+     * Do NOT "fix" this by weakening the assertion; todo 5 owns the green.
+     */
+    it('does not complete when conditional-only routing misses after success (P1 dead-end RED lock)', async () => {
+        // Given: pure gate + only conditional equals edges + non-matching poison value
+        const registry = createAbgNodeRegistry();
+        registry.register(
+            'write-poison-classification',
+            async function* run(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
+                yield { type: 'started', graphId: context.graphId, nodeId: node.id };
+                context.blackboard?.set('ambiguity.classification', {
+                    prose: 'not an enum label',
+                    nested: true,
+                });
+                yield { type: 'success', graphId: context.graphId, nodeId: node.id };
+            },
+        );
+
+        // When
+        const result = await runAbgGraph({
+            ...baseInput,
+            registry,
+            graph: {
+                id: 'routing-dead-end-p1',
+                entryNodeId: 'assess-ambiguity',
+                nodes: [
+                    {
+                        id: 'assess-ambiguity',
+                        kind: 'action',
+                        implementation: 'write-poison-classification',
+                        // pure routing gate: no capabilities
+                        capabilities: [],
+                    },
+                    { id: 'clear-path', kind: 'action' },
+                    { id: 'unclear-path', kind: 'action' },
+                    { id: 'fence-path', kind: 'action' },
+                ],
+                edges: [
+                    { source: 'assess-ambiguity', target: 'clear-path', condition: 'is-clear' },
+                    { source: 'assess-ambiguity', target: 'unclear-path', condition: 'is-unclear' },
+                    { source: 'assess-ambiguity', target: 'fence-path', condition: 'is-fence' },
+                ],
+                rules: [
+                    {
+                        id: 'is-clear',
+                        when: {
+                            kind: 'blackboard.value.equals',
+                            key: 'ambiguity.classification',
+                            value: 'clear',
+                        },
+                    },
+                    {
+                        id: 'is-unclear',
+                        when: {
+                            kind: 'blackboard.value.equals',
+                            key: 'ambiguity.classification',
+                            value: 'unclear',
+                        },
+                    },
+                    {
+                        id: 'is-fence',
+                        when: {
+                            kind: 'blackboard.value.equals',
+                            key: 'ambiguity.classification',
+                            value: 'on-the-fence',
+                        },
+                    },
+                ],
+                policies: [],
+            },
+        });
+
+        // Then (desired post-todo-5 contract — RED until wire):
+        // Conditional-only miss after success MUST NOT complete the graph.
+        expect(result.status).not.toBe('completed');
+        // Downstream paths must not have run.
+        expect(result.events.some((event) => event.abg?.nodeId === 'clear-path')).toBe(false);
+        expect(result.events.some((event) => event.abg?.nodeId === 'unclear-path')).toBe(false);
+        expect(result.events.some((event) => event.abg?.nodeId === 'fence-path')).toBe(false);
+    });
+
+    it('progresses when a conditional equals edge matches after success', async () => {
+        // Given: same gate shape as P1 but value is a valid enum label
+        const registry = createDefaultAbgNodeRegistry();
+        registry.register(
+            'write-clear-classification',
+            async function* run(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
+                yield { type: 'started', graphId: context.graphId, nodeId: node.id };
+                context.blackboard?.set('ambiguity.classification', 'clear');
+                yield { type: 'success', graphId: context.graphId, nodeId: node.id };
+            },
+        );
+
+        // When
+        const result = await runAbgGraph({
+            ...baseInput,
+            registry,
+            graph: {
+                id: 'routing-match-happy',
+                entryNodeId: 'assess-ambiguity',
+                nodes: [
+                    {
+                        id: 'assess-ambiguity',
+                        kind: 'action',
+                        implementation: 'write-clear-classification',
+                        capabilities: [],
+                    },
+                    { id: 'clear-path', kind: 'action' },
+                    { id: 'unclear-path', kind: 'action' },
+                ],
+                edges: [
+                    { source: 'assess-ambiguity', target: 'clear-path', condition: 'is-clear' },
+                    { source: 'assess-ambiguity', target: 'unclear-path', condition: 'is-unclear' },
+                ],
+                rules: [
+                    {
+                        id: 'is-clear',
+                        when: {
+                            kind: 'blackboard.value.equals',
+                            key: 'ambiguity.classification',
+                            value: 'clear',
+                        },
+                    },
+                    {
+                        id: 'is-unclear',
+                        when: {
+                            kind: 'blackboard.value.equals',
+                            key: 'ambiguity.classification',
+                            value: 'unclear',
+                        },
+                    },
+                ],
+                policies: [],
+            },
+        });
+
+        // Then: matching edge enqueues clear-path; graph completes intentionally at sink
+        expect(result.status).toBe('completed');
+        expect(result.events.some((event) => event.abg?.nodeId === 'clear-path')).toBe(true);
+        expect(result.events.some((event) => event.abg?.nodeId === 'unclear-path')).toBe(false);
     });
 });
 
