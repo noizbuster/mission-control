@@ -67,6 +67,39 @@ export async function appendStopCancellationEvents(
     }
 }
 
+export async function appendUnattachedRunInterruptions(input: {
+    readonly client: Client;
+    readonly sessionId: string;
+    readonly runIds: readonly string[];
+    readonly attachedRunIds: ReadonlySet<string>;
+    readonly requestId: string;
+    readonly operationId: string;
+    readonly timestamp: string;
+    readonly observabilityRedactor?: ObservabilityRedactor;
+}): Promise<void> {
+    for (const runId of input.runIds) {
+        if (input.attachedRunIds.has(runId)) continue;
+        await appendFencedSessionStopEvent({
+            client: input.client,
+            sessionId: input.sessionId,
+            event: {
+                type: 'run.interrupted',
+                timestamp: input.timestamp,
+                sessionId: input.sessionId,
+                message: 'run interrupted',
+                run: {
+                    state: 'interrupted',
+                    runId,
+                    requestId: input.requestId,
+                    operationId: input.operationId,
+                    reason: 'operator_aborted',
+                },
+            },
+            ...(input.observabilityRedactor !== undefined ? { observabilityRedactor: input.observabilityRedactor } : {}),
+        });
+    }
+}
+
 export function abortCompletedEvent(
     input: ExactSessionStopInput,
     affected: SessionAbortAffectedCounts,

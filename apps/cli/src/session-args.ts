@@ -107,6 +107,9 @@ export function parseSessionArgs(argv: readonly string[]): CliArgs {
 }
 
 function parseSessionStopArgs(argv: readonly string[]): CliArgs {
+    if (argv.length === 2 && argv[1] === '--help') {
+        return { ...createSessionArgs('session-stop'), showHelp: true, helpText: SESSION_STOP_USAGE };
+    }
     const sessionId = argv[1];
     if (sessionId === undefined || parseCliSessionId(sessionId) === undefined) {
         throw new SessionCliUsageError(SESSION_STOP_USAGE);

@@ -35,6 +35,7 @@ export type CliArgs = {
     readonly useNative: boolean | undefined;
     readonly command: CliCommand;
     readonly showHelp: boolean;
+    readonly helpText?: string;
     readonly showVersion: boolean;
     /**
      * When true, non-interactive Plain/Tui renderers emit reasoning/thinking blocks (dimmed italic).

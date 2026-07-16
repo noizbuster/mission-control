@@ -15,6 +15,7 @@ import { applyStopMutation, readSessionStatus, refreshStoppedSession } from './s
 import {
     abortCompletedEvent,
     appendStopCancellationEvents,
+    appendUnattachedRunInterruptions,
     failedStopReceipt,
     hasStopAffected,
     settleStopHandlesBeforeDeadline,
@@ -134,6 +135,22 @@ export class SessionStopService {
                         timestamp,
                         this.observabilityRedactor,
                     );
+                    await appendUnattachedRunInterruptions({
+                        client,
+                        sessionId: input.sessionId,
+                        runIds: result.activeRunIds,
+                        attachedRunIds: new Set(
+                            snapshot.attachments
+                                .filter((attachment) => attachment.kind === 'run' && attachment.handles.length > 0)
+                                .map((attachment) => attachment.entityId),
+                        ),
+                        requestId: input.requestId,
+                        operationId: input.operationId,
+                        timestamp,
+                        ...(this.observabilityRedactor !== undefined
+                            ? { observabilityRedactor: this.observabilityRedactor }
+                            : {}),
+                    });
                     return result;
                 },
             });
@@ -158,6 +175,24 @@ export class SessionStopService {
             if (!settled) {
                 return this.acquisitions.timeout(acquisition);
             }
+            const completedAt = Date.now();
+            const requiresOwnerlessAbortMarker = snapshot.attachments.length === 0 && mutation.activeRunIds.length > 0;
+            if (requiresOwnerlessAbortMarker) {
+                await runWithSessionControlLeaseFence({
+                    runtime: this.runtime,
+                    lease,
+                    nowWallMs: completedAt,
+                    write: (client) =>
+                        appendFencedSessionStopEvent({
+                            client,
+                            sessionId: input.sessionId,
+                            event: abortCompletedEvent(input, mutation.affected, new Date(completedAt).toISOString()),
+                            ...(this.observabilityRedactor !== undefined
+                                ? { observabilityRedactor: this.observabilityRedactor }
+                                : {}),
+                        }),
+                });
+            }
             await Promise.all(
                 snapshot.attachments.map((attachment) =>
                     this.host.detachEntity(input.sessionId, attachment.kind, attachment.entityId),
@@ -174,20 +209,21 @@ export class SessionStopService {
             }
             const outcome = hasStopAffected(mutation.affected) ? 'interrupted' : 'already_idle';
             const completed = stopReceipt(input, outcome, mutation.affected);
-            const completedAt = Date.now();
             await runWithSessionControlLeaseFence({
                 runtime: this.runtime,
                 lease,
                 nowWallMs: completedAt,
                 write: async (client) => {
-                    await appendFencedSessionStopEvent({
-                        client,
-                        sessionId: input.sessionId,
-                        event: abortCompletedEvent(input, mutation.affected, new Date(completedAt).toISOString()),
-                        ...(this.observabilityRedactor !== undefined
-                            ? { observabilityRedactor: this.observabilityRedactor }
-                            : {}),
-                    });
+                    if (!requiresOwnerlessAbortMarker) {
+                        await appendFencedSessionStopEvent({
+                            client,
+                            sessionId: input.sessionId,
+                            event: abortCompletedEvent(input, mutation.affected, new Date(completedAt).toISOString()),
+                            ...(this.observabilityRedactor !== undefined
+                                ? { observabilityRedactor: this.observabilityRedactor }
+                                : {}),
+                        });
+                    }
                     await completeSessionControlOperationWithClient(client, {
                         lease,
                         operationId: input.operationId,

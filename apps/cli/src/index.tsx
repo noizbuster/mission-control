@@ -120,7 +120,7 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
         return;
     }
     if (args.showHelp) {
-        process.stdout.write(`${createHelpText()}\n`);
+        process.stdout.write(`${args.helpText ?? createHelpText()}\n`);
         return;
     }
 

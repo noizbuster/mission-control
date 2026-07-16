@@ -97,4 +97,20 @@ describe('CLI entrypoint', () => {
         );
         expect(process.exitCode).toBe(2);
     });
+
+    it('writes session stop help to stdout with a successful exit', async () => {
+        // Given
+        const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+        const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+        // When
+        await runCli(['session', 'stop', '--help']);
+
+        // Then
+        expect(stdout).toHaveBeenCalledExactlyOnceWith(
+            'Usage: mc session stop <session-id> [--only | --child-only] [--timeout <duration>]\n',
+        );
+        expect(stderr).not.toHaveBeenCalled();
+        expect(process.exitCode).toBeUndefined();
+    });
 });

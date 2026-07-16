@@ -30,6 +30,18 @@ describe('session stop arguments', () => {
         });
     });
 
+    it('recognizes the stop help flag without accepting it as a session ID', () => {
+        // Given
+        const command = ['session', 'stop', '--help'];
+
+        // When
+        const result = parseArgs(command);
+
+        // Then
+        expect(result).toMatchObject({ command: 'session-stop', showHelp: true });
+        expect(result).not.toHaveProperty('sessionId');
+    });
+
     it.each([
         ['--only', '--child-only'],
         ['--timeout'],
