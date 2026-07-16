@@ -27,6 +27,7 @@ describe('OpenAI-compatible provider adapter family', () => {
             ['deepseek', 'https://api.deepseek.com/chat/completions'],
             ['mistral', 'https://api.mistral.ai/v1/chat/completions'],
             ['zai-coding-plan', 'https://api.z.ai/api/coding/paas/v4/chat/completions'],
+            ['xai', 'https://api.x.ai/v1/chat/completions'],
         ]);
     });
 
