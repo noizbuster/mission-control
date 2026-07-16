@@ -655,7 +655,10 @@ describe('bounded ABG graph coordinator', () => {
         });
     });
 
-    it('fails once when a non-rate-limit provider reports retry budget exhausted', async () => {
+    it('fails once when a non-retryable provider hard failure is terminal', async () => {
+        // Given: providerError with retryable:false (taxonomy terminal class)
+        // When: first attempt fails
+        // Then: graph fails immediately without spending node maxAttempts
         const registry = createAbgNodeRegistry();
         registry.register(
             'retry-exhausted-unknown',
@@ -668,7 +671,7 @@ describe('bounded ABG graph coordinator', () => {
                     error: {
                         code: 'unknown',
                         message: 'upstream hard failure',
-                        retryable: true,
+                        retryable: false,
                         retryExhausted: true,
                         providerError: true,
                     },
@@ -695,7 +698,7 @@ describe('bounded ABG graph coordinator', () => {
         expect(result.terminalError).toEqual({
             code: 'unknown',
             message: 'upstream hard failure',
-            retryable: true,
+            retryable: false,
         });
     });
 
@@ -820,14 +823,8 @@ describe('bounded ABG graph coordinator', () => {
     });
 
     /**
-     * P1 / routing dead-end RED lock (todo 3).
-     *
-     * Pure gate succeeds after writing a non-enum blob to a routing key that only
-     * has conditional `blackboard.value.equals` outbound edges. Desired post-todo-5
-     * behavior: status !== 'completed' (routing_dead_end re-admit/fail or
-     * invalid_structured_output). Current coordinator silently empties the queue and
-     * emits graph.completed — this assertion FAILS until todo 5 wires classifyRoutingProgress.
-     * Do NOT "fix" this by weakening the assertion; todo 5 owns the green.
+     * P1 / routing dead-end (todo 5 green).
+     * Poison classification blob + conditional-only equals edges must not silent-complete.
      */
     it('does not complete when conditional-only routing misses after success (P1 dead-end RED lock)', async () => {
         // Given: pure gate + only conditional equals edges + non-matching poison value
@@ -851,13 +848,17 @@ describe('bounded ABG graph coordinator', () => {
             graph: {
                 id: 'routing-dead-end-p1',
                 entryNodeId: 'assess-ambiguity',
+                defaults: { retryLimit: 2 },
                 nodes: [
                     {
                         id: 'assess-ambiguity',
                         kind: 'action',
                         implementation: 'write-poison-classification',
-                        // pure routing gate: no capabilities
                         capabilities: [],
+                        config: {
+                            outputKey: 'ambiguity.classification',
+                            outputEnum: ['clear', 'unclear', 'on-the-fence'],
+                        },
                     },
                     { id: 'clear-path', kind: 'action' },
                     { id: 'unclear-path', kind: 'action' },
@@ -898,13 +899,203 @@ describe('bounded ABG graph coordinator', () => {
             },
         });
 
-        // Then (desired post-todo-5 contract — RED until wire):
-        // Conditional-only miss after success MUST NOT complete the graph.
+        // Then: dead-end re-admit exhausts budget → typed fail, never completed
         expect(result.status).not.toBe('completed');
-        // Downstream paths must not have run.
+        expect(result.status).toBe('failed');
+        expect(result.terminalError?.code).toBe('routing_dead_end');
+        expect(
+            result.events.some(
+                (event) =>
+                    event.message.includes('routing.dead_end') ||
+                    event.abg?.emit?.type === 'routing.dead_end' ||
+                    event.abg?.error?.code === 'routing_dead_end',
+            ),
+        ).toBe(true);
         expect(result.events.some((event) => event.abg?.nodeId === 'clear-path')).toBe(false);
         expect(result.events.some((event) => event.abg?.nodeId === 'unclear-path')).toBe(false);
         expect(result.events.some((event) => event.abg?.nodeId === 'fence-path')).toBe(false);
+    });
+
+    it('re-queues provider_timeout with retryExhausted when node budget remains (P2)', async () => {
+        // Given: provider timeout + retryExhausted while consecutiveFailures < maxAttempts
+        // When: first attempt fails
+        // Then: node is re-queued (not terminal); second attempt succeeds
+        const registry = createAbgNodeRegistry();
+        let runs = 0;
+        registry.register(
+            'timeout-then-ok',
+            async function* run(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
+                runs += 1;
+                yield { type: 'started', graphId: context.graphId, nodeId: node.id };
+                if (runs === 1) {
+                    yield {
+                        type: 'failure',
+                        graphId: context.graphId,
+                        nodeId: node.id,
+                        error: {
+                            code: 'provider_timeout',
+                            message: 'fetch failed',
+                            retryable: true,
+                            retryExhausted: true,
+                            providerError: true,
+                        },
+                    };
+                    return;
+                }
+                yield { type: 'success', graphId: context.graphId, nodeId: node.id };
+            },
+        );
+
+        const result = await runAbgGraph({
+            ...baseInput,
+            registry,
+            graph: {
+                id: 'provider-timeout-p2',
+                entryNodeId: 'flaky',
+                defaults: { retryLimit: 2 },
+                nodes: [{ id: 'flaky', kind: 'llm', implementation: 'timeout-then-ok' }],
+                edges: [],
+                rules: [],
+                policies: [],
+            },
+        });
+
+        expect(result.status).toBe('completed');
+        expect(runs).toBe(2);
+        expect(attemptsFor(result.events, 'flaky')).toEqual([1, 2]);
+    });
+
+    it('injects correction on structured rejection and clears after success (P5)', async () => {
+        // Given: invalid_structured_output then success
+        // When: node is re-queued under budget
+        // Then: second attempt sees retryCorrection; third path after success has none
+        const registry = createAbgNodeRegistry();
+        const corrections: Array<string | undefined> = [];
+        let runs = 0;
+        registry.register(
+            'structured-then-ok',
+            async function* run(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
+                runs += 1;
+                corrections.push(context.retryCorrection);
+                yield { type: 'started', graphId: context.graphId, nodeId: node.id };
+                if (runs === 1) {
+                    yield {
+                        type: 'failure',
+                        graphId: context.graphId,
+                        nodeId: node.id,
+                        error: {
+                            code: 'invalid_structured_output',
+                            message: 'output outside enum',
+                        },
+                    };
+                    return;
+                }
+                context.blackboard?.set('ambiguity.classification', 'clear');
+                yield { type: 'success', graphId: context.graphId, nodeId: node.id };
+            },
+        );
+        registry.register(
+            'sink',
+            async function* run(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
+                corrections.push(context.retryCorrection);
+                yield { type: 'started', graphId: context.graphId, nodeId: node.id };
+                yield { type: 'success', graphId: context.graphId, nodeId: node.id };
+            },
+        );
+
+        const result = await runAbgGraph({
+            ...baseInput,
+            registry,
+            graph: {
+                id: 'correction-p5',
+                entryNodeId: 'gate',
+                defaults: { retryLimit: 2 },
+                nodes: [
+                    {
+                        id: 'gate',
+                        kind: 'action',
+                        implementation: 'structured-then-ok',
+                        capabilities: [],
+                        config: {
+                            outputKey: 'ambiguity.classification',
+                            outputEnum: ['clear', 'unclear', 'on-the-fence'],
+                        },
+                    },
+                    { id: 'clear-path', kind: 'action', implementation: 'sink' },
+                ],
+                edges: [{ source: 'gate', target: 'clear-path', condition: 'is-clear' }],
+                rules: [
+                    {
+                        id: 'is-clear',
+                        when: {
+                            kind: 'blackboard.value.equals',
+                            key: 'ambiguity.classification',
+                            value: 'clear',
+                        },
+                    },
+                ],
+                policies: [],
+            },
+        });
+
+        expect(result.status).toBe('completed');
+        expect(corrections[0]).toBeUndefined();
+        expect(corrections[1]).toEqual(expect.stringContaining('invalid_structured_output'));
+        expect(corrections[1]).toEqual(expect.stringContaining('clear|unclear|on-the-fence'));
+        // After productive success, downstream sink must not inherit gate correction
+        expect(corrections[2]).toBeUndefined();
+    });
+
+    it('fails typed when permanent dead-end exhausts budget (not completed)', async () => {
+        // Given: always-poison gate with no escalationTarget
+        // When: dead-end re-admits until maxAttempts
+        // Then: failGraph routing_dead_end, never graph.completed
+        const registry = createAbgNodeRegistry();
+        registry.register(
+            'always-poison',
+            async function* run(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
+                yield { type: 'started', graphId: context.graphId, nodeId: node.id };
+                context.blackboard?.set('ambiguity.classification', { blob: true });
+                yield { type: 'success', graphId: context.graphId, nodeId: node.id };
+            },
+        );
+
+        const result = await runAbgGraph({
+            ...baseInput,
+            registry,
+            graph: {
+                id: 'dead-end-exhaust',
+                entryNodeId: 'gate',
+                defaults: { retryLimit: 1 },
+                nodes: [
+                    {
+                        id: 'gate',
+                        kind: 'action',
+                        implementation: 'always-poison',
+                        capabilities: [],
+                        config: { outputKey: 'ambiguity.classification', outputEnum: ['clear'] },
+                    },
+                    { id: 'next', kind: 'action' },
+                ],
+                edges: [{ source: 'gate', target: 'next', condition: 'is-clear' }],
+                rules: [
+                    {
+                        id: 'is-clear',
+                        when: {
+                            kind: 'blackboard.value.equals',
+                            key: 'ambiguity.classification',
+                            value: 'clear',
+                        },
+                    },
+                ],
+                policies: [],
+            },
+        });
+
+        expect(result.status).toBe('failed');
+        expect(result.terminalError?.code).toBe('routing_dead_end');
+        expect(result.events.some((event) => event.type === 'graph.completed')).toBe(false);
+        expect(attemptsFor(result.events, 'gate')).toEqual([1, 2]);
     });
 
     it('progresses when a conditional equals edge matches after success', async () => {

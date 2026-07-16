@@ -12,20 +12,27 @@ import type { AbgGraphRunnerInput } from './graph-runner';
 import type { AbgNodeRegistry, AbgObservedGraphEvent } from './node-registry';
 import type { LlmActorModel } from './nodes/llm-actor/llm-actor-node';
 
+export type RunContextOptions = {
+    readonly toolCallId?: string;
+    readonly nodeId?: string;
+};
+
 export function runContext(
     graph: AuthorableAbgGraph,
     registry: AbgNodeRegistry,
     input: AbgGraphRunnerInput,
     state: CoordinatorState,
-    toolCallId?: string,
+    options: RunContextOptions = {},
 ) {
     const nodes = Object.fromEntries(graph.nodes.map((node) => [node.id, node]));
     const model = graph.defaults?.model ?? runtimeModel(input.modelProviderSelection);
     const sdkModel = input.resolveSdkModel !== undefined ? input.resolveSdkModel(model) : undefined;
+    const retryCorrection =
+        options.nodeId !== undefined ? state.correctionByNodeId.get(options.nodeId) : undefined;
     return {
         graphId: graph.id,
         now: input.now,
-        ...(toolCallId !== undefined ? { toolCallId } : {}),
+        ...(options.toolCallId !== undefined ? { toolCallId: options.toolCallId } : {}),
         registry,
         nodes,
         policies: graph.policies,
@@ -57,6 +64,9 @@ export function runContext(
             ? { projectInstructionResources: input.projectInstructionResources }
             : {}),
         observabilityRedactor: state.observabilityRedactor,
+        ...(retryCorrection !== undefined && retryCorrection.length > 0
+            ? { retryCorrection }
+            : {}),
     } satisfies {
         readonly graphId: string;
         readonly now: () => string;
@@ -79,6 +89,7 @@ export function runContext(
         readonly systemPromptEnv?: SystemPromptEnvironment;
         readonly projectInstructionResources?: readonly ProjectInstructionResource[];
         readonly observabilityRedactor: CoordinatorState['observabilityRedactor'];
+        readonly retryCorrection?: string;
     };
 }
 

@@ -1,4 +1,4 @@
-// allow: SIZE_OK -- HEAD 410 -> current 406 pure LOC; one bounded graph execution state machine after run-context extraction.
+// allow: SIZE_OK -- HEAD 410 -> current 477 pure LOC; one bounded graph execution state machine (progress-contract wire).
 import type { AbgNodeSpec, AbgPolicyDecision, AbgSignal, AgentEvent } from '@mission-control/protocol';
 import { type AuthorableAbgGraph, createAuthorableAbgGraph } from './authorable-graph';
 import {
@@ -9,6 +9,14 @@ import {
     nodeModel,
 } from './graph-coordinator-helpers';
 import { runQueuedNode } from './graph-coordinator-node-runner';
+import {
+    clearAllCorrections,
+    clearNodeCorrection,
+    handlePostSuccessRouting,
+    handleStructuredFailureExhaust,
+    setStructuredOutputCorrection,
+} from './graph-coordinator-progress-contract';
+import { failureCodeFromSignal, failureMessageFromSignal } from './graph-coordinator-node-signals';
 import { scheduleQueuedNodes } from './graph-coordinator-scheduler';
 import type { AbgGraphRunnerInput, AbgGraphRunResult, AbgGraphTerminalError } from './graph-runner';
 import { graphEvent } from './graph-runner-events';
@@ -21,6 +29,7 @@ import {
 } from './loop-safety';
 import { createDefaultAbgNodeRegistry } from './node-registry';
 import { projectAbgSignalToEvent } from './signals';
+import { CANONICAL_FAILURE_CODES } from './failure-taxonomy';
 
 export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<AbgGraphRunResult> {
     const graph = createAuthorableAbgGraph(input.graph, input.agentModelLookup);
@@ -33,6 +42,7 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
         // user cancel would re-enqueue the node up to maxAttempts before the loop noticed. The
         // turn runner maps any aborted run to `interrupted` regardless of how we settle here.
         if (input.abortSignal?.aborted === true) {
+            clearAllCorrections(state);
             return failGraph(
                 graph.id,
                 input,
@@ -43,10 +53,12 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
             );
         }
         if (state.totalNodeRuns >= state.maxNodeRuns) {
+            clearAllCorrections(state);
             return failGraph(graph.id, input, state.events, 'graph_loop_limit', 'ABG graph loop limit exceeded');
         }
         const scheduledNodes = scheduleQueuedNodes(graph, state, input);
         if (scheduledNodes.length === 0) {
+            clearAllCorrections(state);
             return failGraph(graph.id, input, state.events, 'graph_loop_limit', 'ABG graph made no progress');
         }
         const results = await Promise.all(
@@ -54,7 +66,7 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
         );
         for (const result of results) {
             switch (result.kind) {
-                case 'completed':
+                case 'completed': {
                     if (result.lastSignal?.type === 'escalate') {
                         // Escalation is a non-terminal redirect (ABG §9.6 supervision). Prefer
                         // the escalate signal's own `target`; fall back to node config.
@@ -62,9 +74,11 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                         const target =
                             (typeof signalTarget === 'string' && signalTarget.length > 0 ? signalTarget : undefined) ??
                             readEscalationTarget(result.node);
+                        clearNodeCorrection(state, result.node.id);
                         if (target !== undefined && hasNode(graph, target)) {
                             state.queuedNodeIds.push(target);
                         } else {
+                            clearAllCorrections(state);
                             return failGraph(
                                 graph.id,
                                 input,
@@ -79,6 +93,7 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                         const consecutive = (state.consecutiveToolFailuresByNodeId.get(result.node.id) ?? 0) + 1;
                         state.consecutiveToolFailuresByNodeId.set(result.node.id, consecutive);
                         if (consecutive >= state.maxAttempts) {
+                            clearAllCorrections(state);
                             return failGraph(
                                 graph.id,
                                 input,
@@ -95,6 +110,7 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                             nodeFailureSignature(result.lastSignal),
                         );
                         if (failureTrip?.kind === 'fail') {
+                            clearAllCorrections(state);
                             return failGraph(
                                 graph.id,
                                 input,
@@ -108,17 +124,24 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                                 },
                             );
                         }
-                    } else if (result.hadProductiveToolUse === true) {
+                    }
+                    let softLanded = false;
+                    if (result.hadProductiveToolUse === true) {
                         // Productive tool use is progress unless the *same* tool turn repeats.
                         state.consecutiveToolFailuresByNodeId.set(result.node.id, 0);
                         const trip = applyLoopSafetyToolTurn(result.node.id, state, result.toolActions ?? []);
                         if (trip?.kind === 'soft_land') {
                             softLandToolLoop(result.node, state, graph.id, input, trip);
+                            softLanded = true;
                         } else {
-                            softLandToolLoopIfNearMaxNodeRuns(result.node, state, graph.id, input);
+                            softLanded = softLandToolLoopIfNearMaxNodeRuns(
+                                result.node,
+                                state,
+                                graph.id,
+                                input,
+                            );
                         }
                     }
-                    state.consecutiveFailuresByNodeId.set(result.node.id, 0);
                     enqueueSelectedTargets(
                         graph,
                         result.node,
@@ -128,7 +151,33 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                         result.lastEventType,
                         result.lastPolicyDecision,
                     );
+                    if (softLanded) {
+                        // Loop soft-land is an intentional stop (clear loop_active); do not
+                        // treat the resulting conditional miss as routing_dead_end.
+                        state.consecutiveFailuresByNodeId.set(result.node.id, 0);
+                        clearNodeCorrection(state, result.node.id);
+                    } else {
+                        const routingOutcome = handlePostSuccessRouting({
+                            graph,
+                            node: result.node,
+                            state,
+                            runnerInput: input,
+                            failGraph: (code, message, terminalError) =>
+                                failGraph(graph.id, input, state.events, code, message, terminalError),
+                            ...(result.lastSignal !== undefined ? { lastSignal: result.lastSignal } : {}),
+                            ...(result.lastEventType !== undefined
+                                ? { lastEventType: result.lastEventType }
+                                : {}),
+                            ...(result.lastPolicyDecision !== undefined
+                                ? { lastPolicyDecision: result.lastPolicyDecision }
+                                : {}),
+                        });
+                        if (routingOutcome.kind === 'fail') {
+                            return routingOutcome.result;
+                        }
+                    }
                     break;
+                }
                 case 'failed': {
                     // Fail explicit non-retryable provider errors and terminal tool settlements
                     // immediately instead of consuming the graph retry budget. A denial is NOT
@@ -136,6 +185,7 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                     // toolCallId travels on the run's tool.failed event (set via the adapter), so it
                     // surfaces on `session.stopped` without threading it here.
                     if (result.terminal === true) {
+                        clearAllCorrections(state);
                         const terminalError = terminalErrorFromSignal(result.lastSignal);
                         const isToolSettlement = terminalError?.code === 'tool_settlement_failed';
                         return failGraph(
@@ -155,9 +205,31 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                     const consecutiveFailures = (state.consecutiveFailuresByNodeId.get(result.node.id) ?? 0) + 1;
                     state.consecutiveFailuresByNodeId.set(result.node.id, consecutiveFailures);
                     if (consecutiveFailures < state.maxAttempts) {
+                        if (failureCodeFromSignal(result.lastSignal) === CANONICAL_FAILURE_CODES.INVALID_STRUCTURED_OUTPUT) {
+                            setStructuredOutputCorrection(
+                                state,
+                                result.node,
+                                failureMessageFromSignal(result.lastSignal),
+                            );
+                        }
                         state.queuedNodeIds.unshift(result.node.id);
                         break;
                     }
+                    const structuredExhaust = handleStructuredFailureExhaust({
+                        graph,
+                        node: result.node,
+                        state,
+                        ...(result.lastSignal !== undefined ? { lastSignal: result.lastSignal } : {}),
+                        failGraph: (code, message, terminalError) =>
+                            failGraph(graph.id, input, state.events, code, message, terminalError),
+                    });
+                    if (structuredExhaust?.kind === 'continue') {
+                        break;
+                    }
+                    if (structuredExhaust?.kind === 'fail') {
+                        return structuredExhaust.result;
+                    }
+                    clearAllCorrections(state);
                     return failGraph(
                         graph.id,
                         input,
@@ -377,17 +449,18 @@ function softLandToolLoopIfNearMaxNodeRuns(
     state: CoordinatorState,
     graphId: string,
     input: AbgGraphRunnerInput,
-): void {
+): boolean {
     if (state.blackboard.get('llm.loop_active') !== true) {
-        return;
+        return false;
     }
     if (state.totalNodeRuns < state.maxNodeRuns - 1) {
-        return;
+        return false;
     }
     softLandToolLoop(node, state, graphId, input, {
         eventCode: 'node_loop_soft_landed',
         message: `soft-landed at maxNodeRuns ${state.maxNodeRuns}`,
     });
+    return true;
 }
 
 function softLandToolLoop(

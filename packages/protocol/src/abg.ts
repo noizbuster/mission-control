@@ -120,6 +120,7 @@ export const AbgGraphDefaultsSchema = z.object({
     timeoutMs: z.number().int().positive().optional(),
     retryLimit: z.number().int().nonnegative().optional(),
     maxNodeRuns: z.number().int().positive().optional(),
+    escalationTarget: z.string().min(1).optional(),
 });
 export type AbgGraphDefaults = z.infer<typeof AbgGraphDefaultsSchema>;
 

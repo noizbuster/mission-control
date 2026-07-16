@@ -108,6 +108,7 @@ export type AbgNodeRunContext = {
      */
     readonly projectInstructionResources?: readonly ProjectInstructionResource[];
     readonly observabilityRedactor?: ObservabilityRedactor;
+    readonly retryCorrection?: string;
 };
 
 export type AbgNodeRunner = (node: AbgNodeSpec, context: AbgNodeRunContext) => AsyncIterable<AbgSignal>;

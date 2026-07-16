@@ -104,9 +104,13 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
                 ? { resources: context.projectInstructionResources }
                 : {}),
         });
+    const correctedSystem =
+        context.retryCorrection !== undefined && context.retryCorrection.length > 0
+            ? `${context.retryCorrection}\n\n${baseSystem}`
+            : baseSystem;
     const outputKeyConfig = readStringConfig(node, 'outputKey');
     const pureStructuredGate = outputKeyConfig !== undefined && suppressTools;
-    const system = appendStructuredOutputSystem(baseSystem, node, {
+    const system = appendStructuredOutputSystem(correctedSystem, node, {
         pureStructuredGate,
         outputKey: outputKeyConfig,
     });

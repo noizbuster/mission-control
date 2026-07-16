@@ -5,6 +5,7 @@ import {
     type AbgRuntimeError,
     type AbgSignal,
 } from '@mission-control/protocol';
+import { classifyFailure, isBudgetScopedRetryable } from './failure-taxonomy';
 import { type ToolActionFingerprint, toolActionFromEmit } from './loop-safety';
 
 export function rememberProposedInput(
@@ -54,10 +55,14 @@ export function isTerminalProviderError(error: unknown): boolean {
     if (typeof error !== 'object' || error === null || !('providerError' in error) || error.providerError !== true) {
         return false;
     }
-    // Rate-limit / overload / timeout must use the node maxAttempts budget instead of
-    // terminating the graph on the first AI-SDK or bridge failure.
-    if ('code' in error && (error.code === 'provider_rate_limited' || error.code === 'provider_timeout')) {
+    // Taxonomy owns class: transient/rejected spend the node attempt budget even when the
+    // provider layer set retryExhausted (ABG §13.6). Auth/abort/context_overflow stay terminal.
+    const classified = classifyFailure(error);
+    if (isBudgetScopedRetryable(classified)) {
         return false;
+    }
+    if (classified.class === 'terminal' || classified.class === 'denied') {
+        return true;
     }
     const retryExhausted = 'retryExhausted' in error && error.retryExhausted === true;
     const explicitlyNonRetryable = 'retryable' in error && error.retryable === false;
@@ -72,6 +77,31 @@ export function extractPolicyDecision(signal: AbgSignal): AbgPolicyDecision | un
     }
     const parsed = AbgPolicyDecisionSchema.safeParse(payload.decision);
     return parsed.success ? parsed.data : undefined;
+}
+
+export function failureCodeFromSignal(signal: AbgSignal | undefined): string | undefined {
+    if (signal === undefined || signal.type !== 'failure') {
+        return undefined;
+    }
+    const error = signal.error;
+    if (typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string') {
+        return error.code;
+    }
+    return undefined;
+}
+
+export function failureMessageFromSignal(signal: AbgSignal | undefined): string | undefined {
+    if (signal === undefined || signal.type !== 'failure') {
+        return undefined;
+    }
+    const error = signal.error;
+    if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') {
+        return error.message;
+    }
+    if (typeof error === 'string' && error.length > 0) {
+        return error;
+    }
+    return undefined;
 }
 
 export function attemptFailureError(

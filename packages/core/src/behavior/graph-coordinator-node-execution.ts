@@ -104,7 +104,10 @@ async function runNode(
     const toolActions: ToolActionFingerprint[] = [];
     const proposedInputByCallId = new Map<string, string>();
     const toolCallId = node.kind === 'tool' ? (input.createToolCallId ?? randomUUID)() : undefined;
-    const context = runContext(graph, registry, input, state, toolCallId);
+    const context = runContext(graph, registry, input, state, {
+        nodeId: node.id,
+        ...(toolCallId !== undefined ? { toolCallId } : {}),
+    });
     if (toolCallId !== undefined) {
         state.events.push(
             toolLifecycleEvent('tool.started', graph.id, node, input, `tool started: ${node.id}`, toolCallId),

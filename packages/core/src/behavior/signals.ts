@@ -52,6 +52,7 @@ const EMIT_TYPES_WITH_PERSISTED_PAYLOAD: ReadonlySet<string> = new Set([
     // first-class events with structured payloads (not just log strings).
     'blackboard.set',
     'blackboard.delete',
+    'routing.dead_end',
 ]);
 
 export function projectAbgSignalToEvent(input: AbgSignalProjectionInput): AgentEvent {
