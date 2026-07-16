@@ -1,4 +1,4 @@
-// allow: SIZE_OK -- HEAD 394 -> current 393 pure LOC; one byte-parity and behavior contract for the declarative fixer workflow graph.
+// allow: SIZE_OK -- HEAD 393 -> current ~596 pure LOC; one byte-parity and progress-contract matrix for the declarative fixer workflow graph.
 /**
  * Fixer workflow parity — behavioral proofs for the richer intent routing
  * (intent-gated implement/fix path with 5-class gate and verification loop).
@@ -11,6 +11,8 @@
  *   - A 3-strike recovery ceiling bounds the supervisor.
  *   - The final response cites evidence.
  *   - The runtime blackboard seam writes the new class labels end-to-end.
+ *   - Progress-contract matrix: equals-routed llm keys declare outputEnum/shape;
+ *     supervisor.action is non-llm; invalid intent fails closed (no silent complete).
  *
  * Structural assertions (edges/rules/capabilities) are the primary proof because
  * the graph is declarative; a reachability walk proves no implementation path leaks
@@ -18,14 +20,16 @@
  * to prove the outputKey seam persists the new class labels.
  */
 import type { LanguageModelV3StreamPart } from '@ai-sdk/provider';
-import { AbgGraphSpecSchema, type AbgNodeSpec, type AbgRuleSpec } from '@mission-control/protocol';
+import { AbgGraphSpecSchema, type AbgNodeSpec, type AbgRuleSpec, type AbgSignal } from '@mission-control/protocol';
 import type { ModelMessage } from 'ai';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
 import { createBlackboard } from '../memory/blackboard';
 import { collectSignals, createCompositeNodeTestContext } from './composite-node-test-helpers';
 import { createFixerWorkflowGraph, FIXER_WORKFLOW_STRIKE_BUDGET } from './fixer-workflow-graph';
+import { runAbgGraph } from './graph-runner';
 import type { AbgNodeRunContext } from './node-registry';
+import { createAbgNodeRegistry } from './node-registry';
 import { runLlmActorNode } from './nodes/llm-actor/llm-actor-node-runner';
 
 const INTENT_CLASSES = [
@@ -388,40 +392,6 @@ describe('fixer workflow parity — evidence requirements and final citation', (
 });
 
 describe('fixer workflow parity — runtime blackboard write for the new intent classes', () => {
-    function contextForIntentGate(modelText: string): {
-        readonly context: AbgNodeRunContext;
-        readonly blackboard: ReturnType<typeof createBlackboard>;
-    } {
-        const blackboard = createBlackboard();
-        blackboard.appendMessages([{ role: 'user', content: 'classify' }] as readonly ModelMessage[]);
-        const chunks: LanguageModelV3StreamPart[] = [
-            { type: 'stream-start', warnings: [] },
-            { type: 'text-start', id: 't1' },
-            { type: 'text-delta', id: 't1', delta: modelText },
-            { type: 'text-end', id: 't1' },
-            {
-                type: 'finish',
-                finishReason: { unified: 'stop', raw: undefined },
-                usage: {
-                    inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
-                    outputTokens: { total: 1, text: 1, reasoning: 0 },
-                },
-            },
-        ];
-        const helper = createCompositeNodeTestContext();
-        const context: AbgNodeRunContext = {
-            graphId: helper.graphId,
-            now: helper.now,
-            sdkModel: new MockLanguageModelV3({
-                provider: 'test',
-                modelId: 'mock',
-                doStream: async () => ({ stream: convertArrayToReadableStream(chunks) }),
-            }),
-            blackboard,
-        };
-        return { context, blackboard };
-    }
-
     it.each(
         INTENT_CLASSES,
     )('intent-gate writes %s to intent.classification and the matching rule fires', async (intentClass) => {
@@ -446,3 +416,282 @@ describe('fixer workflow parity — runtime blackboard write for the new intent 
         expect(configString(findNode(graph, 'intent-gate'), 'outputKey')).toBe('intent.classification');
     });
 });
+
+const FIXER_EQUALS_ROUTED_LLM_GATES = [
+    {
+        nodeId: 'intent-gate',
+        outputKey: 'intent.classification',
+        kind: 'enum' as const,
+        outputEnum: [
+            'trivial',
+            'exploratory-research',
+            'open-ended-planning',
+            'explicit-implementation',
+            'ambiguous',
+        ],
+    },
+    { nodeId: 'research-explore', outputKey: 'explore.complete', kind: 'boolean' as const },
+    { nodeId: 'route-planner', outputKey: 'planner.routed', kind: 'boolean' as const },
+    {
+        nodeId: 'maturity-check',
+        outputKey: 'explore.maturity',
+        kind: 'enum' as const,
+        outputEnum: ['disciplined', 'transitional', 'legacy', 'greenfield'],
+    },
+    { nodeId: 'anti-dup-guard', outputKey: 'guard.cleared', kind: 'boolean' as const },
+    { nodeId: 'evidence-check', outputKey: 'evidence.verified', kind: 'boolean' as const },
+    { nodeId: 'clarify', outputKey: 'clarify.active', kind: 'boolean' as const },
+] as const;
+
+describe('fixer workflow parity — progress-contract routing key matrix', () => {
+    it.each(FIXER_EQUALS_ROUTED_LLM_GATES)(
+        '$nodeId declares fail-closed shape/enum for $outputKey',
+        (gate) => {
+            const graph = createFixerWorkflowGraph();
+            const node = findNode(graph, gate.nodeId);
+            expect(configString(node, 'outputKey')).toBe(gate.outputKey);
+            if (gate.kind === 'boolean') {
+                expect(configString(node, 'outputShape')).toBe('boolean');
+            } else {
+                expect(configValue(node, 'outputEnum')).toEqual([...gate.outputEnum]);
+            }
+        },
+    );
+
+    it('todo-plan keeps array shape for fanOutKey plan.todos (key.exists, not equals)', () => {
+        const graph = createFixerWorkflowGraph();
+        const node = findNode(graph, 'todo-plan');
+        expect(configString(node, 'outputKey')).toBe('plan.todos');
+        expect(configString(node, 'outputShape')).toBe('array');
+    });
+
+    it('planner-routed requires planner.routed === true (not bare key.exists)', () => {
+        const graph = createFixerWorkflowGraph();
+        const rule = ruleById(graph, 'planner-routed');
+        expect(rule.when).toEqual({
+            kind: 'blackboard.value.equals',
+            key: 'planner.routed',
+            value: true,
+        });
+    });
+
+    it('clarify-loop requires clarify.active === true with boolean shape', () => {
+        const graph = createFixerWorkflowGraph();
+        expect(configString(findNode(graph, 'clarify'), 'outputShape')).toBe('boolean');
+        const rule = ruleById(graph, 'clarify-loop');
+        expect(rule.when).toEqual({
+            kind: 'blackboard.value.equals',
+            key: 'clarify.active',
+            value: true,
+        });
+    });
+});
+
+describe('fixer workflow parity — supervisor.action is non-llm (supervisor-node written)', () => {
+    it('supervisor node has implementation supervisor and no llm outputEnum/outputKey', () => {
+        const graph = createFixerWorkflowGraph();
+        const supervisor = findNode(graph, 'supervisor');
+        expect(supervisor.implementation).toBe('supervisor');
+        expect(configString(supervisor, 'outputKey')).toBeUndefined();
+        expect(configValue(supervisor, 'outputEnum')).toBeUndefined();
+        expect(configString(supervisor, 'outputShape')).toBeUndefined();
+    });
+
+    it('keeps escalate edges: retry -> delegate-wave, escalated -> final-respond', () => {
+        const graph = createFixerWorkflowGraph();
+        const retryEdge = edgesFrom(graph, 'supervisor').find((edge) => edge.target === 'delegate-wave');
+        const escalateEdge = edgesFrom(graph, 'supervisor').find((edge) => edge.target === 'final-respond');
+        expect(retryEdge?.condition).toBe('supervisor-retry');
+        expect(escalateEdge?.condition).toBe('supervisor-escalated');
+
+        const retryRule = ruleById(graph, 'supervisor-retry');
+        expect(retryRule.when).toEqual({
+            kind: 'blackboard.value.equals',
+            key: 'supervisor.action',
+            value: 'retry',
+        });
+        const escalateRule = ruleById(graph, 'supervisor-escalated');
+        expect(escalateRule.when).toEqual({
+            kind: 'blackboard.key.exists',
+            key: 'supervisor.escalated',
+        });
+    });
+
+    it('supervisor-retry fires only for action retry; escalate path uses supervisor.escalated', () => {
+        const graph = createFixerWorkflowGraph();
+        const blackboard = createBlackboard();
+        const retryRule = ruleById(graph, 'supervisor-retry');
+        const escalateRule = ruleById(graph, 'supervisor-escalated');
+
+        blackboard.set('supervisor.action', 'retry');
+        expect(ruleMatches(retryRule, blackboard)).toBe(true);
+        expect(ruleMatches(escalateRule, blackboard)).toBe(false);
+
+        blackboard.set('supervisor.action', 'escalate');
+        blackboard.set('supervisor.escalated', true);
+        expect(ruleMatches(retryRule, blackboard)).toBe(false);
+        expect(ruleMatches(escalateRule, blackboard)).toBe(true);
+    });
+});
+
+describe('fixer workflow parity — invalid intent fails closed (no silent complete)', () => {
+    it('intent-gate rejects non-enum text with invalid_structured_output and no blackboard write', async () => {
+        // Given: intent-gate with declared outputEnum; model emits a poison blob
+        const graph = createFixerWorkflowGraph();
+        const intentGate = findNode(graph, 'intent-gate');
+        const { context, blackboard } = contextForIntentGate('{"prose":"not a class"}');
+
+        // When
+        const signals = await collectSignals(runLlmActorNode(intentGate, context));
+
+        // Then: fail closed — no poison on the board, typed failure
+        expect(blackboard.has('intent.classification')).toBe(false);
+        const failure = signals.find((signal) => signal.type === 'failure');
+        expect(failure).toMatchObject({
+            type: 'failure',
+            error: { code: 'invalid_structured_output' },
+        });
+    });
+
+    it('poison intent.classification with only conditional equals edges does not complete the graph', async () => {
+        // Given: fixer-shaped intent gate edges + non-matching poison value (P1 pattern)
+        const registry = createAbgNodeRegistry();
+        registry.register(
+            'write-poison-intent',
+            async function* run(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
+                yield { type: 'started', graphId: context.graphId, nodeId: node.id };
+                context.blackboard?.set('intent.classification', {
+                    prose: 'not an intent class',
+                    nested: true,
+                });
+                yield { type: 'success', graphId: context.graphId, nodeId: node.id };
+            },
+        );
+
+        // When
+        const result = await runAbgGraph({
+            sessionId: 'session_fixer_invalid_intent',
+            now: () => '2026-07-16T00:00:00.000Z',
+            modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
+            registry,
+            graph: {
+                id: 'fixer-invalid-intent-dead-end',
+                entryNodeId: 'intent-gate',
+                defaults: { retryLimit: 2 },
+                nodes: [
+                    {
+                        id: 'intent-gate',
+                        kind: 'action',
+                        implementation: 'write-poison-intent',
+                        capabilities: [],
+                        config: {
+                            outputKey: 'intent.classification',
+                            outputEnum: [...INTENT_CLASSES],
+                        },
+                    },
+                    { id: 'direct-respond', kind: 'action' },
+                    { id: 'research-explore', kind: 'action' },
+                    { id: 'route-planner', kind: 'action' },
+                    { id: 'memory', kind: 'action' },
+                    { id: 'clarify', kind: 'action' },
+                ],
+                edges: [
+                    { source: 'intent-gate', target: 'direct-respond', condition: 'intent-trivial' },
+                    { source: 'intent-gate', target: 'research-explore', condition: 'intent-exploratory' },
+                    { source: 'intent-gate', target: 'route-planner', condition: 'intent-open-ended' },
+                    {
+                        source: 'intent-gate',
+                        target: 'memory',
+                        condition: 'intent-explicit-implementation',
+                    },
+                    { source: 'intent-gate', target: 'clarify', condition: 'intent-ambiguous' },
+                ],
+                rules: [
+                    {
+                        id: 'intent-trivial',
+                        when: {
+                            kind: 'blackboard.value.equals',
+                            key: 'intent.classification',
+                            value: 'trivial',
+                        },
+                    },
+                    {
+                        id: 'intent-exploratory',
+                        when: {
+                            kind: 'blackboard.value.equals',
+                            key: 'intent.classification',
+                            value: 'exploratory-research',
+                        },
+                    },
+                    {
+                        id: 'intent-open-ended',
+                        when: {
+                            kind: 'blackboard.value.equals',
+                            key: 'intent.classification',
+                            value: 'open-ended-planning',
+                        },
+                    },
+                    {
+                        id: 'intent-explicit-implementation',
+                        when: {
+                            kind: 'blackboard.value.equals',
+                            key: 'intent.classification',
+                            value: 'explicit-implementation',
+                        },
+                    },
+                    {
+                        id: 'intent-ambiguous',
+                        when: {
+                            kind: 'blackboard.value.equals',
+                            key: 'intent.classification',
+                            value: 'ambiguous',
+                        },
+                    },
+                ],
+                policies: [],
+            },
+        });
+
+        // Then: dead-end exhaust → typed fail, never silent complete
+        expect(result.status).not.toBe('completed');
+        expect(result.status).toBe('failed');
+        expect(result.terminalError?.code).toBe('routing_dead_end');
+        expect(result.events.some((event) => event.abg?.nodeId === 'direct-respond')).toBe(false);
+        expect(result.events.some((event) => event.abg?.nodeId === 'memory')).toBe(false);
+        expect(result.events.some((event) => event.abg?.nodeId === 'clarify')).toBe(false);
+    });
+});
+
+function contextForIntentGate(modelText: string): {
+    readonly context: AbgNodeRunContext;
+    readonly blackboard: ReturnType<typeof createBlackboard>;
+} {
+    const blackboard = createBlackboard();
+    blackboard.appendMessages([{ role: 'user', content: 'classify' }] as readonly ModelMessage[]);
+    const chunks: LanguageModelV3StreamPart[] = [
+        { type: 'stream-start', warnings: [] },
+        { type: 'text-start', id: 't1' },
+        { type: 'text-delta', id: 't1', delta: modelText },
+        { type: 'text-end', id: 't1' },
+        {
+            type: 'finish',
+            finishReason: { unified: 'stop', raw: undefined },
+            usage: {
+                inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+                outputTokens: { total: 1, text: 1, reasoning: 0 },
+            },
+        },
+    ];
+    const helper = createCompositeNodeTestContext();
+    const context: AbgNodeRunContext = {
+        graphId: helper.graphId,
+        now: helper.now,
+        sdkModel: new MockLanguageModelV3({
+            provider: 'test',
+            modelId: 'mock',
+            doStream: async () => ({ stream: convertArrayToReadableStream(chunks) }),
+        }),
+        blackboard,
+    };
+    return { context, blackboard };
+}

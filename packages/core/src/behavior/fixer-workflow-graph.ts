@@ -1,4 +1,4 @@
-// allow: SIZE_OK -- HEAD 460 -> current 452 pure LOC; one declarative fixer-workflow graph whose node and edge tables stay together.
+// allow: SIZE_OK -- HEAD 452 -> current 465 pure LOC; one declarative fixer-workflow graph whose node and edge tables stay together.
 /**
  * The Fixer workflow graph: the intent-gated implement/fix path (ABG graph).
  * Inspired by orchestrator discipline for bounded implementation with verification;
@@ -155,12 +155,14 @@ export function createFixerWorkflowGraph(options: FixerWorkflowGraphOptions = {}
                         'user\'s request>"). Use this when the request needs a real plan before any code.\n' +
                         '2. Ask exactly ONE high-signal clarifying question (with 2-4 options and your ' +
                         'recommended default first). Use this when one answer would unblock planning.\n' +
-                        'Never implement, never edit files, never run effectful tools. Planning mode is STICKY: ' +
-                        '"do/fix/build" all mean "plan X" here, not "implement X". Set planner.routed when you ' +
-                        'have routed to #planner or asked the question.',
-                    outputKey: 'planner.routed',
-                },
-            },
+                         'Never implement, never edit files, never run effectful tools. Planning mode is STICKY: ' +
+                         '"do/fix/build" all mean "plan X" here, not "implement X". While calling the workflow ' +
+                         'tool, do NOT emit true. When you have routed to #planner or asked the question, Output ' +
+                         'ONLY the JSON boolean `true` — no prose, no formatting, no extra text.',
+                     outputKey: 'planner.routed',
+                     outputShape: 'boolean',
+                 },
+             },
             {
                 id: 'memory',
                 kind: 'memory',
@@ -306,15 +308,17 @@ export function createFixerWorkflowGraph(options: FixerWorkflowGraphOptions = {}
                 id: 'clarify',
                 kind: 'llm',
                 label: 'Ask ONE clarifying question — ambiguous prompts',
-                config: {
-                    systemPrompt:
-                        'Ask the user exactly ONE targeted clarifying question. Name what you understood, what ' +
-                        'you are unsure about, 2-4 options with effort/implications, and your recommendation. ' +
-                        'Set clarify.active when clarification is collected.',
-                    outputKey: 'clarify.active',
-                },
-            },
-        ],
+                 config: {
+                     systemPrompt:
+                         'Ask the user exactly ONE targeted clarifying question. Name what you understood, what ' +
+                         'you are unsure about, 2-4 options with effort/implications, and your recommendation. ' +
+                         'After the question is asked, Output ONLY the JSON boolean `true` — no prose, no ' +
+                         'formatting, no extra text.',
+                     outputKey: 'clarify.active',
+                     outputShape: 'boolean',
+                 },
+             },
+         ],
         edges: [
             { source: 'intent-gate', target: 'direct-respond', condition: 'intent-trivial', priority: 30 },
             { source: 'intent-gate', target: 'research-explore', condition: 'intent-exploratory', priority: 25 },
@@ -410,11 +414,11 @@ export function createFixerWorkflowGraph(options: FixerWorkflowGraphOptions = {}
                 description: 'exploratory research synthesis ready',
                 when: { kind: 'blackboard.value.equals', key: 'explore.complete', value: true },
             },
-            {
-                id: 'planner-routed',
-                description: 'routed to #planner or asked one question',
-                when: { kind: 'blackboard.key.exists', key: 'planner.routed' },
-            },
+             {
+                 id: 'planner-routed',
+                 description: 'routed to #planner or asked one question',
+                 when: { kind: 'blackboard.value.equals', key: 'planner.routed', value: true },
+             },
             {
                 id: 'plan-ready',
                 description: 'todo plan produced',

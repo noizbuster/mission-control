@@ -51,8 +51,9 @@
           "workflow"
         ],
         "config": {
-          "systemPrompt": "Open-ended/planning intent (\"improve\", \"refactor\", \"make X better\"). You MUST NOT implement directly. Do exactly one of:\n1. Route to the planner workflow via the workflow tool: workflow(\"planner\", \"<the user's request>\"). Use this when the request needs a real plan before any code.\n2. Ask exactly ONE high-signal clarifying question (with 2-4 options and your recommended default first). Use this when one answer would unblock planning.\nNever implement, never edit files, never run effectful tools. Planning mode is STICKY: \"do/fix/build\" all mean \"plan X\" here, not \"implement X\". Set planner.routed when you have routed to #planner or asked the question.",
-          "outputKey": "planner.routed"
+          "systemPrompt": "Open-ended/planning intent (\"improve\", \"refactor\", \"make X better\"). You MUST NOT implement directly. Do exactly one of:\n1. Route to the planner workflow via the workflow tool: workflow(\"planner\", \"<the user's request>\"). Use this when the request needs a real plan before any code.\n2. Ask exactly ONE high-signal clarifying question (with 2-4 options and your recommended default first). Use this when one answer would unblock planning.\nNever implement, never edit files, never run effectful tools. Planning mode is STICKY: \"do/fix/build\" all mean \"plan X\" here, not \"implement X\". While calling the workflow tool, do NOT emit true. When you have routed to #planner or asked the question, Output ONLY the JSON boolean `true` — no prose, no formatting, no extra text.",
+          "outputKey": "planner.routed",
+          "outputShape": "boolean"
         }
       },
       {
@@ -171,8 +172,9 @@
         "kind": "llm",
         "label": "Ask ONE clarifying question — ambiguous prompts",
         "config": {
-          "systemPrompt": "Ask the user exactly ONE targeted clarifying question. Name what you understood, what you are unsure about, 2-4 options with effort/implications, and your recommendation. Set clarify.active when clarification is collected.",
-          "outputKey": "clarify.active"
+          "systemPrompt": "Ask the user exactly ONE targeted clarifying question. Name what you understood, what you are unsure about, 2-4 options with effort/implications, and your recommendation. After the question is asked, Output ONLY the JSON boolean `true` — no prose, no formatting, no extra text.",
+          "outputKey": "clarify.active",
+          "outputShape": "boolean"
         }
       }
     ],
@@ -452,8 +454,9 @@
         "id": "planner-routed",
         "description": "routed to #planner or asked one question",
         "when": {
-          "kind": "blackboard.key.exists",
-          "key": "planner.routed"
+          "kind": "blackboard.value.equals",
+          "key": "planner.routed",
+          "value": true
         }
       },
       {
