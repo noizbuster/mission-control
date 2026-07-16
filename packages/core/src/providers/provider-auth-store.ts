@@ -48,6 +48,11 @@ export type ProviderAuthStore = {
     readonly authFilePath: string;
     readonly readAuthFile: () => Promise<ProviderAuthFile>;
     readonly saveCredential: (input: SaveProviderCredentialInput) => Promise<void>;
+    readonly updateOAuthCredential: (
+        providerID: string,
+        oauth: SaveProviderOAuthCredentialInput,
+        now?: string,
+    ) => Promise<void>;
     readonly setDefaultSelection: (selection: ModelProviderSelection) => Promise<void>;
     readonly deleteCredential: (providerID: string) => Promise<void>;
     readonly listCredentialSummaries: () => Promise<readonly ProviderCredentialSummary[]>;
@@ -82,6 +87,48 @@ export function createProviderAuthStore(): ProviderAuthStore {
                 credentials: {
                     ...current.credentials,
                     [input.providerID]: buildStoredCredential(input, existing),
+                },
+            });
+            await writeAuthFile(authFilePath, next);
+        },
+        async updateOAuthCredential(providerID, oauth, now = new Date().toISOString()) {
+            const current = await readAuthFile(authFilePath);
+            const existing = current.credentials[providerID];
+            if (existing === undefined || existing.type !== 'oauth') {
+                throw new Error(`OAuth credential is not configured for ${providerID}`);
+            }
+            const nextCredential: ProviderCredential = {
+                providerID,
+                type: 'oauth',
+                accessToken: oauth.accessToken,
+                createdAt: existing.createdAt,
+                updatedAt: now,
+                ...(oauth.refreshToken !== undefined
+                    ? { refreshToken: oauth.refreshToken }
+                    : existing.refreshToken !== undefined
+                      ? { refreshToken: existing.refreshToken }
+                      : {}),
+                ...(oauth.expiresAt !== undefined
+                    ? { expiresAt: oauth.expiresAt }
+                    : existing.expiresAt !== undefined
+                      ? { expiresAt: existing.expiresAt }
+                      : {}),
+                ...(oauth.scopes !== undefined
+                    ? { scopes: [...oauth.scopes] }
+                    : existing.scopes !== undefined
+                      ? { scopes: [...existing.scopes] }
+                      : {}),
+                ...(oauth.accountLabel !== undefined
+                    ? { accountLabel: oauth.accountLabel }
+                    : existing.accountLabel !== undefined
+                      ? { accountLabel: existing.accountLabel }
+                      : {}),
+            };
+            const next = ProviderAuthFileSchema.parse({
+                ...current,
+                credentials: {
+                    ...current.credentials,
+                    [providerID]: nextCredential,
                 },
             });
             await writeAuthFile(authFilePath, next);

@@ -67,6 +67,53 @@ describe('ProviderAuthStore model-role persistence', () => {
         await rm(authFilePath, { force: true });
     });
 
+    it('updateOAuthCredential refreshes tokens without changing the default selection', async () => {
+        // Given
+        const authFilePath = await createAuthFilePath();
+        vi.stubEnv(missionControlAuthFileEnvKey, authFilePath);
+        const store = createProviderAuthStore();
+        await store.saveCredential({
+            providerID: 'xai',
+            modelID: 'grok-4.5',
+            variantID: 'reasoning-high',
+            now: '2026-07-16T08:00:00.000Z',
+            oauth: {
+                accessToken: 'old-access',
+                refreshToken: 'old-refresh',
+                expiresAt: '2026-07-16T09:00:00.000Z',
+                accountLabel: 'user@example.com',
+            },
+        });
+
+        // When
+        await store.updateOAuthCredential(
+            'xai',
+            {
+                accessToken: 'new-access',
+                refreshToken: 'new-refresh',
+                expiresAt: '2026-07-16T18:00:00.000Z',
+            },
+            '2026-07-16T12:00:00.000Z',
+        );
+
+        // Then
+        const authFile = await store.readAuthFile();
+        expect(authFile.default).toEqual({
+            providerID: 'xai',
+            modelID: 'grok-4.5',
+            variantID: 'reasoning-high',
+        });
+        expect(authFile.credentials['xai']).toMatchObject({
+            type: 'oauth',
+            accessToken: 'new-access',
+            refreshToken: 'new-refresh',
+            expiresAt: '2026-07-16T18:00:00.000Z',
+            accountLabel: 'user@example.com',
+            updatedAt: '2026-07-16T12:00:00.000Z',
+        });
+        await rm(authFilePath, { force: true });
+    });
+
     it('clearModelRole removes an assignment and leaves an empty map', async () => {
         const authFilePath = await createAuthFilePath();
         vi.stubEnv(missionControlAuthFileEnvKey, authFilePath);
