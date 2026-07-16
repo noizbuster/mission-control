@@ -529,7 +529,8 @@ export async function runInteractiveChatSession(
                   ...(pluginSkillDirs.length > 0 ? { additionalSkillDirs: pluginSkillDirs } : {}),
               })
             : { skills: [], diagnostics: [] };
-    const sessionSkills: readonly Skill[] = discoveredSkills.skills;
+    let sessionSkills: readonly Skill[] = discoveredSkills.skills;
+    tuiHandle?.setSkillNames(sessionSkills.map((skill) => skill.name));
 
     const discoveredWorkflows =
         options.workspaceRoot !== undefined
@@ -745,6 +746,10 @@ export async function runInteractiveChatSession(
                     sessionStore: currentSessionStore,
                     workspaceRoot: options.workspaceRoot,
                     skills: sessionSkills,
+                    onSkillsReloaded: (skills) => {
+                        sessionSkills = skills;
+                        tuiHandle?.setSkillNames(skills.map((skill) => skill.name));
+                    },
                     workflowRegistry: sessionWorkflowRegistry,
                     onWorkflowStarted,
                     ...(options.plainPromptGraph !== undefined ? { plainPromptGraph: options.plainPromptGraph } : {}),

@@ -32,6 +32,7 @@ const CHAT_TUI_HANDLE_METHODS = [
     'setModelSelection',
     'setGenerating',
     'setWorkflowNames',
+    'setSkillNames',
     'setAgentStatus',
     'clearAgentStatus',
     'showTransientNotice',

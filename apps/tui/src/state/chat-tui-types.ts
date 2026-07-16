@@ -46,6 +46,7 @@ export type ChatTuiHandle = {
     onRenameSubmit: ((name: string) => void) | undefined;
     readonly setGenerating: (value: boolean) => void;
     readonly setWorkflowNames: (names: readonly string[]) => void;
+    readonly setSkillNames: (names: readonly string[]) => void;
     readonly setAgentStatus: (text: string) => void;
     readonly clearAgentStatus: () => void;
     readonly showTransientNotice: (message: string) => void;

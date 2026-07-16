@@ -93,6 +93,7 @@ export async function runSkillsAction(
         workspaceRoot: coding.workspaceRoot,
         userConfigDir: resolveUserConfigDir(),
     });
+    coding.onSkillsReloaded?.(skills);
     chatOutput.write(`Reloaded ${skills.length} skill${skills.length === 1 ? '' : 's'}.\n`);
     return actionResult(selection, coding.activeTurn);
 }

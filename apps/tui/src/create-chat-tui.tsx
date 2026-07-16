@@ -41,6 +41,7 @@ export function createChatTuiHandle(store: ChatStore, unmountFn: () => void): Ch
         isShowThinking: () => store.getSnapshot().showThinking,
         isToolOutputExpanded: () => store.getSnapshot().toolOutputExpanded,
         setWorkflowNames: (names) => store.setWorkflowNames(names),
+        setSkillNames: (names) => store.setSkillNames(names),
         setModelCycleChoices: (choices) => store.setModelCycleChoices(choices),
         setModelSelection: (selection) => store.setModelSelection(selection),
         setApprovalLevel: (level) => store.setApprovalLevel(level),

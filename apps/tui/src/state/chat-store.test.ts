@@ -521,6 +521,24 @@ describe('chat-store — menus', () => {
         expect(store.getSnapshot().menuState.selectedIndex).toBe(0);
     });
 
+    it('setSkillNames updates snapshot skillNames', () => {
+        const store = createChatStore();
+        expect(store.getSnapshot().skillNames).toEqual([]);
+        store.setSkillNames(['a', 'b']);
+        expect(store.getSnapshot().skillNames).toEqual(['a', 'b']);
+    });
+
+    it('navigateSkillMenu changes selectedIndex when $ menu is open', () => {
+        const store = createChatStore();
+        store.setSkillNames(['alpha', 'beta', 'gamma']);
+        store.setInputMirror('$');
+        expect(store.getSnapshot().menuState.selectedIndex).toBe(0);
+        store.navigateSkillMenu('down');
+        expect(store.getSnapshot().menuState.selectedIndex).toBe(1);
+        store.navigateSkillMenu('up');
+        expect(store.getSnapshot().menuState.selectedIndex).toBe(0);
+    });
+
     it('closeMenus resets menuState and fileAutocomplete', () => {
         const store = createChatStore();
         store.setInputMirror('/m');

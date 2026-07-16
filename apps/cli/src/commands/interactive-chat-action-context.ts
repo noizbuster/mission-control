@@ -21,6 +21,7 @@ export type CodingActionContext = PromptTurnContext & {
     readonly useTui: boolean;
     readonly sessionNavigation?: SessionNavigationController;
     readonly skills?: readonly Skill[];
+    readonly onSkillsReloaded?: (skills: readonly Skill[]) => void;
     readonly workflowRegistry?: WorkflowRegistry;
     readonly plainPromptGraph?: PlainPromptGraph;
     readonly sessionDisplayName?: SessionDisplayNameController;

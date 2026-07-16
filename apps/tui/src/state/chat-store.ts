@@ -29,6 +29,7 @@ import {
 import {
     createSlashCommandMenuState,
     reduceSlashCommandMenuSelection,
+    reduceSkillCommandMenuSelection,
     reduceWorkflowCommandMenuSelection,
     type SlashCommandMenuState,
 } from './interactive-chat-command-menu';
@@ -181,6 +182,7 @@ export type ChatStoreState = {
     readonly toolOutputExpanded: boolean;
     readonly approvalLevel: ApprovalLevel | undefined;
     readonly workflowNames: readonly string[];
+    readonly skillNames: readonly string[];
     readonly modelCycleChoices: readonly ModelChoice[];
     readonly modelCycleIndex: number;
     /** Single source of truth for the live selection; `setModelSelection` keeps `modelCycleIndex` aligned when the base matches a cycle entry. */
@@ -331,6 +333,7 @@ export class ChatStore {
             toolOutputExpanded: true,
             approvalLevel: options?.initialApprovalLevel,
             workflowNames: [],
+            skillNames: [],
             modelCycleChoices: [],
             modelCycleIndex: 0,
             currentModelSelection: undefined,
@@ -748,6 +751,16 @@ export class ChatStore {
         this.publish();
     }
 
+    navigateSkillMenu(direction: 'up' | 'down'): void {
+        this.state.menuState = reduceSkillCommandMenuSelection(
+            this.state.menuState,
+            direction === 'up' ? CURSOR_UP : CURSOR_DOWN,
+            this.state.inputMirror,
+            this.state.skillNames,
+        );
+        this.publish();
+    }
+
     navigateFileAutocomplete(direction: 'up' | 'down'): void {
         this.state.fileAutocomplete =
             direction === 'up'
@@ -779,6 +792,11 @@ export class ChatStore {
 
     setWorkflowNames(names: readonly string[]): void {
         this.state.workflowNames = names;
+        this.publish();
+    }
+
+    setSkillNames(names: readonly string[]): void {
+        this.state.skillNames = names;
         this.publish();
     }
 

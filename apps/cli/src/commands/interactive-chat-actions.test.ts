@@ -639,6 +639,42 @@ describe('interactive chat actions', () => {
             const captured = output.getOutput();
             expect(captured).toContain('Reloaded 1 skill');
         });
+
+        it('invokes onSkillsReloaded with rediscovered skills', async () => {
+            const root = await mkdtemp(join(tmpdir(), 'skills-reload-cb-ws-'));
+            const configDir = await mkdtemp(join(tmpdir(), 'skills-reload-cb-cfg-'));
+            tempRoots.push(root, configDir);
+            const skillDir = join(root, '.mctrl', 'skills', 'reload-cb-skill');
+            await mkdir(skillDir, { recursive: true });
+            await writeFile(
+                join(skillDir, 'SKILL.md'),
+                '---\nname: reload-cb-skill\ndescription: reload callback test.\n---\nbody',
+                'utf8',
+            );
+
+            vi.stubEnv('MCTRL_CONFIG_DIR', configDir);
+
+            const onSkillsReloaded = vi.fn();
+            const runtime = new AgentRuntime();
+            const output = createOutput();
+            await runChatAction(
+                runtime,
+                output,
+                { kind: 'skills', skills: { kind: 'reload' } },
+                currentSelection,
+                async () => undefined,
+                [],
+                createCodingContext({ workspaceRoot: root, onSkillsReloaded }),
+            );
+
+            expect(onSkillsReloaded).toHaveBeenCalledTimes(1);
+            const reloaded = onSkillsReloaded.mock.calls[0]?.[0];
+            expect(Array.isArray(reloaded)).toBe(true);
+            expect(reloaded).toEqual(
+                expect.arrayContaining([expect.objectContaining({ name: 'reload-cb-skill' })]),
+            );
+            expect(output.getOutput()).toContain('Reloaded 1 skill');
+        });
     });
 
     describe('/skills and /agents reload bust the skill cache', () => {
@@ -1215,6 +1251,7 @@ function createCodingContext(overrides: Partial<CodingActionContext> = {}): Codi
         sessionStore: overrides.sessionStore ?? undefined,
         workspaceRoot: overrides.workspaceRoot ?? '/workspace',
         ...(overrides.skills !== undefined ? { skills: overrides.skills } : {}),
+        ...(overrides.onSkillsReloaded !== undefined ? { onSkillsReloaded: overrides.onSkillsReloaded } : {}),
         ...(overrides.sessionNavigation !== undefined ? { sessionNavigation: overrides.sessionNavigation } : {}),
         ...(overrides.workflowRegistry !== undefined ? { workflowRegistry: overrides.workflowRegistry } : {}),
         ...(overrides.approvalLevel !== undefined ? { approvalLevel: overrides.approvalLevel } : {}),
