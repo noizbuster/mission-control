@@ -15,8 +15,23 @@
         "kind": "llm",
         "label": "Capture the planning request and summarize the goal",
         "config": {
-          "systemPrompt": "You are a senior staff engineer planning craft. Summarize the user request into a concise GOAL statement (objective and success outcome, not a recipe). Even if the user says \"do\", \"fix\", or \"build\", you PLAN the work — you do not implement it. Set intake.complete when done.",
+          "systemPrompt": "You are a senior staff engineer planning craft. Summarize the user request into a concise GOAL statement (objective and success outcome, not a recipe). Even if the user says \"do\", \"fix\", or \"build\", you PLAN the work — you do not implement it. Note optional slug:<name> tokens, high-accuracy markers (\"high accuracy\", \"ultra high accuracy\", \"고정밀\", \"deep review\"), and interview-force markers (\"interview me\", \"ask me\", \"왜 안 물어\") for the deterministic resume-gate that follows. Set intake.complete when done.",
           "outputKey": "intake.complete"
+        }
+      },
+      {
+        "id": "resume-gate",
+        "kind": "llm",
+        "implementation": "resume-gate",
+        "label": "Resume gate — draft frontmatter enum (fresh | resume_approval | resume_drafting)",
+        "capabilities": [],
+        "config": {
+          "outputKey": "resume_gate",
+          "outputEnum": [
+            "fresh",
+            "resume_approval",
+            "resume_drafting"
+          ]
         }
       },
       {
@@ -33,6 +48,14 @@
             "on-the-fence"
           ]
         }
+      },
+      {
+        "id": "intent-bridge",
+        "kind": "llm",
+        "implementation": "intent-bridge",
+        "label": "Intent bridge — clear|unclear classification → blackboard intent",
+        "capabilities": [],
+        "config": {}
       },
       {
         "id": "explore-filter",
@@ -58,6 +81,31 @@
         "config": {
           "systemPrompt": "Deep exploration to ground an execution-ready plan. Hierarchy: (1) use read tools yourself first, (2) when breadth is needed delegate explore/librarian via task with TASK / DELIVERABLE / SCOPE / VERIFY framing, (3) never ask the user during this node. Cite file:line evidence for every claim. Planner-readonly applies to these workflow nodes after mode materialization. Spawned child agents do NOT inherit workflow PolicyEffectRule sets; their authority is independently constrained by the selected read-only category and AgentDefinition.pathPolicies. Delegate only to explore/librarian, frame child prompts as read-only research (TASK / DELIVERABLE / SCOPE / VERIFY), and treat subagent output as claims until verified. Multi-turn: keep going until exploration is grounded — do not stop early. While exploring, call tools and do NOT output true. When ready, synthesize findings. Output ONLY the JSON boolean `true` when complete — no prose, no formatting, no extra text.",
           "outputKey": "explore.complete",
+          "outputShape": "boolean"
+        }
+      },
+      {
+        "id": "interview-loop",
+        "kind": "llm",
+        "label": "Multi-turn interview — continue | clear | cap_adopt",
+        "capabilities": [],
+        "config": {
+          "systemPrompt": "Multi-turn interview on the clear planning path. Ask high-signal owner decisions only after exploration (or when exploration was skippable). Track interview turns; max 6 turns then route cap_adopt. When interview.force is true, do NOT auto-default owner decisions — keep interviewing until the user clears or the cap is hit. Write exactly one whole-output label to interview.route: \"continue\" (more questions needed), \"clear\" (enough to draft), or \"cap_adopt\" (turn cap reached; adopt remaining defaults). Output ONLY that enum label — no prose, no formatting, no extra text.",
+          "outputKey": "interview.route",
+          "outputEnum": [
+            "continue",
+            "clear",
+            "cap_adopt"
+          ]
+        }
+      },
+      {
+        "id": "adopt-defaults-announce",
+        "kind": "llm",
+        "label": "Announce adopted defaults after interview turn cap",
+        "config": {
+          "systemPrompt": "Interview turn cap reached. Briefly announce each remaining default you are adopting (with rationale and reversibility) so the user can see what was assumed after the interview budget. Then set interview.defaults_announced when the announcement is complete so drafting can proceed.",
+          "outputKey": "interview.defaults_announced",
           "outputShape": "boolean"
         }
       },
@@ -106,13 +154,152 @@
         }
       },
       {
+        "id": "draft-frontmatter",
+        "kind": "llm",
+        "implementation": "draft-frontmatter",
+        "label": "Write draft frontmatter status=drafting + intent/review_required",
+        "capabilities": [],
+        "config": {
+          "status": "drafting"
+        }
+      },
+      {
         "id": "review-plan",
         "kind": "llm",
         "implementation": "critic",
-        "label": "Critic — review draft completeness, references, and QA",
+        "label": "Critic floor — approve-biased executability checks",
         "config": {
           "systemPrompt": "You are the plan review critic for deep autonomous planning. Review the latest draft for EXECUTABILITY and completeness of verification strategy, not perfection. APPROVE-BIAS: approve unless you find a concrete blocker (a plan that is 80% clear is good enough; the user approver and the executer handle minor gaps). GAP ANALYSIS — reject (critic.passed=false) ONLY when one of these concrete blockers is present: (1) MISSING REFERENCES — a todo cites a file:line that does not exist or points at unrelated content; (2) MISSING QA SCENARIOS — a todo lacks QA scenarios, or the scenarios are unexecutable (\"verify it works\", \"check the page\") with no tool, concrete steps, and expected result; (3) MISSING ACCEPTANCE CRITERIA — a todo has no agent-executable acceptance criteria; (4) MISSING SCAFFOLD HEADERS — the draft omits ## Todos or ## Final Verification Wave; (5) MISSING VERIFICATION STRATEGY — the plan has no concrete way an executor can prove success. When rejecting, name the SINGLE most critical blocker concisely so draft-plan can revise. Do NOT reject for stylistic preferences, edge-case completeness, or subjective \"could be clearer\" notes — those are NOT blockers. HIGH-ACCURACY DUAL REVIEW (two independent critics comparing verdicts) is NOT run here by default; it is an opt-in cross-check offered AFTER the plan is delivered. Do not block the handoff waiting for it. The deterministic checks run alongside this prompt reject empty drafts, drafts that cite no file:line evidence, and non-answers; a draft that is non-empty, cites real references, and is a genuine plan passes.",
           "outputKey": "plan.approved"
+        }
+      },
+      {
+        "id": "metis-gap",
+        "kind": "llm",
+        "label": "Metis gap analysis — stricter refs/QA/acceptance/headers/verification",
+        "capabilities": [],
+        "config": {
+          "systemPrompt": "You are Metis, the strict plan gap-analysis critic for deep autonomous planning. The deterministic floor already confirmed the draft is non-empty, cites file:line evidence, and is not a non-answer. Your job is STRICTER gap analysis. Reject (metis.passed=false) when ANY of these concrete gaps is present: (1) MISSING or weak REFERENCES — todos lack real file:line anchors or cite unrelated content; (2) MISSING QA SCENARIOS — a todo lacks happy+failure QA with tool, concrete steps, and expected result (vague \"verify it works\" fails); (3) MISSING ACCEPTANCE CRITERIA — a todo has no agent-executable acceptance criteria; (4) MISSING SCAFFOLD HEADERS — draft omits ## Todos or ## Final Verification Wave; (5) MISSING VERIFICATION STRATEGY — no concrete way an executor can prove success (tests, diagnostics, manual QA surface). Prefer reject over approve when a gap is real. When rejecting, name the SINGLE most critical gap so draft-plan can revise. Output ONLY the JSON boolean `true` if the draft passes every check, or `false` if any gap remains — no prose, no formatting, no extra text.",
+          "outputKey": "metis.passed",
+          "outputShape": "boolean"
+        }
+      },
+      {
+        "id": "metis-reject-gate",
+        "kind": "llm",
+        "implementation": "metis-reject-gate",
+        "label": "Metis reject budget — revise once then escalate to present-blocked",
+        "capabilities": [],
+        "config": {
+          "outputKey": "metis.reject_route",
+          "outputEnum": [
+            "revise",
+            "escalate_present"
+          ],
+          "rejectKey": "metis.rejects",
+          "rejectBudget": 1
+        }
+      },
+      {
+        "id": "present-blocked",
+        "kind": "llm",
+        "label": "Terminal — Metis or dual-fix budget exhausted; present blocked summary",
+        "capabilities": [],
+        "config": {
+          "systemPrompt": "Planning is blocked: either Metis gap analysis exhausted metis.rejects, or dual-review (reviewer+oracle) exhausted dual.fixes after REJECT. Present a clear blocked summary: name which gate blocked (Metis vs dual-review), the last critical gap or dual verdicts if known, and tell the user what to change or how to resume. Do NOT write .omo/plans/, do NOT implement product code, and do NOT loop back into draft-plan. This node is terminal."
+        }
+      },
+      {
+        "id": "dual-review-route",
+        "kind": "llm",
+        "implementation": "dual-review-route",
+        "label": "Dual-review route — skip when clear && !review_required; else run",
+        "capabilities": [],
+        "config": {
+          "outputKey": "dual.route",
+          "outputEnum": [
+            "skip",
+            "run"
+          ]
+        }
+      },
+      {
+        "id": "dual-review-wave",
+        "kind": "parallel",
+        "label": "Dual-review wave — reviewer + oracle task children, all-approve dual.verdict",
+        "children": [
+          "dual-reviewer",
+          "dual-oracle"
+        ],
+        "config": {
+          "completionKey": "dual.complete",
+          "verdictKey": "dual.verdict",
+          "verdictStrategy": "all-approve",
+          "verdictSources": [
+            "dual.reviewer",
+            "dual.oracle"
+          ],
+          "aggregateKey": "dual.critics"
+        }
+      },
+      {
+        "id": "dual-reviewer",
+        "kind": "llm",
+        "label": "Dual-review reviewer lane — task(agent=reviewer) → dual.reviewer",
+        "capabilities": [
+          "subagent"
+        ],
+        "config": {
+          "systemPrompt": "You are the dual-review REVIEWER lane for deep autonomous planning. Call task() exactly once with agent=\"reviewer\" and an assignment that reviews the latest draft for executability, references, QA scenarios, acceptance criteria, and verification strategy. After the child returns, output ONLY one whole-output verdict — APPROVE or REJECT — with no prose or formatting. Prefer REJECT when a concrete blocker remains. Do not implement product code.",
+          "outputKey": "dual.reviewer",
+          "outputEnum": [
+            "APPROVE",
+            "REJECT"
+          ]
+        }
+      },
+      {
+        "id": "dual-oracle",
+        "kind": "llm",
+        "label": "Dual-review oracle lane — task(agent=oracle) → dual.oracle",
+        "capabilities": [
+          "subagent"
+        ],
+        "config": {
+          "systemPrompt": "You are the dual-review ORACLE lane for deep autonomous planning. Call task() exactly once with agent=\"oracle\" and an assignment that independently reviews the latest draft for architectural soundness, missing risks, and whether the plan is execution-ready. After the child returns, output ONLY one whole-output verdict — APPROVE or REJECT — with no prose or formatting. Prefer REJECT when a concrete blocker remains. Do not implement product code.",
+          "outputKey": "dual.oracle",
+          "outputEnum": [
+            "APPROVE",
+            "REJECT"
+          ]
+        }
+      },
+      {
+        "id": "dual-fix-gate",
+        "kind": "llm",
+        "implementation": "dual-fix-gate",
+        "label": "Dual-fix budget — revise once (reset metis.rejects) then escalate",
+        "capabilities": [],
+        "config": {
+          "outputKey": "dual.fix_route",
+          "outputEnum": [
+            "revise",
+            "escalate"
+          ],
+          "fixKey": "dual.fixes",
+          "fixBudget": 1,
+          "metisRejectKey": "metis.rejects"
+        }
+      },
+      {
+        "id": "draft-awaiting-approval",
+        "kind": "llm",
+        "implementation": "draft-frontmatter",
+        "label": "Write draft frontmatter status=awaiting-approval (+ dual receipts when present)",
+        "capabilities": [],
+        "config": {
+          "status": "awaiting-approval",
+          "appendDualReceipts": true
         }
       },
       {
@@ -149,23 +336,46 @@
     "edges": [
       {
         "source": "intake",
+        "target": "resume-gate",
+        "priority": 10
+      },
+      {
+        "source": "resume-gate",
+        "target": "approval-gate",
+        "condition": "resume-approval",
+        "priority": 30
+      },
+      {
+        "source": "resume-gate",
+        "target": "draft-plan",
+        "condition": "resume-drafting",
+        "priority": 20
+      },
+      {
+        "source": "resume-gate",
         "target": "assess-ambiguity",
+        "condition": "resume-fresh",
         "priority": 10
       },
       {
         "source": "assess-ambiguity",
+        "target": "intent-bridge",
+        "priority": 10
+      },
+      {
+        "source": "intent-bridge",
         "target": "explore-filter",
         "condition": "ambiguity-clear",
         "priority": 30
       },
       {
-        "source": "assess-ambiguity",
+        "source": "intent-bridge",
         "target": "research",
         "condition": "ambiguity-unclear",
         "priority": 20
       },
       {
-        "source": "assess-ambiguity",
+        "source": "intent-bridge",
         "target": "ask-one-question",
         "condition": "ambiguity-on-the-fence",
         "priority": 10
@@ -178,14 +388,38 @@
       },
       {
         "source": "explore-filter",
-        "target": "draft-plan",
+        "target": "interview-loop",
         "condition": "exploration-skippable",
         "priority": 10
       },
       {
         "source": "explore",
-        "target": "draft-plan",
+        "target": "interview-loop",
         "condition": "explore-complete",
+        "priority": 10
+      },
+      {
+        "source": "interview-loop",
+        "target": "interview-loop",
+        "condition": "interview-continue",
+        "priority": 30
+      },
+      {
+        "source": "interview-loop",
+        "target": "draft-plan",
+        "condition": "interview-clear",
+        "priority": 20
+      },
+      {
+        "source": "interview-loop",
+        "target": "adopt-defaults-announce",
+        "condition": "interview-cap-adopt",
+        "priority": 10
+      },
+      {
+        "source": "adopt-defaults-announce",
+        "target": "draft-plan",
+        "condition": "interview-defaults-announced",
         "priority": 10
       },
       {
@@ -208,13 +442,18 @@
       },
       {
         "source": "draft-plan",
-        "target": "review-plan",
+        "target": "draft-frontmatter",
         "condition": "plan-drafted",
         "priority": 10
       },
       {
+        "source": "draft-frontmatter",
+        "target": "review-plan",
+        "priority": 10
+      },
+      {
         "source": "review-plan",
-        "target": "approval-gate",
+        "target": "metis-gap",
         "condition": "plan-approved",
         "priority": 20
       },
@@ -222,6 +461,71 @@
         "source": "review-plan",
         "target": "draft-plan",
         "condition": "plan-rejected",
+        "priority": 10
+      },
+      {
+        "source": "metis-gap",
+        "target": "dual-review-route",
+        "condition": "metis-passed",
+        "priority": 20
+      },
+      {
+        "source": "metis-gap",
+        "target": "metis-reject-gate",
+        "condition": "metis-failed",
+        "priority": 10
+      },
+      {
+        "source": "metis-reject-gate",
+        "target": "draft-plan",
+        "condition": "metis-revise",
+        "priority": 20
+      },
+      {
+        "source": "metis-reject-gate",
+        "target": "present-blocked",
+        "condition": "metis-escalate-present",
+        "priority": 10
+      },
+      {
+        "source": "dual-review-route",
+        "target": "draft-awaiting-approval",
+        "condition": "dual-skip",
+        "priority": 20
+      },
+      {
+        "source": "dual-review-route",
+        "target": "dual-review-wave",
+        "condition": "dual-run",
+        "priority": 10
+      },
+      {
+        "source": "dual-review-wave",
+        "target": "draft-awaiting-approval",
+        "condition": "dual-approved",
+        "priority": 20
+      },
+      {
+        "source": "dual-review-wave",
+        "target": "dual-fix-gate",
+        "condition": "dual-rejected",
+        "priority": 10
+      },
+      {
+        "source": "dual-fix-gate",
+        "target": "draft-plan",
+        "condition": "dual-revise",
+        "priority": 20
+      },
+      {
+        "source": "dual-fix-gate",
+        "target": "present-blocked",
+        "condition": "dual-escalate",
+        "priority": 10
+      },
+      {
+        "source": "draft-awaiting-approval",
+        "target": "approval-gate",
         "priority": 10
       },
       {
@@ -267,6 +571,18 @@
         "priority": 5
       },
       {
+        "source": "interview-loop",
+        "target": "interview-loop",
+        "condition": "llm-loop-active",
+        "priority": 5
+      },
+      {
+        "source": "adopt-defaults-announce",
+        "target": "adopt-defaults-announce",
+        "condition": "llm-loop-active",
+        "priority": 5
+      },
+      {
         "source": "research",
         "target": "research",
         "condition": "llm-loop-active",
@@ -297,6 +613,24 @@
         "priority": 5
       },
       {
+        "source": "metis-gap",
+        "target": "metis-gap",
+        "condition": "llm-loop-active",
+        "priority": 5
+      },
+      {
+        "source": "dual-reviewer",
+        "target": "dual-reviewer",
+        "condition": "llm-loop-active",
+        "priority": 5
+      },
+      {
+        "source": "dual-oracle",
+        "target": "dual-oracle",
+        "condition": "llm-loop-active",
+        "priority": 5
+      },
+      {
         "source": "approval-gate",
         "target": "approval-gate",
         "condition": "llm-loop-active",
@@ -313,6 +647,12 @@
         "target": "present",
         "condition": "llm-loop-active",
         "priority": 5
+      },
+      {
+        "source": "present-blocked",
+        "target": "present-blocked",
+        "condition": "llm-loop-active",
+        "priority": 5
       }
     ],
     "rules": [
@@ -323,6 +663,33 @@
           "kind": "blackboard.value.equals",
           "key": "llm.loop_active",
           "value": true
+        }
+      },
+      {
+        "id": "resume-approval",
+        "description": "draft frontmatter status is awaiting-approval — resume at approval-gate",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "resume_gate",
+          "value": "resume_approval"
+        }
+      },
+      {
+        "id": "resume-drafting",
+        "description": "draft frontmatter status is drafting with body — resume at draft-plan",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "resume_gate",
+          "value": "resume_drafting"
+        }
+      },
+      {
+        "id": "resume-fresh",
+        "description": "no resumable draft — continue through assess-ambiguity",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "resume_gate",
+          "value": "fresh"
         }
       },
       {
@@ -363,7 +730,7 @@
       },
       {
         "id": "exploration-skippable",
-        "description": "clear request is trivial enough to draft directly",
+        "description": "clear request is trivial enough to skip exploration and enter interview",
         "when": {
           "kind": "blackboard.value.equals",
           "key": "explore.decision",
@@ -372,10 +739,46 @@
       },
       {
         "id": "explore-complete",
-        "description": "codebase exploration finished",
+        "description": "codebase exploration finished — enter interview-loop",
         "when": {
           "kind": "blackboard.value.equals",
           "key": "explore.complete",
+          "value": true
+        }
+      },
+      {
+        "id": "interview-continue",
+        "description": "interview needs another turn",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "interview.route",
+          "value": "continue"
+        }
+      },
+      {
+        "id": "interview-clear",
+        "description": "interview cleared — draft the plan",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "interview.route",
+          "value": "clear"
+        }
+      },
+      {
+        "id": "interview-cap-adopt",
+        "description": "interview turn cap reached — announce adopted defaults",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "interview.route",
+          "value": "cap_adopt"
+        }
+      },
+      {
+        "id": "interview-defaults-announced",
+        "description": "post-cap defaults announced — draft the plan",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "interview.defaults_announced",
           "value": true
         }
       },
@@ -414,7 +817,7 @@
       },
       {
         "id": "plan-approved",
-        "description": "review-plan critic approved the draft",
+        "description": "review-plan critic floor approved the draft — enter metis-gap",
         "when": {
           "kind": "blackboard.value.equals",
           "key": "critic.passed",
@@ -428,6 +831,96 @@
           "kind": "blackboard.value.equals",
           "key": "critic.passed",
           "value": false
+        }
+      },
+      {
+        "id": "metis-passed",
+        "description": "metis-gap approved the draft — enter dual-review-route",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "metis.passed",
+          "value": true
+        }
+      },
+      {
+        "id": "metis-failed",
+        "description": "metis-gap rejected the draft — enter metis-reject-gate",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "metis.passed",
+          "value": false
+        }
+      },
+      {
+        "id": "metis-revise",
+        "description": "metis reject under budget — revise draft-plan",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "metis.reject_route",
+          "value": "revise"
+        }
+      },
+      {
+        "id": "metis-escalate-present",
+        "description": "metis reject budget exhausted — present-blocked terminal",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "metis.reject_route",
+          "value": "escalate_present"
+        }
+      },
+      {
+        "id": "dual-skip",
+        "description": "dual-review skipped (clear intent and review_required false) — approval-gate",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "dual.route",
+          "value": "skip"
+        }
+      },
+      {
+        "id": "dual-run",
+        "description": "dual-review required — enter dual-review-wave",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "dual.route",
+          "value": "run"
+        }
+      },
+      {
+        "id": "dual-approved",
+        "description": "dual-review all-approve — continue to approval-gate",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "dual.verdict",
+          "value": "APPROVE"
+        }
+      },
+      {
+        "id": "dual-rejected",
+        "description": "dual-review rejected — enter dual-fix-gate",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "dual.verdict",
+          "value": "REJECT"
+        }
+      },
+      {
+        "id": "dual-revise",
+        "description": "dual-fix under budget — revise draft-plan (metis.rejects reset)",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "dual.fix_route",
+          "value": "revise"
+        }
+      },
+      {
+        "id": "dual-escalate",
+        "description": "dual-fix budget exhausted — present-blocked terminal",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "dual.fix_route",
+          "value": "escalate"
         }
       },
       {

@@ -7,8 +7,8 @@
  *      and is approve-biased; high-accuracy dual review is opt-in, not default.
  *   2. review-plan runs the deterministic critic in draft-heuristic mode (no
  *      evaluateKey) so approve-biased executability checks gate the draft.
- *   3. Routing: reject loops back to draft-plan (revision); approve reaches the
- *      approval gate, then write-plan, then the present/handoff node.
+ *   3. Routing: reject loops back to draft-plan (revision); floor approve reaches
+ *      metis-gap, then (on metis pass) the approval gate, write-plan, present.
  *   4. Runtime: an evidence-citing draft passes (critic.passed=true); an empty
  *      or non-answer draft is rejected (critic.passed=false) and would loop.
  *   5. Runner refuses absent/malformed plans at the entry admission gate.
@@ -132,14 +132,78 @@ describe('planner review-plan: routing loops to revision and reaches handoff', (
         expect(rule?.when).toEqual({ kind: 'blackboard.value.equals', key: 'critic.passed', value: false });
     });
 
-    it('approve routes forward to the approval gate (plan-approved condition)', () => {
+    it('floor approve routes to metis-gap (plan-approved condition), not directly to approval-gate', () => {
         const graph = createPlannerWorkflowGraph();
         const approveEdge = graph.edges.find(
-            (edge) => edge.source === 'review-plan' && edge.target === 'approval-gate',
+            (edge) => edge.source === 'review-plan' && edge.target === 'metis-gap',
         );
         expect(approveEdge?.condition).toBe('plan-approved');
+        const directToApproval = graph.edges.find(
+            (edge) => edge.source === 'review-plan' && edge.target === 'approval-gate',
+        );
+        expect(directToApproval).toBeUndefined();
         const rule = graph.rules.find((candidate) => candidate.id === 'plan-approved');
         expect(rule?.when).toEqual({ kind: 'blackboard.value.equals', key: 'critic.passed', value: true });
+    });
+
+    it('metis pass routes to dual-review-route; metis fail routes to metis-reject-gate', () => {
+        const graph = createPlannerWorkflowGraph();
+        const passEdge = graph.edges.find(
+            (edge) => edge.source === 'metis-gap' && edge.target === 'dual-review-route',
+        );
+        const failEdge = graph.edges.find(
+            (edge) => edge.source === 'metis-gap' && edge.target === 'metis-reject-gate',
+        );
+        expect(passEdge?.condition).toBe('metis-passed');
+        expect(failEdge?.condition).toBe('metis-failed');
+        expect(graph.rules.find((rule) => rule.id === 'metis-passed')?.when).toEqual({
+            kind: 'blackboard.value.equals',
+            key: 'metis.passed',
+            value: true,
+        });
+        expect(graph.rules.find((rule) => rule.id === 'metis-failed')?.when).toEqual({
+            kind: 'blackboard.value.equals',
+            key: 'metis.passed',
+            value: false,
+        });
+    });
+
+    it('dual-review skip/approve reach draft-awaiting-approval then approval-gate; reject uses dual-fix budget then present-blocked', () => {
+        const graph = createPlannerWorkflowGraph();
+        expect(
+            graph.edges.find(
+                (edge) => edge.source === 'dual-review-route' && edge.target === 'draft-awaiting-approval',
+            )?.condition,
+        ).toBe('dual-skip');
+        expect(
+            graph.edges.find(
+                (edge) => edge.source === 'dual-review-wave' && edge.target === 'draft-awaiting-approval',
+            )?.condition,
+        ).toBe('dual-approved');
+        expect(
+            graph.edges.find((edge) => edge.source === 'draft-awaiting-approval' && edge.target === 'approval-gate'),
+        ).toBeDefined();
+        expect(
+            graph.edges.find((edge) => edge.source === 'dual-review-wave' && edge.target === 'dual-fix-gate')
+                ?.condition,
+        ).toBe('dual-rejected');
+        expect(
+            graph.edges.find((edge) => edge.source === 'dual-fix-gate' && edge.target === 'draft-plan')?.condition,
+        ).toBe('dual-revise');
+        expect(
+            graph.edges.find((edge) => edge.source === 'dual-fix-gate' && edge.target === 'present-blocked')
+                ?.condition,
+        ).toBe('dual-escalate');
+        expect(graph.rules.find((rule) => rule.id === 'dual-skip')?.when).toEqual({
+            kind: 'blackboard.value.equals',
+            key: 'dual.route',
+            value: 'skip',
+        });
+        expect(graph.rules.find((rule) => rule.id === 'dual-approved')?.when).toEqual({
+            kind: 'blackboard.value.equals',
+            key: 'dual.verdict',
+            value: 'APPROVE',
+        });
     });
 
     it('a valid plan reaches the handoff (present) only through write-plan after approval', () => {

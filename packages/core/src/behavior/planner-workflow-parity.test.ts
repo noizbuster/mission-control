@@ -167,14 +167,32 @@ describe('planner workflow parity: draft state before final plan', () => {
         expect(draftPlan.capabilities).toContain('write');
     });
 
-    it('the draft precedes review-plan which precedes the approval gate', () => {
+    it('the draft precedes frontmatter then review-plan which precedes metis-gap which precedes dual-review then approval', () => {
         const graph = createPlannerWorkflowGraph();
-        const draftToReview = graph.edges.find((edge) => edge.source === 'draft-plan' && edge.target === 'review-plan');
-        const reviewToGate = graph.edges.find(
-            (edge) => edge.source === 'review-plan' && edge.target === 'approval-gate',
+        const draftToFrontmatter = graph.edges.find(
+            (edge) => edge.source === 'draft-plan' && edge.target === 'draft-frontmatter',
         );
-        expect(draftToReview?.condition).toBe('plan-drafted');
-        expect(reviewToGate?.condition).toBe('plan-approved');
+        const frontmatterToReview = graph.edges.find(
+            (edge) => edge.source === 'draft-frontmatter' && edge.target === 'review-plan',
+        );
+        const reviewToMetis = graph.edges.find(
+            (edge) => edge.source === 'review-plan' && edge.target === 'metis-gap',
+        );
+        const metisToDual = graph.edges.find(
+            (edge) => edge.source === 'metis-gap' && edge.target === 'dual-review-route',
+        );
+        const dualSkipToAwaiting = graph.edges.find(
+            (edge) => edge.source === 'dual-review-route' && edge.target === 'draft-awaiting-approval',
+        );
+        const awaitingToGate = graph.edges.find(
+            (edge) => edge.source === 'draft-awaiting-approval' && edge.target === 'approval-gate',
+        );
+        expect(draftToFrontmatter?.condition).toBe('plan-drafted');
+        expect(frontmatterToReview).toBeDefined();
+        expect(reviewToMetis?.condition).toBe('plan-approved');
+        expect(metisToDual?.condition).toBe('metis-passed');
+        expect(dualSkipToAwaiting?.condition).toBe('dual-skip');
+        expect(awaitingToGate).toBeDefined();
     });
 });
 
@@ -315,14 +333,32 @@ describe('planner workflow parity: independently constrained child consultations
 });
 
 describe('planner workflow progress-contract routing matrix', () => {
-    it('locks ambiguity.classification and explore.decision outputEnum labels', () => {
+    it('locks ambiguity.classification, explore.decision, and interview.route outputEnum labels', () => {
         const graph = createPlannerWorkflowGraph();
         const assess = findNode(graph, 'assess-ambiguity');
         const exploreFilter = findNode(graph, 'explore-filter');
+        const interviewLoop = findNode(graph, 'interview-loop');
         expect(configString(assess, 'outputKey')).toBe('ambiguity.classification');
         expect(assess.config?.['outputEnum']).toEqual(['clear', 'unclear', 'on-the-fence']);
         expect(configString(exploreFilter, 'outputKey')).toBe('explore.decision');
         expect(exploreFilter.config?.['outputEnum']).toEqual(['needs-exploration', 'direct-draft']);
+        expect(configString(interviewLoop, 'outputKey')).toBe('interview.route');
+        expect(interviewLoop.config?.['outputEnum']).toEqual(['continue', 'clear', 'cap_adopt']);
+    });
+
+    it('routes both clear explore-filter branches into interview-loop (never skip interview)', () => {
+        const graph = createPlannerWorkflowGraph();
+        const fromFilter = graph.edges.filter((edge) => edge.source === 'explore-filter' && edge.target !== 'explore-filter');
+        const fromExplore = graph.edges.filter((edge) => edge.source === 'explore' && edge.target !== 'explore');
+        expect(fromFilter.map((edge) => edge.target).sort()).toEqual(['explore', 'interview-loop'].sort());
+        expect(fromExplore.map((edge) => edge.target)).toEqual(['interview-loop']);
+        expect(fromFilter.some((edge) => edge.target === 'draft-plan')).toBe(false);
+        expect(fromExplore.some((edge) => edge.target === 'draft-plan')).toBe(false);
+    });
+
+    it('marks interview-loop as a pure routing gate with empty capabilities', () => {
+        const graph = createPlannerWorkflowGraph();
+        expect(findNode(graph, 'interview-loop').capabilities).toEqual([]);
     });
 
     it('locks equals-used booleans with outputShape boolean', () => {
@@ -340,7 +376,7 @@ describe('planner workflow progress-contract routing matrix', () => {
 
     it('marks pure routing gates with empty capabilities', () => {
         const graph = createPlannerWorkflowGraph();
-        for (const id of ['assess-ambiguity', 'explore-filter', 'approval-gate'] as const) {
+        for (const id of ['assess-ambiguity', 'explore-filter', 'interview-loop', 'approval-gate'] as const) {
             expect(findNode(graph, id).capabilities).toEqual([]);
         }
     });
