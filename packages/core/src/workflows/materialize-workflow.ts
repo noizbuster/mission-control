@@ -19,6 +19,7 @@ import {
     DEFAULT_PLAN_READONLY_MODE,
 } from '../behavior/default-workflow-graph';
 import { applyMode } from '../behavior/modes/mode-application';
+import { assertRoutingKeyBiCoverage } from '../behavior/routing-key-bi-coverage';
 
 /** The workflow name used as the no-`#` / plain-prompt fallback. */
 export const DEFAULT_WORKFLOW_NAME = 'default';
@@ -48,6 +49,7 @@ export type MaterializeWorkflowOptions = {
 export function materializeWorkflow(spec: WorkflowSpec, options: MaterializeWorkflowOptions = {}): AbgGraphSpec {
     const declaredModes = spec.modes;
     if (declaredModes === undefined || declaredModes.length === 0) {
+        assertRoutingKeyBiCoverage(spec.graph);
         return spec.graph;
     }
     const activeFilter = options.activeModeIds !== undefined ? new Set(options.activeModeIds) : undefined;
@@ -57,6 +59,7 @@ export function materializeWorkflow(spec: WorkflowSpec, options: MaterializeWork
             graph = applyMode(graph, mode);
         }
     }
+    assertRoutingKeyBiCoverage(graph);
     return graph;
 }
 

@@ -6,6 +6,7 @@ import {
 } from '@mission-control/protocol';
 import type { AgentModelLookup } from './agent-model-resolver';
 import { resolveGraphAgentModels } from './agent-model-resolver';
+import { assertRoutingKeyBiCoverage } from './routing-key-bi-coverage';
 import { AbgGraphValidationError, type CompiledAbgRule, compileAbgRule } from './rule-compiler';
 
 export type AuthorableAbgGraph = AbgGraphSpec & {
@@ -18,6 +19,7 @@ export function createAuthorableAbgGraph(input: unknown, agentModelLookup?: Agen
         throw new AbgGraphValidationError('invalid ABG graph spec', parsed.error.issues.length);
     }
     assertRuleReferences(parsed.data);
+    assertRoutingKeyBiCoverage(parsed.data);
     const resolved =
         agentModelLookup !== undefined ? resolveGraphAgentModels(parsed.data, agentModelLookup) : parsed.data;
     const graph = {

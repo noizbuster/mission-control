@@ -26,14 +26,16 @@
 - Approval and policy blocks must emit observable lifecycle events, not silent booleans.
 - Keep model metadata as observability/control data unless an implemented provider path is explicitly wired.
 - An `llm` node with `outputKey` accepts only a whole exact structured representation. It does not parse a reasoning tail, select a last line, or invent a default when parsing fails.
+- **Routing-key bi-coverage (LEVER B):** at `createAuthorableAbgGraph` / `materializeWorkflow`, every equals-routed structured llm `outputKey` MUST declare `outputEnum` (string labels) or `outputShape: 'boolean'`. Every `outputEnum` label MUST have a matching outbound equals edge from that node (or an unconditional outbound / `selectDefault` / `defaultTarget`). Every equals value for that key MUST be in the declared `outputEnum`. Non-structured writers (`implementation: 'critic'|'supervisor'|…`, parallel `verdictKey`, runtime keys like `llm.loop_active`) are exempt. See `routing-key-bi-coverage.ts`.
+- **Recovery contract:** invalid structured admission → no `blackboard.set` → `invalid_structured_output` (retryable under budget) with correction payload (allowed labels + code). Conditional-only routing miss after success → durable `routing.dead_end`, re-admit under budget (tombstone the outputKey), then `failGraph('routing_dead_end')` or declared `escalationTarget` — never silent `graph.completed`. Correction is prepended once on the next attempt and cleared after productive success / escalate / failGraph.
 - A static `parallel` node without `config.fanOutKey` runs declared `children` in waves. A positive integer `config.concurrency` selects its local bound, defaulting to 2; aggregate signals and child results remain in declaration order. A rejected child iterator emits failure and fails normal all-child completion.
 - `fanOutKey` is a distinct blackboard-array path with a template child. Do not describe it as static `children` parallelism.
 - `race` starts at most 4 children and rejects excess authoring before branch creation. It chooses the earliest valid completion within the current process. Cooperative branches drain through `.return()` during cleanup (5000ms default; positive integer `cleanupTimeoutMs` capped at 30000ms). Cleanup timeout, return rejection, or `next()`/pump rejection fails the Race even after a valid winner; ordinary child failure signals may lose without poisoning that winner. Arbitrary work is not forcibly terminated. Durable committed-order arbitration is deferred.
 
 ## Tests
 
-- Validation and graph shape: `action-graph.test.ts`, `coding-agent-graph-fixtures.test.ts`.
-- Coordinator behavior: `graph-coordinator*.test.ts`, `watch-statechart-nodes.test.ts`.
+- Validation and graph shape: `action-graph.test.ts`, `coding-agent-graph-fixtures.test.ts`, `routing-key-bi-coverage.test.ts` (LEVER B).
+- Coordinator behavior: `graph-coordinator*.test.ts`, `watch-statechart-nodes.test.ts` (includes P1–P5 progress-contract pattern pack).
 - Node registry and node behavior: `node-registry.ts`, `parallel-fan-out.test.ts`, `static-parallel.test.ts`, `selector.test.ts`, `join.test.ts`, `parallel-verdict.test.ts`, `nodes/race-node*.test.ts`, `leaf-nodes.test.ts`.
 - When example graph behavior changes, update `examples/abg/*.graph.json` and root ABG/readme contract tests as needed.
 
