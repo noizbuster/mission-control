@@ -9,6 +9,7 @@ import type { HistoryPickerEntry, HistoryPickerState } from '../state/history-pi
 import type { SlashCommandMenuState } from '../state/interactive-chat-command-menu';
 import type { FileAutocompleteState } from '../state/interactive-chat-file-autocomplete';
 import { resolveSeparatorState } from '../state/separator-state';
+import { AgentSpinner } from '../app/AgentSpinner';
 import { ChatInputArea } from './ChatInputArea';
 import type { ChatTextareaHandle } from './ChatInputTextarea';
 import type { ChatScrollboxHandle } from './ChatTranscript';
@@ -42,6 +43,8 @@ export type ChatBottomDockSlice = {
     readonly sessionId: string;
     readonly approvalLevel: ChatStoreState['approvalLevel'];
     readonly separatorState: SeparatorState;
+    readonly generating: boolean;
+    readonly agentStatusText: string;
 };
 
 export type ChatBottomDockProps = {
@@ -91,6 +94,8 @@ export function selectChatBottomDockSlice(snapshot: ChatStoreState): ChatBottomD
             approvalActive: snapshot.overlayMode === 'approval',
             questionActive: snapshot.overlayMode === 'question',
         }),
+        generating: snapshot.generating,
+        agentStatusText: snapshot.agentStatusText,
     };
 }
 
@@ -195,8 +200,15 @@ export function ChatBottomDockBase(props: ChatBottomDockBaseProps): JSX.Element 
             dockSlice: props.dockSlice,
         });
 
+    const agentStatusLine = (): string | undefined => {
+        if (props.dockSlice.agentStatusText.length > 0) return props.dockSlice.agentStatusText;
+        if (props.dockSlice.generating) return 'Working…';
+        return undefined;
+    };
+
     return (
         <box flexDirection="column" flexShrink={0} width="100%">
+            <Show when={agentStatusLine()}>{(text) => <AgentSpinner text={text()} />}</Show>
             <Show when={topStatusBarProps()}>{(top) => <TopStatusBar {...top()} />}</Show>
             {renderPromptAdjacentPanels({
                 dockSlice: props.dockSlice,

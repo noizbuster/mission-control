@@ -54,6 +54,11 @@ export function isTerminalProviderError(error: unknown): boolean {
     if (typeof error !== 'object' || error === null || !('providerError' in error) || error.providerError !== true) {
         return false;
     }
+    // Rate-limit / overload / timeout must use the node maxAttempts budget instead of
+    // terminating the graph on the first AI-SDK or bridge failure.
+    if ('code' in error && (error.code === 'provider_rate_limited' || error.code === 'provider_timeout')) {
+        return false;
+    }
     const retryExhausted = 'retryExhausted' in error && error.retryExhausted === true;
     const explicitlyNonRetryable = 'retryable' in error && error.retryable === false;
     return retryExhausted || explicitlyNonRetryable;

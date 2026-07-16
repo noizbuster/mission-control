@@ -45,6 +45,36 @@ export function applyEnumConstraint(
     };
 }
 
+/** Free-text format contract for hybrid outputKey nodes (not pure generate_object gates). */
+export function buildStructuredOutputContract(node: AbgNodeSpec, outputKey: string): string {
+    const shape = readOutputShape(node);
+    const outputEnum = readOutputEnum(node);
+    const allowed =
+        outputEnum !== undefined
+            ? outputEnum.map((entry) => `\`${entry}\``).join(' | ')
+            : shape === 'boolean'
+              ? '`true` | `false`'
+              : shape === 'array'
+                ? 'a JSON array'
+                : shape === 'object'
+                  ? 'a JSON object'
+                  : shape === 'string'
+                    ? 'a single-line string token'
+                    : 'a whole exact structured value (JSON, boolean, or single-line string)';
+    return (
+        `STRUCTURED OUTPUT CONTRACT for key "${outputKey}":\n` +
+        `Your entire response must be exactly ${allowed} and nothing else.\n` +
+        'No prose, no markdown fences, no tool calls, no continuation of prior exploration, no explanation.'
+    );
+}
+
+export function readOutputEnum(node: AbgNodeSpec): readonly string[] | undefined {
+    const { outputEnum: value } = node.config ?? {};
+    if (!Array.isArray(value)) return undefined;
+    const entries = value.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0);
+    return entries.length > 0 ? entries : undefined;
+}
+
 export function readPriorSummary(blackboard: Blackboard): ConversationSummary | undefined {
     const value = blackboard.get('context.summary');
     if (value === undefined || value === null || typeof value !== 'object') return undefined;
@@ -61,11 +91,4 @@ export function extractTurnResult(result: unknown): LlmActorTurnResult | undefin
         usage: candidate.usage,
         responseMessages: candidate.responseMessages as readonly ModelMessage[],
     };
-}
-
-function readOutputEnum(node: AbgNodeSpec): readonly string[] | undefined {
-    const { outputEnum: value } = node.config ?? {};
-    if (!Array.isArray(value)) return undefined;
-    const entries = value.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0);
-    return entries.length > 0 ? entries : undefined;
 }

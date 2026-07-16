@@ -609,8 +609,9 @@ describe('bounded ABG graph coordinator', () => {
         expect(attemptsFor(result.events, 'flaky')).toEqual([1, 2]);
     });
 
-    it('fails once when a provider reports that its retry budget is exhausted', async () => {
-        // Given
+    it('still spends node maxAttempts on rate-limited provider failures even when marked retryExhausted', async () => {
+        // Rate-limit / overload is no longer a single-shot terminal: the graph spends its
+        // node retry budget so transient ZAI/GLM overload can recover.
         const registry = createAbgNodeRegistry();
         registry.register(
             'retry-exhausted-provider',
@@ -631,7 +632,6 @@ describe('bounded ABG graph coordinator', () => {
             },
         );
 
-        // When
         const result = await runAbgGraph({
             ...baseInput,
             registry,
@@ -646,18 +646,57 @@ describe('bounded ABG graph coordinator', () => {
             },
         });
 
-        // Then
         expect(result.status).toBe('failed');
-        expect(attemptsFor(result.events, 'limited')).toEqual([1]);
+        expect(attemptsFor(result.events, 'limited')).toEqual([1, 2, 3]);
         expect(result.terminalError).toEqual({
             code: 'provider_rate_limited',
             message: 'temporarily overloaded',
             retryable: true,
         });
-        expect(
-            result.events.find((event) => event.type === 'attempt.failed' && event.abg?.nodeId === 'limited')?.abg
-                ?.error?.retryable,
-        ).toBe(false);
+    });
+
+    it('fails once when a non-rate-limit provider reports retry budget exhausted', async () => {
+        const registry = createAbgNodeRegistry();
+        registry.register(
+            'retry-exhausted-unknown',
+            async function* run(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
+                yield { type: 'started', graphId: context.graphId, nodeId: node.id };
+                yield {
+                    type: 'failure',
+                    graphId: context.graphId,
+                    nodeId: node.id,
+                    error: {
+                        code: 'unknown',
+                        message: 'upstream hard failure',
+                        retryable: true,
+                        retryExhausted: true,
+                        providerError: true,
+                    },
+                };
+            },
+        );
+
+        const result = await runAbgGraph({
+            ...baseInput,
+            registry,
+            graph: {
+                id: 'provider-retry-exhausted-unknown',
+                entryNodeId: 'hard',
+                defaults: { retryLimit: 2 },
+                nodes: [{ id: 'hard', kind: 'llm', implementation: 'retry-exhausted-unknown' }],
+                edges: [],
+                rules: [],
+                policies: [],
+            },
+        });
+
+        expect(result.status).toBe('failed');
+        expect(attemptsFor(result.events, 'hard')).toEqual([1]);
+        expect(result.terminalError).toEqual({
+            code: 'unknown',
+            message: 'upstream hard failure',
+            retryable: true,
+        });
     });
 
     it('does not misclassify a non-provider retryable-false failure as a provider terminal error', async () => {

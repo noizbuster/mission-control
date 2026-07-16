@@ -184,8 +184,16 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
                         '- legacy (no consistency, outdated patterns) -> propose an approach, do not copy.\n' +
                         '- greenfield (new/empty) -> apply modern best practices.\n' +
                         'If the codebase looks undisciplined, verify before assuming — different patterns may ' +
-                        'serve different purposes intentionally. Write the classification to explore.maturity.',
+                        'serve different purposes intentionally.\n' +
+                        'While sampling, call read tools and do NOT emit the classification yet. When ready, ' +
+                        'Output ONLY one class name — no quotes, no formatting, no extra text:\n' +
+                        '- disciplined\n' +
+                        '- transitional\n' +
+                        '- legacy\n' +
+                        '- greenfield',
                     outputKey: 'explore.maturity',
+                    outputShape: 'string',
+                    outputEnum: ['disciplined', 'transitional', 'legacy', 'greenfield'],
                 },
             },
             {
@@ -194,6 +202,8 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
                 label: 'Anti-dup exploration guard and delegation-bias check',
                 config: {
                     systemPrompt:
+                        'You are a pure boolean gate. Do NOT explore, do NOT call tools, do NOT continue prior ' +
+                        'assistant turns. Judge the existing conversation only, then emit one token.\n\n' +
                         'Two checks before delegation:\n' +
                         '1. ANTI-DUP: if the work was already SUCCESSFULLY explored (a read that returned ' +
                         'content, a grep with matches — check prior exploration results in context), do NOT ' +
@@ -207,7 +217,7 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
                         'to do directly with certainty? Is there an existing pattern to follow (per the maturity ' +
                         'check)? Default bias is DELEGATE for non-trivial work, but trivial single-file work ' +
                         'you can do correctly yourself should be done directly rather than over-delegated.\n' +
-                        'Output ONLY the JSON boolean `true` or `false` — no prose, no formatting, no extra text. Output `true` ' +
+                        'Output ONLY `true` or `false` — no prose, no formatting, no extra text. Output `true` ' +
                         'when both checks pass and the plan may proceed to todo planning; output `false` ' +
                         'otherwise.',
                     outputKey: 'guard.cleared',

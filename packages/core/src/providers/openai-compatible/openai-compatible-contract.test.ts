@@ -58,3 +58,34 @@ it('maps retryable rate-limit failures without leaking compatible provider token
         },
     });
 });
+
+it('maps 503 overloaded failures as retryable rate limits without leaking tokens', async () => {
+    const provider = createOpenAICompatibleProvider({
+        credentialResolver: createStaticProviderCredentialResolver([
+            credential('zai-coding-plan', 'sk-zai-contract-secret'),
+        ]),
+        transport: {
+            stream() {
+                throw new OpenAICompatibleTransportError({
+                    status: 503,
+                    message: 'The service may be temporarily overloaded, please try again later sk-zai-contract-secret',
+                });
+            },
+        },
+    });
+
+    const request = turnRequest({ providerID: 'zai-coding-plan' });
+    await expect(collectChunks(provider.streamTurn(request, createProviderContext()))).rejects.toMatchObject({
+        error: {
+            code: 'provider_rate_limited',
+            message: expect.stringContaining('temporarily overloaded'),
+            retryable: true,
+        },
+    });
+    try {
+        await collectChunks(provider.streamTurn(request, createProviderContext()));
+        expect.unreachable('expected transport failure');
+    } catch (error) {
+        expect(JSON.stringify(error)).not.toContain('sk-zai-contract-secret');
+    }
+});

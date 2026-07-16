@@ -14,6 +14,11 @@ import {
 } from './interactive-coding-signal-payload';
 import { parseFileEditOutput, parseFilePatchOutput, renderToolPreview } from './interactive-coding-tool-preview';
 import {
+    describeRetryableFailure,
+    formatNodeRetryStatus,
+    formatNodeWorkingStatus,
+} from './interactive-coding-graph-status';
+import {
     type InteractiveGraphSignalObserver,
     notifyInteractiveGraphSignalObservers,
 } from './interactive-graph-signal-observers';
@@ -50,6 +55,32 @@ export function renderInteractiveGraphDurableEvent(
     state: ProviderRenderState,
     event: AgentEvent,
 ): void {
+    if (event.type === 'attempt.started') {
+        const nodeId = event.abg?.nodeId;
+        if (typeof nodeId === 'string' && nodeId.length > 0) {
+            const attempt = typeof event.abg?.attempt === 'number' ? event.abg.attempt : undefined;
+            output.setAgentStatus?.(formatNodeWorkingStatus(nodeId, attempt));
+        }
+        return;
+    }
+    if (event.type === 'attempt.failed') {
+        const nodeId = event.abg?.nodeId;
+        const failure = describeRetryableFailure(event.abg?.error);
+        if (typeof nodeId === 'string' && nodeId.length > 0 && failure.retryable) {
+            output.setAgentStatus?.(
+                formatNodeRetryStatus({
+                    nodeId,
+                    shortReason: failure.shortReason,
+                    ...(typeof event.abg?.attempt === 'number' ? { attempt: event.abg.attempt } : {}),
+                    ...(typeof event.abg?.maxAttempts === 'number' ? { maxAttempts: event.abg.maxAttempts } : {}),
+                }),
+            );
+            return;
+        }
+        output.clearAgentStatus?.();
+        return;
+    }
+
     const emit = event.abg?.emit;
     if (emit === undefined) return;
     if (emit.type === 'llm.turn.completed') {
@@ -82,7 +113,26 @@ export function renderInteractiveGraphDurableEvent(
         return;
     }
     if (emit.type === 'llm.error') {
-        output.write(`Error: ${redactCredentialText(readStringField(emit.payload, 'error') ?? 'LLM error')}\n`);
+        const errorText = readStringField(emit.payload, 'error') ?? 'LLM error';
+        const errorCode = readStringField(emit.payload, 'errorCode');
+        const failure = describeRetryableFailure({
+            message: errorText,
+            ...(errorCode !== undefined ? { code: errorCode, retryable: true } : {}),
+        });
+        const nodeId = event.abg?.nodeId;
+        if (failure.retryable && typeof nodeId === 'string' && nodeId.length > 0) {
+            output.setAgentStatus?.(
+                formatNodeRetryStatus({
+                    nodeId,
+                    shortReason: failure.shortReason,
+                    ...(typeof event.abg?.attempt === 'number' ? { attempt: event.abg.attempt } : {}),
+                    ...(typeof event.abg?.maxAttempts === 'number' ? { maxAttempts: event.abg.maxAttempts } : {}),
+                }),
+            );
+            return;
+        }
+        output.clearAgentStatus?.();
+        output.write(`Error: ${redactCredentialText(errorText)}\n`);
     }
 }
 
@@ -95,12 +145,23 @@ function renderInteractiveGraphSignal(
     if (signal.type === 'started') {
         closeStreams(output, state);
         output.write(`▸ ${signal.nodeId}\n`);
-        output.setAgentStatus?.(`${formatNodeLabel(signal.nodeId)}...`);
+        output.setAgentStatus?.(formatNodeWorkingStatus(signal.nodeId));
         return;
     }
     if (signal.type === 'failure') {
-        output.clearAgentStatus?.();
         closeStreams(output, state);
+        const failure = describeRetryableFailure(signal.error);
+        if (failure.retryable) {
+            // Keep the spinner above the prompt; durable attempt.failed fills attempt/max.
+            output.setAgentStatus?.(
+                formatNodeRetryStatus({
+                    nodeId: signal.nodeId,
+                    shortReason: failure.shortReason,
+                }),
+            );
+            return;
+        }
+        output.clearAgentStatus?.();
         output.write(`✗ ${signal.nodeId}: ${extractSignalError(signal.error)}\n`);
         return;
     }
@@ -190,27 +251,6 @@ function closeStreams(output: ChatOutput, state: ProviderRenderState): void {
     if (state.streamingText || state.streamingThinking) output.write('\n');
     state.streamingText = false;
     state.streamingThinking = false;
-}
-
-const NODE_LABELS: Readonly<Record<string, string>> = {
-    'intent-gate': 'Classifying intent',
-    'direct-respond': 'Responding',
-    'research-explore': 'Exploring',
-    'route-planner': 'Planning',
-    'maturity-check': 'Checking maturity',
-    'anti-dup-guard': 'Checking for duplicates',
-    'todo-plan': 'Planning tasks',
-    'delegate-wave': 'Delegating',
-    'delegate-worker': 'Working on task',
-    'verify-wave': 'Verifying',
-    'evidence-check': 'Checking evidence',
-    supervisor: 'Reviewing progress',
-    'final-respond': 'Composing answer',
-    clarify: 'Asking for clarification',
-};
-
-function formatNodeLabel(nodeId: string): string {
-    return NODE_LABELS[nodeId] ?? nodeId.replace(/-/g, ' ');
 }
 
 export type { ToolInvocationSettlement };

@@ -285,18 +285,24 @@ describe('App OpenCode layout wiring', () => {
 });
 
 describe('UpperRegion and fullscreen feature inventory', () => {
-    it('keeps transcript output, spinner, toast, and minimap inside the upper output region', () => {
+    it('keeps transcript output, toast, and minimap inside the upper output region', () => {
         const upperSource = readSource(join(chatAppDir, 'UpperRegion.tsx'));
+        const dockSource = readSource('apps/tui/src/components/ChatBottomDock.tsx');
 
         expect(upperSource).toContain('flexGrow={1} minHeight={0}');
         expect(upperSource).toContain('<WelcomeScreen');
         expect(upperSource).toContain('viewportColumns={dimensions().width}');
         expect(upperSource).toContain('availableRows={availableRows()}');
         expect(upperSource).toContain('props.transcript');
-        expect(upperSource).toContain('<AgentSpinner');
+        expect(upperSource).not.toContain('<AgentSpinner');
         expect(upperSource).toContain('<Toast');
         expect(upperSource).toContain('<AbgMinimap');
         expect(upperSource).not.toContain('<>');
+        expect(dockSource).toContain('<AgentSpinner');
+        expect(dockSource).toContain('agentStatusText');
+        expect(dockSource.indexOf('<AgentSpinner')).toBeLessThan(dockSource.indexOf('<TopStatusBar'));
+        expect(dockSource.indexOf('<TopStatusBar')).toBeLessThan(dockSource.indexOf('<ChatInputArea'));
+        expect(dockSource.indexOf('<ChatInputArea')).toBeLessThan(dockSource.indexOf('<BottomStatusBar'));
     });
 
     it('threads the terminal viewport into ABG overlay and minimap renderers', () => {

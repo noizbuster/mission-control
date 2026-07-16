@@ -143,7 +143,6 @@ function AppMain(props: AppProps): JSX.Element {
         promptRepaintKey,
     });
 
-    const showAgentIndicator = () => !overlayActive();
     const showAbgMinimap = () =>
         snapshot().abgMinimapVisible && !overlayActive() && abgOverlayController !== undefined;
     const isFullscreenOverlay = () => {
@@ -187,9 +186,6 @@ function AppMain(props: AppProps): JSX.Element {
                                     toolOutputExpanded={snapshot().toolOutputExpanded}
                                 />
                             }
-                            showAgentIndicator={showAgentIndicator()}
-                            agentStatusText={snapshot().agentStatusText}
-                            generating={snapshot().generating}
                             showAbgMinimap={showAbgMinimap()}
                             abgOverlayController={abgOverlayController}
                         />

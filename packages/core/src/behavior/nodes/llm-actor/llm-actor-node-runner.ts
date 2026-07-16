@@ -1,40 +1,32 @@
+// allow: SIZE_OK -- single LLMActor turn state machine: tool bridge + pure generate_object
+// gates + hybrid free-text outputKey + budget ledger must stay in one generator.
 /**
- * LLMActor as an ABG node runner (`AbgNodeRunner`).
- *
- * This is the bridge between the graph and the Phase-0 Vercel-AI-SDK keystone. The node:
- *   1. reads the running conversation from the Blackboard (`getMessages`);
- *   2. builds the AI-SDK tool set from the ToolRegistry via `abg-tool-bridge` (so every
- *      tool crosses the §5.2 policy-await seam — the SDK owns dispatch, ABG wraps it);
- *   3. runs exactly ONE `streamText` step — `runLlmActor` pins `stopWhen: stepCountIs(1)`,
- *      so each node run = one model call + one tool batch (the SDK never loops on its own);
- *   4. appends the SDK's response messages (assistant turn + executed tool results) back
- *      onto the Blackboard, and sets `llm.loop_active`.
- *
- * The graph re-enters this node for the next step via a rule-gated self-edge on
- * `blackboard.value.equals { key:'llm.loop_active', value:true }`. So the GRAPH owns the
- * loop — every tool turn is a graph transition — never the SDK (ABG §10.3).
- *
- * Resolves the "runLlmActor not yet AbgNodeRunner-shaped" part of deferred review #10:
- * the LLMActor is now graph-driven with an observable signal stream; the authoritative
- * 3-state per-action policy decision lives at node altitude in `PolicyGateNode`,
- * complementing the bridge's synchronous SDK-contract gate.
+ * LLMActor as an ABG node runner: one streamText step, tool bridge, structured output
+ * (OpenCode forced generate_object on pure gates), blackboard loop_active ownership.
  */
 import type { AbgNodeSpec, AbgSignal } from '@mission-control/protocol';
 import { packContext } from '../../../context/context-packer';
 import { assembleSystemPrompt, type SystemPromptSkill } from '../../../context/system-prompt';
 import { createAbgEmitSignal } from '../../abg-emit';
 import type { AbgNodeRunContext, AbgNodeRunner } from '../../node-registry';
-import { type ParseStructuredOutputResult, parseStructuredOutput } from '../../structured-blackboard';
+import type { ToolSet } from 'ai';
 import { bridgeAdvertisementsToAiSdk, createAbgToolSettlementLedger } from './abg-tool-bridge';
 import { type LlmActorTurnResult, runLlmActor } from './llm-actor-node';
 import {
     applyEnumConstraint,
     filterByCapabilities,
-    readOutputShape,
     readPriorSummary,
     readStringConfig,
 } from './llm-actor-node-helpers';
+import { extractProposedToolName } from './llm-actor-settlements';
 import { discoverPromptSkills } from './llm-actor-skill-cache';
+import {
+    appendStructuredOutputSystem,
+    createPureStructuredGateTools,
+    type GenerateObjectCapture,
+    isGenerateObjectToolName,
+    resolveStructuredOutputFromTurn,
+} from './structured-output-tool';
 
 export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
     const nodeId = node.id;
@@ -101,7 +93,7 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
     // instructions. Without `env` the model has no workspace awareness (cwd, git, date); without
     // `resources` it never sees AGENTS.md/CLAUDE.md — both gaps make the agent answer generically
     // instead of acting on the codebase. An explicit node `systemPrompt` config still wins.
-    const system =
+    const baseSystem =
         readStringConfig(node, 'systemPrompt') ??
         assembleSystemPrompt({
             toolSnippets,
@@ -112,27 +104,30 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
                 ? { resources: context.projectInstructionResources }
                 : {}),
         });
-    // One ledger per turn: the bridge records each tool settlement; the stream-part adapter
-    // reads it so the `tool.completed`/`tool.failed` emits carry the true status/output/error
-    // (coding-step replay parity with the flat path). Fresh per turn — no stale entries leak.
+    const outputKeyConfig = readStringConfig(node, 'outputKey');
+    const pureStructuredGate = outputKeyConfig !== undefined && suppressTools;
+    const system = appendStructuredOutputSystem(baseSystem, node, {
+        pureStructuredGate,
+        outputKey: outputKeyConfig,
+    });
     const settlementLedger = createAbgToolSettlementLedger();
-    const tools =
+    let generateObjectCapture: GenerateObjectCapture | undefined;
+    const workspaceTools: ToolSet | undefined =
         suppressTools || context.toolRegistry === undefined
             ? undefined
             : bridgeAdvertisementsToAiSdk(context.toolRegistry, advertisements, {
                   settlementLedger,
-                  // Forward the tool's own events (file.diff.applied, ...) into the graph stream so
-                  // the graph surfaces the same rich tool events the flat loop's settleToolCalls does.
                   ...(context.emitEvent !== undefined ? { onToolEvent: context.emitEvent } : {}),
-                  // Interactive path: serialize a tool BATCH so the approval broker sees one approval
-                  // at a time (non-interactive omits this → parallel batch execution).
                   ...(context.serializeToolExecution === true ? { serializeToolExecution: true } : {}),
                   ...(context.controlEpoch !== undefined ? { controlEpoch: context.controlEpoch } : {}),
               });
-
-    // Keep the model's input BOUNDED across a long run: compact the older conversation into a
-    // structured summary when it exceeds the budget, preserving the recent tail verbatim. The
-    // full history stays on the Blackboard (the ledger); only the model-facing view is packed.
+    const pureGateTools = pureStructuredGate
+        ? createPureStructuredGateTools(node, (capture) => {
+              generateObjectCapture = capture;
+          })
+        : undefined;
+    const tools: ToolSet | undefined = pureGateTools?.tools ?? workspaceTools;
+    const toolChoice = pureGateTools?.toolChoice;
     const priorSummary = readPriorSummary(blackboard);
     const packed = packContext({
         messages,
@@ -154,18 +149,23 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
         });
     }
 
+    const modelMessages = [...packed.messages];
+
     let turnResult: LlmActorTurnResult | undefined;
-    let proposedToolCalls = 0;
+    let proposedWorkspaceToolCalls = 0;
     for await (const signal of runLlmActor({
         graphId: context.graphId,
         nodeId,
         model: context.sdkModel,
         system,
-        messages: [...packed.messages],
+        messages: modelMessages,
         ...(tools !== undefined ? { tools } : {}),
+        ...(toolChoice !== undefined ? { toolChoice } : {}),
         ...(context.abortSignal !== undefined ? { signal: context.abortSignal } : {}),
         now: context.now,
-        ...(context.toolRegistry !== undefined ? { settlementLedger } : {}),
+        ...(context.toolRegistry !== undefined || pureStructuredGate
+            ? { settlementLedger }
+            : {}),
         ...(context.haltOnFailedToolSettlement === true ? { haltOnFailedToolSettlement: true } : {}),
         ...(context.observabilityRedactor !== undefined
             ? { observabilityRedactor: context.observabilityRedactor }
@@ -175,29 +175,32 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
         },
     })) {
         if (signal.type === 'emit' && signal.event.type === 'llm.tool_call.proposed') {
-            proposedToolCalls += 1;
+            const toolName = extractProposedToolName(signal.event.payload);
+            if (toolName === undefined || !isGenerateObjectToolName(toolName)) {
+                proposedWorkspaceToolCalls += 1;
+            }
         }
         yield signal;
     }
 
     // loop_active is ALWAYS written so a failed/aborted turn after a tool step CLEARS it
     // (otherwise the rule-gated self-edge would spin re-entering until maxNodeRuns). It is
-    // derived from THIS turn's tool-call proposals — what the model decided this step — not
-    // from response.messages roles, so it is robust to how the SDK shapes response.messages.
-    let loopActive = turnResult !== undefined && proposedToolCalls > 0;
+    // derived from THIS turn's workspace tool-call proposals — generate_object is not a loop.
+    let loopActive = turnResult !== undefined && proposedWorkspaceToolCalls > 0;
     blackboard.set('llm.loop_active', loopActive);
     if (turnResult !== undefined) {
         blackboard.appendMessages(turnResult.responseMessages);
         const outputKey = readStringConfig(node, 'outputKey');
         if (outputKey !== undefined) {
-            // Empty text and prose are not completion signals for a declared outputKey.
-            // Tool-only turns keep the loop active so the graph can re-enter for another turn.
-            const parsed: ParseStructuredOutputResult =
-                turnResult.text.trim().length > 0
-                    ? parseStructuredOutput(turnResult.text, readOutputShape(node))
-                    : { ok: false, error: 'empty structured output' };
-            const constrained = applyEnumConstraint(node, parsed);
-            const outputResult = constrained;
+            const outputResult = applyEnumConstraint(
+                node,
+                resolveStructuredOutputFromTurn({
+                    node,
+                    pureStructuredGate,
+                    generateObjectCapture,
+                    turnText: turnResult.text,
+                }),
+            );
             if (outputResult.ok) {
                 blackboard.set(outputKey, outputResult.value);
                 yield createAbgEmitSignal({

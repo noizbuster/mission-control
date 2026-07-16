@@ -322,6 +322,13 @@ describe('default workflow parity — explicit-implementation creates todos + de
         const prompt = configString(node, 'systemPrompt') ?? '';
         expect(/disciplined|transitional|legacy|greenfield/i.test(prompt)).toBe(true);
         expect(configString(node, 'outputKey')).toBe('explore.maturity');
+        expect(configString(node, 'outputShape')).toBe('string');
+        expect(configValue(node, 'outputEnum')).toEqual([
+            'disciplined',
+            'transitional',
+            'legacy',
+            'greenfield',
+        ]);
     });
 });
 

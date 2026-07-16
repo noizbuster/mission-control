@@ -62,7 +62,16 @@ function protocolErrorFromTransportError(
     if (error.status === 401 || error.status === 403) {
         return { code: 'provider_auth_failed', message, retryable: false };
     }
-    if (error.status === 429) {
+    if (
+        error.status === 429
+        || error.status === 502
+        || error.status === 503
+        || error.status === 504
+        || error.status === 529
+        || (error.status !== undefined && error.status >= 500 && error.status < 600)
+        || message.toLowerCase().includes('overloaded')
+        || message.toLowerCase().includes('try again later')
+    ) {
         return { code: 'provider_rate_limited', message, retryable: true };
     }
     if (error.code === 'context_length_exceeded' || message.includes('context_length_exceeded')) {

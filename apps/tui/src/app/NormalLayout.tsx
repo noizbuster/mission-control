@@ -29,7 +29,6 @@ export type NormalLayoutProps = {
     readonly welcomeData: WelcomeData | undefined;
     readonly dockPolicy: BottomDockPolicy;
     readonly transcript: JSX.Element;
-    readonly showAgentIndicator: boolean;
     readonly showAbgMinimap: boolean;
     readonly abgOverlayController: AbgOverlayController | undefined;
 };
@@ -44,9 +43,6 @@ export function NormalLayout(props: NormalLayoutProps): JSX.Element {
                     welcomeData={props.welcomeData}
                     statusBarProps={props.statusBarProps}
                     transcript={props.transcript}
-                    showAgentIndicator={props.showAgentIndicator}
-                    agentStatusText={props.snap.agentStatusText}
-                    generating={props.snap.generating}
                     showAbgMinimap={props.showAbgMinimap}
                     abgOverlayController={props.abgOverlayController}
                 />

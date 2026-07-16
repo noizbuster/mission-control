@@ -401,6 +401,95 @@ describe('runLlmActorNode — outputKey structured-output persistence', () => {
         expect(failure).toMatchObject({ type: 'failure', error: { code: 'invalid_structured_output' } });
     });
 
+    it('forces generate_object toolChoice on pure outputKey gates (OpenCode path)', async () => {
+        const blackboard = seedBlackboard();
+        const model = modelReturning('true');
+        const context: AbgNodeRunContext = {
+            graphId: 'g_force_tool',
+            now: () => NOW,
+            sdkModel: model,
+            blackboard,
+        };
+        const node = {
+            id: 'guard',
+            kind: 'llm',
+            config: { outputKey: 'guard.cleared', outputShape: 'boolean' },
+        } as const;
+
+        await collectSignals(runLlmActorNode(node, context));
+
+        expect(model.doStreamCalls.length).toBe(1);
+        const call = model.doStreamCalls[0] as { toolChoice?: unknown; prompt?: readonly unknown[] };
+        expect(call.toolChoice).toEqual({ type: 'tool', toolName: 'generate_object' });
+        const system = capturedSystemText(model.doStreamCalls);
+        expect(system).toContain('STRUCTURED OUTPUT TOOL CONTRACT');
+        expect(system).toContain('generate_object');
+        expect(blackboard.get('guard.cleared')).toBe(true);
+        expect(blackboard.get('llm.loop_active')).toBe(false);
+    });
+
+    it('persists generate_object tool capture as the structured value', async () => {
+        const blackboard = seedBlackboard();
+        const chunks: LanguageModelV3StreamPart[] = [
+            { type: 'stream-start', warnings: [] },
+            { type: 'tool-input-start', id: 'call_go', toolName: 'generate_object' },
+            {
+                type: 'tool-input-delta',
+                id: 'call_go',
+                delta: JSON.stringify({ value: true }),
+            },
+            { type: 'tool-input-end', id: 'call_go' },
+            {
+                type: 'tool-call',
+                toolCallId: 'call_go',
+                toolName: 'generate_object',
+                input: JSON.stringify({ value: true }),
+            },
+            { type: 'finish', finishReason: { unified: 'tool-calls', raw: undefined }, usage: buildUsage() },
+        ];
+        const model = new MockLanguageModelV3({
+            provider: 'test',
+            modelId: 'mock-generate-object',
+            doStream: async () => ({ stream: convertArrayToReadableStream(chunks) }),
+        });
+        const context: AbgNodeRunContext = {
+            graphId: 'g_go_capture',
+            now: () => NOW,
+            sdkModel: model,
+            blackboard,
+        };
+        const node = {
+            id: 'guard',
+            kind: 'llm',
+            config: { outputKey: 'guard.cleared', outputShape: 'boolean' },
+        } as const;
+
+        await collectSignals(runLlmActorNode(node, context));
+
+        expect(blackboard.get('guard.cleared')).toBe(true);
+        expect(blackboard.get('llm.loop_active')).toBe(false);
+    });
+
+    it('fails closed when pure gate emits prose without generate_object', async () => {
+        const blackboard = seedBlackboard();
+        const context: AbgNodeRunContext = {
+            graphId: 'g_go_prose',
+            now: () => NOW,
+            sdkModel: modelReturning('Let me explore the project structure next.'),
+            blackboard,
+        };
+        const node = {
+            id: 'guard',
+            kind: 'llm',
+            config: { outputKey: 'guard.cleared', outputShape: 'boolean' },
+        } as const;
+
+        const signals = await collectSignals(runLlmActorNode(node, context));
+
+        expect(blackboard.has('guard.cleared')).toBe(false);
+        expect(signals.some((signal) => signal.type === 'failure')).toBe(true);
+    });
+
     it('fails closed when outputShape does not match the parsed value', async () => {
         const blackboard = seedBlackboard();
         const context: AbgNodeRunContext = {

@@ -36,7 +36,10 @@ export function protocolErrorFromOpenAICompatibleError(
     if (code === 'context_length_exceeded') {
         return { code: 'provider_context_overflow', message, retryable: false };
     }
-    if (code === 'rate_limit_exceeded') {
+    if (code === 'rate_limit_exceeded' || code === 'overloaded_error' || code === 'overloaded' || code === 'server_error') {
+        return { code: 'provider_rate_limited', message, retryable: true };
+    }
+    if (isTransientOverloadMessage(message)) {
         return { code: 'provider_rate_limited', message, retryable: true };
     }
     if (code === 'authentication_error' || code === 'permission_error' || code === 'invalid_api_key') {
@@ -60,13 +63,29 @@ function protocolErrorFromTransportError(
     if (error.status === 401 || error.status === 403) {
         return { code: 'provider_auth_failed', message, retryable: false };
     }
-    if (error.status === 429) {
+    if (error.status === 429 || isTransientHttpStatus(error.status) || isTransientOverloadMessage(message)) {
         return { code: 'provider_rate_limited', message, retryable: true };
     }
     if (error.code === 'context_length_exceeded' || message.includes('context_length_exceeded')) {
         return { code: 'provider_context_overflow', message, retryable: false };
     }
     return { code: 'unknown', message, retryable: false };
+}
+
+function isTransientHttpStatus(status: number | undefined): boolean {
+    return status === 502 || status === 503 || status === 504 || status === 529
+        || (status !== undefined && status >= 500 && status < 600);
+}
+
+function isTransientOverloadMessage(message: string): boolean {
+    const lower = message.toLowerCase();
+    return (
+        lower.includes('temporarily overloaded')
+        || lower.includes('service may be temporarily overloaded')
+        || lower.includes('overloaded')
+        || lower.includes('try again later')
+        || lower.includes('too many requests')
+    );
 }
 
 function extractReadableErrorMessage(raw: string): string {

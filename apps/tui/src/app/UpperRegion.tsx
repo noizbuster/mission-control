@@ -10,16 +10,12 @@ import { bottomDockPolicy } from '../components/chat-bottom-dock-policy';
 import type { StatusBarProps } from '../components/StatusBar';
 import { Toast } from '../components/Toast';
 import { WelcomeScreen } from '../components/WelcomeScreen';
-import { AgentSpinner } from './AgentSpinner';
 
 export type UpperRegionProps = {
     readonly showWelcome: boolean;
     readonly welcomeData: WelcomeData | undefined;
     readonly statusBarProps: StatusBarProps;
     readonly transcript: JSX.Element;
-    readonly showAgentIndicator: boolean;
-    readonly agentStatusText: string;
-    readonly generating: boolean;
     readonly showAbgMinimap: boolean;
     readonly abgOverlayController: AbgOverlayController | undefined;
 };
@@ -55,11 +51,6 @@ export function UpperRegion(props: UpperRegionProps): JSX.Element {
                     props.transcript
                 )}
             </box>
-            {props.showAgentIndicator && props.agentStatusText.length > 0 ? (
-                <AgentSpinner text={props.agentStatusText} />
-            ) : props.showAgentIndicator && props.generating ? (
-                <AgentSpinner text="Working..." />
-            ) : null}
             <Toast />
             {props.showAbgMinimap && props.abgOverlayController !== undefined ? (
                 <AbgMinimap

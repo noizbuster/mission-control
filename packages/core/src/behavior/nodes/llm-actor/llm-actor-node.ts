@@ -28,6 +28,7 @@ import type { AbgToolSettlementLedger } from './abg-tool-bridge';
 import { abgSignalsFromStreamPart, createStreamPartObservabilityState } from './ai-sdk-adapter';
 import {
     approvalBlockFailure,
+    classifyProviderStreamError,
     extractProviderErrorCode,
     extractProviderErrorRetryable,
     extractProviderRetryExhausted,
@@ -61,6 +62,7 @@ export type LlmActorRunInput = {
     readonly system: string;
     readonly messages: NonNullable<StreamTextParameters['messages']>;
     readonly tools?: ToolSet;
+    readonly toolChoice?: NonNullable<StreamTextParameters['toolChoice']>;
     readonly signal?: AbortSignal;
     readonly now: () => string;
     readonly settlementLedger?: AbgToolSettlementLedger;
@@ -98,6 +100,7 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
         stopWhen: stepCountIs(1),
         onError: () => undefined,
         ...(input.tools !== undefined ? { tools: input.tools } : {}),
+        ...(input.toolChoice !== undefined ? { toolChoice: input.toolChoice } : {}),
         ...(input.signal !== undefined ? { abortSignal: input.signal } : {}),
     });
 
@@ -129,24 +132,23 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
         // redacts provider error messages at the provider-event layer) so a provider failure
         // carrying a secret does not leak into the `llm.error` emit (rendered + persisted).
         const message = observabilityRedactor.redactText(errorToString(error));
-        const errorCode = extractProviderErrorCode(error);
-        const retryable = extractProviderErrorRetryable(error);
+        const classified = classifyProviderStreamError(error);
+        const errorCode = classified?.code ?? extractProviderErrorCode(error);
+        const retryable = classified?.retryable ?? extractProviderErrorRetryable(error);
         const retryExhausted = extractProviderRetryExhausted(error);
         yield createAbgEmitSignal({
             graphId: input.graphId,
             nodeId,
             source: 'llm-actor',
             eventType: 'llm.error',
-            timestamp: now(),
             payload: observabilityRedactor.redactValue({
                 error: message,
                 ...(errorCode !== undefined ? { errorCode } : {}),
             }),
+            timestamp: now(),
         });
-        // Carry the structured provider error code in the failure signal so the graph runner can
-        // surface it on the result and the turn-runner mapping can distinguish an abort
-        // (`provider_aborted`) from a hard failure the way the flat run coordinator does. The signal
-        // field is `error: unknown`, so a structured object is permitted without a protocol change.
+        // Structured provider failures carry code + retryable so the coordinator can retry
+        // transient overload instead of treating missing retryable as terminal.
         yield {
             type: 'failure',
             nodeId,
@@ -157,7 +159,7 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
                           message,
                           code: errorCode,
                           providerError: true,
-                          ...(retryable !== undefined ? { retryable } : {}),
+                          retryable: retryable ?? false,
                           ...(retryExhausted ? { retryExhausted: true } : {}),
                       }
                     : message,
