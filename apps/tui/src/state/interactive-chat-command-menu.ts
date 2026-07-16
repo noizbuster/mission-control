@@ -234,11 +234,23 @@ export function isWorkflowCommandMenuOpen(line: string): boolean {
     return readCommandQuery(line, '#') !== undefined;
 }
 
+export function isSkillCommandMenuOpen(line: string): boolean {
+    return readCommandQuery(line, '$') !== undefined;
+}
+
 export function workflowCommandChoices(workflows: readonly string[]): readonly SlashCommandMenuChoice[] {
     return workflows.map((name) => ({
         id: `#${name}`,
         insertText: `#${name} `,
         description: `Run the ${name} workflow`,
+    }));
+}
+
+export function skillCommandChoices(skills: readonly string[]): readonly SlashCommandMenuChoice[] {
+    return skills.map((name) => ({
+        id: `$${name}`,
+        insertText: `$${name} `,
+        description: `Load the ${name} skill`,
     }));
 }
 
@@ -285,6 +297,15 @@ export function createWorkflowCommandMenuView(
     return createCommandMenuView(line, state, maxVisibleChoices, '#', workflowCommandChoices(workflows));
 }
 
+export function createSkillCommandMenuView(
+    line: string,
+    state: SlashCommandMenuState,
+    maxVisibleChoices: number,
+    skills: readonly string[],
+): SlashCommandMenuView {
+    return createCommandMenuView(line, state, maxVisibleChoices, '$', skillCommandChoices(skills));
+}
+
 function reduceCommandMenuSelection(chunk: string, view: SlashCommandMenuView): SlashCommandMenuState {
     if (!view.open || view.totalCount === 0) {
         return { selectedIndex: 0 };
@@ -319,6 +340,18 @@ export function reduceWorkflowCommandMenuSelection(
     );
 }
 
+export function reduceSkillCommandMenuSelection(
+    state: SlashCommandMenuState,
+    chunk: string,
+    line: string,
+    skills: readonly string[],
+): SlashCommandMenuState {
+    return reduceCommandMenuSelection(
+        chunk,
+        createSkillCommandMenuView(line, state, skillCommandChoices(skills).length, skills),
+    );
+}
+
 function resolveCommandMenuSubmission(line: string, view: SlashCommandMenuView): string {
     const selectedChoice = view.visibleChoices[view.selectedIndex - view.startIndex];
     if (!view.open || selectedChoice === undefined) {
@@ -342,6 +375,17 @@ export function resolveWorkflowCommandMenuSubmission(
     );
 }
 
+export function resolveSkillCommandMenuSubmission(
+    line: string,
+    state: SlashCommandMenuState,
+    skills: readonly string[],
+): string {
+    return resolveCommandMenuSubmission(
+        line,
+        createSkillCommandMenuView(line, state, skillCommandChoices(skills).length, skills),
+    );
+}
+
 /**
  * Raw (untrimmed) insertText of the workflow menu's selected choice.
  *
@@ -357,6 +401,28 @@ export function resolveWorkflowCommandMenuInsertText(
     workflows: readonly string[],
 ): string | undefined {
     const view = createWorkflowCommandMenuView(line, state, workflowCommandChoices(workflows).length, workflows);
+    if (!view.open) {
+        return undefined;
+    }
+    const selectedChoice = view.visibleChoices[view.selectedIndex - view.startIndex];
+    return selectedChoice?.insertText;
+}
+
+/**
+ * Raw (untrimmed) insertText of the skill menu's selected choice.
+ *
+ * Returns `undefined` when the menu is closed or has no selection. Unlike
+ * {@link resolveSkillCommandMenuSubmission} the trailing space is kept, so a
+ * caller can drop the value into the input buffer and let the user keep typing
+ * skill args; that trailing space also closes the menu (a token with a space is
+ * rejected by `readCommandQuery`), so the next Enter submits normally.
+ */
+export function resolveSkillCommandMenuInsertText(
+    line: string,
+    state: SlashCommandMenuState,
+    skills: readonly string[],
+): string | undefined {
+    const view = createSkillCommandMenuView(line, state, skillCommandChoices(skills).length, skills);
     if (!view.open) {
         return undefined;
     }

@@ -1,14 +1,19 @@
 import {
+    createSkillCommandMenuView,
     createSlashCommandMenuState,
     createSlashCommandMenuView,
     createWorkflowCommandMenuView,
+    isSkillCommandMenuOpen,
     isSlashCommandMenuOpen,
     isWorkflowCommandMenuOpen,
+    reduceSkillCommandMenuSelection,
     reduceSlashCommandMenuSelection,
     reduceWorkflowCommandMenuSelection,
+    resolveSkillCommandMenuInsertText,
     resolveSlashCommandMenuInsertText,
     resolveSlashCommandMenuSubmission,
     resolveWorkflowCommandMenuInsertText,
+    skillCommandChoices,
     type SlashCommandMenuChoice,
     slashCommandChoices,
 } from '@mission-control/tui/state';
@@ -381,5 +386,65 @@ describe('interactive chat command menu', () => {
         const ids = view.visibleChoices.map((choice) => choice.id);
 
         expect(ids.slice(0, 3)).toEqual(['/model', '/models', '/model pick']);
+    });
+
+    it('opens the skill menu on a bare $ prefix', () => {
+        const skills = ['planner', 'playwright'];
+        const state = createSlashCommandMenuState();
+        const view = createSkillCommandMenuView('$', state, 10, skills);
+
+        expect(isSkillCommandMenuOpen('$')).toBe(true);
+        expect(view.open).toBe(true);
+        expect(view.query).toBe('');
+        expect(view.visibleChoices.map((choice) => choice.id)).toEqual(['$planner', '$playwright']);
+        expect(skillCommandChoices(skills)).toEqual([
+            {
+                id: '$planner',
+                insertText: '$planner ',
+                description: 'Load the planner skill',
+            },
+            {
+                id: '$playwright',
+                insertText: '$playwright ',
+                description: 'Load the playwright skill',
+            },
+        ]);
+    });
+
+    it('filters $pl so planner ranks above playwright', () => {
+        const skills = ['planner', 'playwright'];
+        const view = createSkillCommandMenuView('$pl', createSlashCommandMenuState(), 10, skills);
+
+        expect(view.open).toBe(true);
+        expect(view.query).toBe('pl');
+        expect(view.visibleChoices.map((choice) => choice.id)).toEqual(['$planner', '$playwright']);
+        expect(view.visibleChoices[0]?.id).toBe('$planner');
+    });
+
+    it('shows an empty skill menu for unmatched queries without rewriting submission', () => {
+        const skills = ['planner', 'playwright'];
+        const state = createSlashCommandMenuState();
+        const view = createSkillCommandMenuView('$zzz', state, 10, skills);
+
+        expect(view.open).toBe(true);
+        expect(view.empty).toBe(true);
+        expect(view.visibleChoices).toEqual([]);
+    });
+
+    it('returns the untrimmed skill insertText (with trailing space) for the selected choice', () => {
+        const skills = ['planner', 'playwright'];
+        const initial = createSlashCommandMenuState();
+
+        expect(resolveSkillCommandMenuInsertText('$', initial, skills)).toBe('$planner ');
+
+        const down = reduceSkillCommandMenuSelection(initial, '\u001b[B', '$', skills);
+        expect(resolveSkillCommandMenuInsertText('$', down, skills)).toBe('$playwright ');
+    });
+
+    it('closes the skill menu once the token contains a trailing space', () => {
+        expect(isSkillCommandMenuOpen('$planner')).toBe(true);
+        expect(isSkillCommandMenuOpen('$planner ')).toBe(false);
+        expect(isSkillCommandMenuOpen('plain')).toBe(false);
+        expect(resolveSkillCommandMenuInsertText('$planner ', createSlashCommandMenuState(), ['planner'])).toBeUndefined();
     });
 });
