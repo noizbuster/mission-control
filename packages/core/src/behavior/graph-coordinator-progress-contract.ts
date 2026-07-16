@@ -11,6 +11,7 @@ import { CANONICAL_FAILURE_CODES } from './failure-taxonomy';
 import { type CoordinatorState, hasNode, nodeModel } from './graph-coordinator-helpers';
 import { failureCodeFromSignal } from './graph-coordinator-node-signals';
 import type { AbgGraphRunnerInput, AbgGraphRunResult, AbgGraphTerminalError } from './graph-runner';
+import { readOutputEnum, readOutputKey } from './nodes/llm-actor/llm-actor-node-helpers';
 import { classifyRoutingProgress, isRoutingDeadEnd } from './routing-completeness';
 import { projectAbgSignalToEvent } from './signals';
 
@@ -47,15 +48,13 @@ export function setStructuredOutputCorrection(
     errorMessage: string | undefined,
 ): void {
     const allowedLabels = readOutputEnum(node);
-    state.correctionByNodeId.set(
-        node.id,
-        buildCorrectionPayload({
-            code: CANONICAL_FAILURE_CODES.INVALID_STRUCTURED_OUTPUT,
-            ...(allowedLabels !== undefined ? { allowedLabels } : {}),
-            booleanShape: isBooleanOutputShape(node),
-            ...(errorMessage !== undefined ? { errorMessage } : {}),
-        }),
-    );
+    const payload = buildCorrectionPayload({
+        code: CANONICAL_FAILURE_CODES.INVALID_STRUCTURED_OUTPUT,
+        ...(allowedLabels !== undefined ? { allowedLabels } : {}),
+        booleanShape: isBooleanOutputShape(node),
+        ...(errorMessage !== undefined ? { errorMessage } : {}),
+    });
+    state.correctionByNodeId.set(node.id, state.observabilityRedactor.redactText(payload));
 }
 
 export function handlePostSuccessRouting(input: PostSuccessRoutingInput): ProgressContractOutcome {
@@ -138,16 +137,14 @@ export function admitRoutingDeadEnd(input: {
     const observedValue =
         outputKey !== undefined && state.blackboard.has(outputKey) ? state.blackboard.get(outputKey) : undefined;
     const allowedLabels = readOutputEnum(node);
-    state.correctionByNodeId.set(
-        node.id,
-        buildCorrectionPayload({
-            code: CANONICAL_FAILURE_CODES.ROUTING_DEAD_END,
-            ...(allowedLabels !== undefined ? { allowedLabels } : {}),
-            booleanShape: isBooleanOutputShape(node),
-            errorMessage: 'no outbound edge matched',
-            ...(observedValue !== undefined ? { observedValue } : {}),
-        }),
-    );
+    const payload = buildCorrectionPayload({
+        code: CANONICAL_FAILURE_CODES.ROUTING_DEAD_END,
+        ...(allowedLabels !== undefined ? { allowedLabels } : {}),
+        booleanShape: isBooleanOutputShape(node),
+        errorMessage: 'no outbound edge matched',
+        ...(observedValue !== undefined ? { observedValue } : {}),
+    });
+    state.correctionByNodeId.set(node.id, state.observabilityRedactor.redactText(payload));
     if (outputKey !== undefined) {
         state.blackboard.delete(outputKey);
     }
@@ -200,7 +197,19 @@ export function handleStructuredFailureExhaust(input: {
         input.state.queuedNodeIds.push(escalation);
         return { kind: 'continue' };
     }
-    return undefined;
+    clearAllCorrections(input.state);
+    return {
+        kind: 'fail',
+        result: input.failGraph(
+            'node_retry_exhausted',
+            `ABG node retry limit exhausted: ${input.node.id}`,
+            {
+                code: CANONICAL_FAILURE_CODES.INVALID_STRUCTURED_OUTPUT,
+                message: `invalid structured output exhausted retries: ${input.node.id}`,
+                retryable: false,
+            },
+        ),
+    };
 }
 
 export function resolveEscalationTarget(node: AbgNodeSpec, graph: AuthorableAbgGraph): string | undefined {
@@ -246,20 +255,6 @@ function emitRoutingDeadEndEvent(input: {
         observabilityRedactor: input.state.observabilityRedactor,
     });
     input.state.events.push(event);
-}
-
-function readOutputKey(node: AbgNodeSpec): string | undefined {
-    const value = node.config?.['outputKey'];
-    return typeof value === 'string' && value.length > 0 ? value : undefined;
-}
-
-function readOutputEnum(node: AbgNodeSpec): readonly string[] | undefined {
-    const raw = node.config?.['outputEnum'];
-    if (!Array.isArray(raw)) {
-        return undefined;
-    }
-    const labels = raw.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0);
-    return labels.length > 0 ? labels : undefined;
 }
 
 function isBooleanOutputShape(node: AbgNodeSpec): boolean {

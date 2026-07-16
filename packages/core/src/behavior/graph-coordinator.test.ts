@@ -1098,6 +1098,69 @@ describe('bounded ABG graph coordinator', () => {
         expect(attemptsFor(result.events, 'gate')).toEqual([1, 2]);
     });
 
+    it('escalates to defaults.escalationTarget after dead-end budget (not silent complete)', async () => {
+        // Given: pure gate with conditional-only equals edges, permanent poison, graph defaults.escalationTarget
+        // When: dead-end re-admits until maxAttempts then escalates
+        // Then: present sink runs; graph does not silent-complete without recovery
+        const registry = createAbgNodeRegistry();
+        registry.register(
+            'always-poison',
+            async function* run(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
+                yield { type: 'started', graphId: context.graphId, nodeId: node.id };
+                context.blackboard?.set('ambiguity.classification', { blob: true });
+                yield { type: 'success', graphId: context.graphId, nodeId: node.id };
+            },
+        );
+        registry.register(
+            'present-sink',
+            async function* run(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
+                yield { type: 'started', graphId: context.graphId, nodeId: node.id };
+                yield { type: 'success', graphId: context.graphId, nodeId: node.id };
+            },
+        );
+
+        const result = await runAbgGraph({
+            ...baseInput,
+            registry,
+            graph: {
+                id: 'dead-end-escalation-target',
+                entryNodeId: 'gate',
+                defaults: { retryLimit: 1, escalationTarget: 'present' },
+                nodes: [
+                    {
+                        id: 'gate',
+                        kind: 'action',
+                        implementation: 'always-poison',
+                        capabilities: [],
+                        config: { outputKey: 'ambiguity.classification', outputEnum: ['clear'] },
+                    },
+                    { id: 'next', kind: 'action' },
+                    { id: 'present', kind: 'action', implementation: 'present-sink' },
+                ],
+                edges: [{ source: 'gate', target: 'next', condition: 'is-clear' }],
+                rules: [
+                    {
+                        id: 'is-clear',
+                        when: {
+                            kind: 'blackboard.value.equals',
+                            key: 'ambiguity.classification',
+                            value: 'clear',
+                        },
+                    },
+                ],
+                policies: [],
+            },
+        });
+
+        expect(result.events.some((event) => event.abg?.nodeId === 'present')).toBe(true);
+        expect(result.events.some((event) => event.abg?.nodeId === 'next')).toBe(false);
+        expect(result.terminalError?.code).not.toBe('routing_dead_end');
+        expect(
+            result.status === 'completed' ||
+                result.events.some((event) => event.abg?.nodeId === 'present' && event.type === 'node.completed'),
+        ).toBe(true);
+    });
+
     it('progresses when a conditional equals edge matches after success', async () => {
         // Given: same gate shape as P1 but value is a valid enum label
         const registry = createDefaultAbgNodeRegistry();

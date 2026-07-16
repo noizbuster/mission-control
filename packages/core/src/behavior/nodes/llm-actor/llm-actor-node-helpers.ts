@@ -68,6 +68,10 @@ export function buildStructuredOutputContract(node: AbgNodeSpec, outputKey: stri
     );
 }
 
+export function readOutputKey(node: AbgNodeSpec): string | undefined {
+    return readStringConfig(node, 'outputKey');
+}
+
 export function readOutputEnum(node: AbgNodeSpec): readonly string[] | undefined {
     const { outputEnum: value } = node.config ?? {};
     if (!Array.isArray(value)) return undefined;

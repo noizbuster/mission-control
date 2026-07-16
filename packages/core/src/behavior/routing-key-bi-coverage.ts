@@ -10,6 +10,7 @@
  * not admit free-form model text through `parseStructuredOutput`.
  */
 import type { AbgEdgeSpec, AbgGraphSpec, AbgNodeSpec, AbgRuleSpec } from '@mission-control/protocol';
+import { readOutputEnum, readOutputKey } from './nodes/llm-actor/llm-actor-node-helpers';
 import { AbgGraphValidationError } from './rule-compiler';
 
 type EqualsEdgeUse = {
@@ -200,20 +201,6 @@ function hasUnconditionalOrSelectDefault(
         return true;
     }
     return false;
-}
-
-function readOutputKey(node: AbgNodeSpec): string | undefined {
-    const value = node.config?.['outputKey'];
-    return typeof value === 'string' && value.length > 0 ? value : undefined;
-}
-
-function readOutputEnum(node: AbgNodeSpec): readonly string[] | undefined {
-    const raw = node.config?.['outputEnum'];
-    if (!Array.isArray(raw)) {
-        return undefined;
-    }
-    const labels = raw.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0);
-    return labels.length > 0 ? labels : undefined;
 }
 
 function hasOutputEnum(node: AbgNodeSpec): boolean {

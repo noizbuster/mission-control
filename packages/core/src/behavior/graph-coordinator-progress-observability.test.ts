@@ -182,6 +182,86 @@ describe('progress-contract observability (todo 9)', () => {
         expect(structuredFailures[0]?.abg?.error?.message).toContain('output outside enum');
     });
 
+    it('redacts secrets from structured-output correction payloads on re-queue', async () => {
+        // Given: invalid_structured_output with secret in error message + observability redactor
+        // When: node re-queues under budget
+        // Then: retryCorrection does not contain the raw secret
+        const secret = ['sk', 'live', 'corrsecret456'].join('-');
+        const registry = createAbgNodeRegistry();
+        const corrections: Array<string | undefined> = [];
+        let runs = 0;
+        registry.register(
+            'structured-secret-then-ok',
+            async function* run(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
+                runs += 1;
+                corrections.push(context.retryCorrection);
+                yield { type: 'started', graphId: context.graphId, nodeId: node.id };
+                if (runs === 1) {
+                    yield {
+                        type: 'failure',
+                        graphId: context.graphId,
+                        nodeId: node.id,
+                        error: {
+                            code: CANONICAL_FAILURE_CODES.INVALID_STRUCTURED_OUTPUT,
+                            message: `output outside enum; leaked ${secret}`,
+                        },
+                    };
+                    return;
+                }
+                context.blackboard?.set('ambiguity.classification', 'clear');
+                yield { type: 'success', graphId: context.graphId, nodeId: node.id };
+            },
+        );
+        registry.register(
+            'sink',
+            async function* run(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
+                yield { type: 'started', graphId: context.graphId, nodeId: node.id };
+                yield { type: 'success', graphId: context.graphId, nodeId: node.id };
+            },
+        );
+
+        const result = await runAbgGraph({
+            ...baseInput,
+            registry,
+            observabilityRedactor: createObservabilityRedactor({ secrets: [secret] }),
+            graph: {
+                id: 'obs-correction-redaction',
+                entryNodeId: 'gate',
+                defaults: { retryLimit: 2 },
+                nodes: [
+                    {
+                        id: 'gate',
+                        kind: 'action',
+                        implementation: 'structured-secret-then-ok',
+                        capabilities: [],
+                        config: {
+                            outputKey: 'ambiguity.classification',
+                            outputEnum: ['clear', 'unclear'],
+                        },
+                    },
+                    { id: 'clear-path', kind: 'action', implementation: 'sink' },
+                ],
+                edges: [{ source: 'gate', target: 'clear-path', condition: 'is-clear' }],
+                rules: [
+                    {
+                        id: 'is-clear',
+                        when: {
+                            kind: 'blackboard.value.equals',
+                            key: 'ambiguity.classification',
+                            value: 'clear',
+                        },
+                    },
+                ],
+                policies: [],
+            },
+        });
+
+        expect(result.status).toBe('completed');
+        expect(corrections[0]).toBeUndefined();
+        expect(corrections[1]).toEqual(expect.stringContaining('invalid_structured_output'));
+        expect(corrections[1]).not.toContain(secret);
+    });
+
     it('keeps routing.dead_end payload free of observed poison and secrets out of messages', async () => {
         // Given: secret only in poison blob (must not appear in durable emit payload)
         const secret = ['sk', 'live', 'obssecret123'].join('-');

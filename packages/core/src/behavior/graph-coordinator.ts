@@ -14,6 +14,7 @@ import {
     clearNodeCorrection,
     handlePostSuccessRouting,
     handleStructuredFailureExhaust,
+    resolveEscalationTarget,
     setStructuredOutputCorrection,
 } from './graph-coordinator-progress-contract';
 import { failureCodeFromSignal, failureMessageFromSignal } from './graph-coordinator-node-signals';
@@ -69,11 +70,11 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                 case 'completed': {
                     if (result.lastSignal?.type === 'escalate') {
                         // Escalation is a non-terminal redirect (ABG §9.6 supervision). Prefer
-                        // the escalate signal's own `target`; fall back to node config.
+                        // the escalate signal's own `target`; fall back to node/graph defaults.
                         const signalTarget = result.lastSignal.target;
                         const target =
                             (typeof signalTarget === 'string' && signalTarget.length > 0 ? signalTarget : undefined) ??
-                            readEscalationTarget(result.node);
+                            resolveEscalationTarget(result.node, graph);
                         clearNodeCorrection(state, result.node.id);
                         if (target !== undefined && hasNode(graph, target)) {
                             state.queuedNodeIds.push(target);
@@ -514,9 +515,4 @@ function forceCompleteBooleanOutputKey(node: AbgNodeSpec, state: CoordinatorStat
         return;
     }
     state.blackboard.set(outputKey, true);
-}
-
-function readEscalationTarget(node: AbgNodeSpec): string | undefined {
-    const value = node.config?.['escalationTarget'];
-    return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
