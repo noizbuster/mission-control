@@ -1,4 +1,4 @@
-import { getRuntimeModelProviderCatalog } from '@mission-control/config';
+import { getRuntimeModelProviderCatalog, isExecutableCodingProvider } from '@mission-control/config';
 import { type AgentModelLookup, discoverAgents, resolveUserConfigDir } from '@mission-control/core';
 import type { AbgNodeModelOptions, ModelProviderSelection } from '@mission-control/protocol';
 import { createModelChoices, type ModelChoice } from '@mission-control/tui/state';
@@ -13,7 +13,14 @@ export async function resolveModelProviderSelection(
     if (args.modelProviderSelection !== undefined) {
         return args.modelProviderSelection;
     }
-    return authStore.getDefaultSelection();
+    const defaultSelection = await authStore.getDefaultSelection();
+    if (defaultSelection === undefined) {
+        return undefined;
+    }
+    if (!isExecutableCodingProvider(defaultSelection.providerID)) {
+        return undefined;
+    }
+    return defaultSelection;
 }
 
 export async function listAuthenticatedModelChoices(

@@ -1,4 +1,8 @@
-import { modelProviderCatalog } from '@mission-control/config';
+import {
+    defaultModelProviderSelection,
+    isExecutableCodingProvider,
+    modelProviderCatalog,
+} from '@mission-control/config';
 import type { ModelProviderSelection, ProviderCredentialSummary } from '@mission-control/protocol';
 import type { CliArgs } from '../args';
 import { createProviderAuthStore, type ProviderAuthStore } from '../auth-store';
@@ -79,6 +83,7 @@ async function runAuthLogin(args: CliArgs, options: AuthCommandOptions): Promise
         const now = options.now ?? new Date().toISOString();
         const store = options.store ?? createProviderAuthStore();
         const authFile = await store.readAuthFile();
+        const previousDefault = authFile.default;
         const notices: string[] = [];
         if (method.type === 'oauth') {
             rejectOAuthCredentialFlags(args);
@@ -107,6 +112,13 @@ async function runAuthLogin(args: CliArgs, options: AuthCommandOptions): Promise
                 now,
             });
         }
+        const effectiveDefault = await restoreExecutableDefaultIfNeeded({
+            store,
+            loggedIn: selection,
+            previousDefault,
+            capabilityStatus: provider.capability.status,
+            notices,
+        });
         const summary = (await store.listCredentialSummaries()).find(
             (entry) => entry.providerID === selection.providerID,
         );
@@ -114,13 +126,34 @@ async function runAuthLogin(args: CliArgs, options: AuthCommandOptions): Promise
         return [
             ...notices,
             `Logged in ${selection.providerID}`,
-            `default: ${selection.providerID}/${selection.modelID}`,
+            `default: ${effectiveDefault.providerID}/${effectiveDefault.modelID}`,
             `credential: ${maskedCredential}`,
             '',
         ].join('\n');
     } finally {
         promptSession?.close();
     }
+}
+
+async function restoreExecutableDefaultIfNeeded(input: {
+    readonly store: ProviderAuthStore;
+    readonly loggedIn: ModelProviderSelection;
+    readonly previousDefault: ModelProviderSelection | undefined;
+    readonly capabilityStatus: string;
+    readonly notices: string[];
+}): Promise<ModelProviderSelection> {
+    if (isExecutableCodingProvider(input.loggedIn.providerID)) {
+        return input.loggedIn;
+    }
+    const restore =
+        input.previousDefault !== undefined && isExecutableCodingProvider(input.previousDefault.providerID)
+            ? input.previousDefault
+            : defaultModelProviderSelection;
+    await input.store.setDefaultSelection(restore);
+    input.notices.push(
+        `note: ${input.loggedIn.providerID} is ${input.capabilityStatus} and cannot run coding agent prompts; default model left as ${restore.providerID}/${restore.modelID}`,
+    );
+    return restore;
 }
 
 function createProviderPromptFallback(prompt: AuthPrompt): AuthProviderPrompt {

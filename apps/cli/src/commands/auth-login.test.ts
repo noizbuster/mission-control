@@ -39,6 +39,34 @@ describe('runAuthCommand auth login', () => {
         await rm(authFilePath, { force: true });
     });
 
+    it('saves credentials for non-executable providers without making them the coding default', async () => {
+        const authFilePath = await useTempAuthFile();
+        const store = createProviderAuthStore();
+        await runAuthCommand(parseArgs(['auth', 'login', '--provider', 'local', '--api-key', 'local_test_key']), {
+            now: '2026-06-03T09:00:00.000Z',
+            store,
+        });
+
+        const output = await runAuthCommand(
+            parseArgs(['auth', 'login', '--provider', 'perplexity', '--api-key', 'pplx_test_key']),
+            {
+                now: '2026-06-03T10:00:00.000Z',
+                store,
+            },
+        );
+
+        const parsed = ProviderAuthFileSchema.parse(JSON.parse(await readFile(authFilePath, 'utf8')));
+        expect(output).toContain('Logged in perplexity');
+        expect(output).toContain('default: local/local-echo');
+        expect(output).toContain(
+            'note: perplexity is model-discovery-only and cannot run coding agent prompts; default model left as local/local-echo',
+        );
+        expect(parsed.default).toEqual({ providerID: 'local', modelID: 'local-echo' });
+        expect(parsed.credentials['perplexity']).toBeDefined();
+        expect(output).not.toContain('pplx_test_key');
+        await rm(authFilePath, { force: true });
+    });
+
     it('rejects unknown providers before writing credentials', async () => {
         const authFilePath = await useTempAuthFile();
         const store = createProviderAuthStore();
