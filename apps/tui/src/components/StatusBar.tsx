@@ -83,7 +83,7 @@ function statusRowFillCount({
     readonly rightSegments: readonly string[];
 }): number {
     const rightLength = rightSegments.reduce((total, segment) => total + terminalDisplayWidth(segment) + 1, 0);
-    return Math.max(0, columns - terminalDisplayWidth(leftText) - 1 - rightLength);
+    return Math.max(0, columns - terminalDisplayWidth(leftText) - 1 - rightLength - 1);
 }
 
 export function buildStatusDivider(fillCount: number): string {
