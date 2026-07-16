@@ -109,6 +109,20 @@ const githubCopilotAuthMethods = [
     },
 ] as const satisfies readonly ProviderAuthMethod[];
 
+const xaiAuthMethods = [
+    {
+        id: 'oauth-device',
+        type: 'oauth',
+        label: 'xAI Grok OAuth (SuperGrok / X Premium+)',
+        flow: 'deviceCode',
+    },
+    {
+        id: 'api-key',
+        type: 'apiKey',
+        label: 'Manually enter API Key',
+    },
+] as const satisfies readonly ProviderAuthMethod[];
+
 const localProviderCapability = {
     status: 'executable',
     adapterFamily: 'local',
@@ -187,6 +201,11 @@ export async function getRuntimeModelProviderCatalog(): Promise<readonly ModelPr
     return [...scaffoldModelProviderCatalog, ...transformRawCatalog(rawCatalog, loadVariantOverrides())];
 }
 
+export function isExecutableCodingProvider(providerID: string): boolean {
+    const provider = modelProviderCatalog.find((entry) => entry.id === providerID);
+    return provider?.capability.status === 'executable' && provider.capability.adapterFamily !== undefined;
+}
+
 function transformRawCatalog(
     rawCatalog: import('./models-dev-runtime').RawModelsDevCatalog,
     overrides: VariantOverrides,
@@ -232,6 +251,8 @@ function createProviderAuthMethods(providerID: string, authLabel: string): reado
             return openAIAuthMethods;
         case 'github-copilot':
             return githubCopilotAuthMethods;
+        case 'xai':
+            return xaiAuthMethods;
         default:
             return [createApiKeyAuthMethod(authLabel)];
     }

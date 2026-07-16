@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
     cliCommandName,
     defaultModelProviderSelection,
+    isExecutableCodingProvider,
     missionControlAuthFileEnvKey,
     missionControlAuthSchemaURL,
     modelProviderCatalog,
@@ -65,6 +66,7 @@ describe('config catalog constants', () => {
     it('exposes opencode-style auth methods for OAuth-capable AI SDK providers', () => {
         const openaiProvider = modelProviderCatalog.find((provider) => provider.id === 'openai');
         const githubCopilotProvider = modelProviderCatalog.find((provider) => provider.id === 'github-copilot');
+        const xaiProvider = modelProviderCatalog.find((provider) => provider.id === 'xai');
         const anthropicProvider = modelProviderCatalog.find((provider) => provider.id === 'anthropic');
 
         expect(openaiProvider?.authMethods.map((method) => method.id)).toEqual([
@@ -73,6 +75,11 @@ describe('config catalog constants', () => {
             'api-key',
         ]);
         expect(githubCopilotProvider?.authMethods.map((method) => method.id)).toEqual(['oauth-device', 'api-key']);
+        expect(xaiProvider?.authMethods.map((method) => method.id)).toEqual(['oauth-device', 'api-key']);
+        expect(xaiProvider?.authMethods.find((method) => method.id === 'oauth-device')).toMatchObject({
+            type: 'oauth',
+            flow: 'deviceCode',
+        });
         expect(anthropicProvider?.authMethods.map((method) => method.id)).toEqual(['api-key']);
     });
 
@@ -188,6 +195,16 @@ describe('config catalog constants', () => {
         expect(gpt4oMini?.variants).toBeUndefined();
     });
 
+    it('reports executable coding providers for default-selection guards', () => {
+        expect(isExecutableCodingProvider('local')).toBe(true);
+        expect(isExecutableCodingProvider('openai')).toBe(true);
+        expect(isExecutableCodingProvider('xai')).toBe(true);
+        expect(isExecutableCodingProvider('github-copilot')).toBe(false);
+        expect(isExecutableCodingProvider('perplexity')).toBe(false);
+        expect(isExecutableCodingProvider('cloudflare-ai-gateway')).toBe(false);
+        expect(isExecutableCodingProvider('amazon-bedrock')).toBe(false);
+    });
+
     it('classifies provider execution capability explicitly', () => {
         const localProvider = modelProviderCatalog.find((provider) => provider.id === 'local');
         const openAIProvider = opencodeProviderCatalog.find((provider) => provider.id === 'openai');
@@ -197,6 +214,8 @@ describe('config catalog constants', () => {
         const groqProvider = opencodeProviderCatalog.find((provider) => provider.id === 'groq');
         const deepSeekProvider = opencodeProviderCatalog.find((provider) => provider.id === 'deepseek');
         const mistralProvider = opencodeProviderCatalog.find((provider) => provider.id === 'mistral');
+        const zaiProvider = opencodeProviderCatalog.find((provider) => provider.id === 'zai-coding-plan');
+        const xaiProvider = opencodeProviderCatalog.find((provider) => provider.id === 'xai');
         const cloudflareProvider = opencodeProviderCatalog.find((provider) => provider.id === 'cloudflare-ai-gateway');
         const githubCopilotProvider = opencodeProviderCatalog.find((provider) => provider.id === 'github-copilot');
 
@@ -216,7 +235,14 @@ describe('config catalog constants', () => {
             status: 'executable',
             adapterFamily: 'google-gemini',
         });
-        for (const provider of [openRouterProvider, groqProvider, deepSeekProvider, mistralProvider]) {
+        for (const provider of [
+            openRouterProvider,
+            groqProvider,
+            deepSeekProvider,
+            mistralProvider,
+            zaiProvider,
+            xaiProvider,
+        ]) {
             expect(provider?.capability).toEqual({
                 status: 'executable',
                 adapterFamily: 'openai-compatible',
@@ -231,9 +257,9 @@ describe('config catalog constants', () => {
         });
 
         const capabilityCounts = capabilityStatusCounts(opencodeProviderCatalog);
-        expect(capabilityCounts.executable).toBe(8);
+        expect(capabilityCounts.executable).toBe(9);
         expect(capabilityCounts['auth-only']).toBe(1);
-        expect(capabilityCounts['model-discovery-only']).toBe(137);
+        expect(capabilityCounts['model-discovery-only']).toBe(136);
         expect(capabilityCounts.unsupported).toBe(0);
         expect(opencodeProviderCatalog.every((provider) => provider.capability.status.length > 0)).toBe(true);
     });
