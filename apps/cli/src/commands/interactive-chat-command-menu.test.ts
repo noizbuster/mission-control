@@ -269,7 +269,7 @@ describe('interactive chat command menu', () => {
     });
 
     it('returns the untrimmed workflow insertText (with trailing space) for the selected choice', () => {
-        const workflows = ['default', 'planner', 'runner'];
+        const workflows = ['default', 'planner', 'executer'];
         const initial = createSlashCommandMenuState();
 
         expect(resolveWorkflowCommandMenuInsertText('#', initial, workflows)).toBe('#default ');
@@ -278,7 +278,7 @@ describe('interactive chat command menu', () => {
         expect(resolveWorkflowCommandMenuInsertText('#', down, workflows)).toBe('#planner ');
 
         const downAgain = reduceWorkflowCommandMenuSelection(down, '\u001b[B', '#', workflows);
-        expect(resolveWorkflowCommandMenuInsertText('#', downAgain, workflows)).toBe('#runner ');
+        expect(resolveWorkflowCommandMenuInsertText('#', downAgain, workflows)).toBe('#executer ');
     });
 
     it('returns undefined when the workflow menu is closed or has no selection', () => {

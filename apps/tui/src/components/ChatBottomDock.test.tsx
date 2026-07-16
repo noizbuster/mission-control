@@ -276,14 +276,14 @@ describe('selectChatBottomDockSlice', () => {
             ...store.getSnapshot(),
             inputMirror: '/',
             menuState,
-            workflowNames: ['default', 'planner', 'runner'],
+            workflowNames: ['default', 'planner', 'executer'],
             fileAutocomplete,
         };
 
         expect(selectChatBottomDockSlice(snapshot)).toMatchObject({
             inputMirror: '/',
             menuState,
-            workflowNames: ['default', 'planner', 'runner'],
+            workflowNames: ['default', 'planner', 'executer'],
             fileAutocomplete,
         });
     });

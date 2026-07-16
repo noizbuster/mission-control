@@ -106,13 +106,13 @@ describe('loadMissionPanelRows', () => {
         const omoRoot = await resolveOmoRoot(workspace);
         await createMission(
             { omoRoot, dataDir: locationForWorkspace(workspace).dataDir },
-            materializeMission(makeWorkflowSpec('runner')),
+            materializeMission(makeWorkflowSpec('executer')),
         );
 
         const rows = await loadMissionPanelRows(workspace);
 
         expect(rows).toHaveLength(1);
-        expect(rows[0]?.label).toBe('runner');
+        expect(rows[0]?.label).toBe('executer');
     });
 
     it('returns an empty array when the workspace has no .omo root', async () => {
@@ -153,7 +153,7 @@ describe('loadMissionPanelRows', () => {
         const workspace = await makeWorkspace();
         const omoRoot = await resolveOmoRoot(workspace);
         const location = { omoRoot, dataDir: locationForWorkspace(workspace).dataDir };
-        const missionWithoutRun = makeMissionRecord('mission-runner', 'runner', '2026-01-02T00:00:00.000Z');
+        const missionWithoutRun = makeMissionRecord('mission-executer', 'executer', '2026-01-02T00:00:00.000Z');
         const missionWithRun = makeMissionRecord('mission-planner', 'planner', '2026-01-01T00:00:00.000Z');
         await createMission(location, missionWithRun);
         await createMission(location, missionWithoutRun);
@@ -163,7 +163,7 @@ describe('loadMissionPanelRows', () => {
 
         expect(rows).toHaveLength(2);
         expect(rows[0]?.label).toBe('planner #1');
-        expect(rows[1]?.label).toBe('runner');
+        expect(rows[1]?.label).toBe('executer');
     });
 
     it('produces Run rows in deterministic projection order', async () => {

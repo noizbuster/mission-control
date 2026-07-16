@@ -216,7 +216,7 @@ describe('formatAgentDetails', () => {
 
     it('formats object-shaped model as providerID/modelID', () => {
         const agent: AgentDefinition = {
-            name: 'runner',
+            name: 'executer',
             description: 'Runs plans.',
             systemPrompt: '...',
             source: 'project',

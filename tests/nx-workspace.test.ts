@@ -253,7 +253,7 @@ describe('Nx workspace', () => {
             expect.arrayContaining([
                 '{workspaceRoot}/examples/abg/default.workflow.json',
                 '{workspaceRoot}/examples/abg/planner.workflow.json',
-                '{workspaceRoot}/examples/abg/runner.workflow.json',
+                '{workspaceRoot}/examples/abg/executer.workflow.json',
                 '{workspaceRoot}/examples/abg/custom-example.workflow.jsonc',
                 '{workspaceRoot}/ABG.md',
                 '{workspaceRoot}/docs/abg-reference-parity-matrix.md',

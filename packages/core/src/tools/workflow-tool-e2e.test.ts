@@ -33,7 +33,7 @@ async function buildRegistryWithWorkflowTool(): Promise<{
     readonly workflowNames: readonly string[];
 }> {
     const plannerSpec = await loadSpec(`${process.cwd()}/examples/abg/planner.workflow.json`);
-    const runnerSpec = await loadSpec(`${process.cwd()}/examples/abg/runner.workflow.json`);
+    const runnerSpec = await loadSpec(`${process.cwd()}/examples/abg/executer.workflow.json`);
     const workflowRegistry = new WorkflowRegistry([plannerSpec, runnerSpec]);
 
     const toolRegistry = new ToolRegistry();
@@ -69,7 +69,7 @@ describe('workflow tool E2E: registry discovery -> tool registration -> invocati
         expect(settlement.structuredOutput).toMatchObject({ status: 'started', workflowName: 'planner' });
     });
 
-    it('resolves a known workflow (runner) and returns started', async () => {
+    it('resolves a known workflow (executer) and returns started', async () => {
         const { toolRegistry } = await buildRegistryWithWorkflowTool();
         const ad = toolRegistry.advertise().find((advertisement) => advertisement.name === 'workflow');
 
@@ -77,10 +77,10 @@ describe('workflow tool E2E: registry discovery -> tool registration -> invocati
             toolCallId: 'tc_e2e_runner',
             toolName: 'workflow',
             advertisedVersion: ad?.version ?? '',
-            argumentsJson: JSON.stringify({ name: 'runner', prompt: 'execute the plan' }),
+            argumentsJson: JSON.stringify({ name: 'executer', prompt: 'execute the plan' }),
         });
 
-        expect(settlement.structuredOutput).toMatchObject({ status: 'started', workflowName: 'runner' });
+        expect(settlement.structuredOutput).toMatchObject({ status: 'started', workflowName: 'executer' });
     });
 
     it('returns not_found for an unknown workflow name (model-retryable, no throw)', async () => {

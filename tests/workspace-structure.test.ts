@@ -49,7 +49,7 @@ const requiredWorkflowDirectories = [
 const requiredWorkflowFiles = [
     'examples/abg/default.workflow.json',
     'examples/abg/planner.workflow.json',
-    'examples/abg/runner.workflow.json',
+    'examples/abg/executer.workflow.json',
     'examples/abg/custom-example.workflow.jsonc',
     'examples/plans/example-plan.md',
     'docs/plugin-authoring.md',

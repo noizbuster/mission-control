@@ -487,7 +487,7 @@ describe('interactive chat actions', () => {
             );
             await result.activeTurn?.done;
 
-            expect(output.getOutput()).toContain('▸ intent-gate');
+            expect(output.getOutput()).toContain('▸ intake');
             expect(output.getOutput()).toContain('Assistant: hello from default');
         });
 
@@ -496,7 +496,7 @@ describe('interactive chat actions', () => {
             const output = createOutput();
             const registry = new WorkflowRegistry([
                 createTestWorkflowSpec('planner'),
-                createTestWorkflowSpec('runner'),
+                createTestWorkflowSpec('executer'),
             ]);
 
             await runChatAction(
@@ -523,7 +523,7 @@ describe('interactive chat actions', () => {
             const output = createOutput();
             const registry = new WorkflowRegistry([
                 createTestWorkflowSpec('planner'),
-                createTestWorkflowSpec('runner'),
+                createTestWorkflowSpec('executer'),
             ]);
 
             await runChatAction(
@@ -538,7 +538,7 @@ describe('interactive chat actions', () => {
 
             const captured = output.getOutput();
             expect(captured).toContain('Unknown workflow: missing');
-            expect(captured).toContain('Available workflows: planner, runner');
+            expect(captured).toContain('Available workflows: planner, executer');
         });
 
         it('reports unavailable when no workflow registry is configured', async () => {

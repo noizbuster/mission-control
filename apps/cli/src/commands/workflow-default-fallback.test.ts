@@ -66,7 +66,7 @@ describe('workflow materialization routing: plain-prompt default fallback', () =
 
         expect(graph).toBeDefined();
         expect(graph?.id).toBe('default');
-        expect(graph?.entryNodeId).toBe('intent-gate');
+        expect(graph?.entryNodeId).toBe('intake');
     });
 
     it('graphForDefaultFallback returns undefined when no registry is configured', () => {
