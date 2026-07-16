@@ -87,6 +87,28 @@ describe('formatHelpText', () => {
 
         expect(text.endsWith('\n')).toBe(true);
     });
+
+    it('documents prefix commands after the slash list', () => {
+        // Given: a slash command list for /help
+        // When: formatHelpText builds the help body
+        // Then: a Prefix commands section pins skill, bash, and trust prefixes
+        const text = formatHelpText([{ id: '/test', description: 'Test' }]);
+
+        expect(text).toContain('Prefix commands:');
+        expect(text).toContain('$name');
+        expect(text).toContain('!command');
+        expect(text).toMatch(/submit|submits/);
+        expect(text).toContain('!!command');
+        expect(text).toContain('display');
+        expect(text).toContain('/trust');
+
+        const commandsIndex = text.indexOf('Commands:');
+        const prefixIndex = text.indexOf('Prefix commands:');
+        const shortcutsIndex = text.indexOf('Keyboard Shortcuts:');
+        expect(commandsIndex).toBeGreaterThanOrEqual(0);
+        expect(prefixIndex).toBeGreaterThan(commandsIndex);
+        expect(shortcutsIndex).toBeGreaterThan(prefixIndex);
+    });
 });
 
 describe('formatHelpText keyboard section reflects keybind overrides', () => {

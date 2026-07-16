@@ -14,11 +14,11 @@ export type HelpCommand = { readonly id: string; readonly description: string };
 type ResolvedKeybinds = ReturnType<typeof Keybinds.parse>;
 
 /**
- * Format a two-section help block: all available slash commands (aligned
- * columns) followed by the keyboard shortcuts. Both sections are registry- or
- * config-driven: commands come from the slash menu, and the keyboard section
- * is rendered from the resolved keybind registry (shared with `/hotkeys`) so a
- * `keybinds.json` override is reflected in both `/help` and `/hotkeys`.
+ * Format a multi-section help block: slash commands (aligned columns), static
+ * prefix commands (`$` / `!` / `!!`), then keyboard shortcuts. Slash commands
+ * come from the slash menu; the keyboard section is rendered from the resolved
+ * keybind registry (shared with `/hotkeys`) so a `keybinds.json` override is
+ * reflected in both `/help` and `/hotkeys`.
  *
  * Written as a plain system message (no prefix) so `parseMessageBlocks`
  * renders it as dim system text.
@@ -33,12 +33,30 @@ export function formatHelpText(
         lines.push(`  ${padEndToDisplayWidth(command.id, commandColumnWidth)}  ${command.description}`);
     }
     lines.push('');
+    lines.push(...formatPrefixCommandsSection());
+    lines.push('');
     lines.push('Keyboard Shortcuts:');
     lines.push('');
     lines.push(formatKeyboardShortcutsSection(keybinds));
     lines.push('');
     lines.push('Tip: Type / followed by text to filter commands, or use arrow keys to navigate the menu.');
     return `${lines.join('\n')}\n`;
+}
+
+function formatPrefixCommandsSection(): readonly string[] {
+    const entries = [
+        { id: '$name [args]', description: 'Load a skill and submit its body as the next user message' },
+        { id: '!command', description: 'Run a shell command and submit the output to the model' },
+        { id: '!!command', description: 'Run a shell command and display the output only (no model submit)' },
+        { id: '/trust', description: 'Trust this workspace (required before ! / !! bash)' },
+    ] as const;
+    const columnWidth = maxDisplayWidth(entries.map((entry) => entry.id));
+    return [
+        'Prefix commands:',
+        ...entries.map(
+            (entry) => `  ${padEndToDisplayWidth(entry.id, columnWidth)}  ${entry.description}`,
+        ),
+    ];
 }
 
 export async function runHelpAction(
