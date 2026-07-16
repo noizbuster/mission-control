@@ -260,7 +260,10 @@ export function CostPolicyPane(props: CostPolicyPaneProps): JSX.Element {
                 <text {...boldAttrs}>Cost Summary</text>
                 {props.modelLabel !== undefined ? <text {...dimAttrs}>model: {props.modelLabel}</text> : null}
                 <box flexDirection="row">
-                    <text {...(costFg() !== undefined ? { fg: costFg() } : {})}>{cost()}</text>
+                    {(() => {
+                        const fg = costFg();
+                        return <text {...(fg !== undefined ? { fg } : {})}>{cost()}</text>;
+                    })()}
                     <text> / </text>
                     <text>{props.state.inputTokens} in</text>
                     <text> / </text>

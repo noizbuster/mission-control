@@ -102,7 +102,7 @@ export function MarkdownPanelBase(props: MarkdownPanelProps): JSX.Element {
     if (props.barColor !== undefined && (props.barWidth ?? 0) > 0) {
         return (
             <box flexDirection="row" {...(props.marginTop !== undefined ? { marginTop: props.marginTop } : {})}>
-                <box width={props.barWidth} backgroundColor={props.barColor} shouldFill={true} flexShrink={0} />
+                <box width={barWidth()} backgroundColor={props.barColor} shouldFill={true} flexShrink={0} />
                 <box flexDirection="column" flexGrow={1} minWidth={0}>
                     <Markdown
                         text={props.text}
@@ -271,11 +271,16 @@ export function MessageBlockBase(props: MessageBlockProps): JSX.Element {
             </Match>
             <Match when={kind() === 'tool'}>
                 <box marginTop={1}>
-                    <ToolCard
-                        lines={lines()}
-                        expanded={props.toolOutputExpanded}
-                        {...(toolTitle() !== undefined ? { title: toolTitle() } : {})}
-                    />
+                    {(() => {
+                        const title = toolTitle();
+                        return (
+                            <ToolCard
+                                lines={lines()}
+                                expanded={props.toolOutputExpanded}
+                                {...(title !== undefined ? { title } : {})}
+                            />
+                        );
+                    })()}
                 </box>
             </Match>
             <Match when={kind() === 'thinking'}>
