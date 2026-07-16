@@ -139,6 +139,29 @@ function resolveXaiTokenUrl(): string {
     return (MISSION_CONTROL_XAI_OAUTH_TOKEN_URL ?? 'https://auth.x.ai/oauth2/token').replace(/\/+$/, '');
 }
 
+export async function refreshXaiOAuthCredential(input: {
+    readonly refreshToken: string;
+}): Promise<SaveProviderOAuthCredentialInput> {
+    const response = await fetch(resolveXaiTokenUrl(), {
+        method: 'POST',
+        headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+            grant_type: 'refresh_token',
+            client_id: xaiOAuthClientID,
+            refresh_token: input.refreshToken,
+        }).toString(),
+    });
+    if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as Readonly<Record<string, unknown>>;
+        const error = typeof body['error'] === 'string' ? body['error'] : undefined;
+        throw new Error(`xAI OAuth refresh failed${error === undefined ? ` (${response.status})` : `: ${error}`}`);
+    }
+    return tokenResponseToCredential(parseOAuthTokenResponse(await response.json()));
+}
+
 async function pollGitHubDeviceToken(domain: string, device: DeviceCodeResponse): Promise<string> {
     let delayMs = (device.interval ?? 5) * 1000;
     const deadline = Date.now() + maxOAuthWaitMs;

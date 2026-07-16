@@ -1,6 +1,6 @@
 import { modelProviderCatalog } from '@mission-control/config';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createDefaultProviderOAuthClient } from './auth-oauth-client';
+import { createDefaultProviderOAuthClient, refreshXaiOAuthCredential } from './auth-oauth-client';
 import { createServer, type Server } from 'node:http';
 
 type FakeIssuer = {
@@ -98,6 +98,26 @@ describe('createDefaultProviderOAuthClient', () => {
             await issuer.close();
         }
     });
+
+    it('refreshes an xAI OAuth access token via the token endpoint', async () => {
+        // Given
+        const issuer = await createFakeXaiTokenIssuer();
+        vi.stubEnv('MISSION_CONTROL_XAI_OAUTH_TOKEN_URL', `${issuer.origin}/oauth2/token`);
+
+        try {
+            // When
+            const credential = await refreshXaiOAuthCredential({ refreshToken: 'xai_refresh_token' });
+
+            // Then
+            expect(credential).toMatchObject({
+                accessToken: 'xai_refreshed_access_token',
+                refreshToken: 'xai_refreshed_refresh_token',
+            });
+            expect(credential.expiresAt).toBeDefined();
+        } finally {
+            await issuer.close();
+        }
+    });
 });
 
 function findOpenAIProvider() {
@@ -160,6 +180,34 @@ async function createFakeOpenAIIssuer(): Promise<FakeIssuer> {
     const address = server.address();
     if (typeof address !== 'object' || address === null) {
         throw new Error('Fake OpenAI issuer did not bind to a TCP port');
+    }
+    return {
+        origin: `http://127.0.0.1:${address.port}`,
+        close: () => closeServer(server),
+    };
+}
+
+async function createFakeXaiTokenIssuer(): Promise<FakeIssuer> {
+    const server = createServer((request, response) => {
+        if (request.method === 'POST' && request.url === '/oauth2/token') {
+            response.writeHead(200, { 'content-type': 'application/json' });
+            response.end(
+                JSON.stringify({
+                    access_token: 'xai_refreshed_access_token',
+                    refresh_token: 'xai_refreshed_refresh_token',
+                    expires_in: 3600,
+                    token_type: 'Bearer',
+                }),
+            );
+            return;
+        }
+        response.writeHead(404);
+        response.end('not found');
+    });
+    await listen(server);
+    const address = server.address();
+    if (typeof address !== 'object' || address === null) {
+        throw new Error('Fake xAI token issuer did not bind to a TCP port');
     }
     return {
         origin: `http://127.0.0.1:${address.port}`,
