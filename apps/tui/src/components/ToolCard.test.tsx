@@ -53,28 +53,28 @@ describe('hasDiffContent', () => {
 });
 
 describe('buildHeaderLabel', () => {
-    it('uses the provided title when expanded', () => {
-        expect(buildHeaderLabel('file.edit', 5, true)).toBe('> file.edit');
+    it('uses the provided title when expanded (OpenCode inline, no > prefix)', () => {
+        expect(buildHeaderLabel('file.edit', 5, true)).toBe('file.edit');
     });
 
     it('appends a line-count hint when collapsed', () => {
-        expect(buildHeaderLabel('file.edit', 5, false)).toBe('> file.edit (5 lines)');
+        expect(buildHeaderLabel('file.edit', 5, false)).toBe('file.edit (5 lines)');
     });
 
     it('falls back to a generic label when title is undefined', () => {
-        expect(buildHeaderLabel(undefined, 3, true)).toBe('> Tool output');
+        expect(buildHeaderLabel(undefined, 3, true)).toBe('Tool output');
     });
 
     it('shows the line-count hint with the fallback title when collapsed', () => {
-        expect(buildHeaderLabel(undefined, 3, false)).toBe('> Tool output (3 lines)');
+        expect(buildHeaderLabel(undefined, 3, false)).toBe('Tool output (3 lines)');
     });
 
     it('produces different output for collapsed vs expanded (body-present flag)', () => {
         const expandedHeader = buildHeaderLabel('patch.ts', 10, true);
         const collapsedHeader = buildHeaderLabel('patch.ts', 10, false);
         expect(expandedHeader).not.toBe(collapsedHeader);
-        expect(expandedHeader).toBe('> patch.ts');
-        expect(collapsedHeader).toBe('> patch.ts (10 lines)');
+        expect(expandedHeader).toBe('patch.ts');
+        expect(collapsedHeader).toBe('patch.ts (10 lines)');
     });
 });
 
@@ -84,12 +84,14 @@ describe('ToolCard component', () => {
     });
 
     it('routes expanded diff content through DiffView', () => {
-        expect(source).toContain('hasDiffContent(lines) ? (');
-        expect(source).toContain('<DiffView lines={renderDiff(lines.join');
+        expect(source).toContain('hasDiffContent(lines())');
+        expect(source).toContain('<DiffView lines={renderDiff(lines().join');
     });
 
-    it('keeps collapsed cards to the header only', () => {
-        expect(source).toContain('{expanded ? (');
-        expect(source).toContain(') : null}');
+    it('uses OpenCode inline icon row when collapsed and a left-accent panel when expanded', () => {
+        expect(source).toContain("border={['left']}");
+        expect(source).toContain('LEFT_ACCENT_BORDER');
+        expect(source).toContain('toolIconForTitle');
+        expect(source).toContain('CHAT_TOOL_ICON_WIDTH');
     });
 });

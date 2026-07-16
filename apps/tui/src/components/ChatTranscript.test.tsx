@@ -83,3 +83,20 @@ describe('ChatTranscript stream-stability topology', () => {
         expect(source).toContain('streaming={streaming()}');
     });
 });
+
+describe('OpenCode-style transcript chrome', () => {
+    it('uses left-accent user/error panels and padding-only assistant markdown', () => {
+        const source = readFileSync(resolve(process.cwd(), 'apps/tui/src/components/ChatTranscript.tsx'), 'utf8');
+
+        expect(source).toContain('LEFT_ACCENT_BORDER');
+        expect(source).toContain('CHAT_PRIMARY');
+        expect(source).toContain('CHAT_PANEL_BG');
+        expect(source).toContain('UserMessagePanel');
+        expect(source).toContain('ErrorMessagePanel');
+        expect(source).toContain('ThinkingHeader');
+        expect(source).toContain('CHAT_ASSISTANT_PAD_LEFT');
+        expect(source).not.toContain('BLOCK_LEFT_HEX');
+        expect(source).not.toContain('barColor="#00ff00"');
+        expect(source).not.toContain('barColor="#ff00ff"');
+    });
+});

@@ -17,13 +17,17 @@ describe('ChatInputTextarea', () => {
     });
 
     describe('frame', () => {
-        it('keeps the full-width left and right input frame so wrapped prompt rows align', () => {
+        it('uses the OpenCode left-accent prompt frame (no right border)', () => {
             const source = readTextareaSource();
 
-            expect(source).toContain("border={['left', 'right']}");
+            expect(source).toContain("border={['left']}");
+            expect(source).toContain('LEFT_ACCENT_BORDER');
+            expect(source).toContain('CHAT_PRIMARY');
+            expect(source).toContain('CHAT_ELEMENT_BG');
             expect(source).toContain('width="100%"');
             expect(source).toContain('flexShrink={0}');
             expect(source).toContain('minHeight={1}');
+            expect(source).not.toContain("border={['left', 'right']}");
         });
     });
 
@@ -64,7 +68,7 @@ describe('ChatInputTextarea', () => {
         it('keeps dim and bright cursor colors for disabled/enabled states', () => {
             const source = readTextareaSource();
 
-            expect(source).toContain("cursorColor={props.disabled ? '#333333' : '#ffffff'}");
+            expect(source).toContain("cursorColor={props.disabled ? '#333333' : CHAT_TEXT}");
         });
     });
 

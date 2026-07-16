@@ -158,7 +158,7 @@ function AppMain(props: AppProps): JSX.Element {
                 width={dimensions().width}
                 height={dimensions().height}
                 flexDirection="column"
-                backgroundColor="#000000"
+                backgroundColor="#0a0a0a"
                 onMouseUp={handleSelectionMouseUp}
             >
                 <Show when={isFullscreenOverlay()}>
