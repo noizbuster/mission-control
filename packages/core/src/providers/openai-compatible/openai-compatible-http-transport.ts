@@ -25,6 +25,18 @@ export async function* streamOpenAICompatibleChatCompletions(
                 kind: 'network',
                 message: 'OpenAI-compatible SSE frame contained invalid JSON',
             }),
+        onFetchError: (error) => {
+            if (input.signal.aborted || (error instanceof Error && error.name === 'AbortError')) {
+                return new OpenAICompatibleTransportError({
+                    kind: 'abort',
+                    message: error instanceof Error ? error.message : String(error),
+                });
+            }
+            return new OpenAICompatibleTransportError({
+                kind: 'network',
+                message: error instanceof Error ? error.message : String(error),
+            });
+        },
     });
 }
 

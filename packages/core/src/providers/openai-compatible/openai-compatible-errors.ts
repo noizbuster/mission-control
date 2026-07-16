@@ -20,7 +20,12 @@ export function mapOpenAICompatibleProviderError(error: unknown, resolver: Provi
     if (error instanceof OpenAICompatibleTransportError) {
         return protocolErrorFromTransportError(error, resolver);
     }
-    return { code: 'unknown', message: resolver.redactForOutput(String(error)), retryable: false };
+    const rawMessage = error instanceof Error ? error.message : String(error);
+    const message = resolver.redactForOutput(rawMessage);
+    if (isTransportNetworkMessage(`${error instanceof Error ? error.name : ''}: ${rawMessage}`)) {
+        return { code: 'provider_timeout', message, retryable: true };
+    }
+    return { code: 'unknown', message, retryable: false };
 }
 
 export function protocolErrorFromOpenAICompatibleError(
@@ -57,7 +62,7 @@ function protocolErrorFromTransportError(
     if (error.kind === 'abort') {
         return { code: 'provider_aborted', message, retryable: false };
     }
-    if (error.kind === 'timeout') {
+    if (error.kind === 'timeout' || error.kind === 'network') {
         return { code: 'provider_timeout', message, retryable: true };
     }
     if (error.status === 401 || error.status === 403) {
@@ -69,7 +74,26 @@ function protocolErrorFromTransportError(
     if (error.code === 'context_length_exceeded' || message.includes('context_length_exceeded')) {
         return { code: 'provider_context_overflow', message, retryable: false };
     }
+    if (isTransportNetworkMessage(message)) {
+        return { code: 'provider_timeout', message, retryable: true };
+    }
     return { code: 'unknown', message, retryable: false };
+}
+
+function isTransportNetworkMessage(message: string): boolean {
+    const lower = message.toLowerCase();
+    return (
+        lower.includes('fetch failed') ||
+        lower.includes('network request failed') ||
+        lower.includes('socket hang up') ||
+        lower.includes('connection reset') ||
+        lower.includes('connection refused') ||
+        lower.includes('econnreset') ||
+        lower.includes('econnrefused') ||
+        lower.includes('enotfound') ||
+        lower.includes('etimedout') ||
+        lower.includes('und_err_')
+    );
 }
 
 function isTransientHttpStatus(status: number | undefined): boolean {

@@ -10,14 +10,23 @@ export async function* readSseStream(
     options: {
         readonly onError: (response: Response) => Promise<Error> | Error;
         readonly onInvalidJson: () => Error;
+        readonly onFetchError?: (error: unknown) => Error;
     },
 ): AsyncIterable<unknown> {
-    const response = await fetch(request.endpoint, {
-        method: 'POST',
-        headers: { ...request.headers, Accept: 'text/event-stream' },
-        body: JSON.stringify(request.body),
-        signal: request.signal,
-    });
+    let response: Response;
+    try {
+        response = await fetch(request.endpoint, {
+            method: 'POST',
+            headers: { ...request.headers, Accept: 'text/event-stream' },
+            body: JSON.stringify(request.body),
+            signal: request.signal,
+        });
+    } catch (error) {
+        if (options.onFetchError !== undefined) {
+            throw options.onFetchError(error);
+        }
+        throw error;
+    }
 
     if (!response.ok) {
         throw await options.onError(response);

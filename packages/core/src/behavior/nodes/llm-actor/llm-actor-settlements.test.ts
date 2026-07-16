@@ -68,4 +68,37 @@ describe('classifyProviderStreamError', () => {
         });
         expect(classified).toEqual({ code: 'provider_rate_limited', retryable: true });
     });
+
+    it('maps TypeError fetch failed as retryable provider_timeout', () => {
+        const classified = classifyProviderStreamError(
+            Object.assign(new TypeError('fetch failed'), { isRetryable: false }),
+        );
+        expect(classified).toEqual({ code: 'provider_timeout', retryable: true });
+    });
+
+    it('maps AI SDK fetch-failed message with isRetryable false as retryable', () => {
+        const classified = classifyProviderStreamError({
+            name: 'AI_APICallError',
+            message: 'TypeError: fetch failed',
+            isRetryable: false,
+        });
+        expect(classified).toEqual({ code: 'provider_timeout', retryable: true });
+    });
+
+    it('unwraps undici cause codes on fetch failures as retryable', () => {
+        const cause = Object.assign(new Error('connect ECONNRESET'), { code: 'ECONNRESET' });
+        const classified = classifyProviderStreamError(
+            Object.assign(new TypeError('fetch failed'), { cause, isRetryable: false }),
+        );
+        expect(classified).toEqual({ code: 'provider_timeout', retryable: true });
+    });
+
+    it('maps undici connect timeout code as retryable', () => {
+        const classified = classifyProviderStreamError({
+            message: 'Connect Timeout Error',
+            code: 'UND_ERR_CONNECT_TIMEOUT',
+            isRetryable: false,
+        });
+        expect(classified).toEqual({ code: 'provider_timeout', retryable: true });
+    });
 });
