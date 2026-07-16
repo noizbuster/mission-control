@@ -61,6 +61,7 @@ import {
     createTerminalChatOutput,
     maxChatPromptLength,
 } from './interactive-chat-io';
+import { interactiveSessionCliStdout } from './interactive-session-cli-stdout';
 import {
     areModelProviderSelectionsEqual,
     ChatInputPump,
@@ -939,7 +940,10 @@ export async function runInteractiveChatSession(
         await closeTreeSitterClient();
     }
 
-    return chatOutput.getOutput?.() ?? '';
+    return interactiveSessionCliStdout({
+        tuiOwnedDisplay: tuiHandle !== undefined && options.output === undefined,
+        ...(chatOutput.getOutput !== undefined ? { getOutput: () => chatOutput.getOutput?.() ?? '' } : {}),
+    });
 }
 
 async function resolveMissionControlServices(
