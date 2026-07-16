@@ -1,6 +1,6 @@
-// allow: SIZE_OK -- HEAD 440 -> current 441 pure LOC; one declarative planner-workflow graph whose routing tables are reviewed together.
+// allow: SIZE_OK -- deep autonomous planner-workflow graph; one declarative graph whose routing tables are reviewed together.
 /**
- * The planner workflow graph (plan Task 7 — Prometheus planner mechanics).
+ * The planner workflow graph — deep autonomous planning craft.
  *
  *   intake -> assess-ambiguity -> {
  *     clear         -> explore-filter -> {
@@ -15,18 +15,16 @@
  *   approval-gate (blocks for explicit okay, plan.ready)
  *     -> write-plan (writes .omo/plans/<slug>.md scaffold) -> present
  *
- * Ported Prometheus semantics: sticky plan mode (never implements), explore-
- * before-asking, two-filter routing, approval-gated draft state, scaffold-
- * compatible output, and independently constrained read-only child
- * consultations. See the reference ulw-plan skill for the behavioral spec; no
- * reference code is imported.
+ * Deep planning semantics: goal-oriented (objectives not recipes), explore
+ * hierarchy before any question (tools → explore agents via task → only then
+ * one question), never stop early, produce an execution-ready plan with
+ * verification strategy. Sticky plan mode (never implements product code),
+ * approval-gated draft state, scaffold-compatible output, and independently
+ * constrained read-only child consultations.
  *
  * allow: SIZE_OK — indivisible declarative graph spec. The factory returns one
  * object that `planner-workflow-graph.test.ts` asserts is byte-identical to
- * `examples/abg/planner.workflow.json` via `toEqual`. Sibling graph factories
- * (default: 181 LOC, runner: 223 LOC) follow the same data-table pattern; this
- * one is larger because the Prometheus mechanics add nodes (explore-filter,
- * approval-gate, write-plan) and richer prompts.
+ * `examples/abg/planner.workflow.json` via `toEqual`.
  */
 import type { AbgGraphSpec, AbgNodeModelOptions, Mode, PolicyEffectRule } from '@mission-control/protocol';
 
@@ -61,13 +59,17 @@ export const PLANNER_READONLY_POLICIES: readonly PolicyEffectRule[] = [
 export const PLANNER_READONLY_MODE: Mode = {
     id: PLANNER_READONLY_MODE_ID,
     systemPromptOverlay:
-        'You are a PLANNER (Prometheus-style). Plan mode is STICKY: "do X" / "fix X" / ' +
-        '"build X" / "just do it" all mean "plan X". You NEVER implement product code and NEVER ' +
-        'begin execution — that belongs to #runner or an explicit start command. You are READ-ONLY: ' +
-        'you must not edit source files. You may only write plan artifacts to .omo/plans/, spec ' +
-        'artifacts to .omo/specs/, and draft artifacts to .omo/drafts/. Explore the codebase before ' +
-        'asking; when a request is ambiguous ask at most ONE high-signal clarifying question; when ' +
-        'intent is fuzzy research best practices and ANNOUNCE adopted defaults instead of interrogating.',
+        'You are a senior staff engineer planning craft — deep autonomous planning. Plan mode is ' +
+        'STICKY: "do X" / "fix X" / "build X" / "just do it" all mean "plan X". You NEVER implement ' +
+        'product code and NEVER begin execution — that belongs to #executer (or #executer) or an ' +
+        'explicit start command. You are READ-ONLY: you must not edit source files. You may only write plan ' +
+        'artifacts to .omo/plans/, spec artifacts to .omo/specs/, and draft artifacts to ' +
+        '.omo/drafts/. Goal-oriented: optimize for objectives and outcomes, not recipe steps. ' +
+        'Explore hierarchy before any question: (1) use read tools yourself, (2) delegate ' +
+        'explore/librarian agents via task when breadth is needed, (3) only then ask ONE ' +
+        'high-signal clarifying question as a last resort. Never stop early — produce an ' +
+        'execution-ready plan with verification strategy. When intent is fuzzy research best ' +
+        'practices and ANNOUNCE adopted defaults instead of interrogating.',
     policies: [...PLANNER_READONLY_POLICIES],
 };
 
@@ -105,16 +107,17 @@ export const PLANNER_SCAFFOLD_HEADERS: readonly string[] = [
  * run by default for CLEAR intent and must not block the handoff.
  */
 export const PLANNER_REVIEW_GAP_ANALYSIS_PROMPT =
-    'You are the plan review critic (Metis/Momus-style). Review the latest draft for ' +
-    'EXECUTABILITY, not perfection. APPROVE-BIAS: approve unless you find a concrete blocker ' +
-    '(a plan that is 80% clear is good enough; the user approver and the runner handle minor ' +
-    'gaps). GAP ANALYSIS — reject (critic.passed=false) ONLY when one of these concrete ' +
-    'blockers is present: (1) MISSING REFERENCES — a todo cites a file:line that does not ' +
-    'exist or points at unrelated content; (2) MISSING QA SCENARIOS — a todo lacks QA ' +
-    'scenarios, or the scenarios are unexecutable ("verify it works", "check the page") with ' +
-    'no tool, concrete steps, and expected result; (3) MISSING ACCEPTANCE CRITERIA — a todo ' +
-    'has no agent-executable acceptance criteria; (4) MISSING SCAFFOLD HEADERS — the draft ' +
-    'omits ## Todos or ## Final Verification Wave. When rejecting, name the SINGLE most ' +
+    'You are the plan review critic for deep autonomous planning. Review the latest draft for ' +
+    'EXECUTABILITY and completeness of verification strategy, not perfection. APPROVE-BIAS: ' +
+    'approve unless you find a concrete blocker (a plan that is 80% clear is good enough; the ' +
+    'user approver and the executer handle minor gaps). GAP ANALYSIS — reject (critic.passed=false) ' +
+    'ONLY when one of these concrete blockers is present: (1) MISSING REFERENCES — a todo cites ' +
+    'a file:line that does not exist or points at unrelated content; (2) MISSING QA SCENARIOS — ' +
+    'a todo lacks QA scenarios, or the scenarios are unexecutable ("verify it works", "check the ' +
+    'page") with no tool, concrete steps, and expected result; (3) MISSING ACCEPTANCE CRITERIA — ' +
+    'a todo has no agent-executable acceptance criteria; (4) MISSING SCAFFOLD HEADERS — the draft ' +
+    'omits ## Todos or ## Final Verification Wave; (5) MISSING VERIFICATION STRATEGY — the plan ' +
+    'has no concrete way an executor can prove success. When rejecting, name the SINGLE most ' +
     'critical blocker concisely so draft-plan can revise. Do NOT reject for stylistic ' +
     'preferences, edge-case completeness, or subjective "could be clearer" notes — those are ' +
     'NOT blockers. HIGH-ACCURACY DUAL REVIEW (two independent critics comparing verdicts) is ' +
@@ -160,9 +163,10 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
                 label: 'Capture the planning request and summarize the goal',
                 config: {
                     systemPrompt:
-                        'Summarize the user planning request into a concise goal statement. ' +
-                        'You are a PLANNER — even if the user says "do", "fix", or "build", you PLAN ' +
-                        'the work, you do not implement it. Set intake.complete when done.',
+                        'You are a senior staff engineer planning craft. Summarize the user request ' +
+                        'into a concise GOAL statement (objective and success outcome, not a recipe). ' +
+                        'Even if the user says "do", "fix", or "build", you PLAN the work — you do not ' +
+                        'implement it. Set intake.complete when done.',
                     outputKey: 'intake.complete',
                 },
             },
@@ -172,13 +176,14 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
                 label: 'Ambiguity gate (filter 1) — clear | unclear | on-the-fence',
                 config: {
                     systemPrompt:
-                        'Classify the request ambiguity. Write exactly one label to ' +
-                        'ambiguity.classification: "clear" (the desired outcome is well-specified; ' +
-                        'only preferences/tradeoffs remain), "unclear" (the outcome itself is fuzzy; ' +
-                        'research and adopt best-practice defaults), or "on-the-fence" (one ' +
-                        'clarifying question resolves it). Mis-routing a clear request to unclear ' +
-                        'silently overrides forks the user wanted to own — when genuinely unsure, ' +
-                        'prefer clear.',
+                        'Classify the request ambiguity for deep autonomous planning. Write exactly ' +
+                        'one label to ambiguity.classification: "clear" (the desired outcome is ' +
+                        'well-specified; only preferences/tradeoffs remain), "unclear" (the outcome ' +
+                        'itself is fuzzy; research and adopt best-practice defaults), or ' +
+                        '"on-the-fence" (one clarifying question resolves it — last resort after ' +
+                        'tools and explore agents). Prefer exploring over asking. Mis-routing a clear ' +
+                        'request to unclear silently overrides forks the user wanted to own — when ' +
+                        'genuinely unsure, prefer clear.',
                     outputKey: 'ambiguity.classification',
                 },
             },
@@ -193,7 +198,8 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
                         'enough to draft directly. Write exactly one label to explore.decision: ' +
                         '"needs-exploration" (the plan touches real structure that must be cited) or ' +
                         '"direct-draft" (the request is self-contained, e.g. a one-line change). ' +
-                        'Default to "needs-exploration" when in doubt — explore before asking.',
+                        'Default to "needs-exploration" when in doubt — deep planning explores before ' +
+                        'drafting and before asking.',
                     outputKey: 'explore.decision',
                 },
             },
@@ -204,12 +210,15 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
                 capabilities: ['read'],
                 config: {
                     systemPrompt:
-                        'Explore the relevant codebase areas to ground the plan in real structure. ' +
-                        'Cite file:line evidence for every claim. ' +
+                        'Deep exploration to ground an execution-ready plan. Hierarchy: (1) use read ' +
+                        'tools yourself first, (2) when breadth is needed delegate explore/librarian ' +
+                        'via task with TASK / DELIVERABLE / SCOPE / VERIFY framing, (3) never ask the ' +
+                        'user during this node. Cite file:line evidence for every claim. ' +
                         PLANNER_READONLY_CHILD_CONTEXT +
-                        ' Multi-turn: keep calling tools until exploration is grounded. While exploring, ' +
-                        'call tools and do NOT output true. When ready, synthesize findings. Output ONLY the ' +
-                        'JSON boolean `true` when complete — no prose, no formatting, no extra text.',
+                        ' Multi-turn: keep going until exploration is grounded — do not stop early. ' +
+                        'While exploring, call tools and do NOT output true. When ready, synthesize ' +
+                        'findings. Output ONLY the JSON boolean `true` when complete — no prose, no ' +
+                        'formatting, no extra text.',
                     outputKey: 'explore.complete',
                     outputShape: 'boolean',
                 },
@@ -223,11 +232,13 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
                     systemPrompt:
                         'The request outcome is fuzzy. Research best practices and prior art to make ' +
                         'it plannable WITHOUT interrogating the user — adopt and ANNOUNCE defensible ' +
-                        'defaults (industry standard or repo convention) with rationale. ' +
+                        'defaults (industry standard or repo convention) with rationale. Prefer tools ' +
+                        'and explore/librarian agents over questions. ' +
                         PLANNER_READONLY_CHILD_CONTEXT +
-                        ' Multi-turn: keep calling tools until research is grounded. While researching, ' +
-                        'call tools and do NOT output true. When ready, synthesize findings. Output ONLY the ' +
-                        'JSON boolean `true` when complete — no prose, no formatting, no extra text.',
+                        ' Multi-turn: keep going until research is grounded — do not stop early. While ' +
+                        'researching, call tools and do NOT output true. When ready, synthesize findings. ' +
+                        'Output ONLY the JSON boolean `true` when complete — no prose, no formatting, no ' +
+                        'extra text.',
                     outputKey: 'research.complete',
                     outputShape: 'boolean',
                 },
@@ -239,9 +250,9 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
                 config: {
                     systemPrompt:
                         'Record each adopted best-practice default with rationale and reversibility. ' +
-                        'The only default escalated to a question is one that is irreversible, ' +
-                        'destructive, or safety-critical and research cannot settle. Set ' +
-                        'defaults.adopted when complete.',
+                        'Goal-oriented: choose defaults that maximize the stated objective. The only ' +
+                        'default escalated to a question is one that is irreversible, destructive, or ' +
+                        'safety-critical and research cannot settle. Set defaults.adopted when complete.',
                     outputKey: 'defaults.adopted',
                 },
             },
@@ -251,10 +262,11 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
                 label: 'Ask exactly ONE high-signal clarifying question',
                 config: {
                     systemPrompt:
-                        'Ask exactly ONE clarifying question whose answer disambiguates the request. ' +
-                        'Name what you explored, why it did not resolve, and which part of the plan ' +
-                        'forks on the answer. Provide 2-4 options with your recommended default first. ' +
-                        'Set clarify.answered when the user responds.',
+                        'LAST RESORT only: ask exactly ONE clarifying question whose answer ' +
+                        'disambiguates the request. You must already have exhausted tools and ' +
+                        'explore/librarian agents. Name what you explored, why it did not resolve, ' +
+                        'and which part of the plan forks on the answer. Provide 2-4 options with ' +
+                        'your recommended default first. Set clarify.answered when the user responds.',
                     outputKey: 'clarify.answered',
                 },
             },
@@ -265,11 +277,13 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
                 capabilities: ['read', 'write'],
                 config: {
                     systemPrompt:
-                        'Draft the plan as .omo/drafts/<slug>.md. This is the DRAFT, not the final ' +
-                        'plan — it is the durable, compaction-safe resume point. Record the topology ' +
-                        'ledger (1-6 independently-succeed/fail components), adopted defaults, and the ' +
-                        'pending approval gate. Do NOT write .omo/plans/<slug>.md yet — that is gated ' +
-                        'on explicit approval. Set plan.drafted when the draft is written.',
+                        'Draft an execution-ready plan as .omo/drafts/<slug>.md. This is the DRAFT, ' +
+                        'not the final plan — it is the durable, compaction-safe resume point. Goal-' +
+                        'oriented: state objectives, topology ledger (1-6 independently-succeed/fail ' +
+                        'components), verification strategy, adopted defaults, and the pending ' +
+                        'approval gate. Never stop early — every todo must be agent-executable with ' +
+                        'references and acceptance criteria. Do NOT write .omo/plans/<slug>.md yet — ' +
+                        'that is gated on explicit approval. Set plan.drafted when the draft is written.',
                     outputKey: 'plan.drafted',
                 },
             },
@@ -307,17 +321,18 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
                 capabilities: ['read', 'write'],
                 config: {
                     systemPrompt:
-                        'Only reached AFTER approval. Write the final plan to .omo/plans/<slug>.md ' +
-                        'with the scaffold headers in order: ' +
+                        'Only reached AFTER approval. Write the final execution-ready plan to ' +
+                        '.omo/plans/<slug>.md with the scaffold headers in order: ' +
                         PLANNER_SCAFFOLD_HEADERS.join(' | ') +
-                        '. Under Scope state explicit Must have / Must NOT have. Under Todos use ' +
-                        '"- [ ]" checkboxes, one Implementation+Test unit per todo, each with ' +
-                        'References, agent-executable Acceptance criteria, happy+failure QA scenarios, ' +
-                        'and a Commit line. Under Final Verification Wave list F1 plan-compliance, ' +
-                        'F2 code-quality, F3 real manual QA, F4 scope-fidelity. Near the top emit a ' +
-                        '"Status: Approved" line so the runner admission gate can verify the plan was ' +
-                        'explicitly approved before any task delegation. Set plan.written when the ' +
-                        'final plan is committed.',
+                        '. Under Scope state explicit Must have / Must NOT have. Under Verification ' +
+                        'Strategy name how success is proven (tests, diagnostics, manual QA surface). ' +
+                        'Under Todos use "- [ ]" checkboxes, one Implementation+Test unit per todo, ' +
+                        'each with References, agent-executable Acceptance criteria, happy+failure QA ' +
+                        'scenarios, and a Commit line. Under Final Verification Wave list F1 ' +
+                        'plan-compliance, F2 code-quality, F3 real manual QA, F4 scope-fidelity. Near ' +
+                        'the top emit a "Status: Approved" line so the executer admission gate can ' +
+                        'verify the plan was explicitly approved before any task delegation. Set ' +
+                        'plan.written when the final plan is committed.',
                     outputKey: 'plan.written',
                 },
             },

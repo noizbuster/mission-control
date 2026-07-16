@@ -1,9 +1,9 @@
 /**
- * Runner workflow E2E integration test (plan Task 3.13).
+ * Executer workflow E2E integration test (plan Task 3.13).
  *
- * Exercises the runner workflow graph structure end-to-end and runs the verification node
+ * Exercises the executer workflow graph structure end-to-end and runs the verification node
  * that backs the final verification wave (F1-F4):
- *   1. Load the runner WorkflowSpec from `examples/abg/runner.workflow.json`.
+ *   1. Load the executer WorkflowSpec from `examples/abg/executer.workflow.json`.
  *   2. Verify the graph has the three key structural landmarks:
  *      delegate-wave (task fan-out), per-task-verify (critic), final-verification-wave with
  *      children [f1, f2, f3, f4] (all critic implementation).
@@ -20,13 +20,13 @@ import type { AbgNodeRunContext } from './node-registry';
 import { createVerificationNodeRunner, type VerificationVerdict } from './nodes/verification-node';
 import { readFile } from 'node:fs/promises';
 
-const workflowJsonPath = `${process.cwd()}/examples/abg/runner.workflow.json`;
+const workflowJsonPath = `${process.cwd()}/examples/abg/executer.workflow.json`;
 
 async function loadRunnerSpec() {
     const contents = await readFile(workflowJsonPath, 'utf8');
     const result = WorkflowSpecSchema.safeParse(JSON.parse(contents));
     if (!result.success) {
-        throw new Error(`runner.workflow.json failed schema validation: ${result.error.message}`);
+        throw new Error(`executer.workflow.json failed schema validation: ${result.error.message}`);
     }
     return result.data;
 }
@@ -38,7 +38,7 @@ async function runVerificationNode(
 ): Promise<{ readonly verdict: VerificationVerdict | undefined; readonly emits: readonly AbgSignal[] }> {
     const runner = createVerificationNodeRunner();
     const blackboard = createBlackboard();
-    const context: AbgNodeRunContext = { graphId: 'runner', now: () => NOW, blackboard };
+    const context: AbgNodeRunContext = { graphId: 'executer', now: () => NOW, blackboard };
     const node = { id: 'verify', kind: 'condition' as const, config };
 
     const collected: AbgSignal[] = [];
@@ -50,11 +50,11 @@ async function runVerificationNode(
     return { verdict: success?.result as VerificationVerdict | undefined, emits };
 }
 
-describe('runner workflow E2E: graph structure + verification node execution', () => {
-    it('loads a valid runner WorkflowSpec with admit-plan entry node', async () => {
+describe('executer workflow E2E: graph structure + verification node execution', () => {
+    it('loads a valid executer WorkflowSpec with admit-plan entry node', async () => {
         const spec = await loadRunnerSpec();
 
-        expect(spec.name).toBe('runner');
+        expect(spec.name).toBe('executer');
         expect(spec.graph.entryNodeId).toBe('admit-plan');
     });
 

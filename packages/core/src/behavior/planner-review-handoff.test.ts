@@ -23,7 +23,7 @@ import { collectSignals, createCompositeNodeTestContext } from './composite-node
 import type { AbgNodeRunContext } from './node-registry';
 import { runCriticNode } from './nodes/critic-node';
 import { createPlannerWorkflowGraph, PLANNER_REVIEW_GAP_ANALYSIS_PROMPT } from './planner-workflow-graph';
-import { createRunnerWorkflowGraph } from './runner-workflow-graph';
+import { createExecuterWorkflowGraph } from './executer-workflow-graph';
 import { readFile } from 'node:fs/promises';
 
 const WORKFLOW_FIXTURE_PATH = `${process.cwd()}/examples/abg/planner.workflow.json`;
@@ -52,7 +52,7 @@ function criticContext(draftText: string) {
 
 describe('planner review-plan: Metis/Momus gap-analysis contract', () => {
     it('exposes the gap-analysis prompt as an exported constant', () => {
-        expect(PLANNER_REVIEW_GAP_ANALYSIS_PROMPT).toMatch(/Metis|Momus/i);
+        expect(PLANNER_REVIEW_GAP_ANALYSIS_PROMPT).toMatch(/GAP ANALYSIS/i);
         expect(PLANNER_REVIEW_GAP_ANALYSIS_PROMPT).toMatch(/APPROVE-BIAS|approve-bias/i);
     });
 
@@ -153,11 +153,11 @@ describe('planner review-plan: routing loops to revision and reaches handoff', (
         expect(incomingToPresent[0]?.source).toBe('write-plan');
     });
 
-    it('write-plan emits the Status: Approved handoff marker for the runner admission gate', () => {
+    it('write-plan emits the Status: Approved handoff marker for the executer admission gate', () => {
         const graph = createPlannerWorkflowGraph();
         const prompt = configString(findNode(graph, 'write-plan'), 'systemPrompt') ?? '';
         expect(prompt).toMatch(/Status: Approved/i);
-        expect(prompt).toMatch(/runner admission gate/i);
+        expect(prompt).toMatch(/executer admission gate/i);
     });
 });
 
@@ -173,12 +173,12 @@ describe('planner review-plan: fixture parity', () => {
 
 describe('runner handoff: refuses absent or malformed plans at the entry gate', () => {
     it('the runner entry is the admit-plan gate (not parse-plan)', () => {
-        const graph = createRunnerWorkflowGraph();
+        const graph = createExecuterWorkflowGraph();
         expect(graph.entryNodeId).toBe('admit-plan');
     });
 
     it('a rejected plan routes to plan-rejected-terminal and never reaches delegate-wave', () => {
-        const graph = createRunnerWorkflowGraph();
+        const graph = createExecuterWorkflowGraph();
         const rejectEdge = graph.edges.find(
             (edge) => edge.source === 'admit-plan' && edge.target === 'plan-rejected-terminal',
         );

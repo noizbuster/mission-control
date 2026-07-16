@@ -2,13 +2,13 @@ import type { AbgNodeSpec } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import {
     aggregateFinalVerdict,
-    createRunnerWorkflowGraph,
-    RUNNER_FINAL_STRIKE_BUDGET,
+    createExecuterWorkflowGraph,
+    EXECUTER_FINAL_STRIKE_BUDGET,
     routeFixLoop,
-} from './runner-workflow-graph';
+} from './executer-workflow-graph';
 
 function nodeById(id: string): AbgNodeSpec | undefined {
-    return createRunnerWorkflowGraph().nodes.find((node) => node.id === id);
+    return createExecuterWorkflowGraph().nodes.find((node) => node.id === id);
 }
 
 function configString(node: AbgNodeSpec | undefined, key: string): string | undefined {
@@ -57,7 +57,7 @@ describe('runner final-wave verdict aggregation — aggregateFinalVerdict (all-a
 });
 
 describe('runner final-wave verdict aggregation — graph wiring', () => {
-    const graph = createRunnerWorkflowGraph();
+    const graph = createExecuterWorkflowGraph();
     const finalWave = nodeById('final-verification-wave');
 
     it('declares a string verdictStrategy (all-approve) on the parallel node', () => {
@@ -90,7 +90,7 @@ describe('runner final-wave verdict aggregation — graph wiring', () => {
         expect(finalRejected?.when).toMatchObject({ key: 'final.verdict', value: 'REJECT' });
     });
 
-    it('does NOT declare a path that completes the runner while any critic could still reject', () => {
+    it('does NOT declare a path that completes the executer while any critic could still reject', () => {
         // The complete node is reachable ONLY via final-approved (all four APPROVE). There is
         // no edge from fix-loop or any other node directly into complete.
         const intoComplete = graph.edges.filter((edge) => edge.target === 'complete');
@@ -102,26 +102,26 @@ describe('runner final-wave verdict aggregation — graph wiring', () => {
 
 describe('runner 3-strike fix-loop — routeFixLoop ceiling', () => {
     it('retries while the strike count is strictly below the budget', () => {
-        expect(routeFixLoop(0, RUNNER_FINAL_STRIKE_BUDGET)).toBe('retry');
-        expect(routeFixLoop(1, RUNNER_FINAL_STRIKE_BUDGET)).toBe('retry');
-        expect(routeFixLoop(2, RUNNER_FINAL_STRIKE_BUDGET)).toBe('retry');
+        expect(routeFixLoop(0, EXECUTER_FINAL_STRIKE_BUDGET)).toBe('retry');
+        expect(routeFixLoop(1, EXECUTER_FINAL_STRIKE_BUDGET)).toBe('retry');
+        expect(routeFixLoop(2, EXECUTER_FINAL_STRIKE_BUDGET)).toBe('retry');
     });
 
     it('blocks exactly when the strike count reaches the budget (3rd strike)', () => {
         // Three repeated failures: strikes 1 and 2 retry, strike 3 blocks.
-        expect(routeFixLoop(RUNNER_FINAL_STRIKE_BUDGET, RUNNER_FINAL_STRIKE_BUDGET)).toBe('blocked');
-        expect(routeFixLoop(4, RUNNER_FINAL_STRIKE_BUDGET)).toBe('blocked');
+        expect(routeFixLoop(EXECUTER_FINAL_STRIKE_BUDGET, EXECUTER_FINAL_STRIKE_BUDGET)).toBe('blocked');
+        expect(routeFixLoop(4, EXECUTER_FINAL_STRIKE_BUDGET)).toBe('blocked');
     });
 });
 
 describe('runner 3-strike fix-loop — graph wiring', () => {
-    const graph = createRunnerWorkflowGraph();
+    const graph = createExecuterWorkflowGraph();
     const fixLoop = nodeById('fix-loop');
     const blockedEscalation = nodeById('blocked-escalation');
 
     it('declares a numeric strike budget (3) on the fix-loop node', () => {
-        expect(configNumber(fixLoop, 'strikeBudget')).toBe(RUNNER_FINAL_STRIKE_BUDGET);
-        expect(configNumber(fixLoop, 'maxStrikes')).toBe(RUNNER_FINAL_STRIKE_BUDGET);
+        expect(configNumber(fixLoop, 'strikeBudget')).toBe(EXECUTER_FINAL_STRIKE_BUDGET);
+        expect(configNumber(fixLoop, 'maxStrikes')).toBe(EXECUTER_FINAL_STRIKE_BUDGET);
     });
 
     it('writes the route decision to fix.route (retry | blocked), not the old fix.retry boolean', () => {
@@ -182,7 +182,7 @@ describe('runner retry session reuse — persisted child session id lineage', ()
 });
 
 describe('runner final-wave — graph loop bound still protects against bugs', () => {
-    const graph = createRunnerWorkflowGraph();
+    const graph = createExecuterWorkflowGraph();
 
     it('declares a finite maxNodeRuns default (independent backstop)', () => {
         expect(graph.defaults?.maxNodeRuns).toBe(64);
@@ -209,14 +209,14 @@ describe('runner final-wave — end-to-end decision matrix over the pure contrac
     it('scenario B: one REJECT -> final.verdict REJECT -> fix-loop (strike 1, retry)', () => {
         const verdict = aggregateFinalVerdict(['APPROVE', 'REJECT', 'APPROVE', 'APPROVE']);
         expect(verdict).toBe('REJECT');
-        expect(routeFixLoop(1, RUNNER_FINAL_STRIKE_BUDGET)).toBe('retry');
+        expect(routeFixLoop(1, EXECUTER_FINAL_STRIKE_BUDGET)).toBe('retry');
     });
 
     it('scenario C: second consecutive REJECT -> fix-loop (strike 2, still retry)', () => {
-        expect(routeFixLoop(2, RUNNER_FINAL_STRIKE_BUDGET)).toBe('retry');
+        expect(routeFixLoop(2, EXECUTER_FINAL_STRIKE_BUDGET)).toBe('retry');
     });
 
     it('scenario D: third consecutive REJECT -> fix.route blocked -> blocked-escalation', () => {
-        expect(routeFixLoop(3, RUNNER_FINAL_STRIKE_BUDGET)).toBe('blocked');
+        expect(routeFixLoop(3, EXECUTER_FINAL_STRIKE_BUDGET)).toBe('blocked');
     });
 });

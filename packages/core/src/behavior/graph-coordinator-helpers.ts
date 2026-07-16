@@ -135,9 +135,19 @@ export function hasNode(graph: AuthorableAbgGraph, nodeId: string): boolean {
 }
 
 export function findBlockingPolicy(node: AbgNodeSpec, policies: readonly AbgPolicySpec[]): AbgPolicySpec | undefined {
-    return policies.find(
-        (policy) => policy.decision !== 'allow' && (node.capabilities ?? []).includes(policy.capability),
-    );
+    const capabilities = node.capabilities ?? [];
+    const lastByCapability = new Map<string, AbgPolicySpec>();
+    for (const policy of policies) {
+        if (capabilities.includes(policy.capability)) {
+            lastByCapability.set(policy.capability, policy);
+        }
+    }
+    for (const policy of lastByCapability.values()) {
+        if (policy.decision !== 'allow') {
+            return policy;
+        }
+    }
+    return undefined;
 }
 
 export function nodeModel(

@@ -95,14 +95,14 @@ describe('planner workflow parity: sticky plan mode', () => {
         const overlay = PLANNER_READONLY_MODE.systemPromptOverlay;
         expect(overlay).toMatch(/STICKY|sticky plan mode/i);
         expect(overlay).toMatch(/NEVER implement/i);
-        expect(overlay).toMatch(/#runner|explicit start/i);
+        expect(overlay).toMatch(/#executer|explicit start/i);
     });
 
     it('intake prompt treats do/fix/build as plan requests', () => {
         const graph = createPlannerWorkflowGraph();
         const intake = configString(findNode(graph, 'intake'), 'systemPrompt') ?? '';
-        expect(intake).toMatch(/PLANNER/i);
-        expect(intake).toMatch(/do.*fix.*build|"do"|plan the work/i);
+        expect(intake).toMatch(/senior staff engineer|planning craft|PLAN/i);
+        expect(intake).toMatch(/do.*fix.*build|"do"|PLAN the work/i);
         expect(intake).toMatch(/not implement/i);
     });
 

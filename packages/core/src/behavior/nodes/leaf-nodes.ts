@@ -141,7 +141,18 @@ function emit(node: AbgNodeSpec, context: AbgNodeRunContext, eventType: string, 
 
 function findBlockingPolicy(node: AbgNodeSpec, policies: readonly AbgPolicySpec[]): AbgPolicySpec | undefined {
     const capabilities = node.capabilities ?? [];
-    return policies.find((policy) => capabilities.includes(policy.capability) && policy.decision !== 'allow');
+    const lastByCapability = new Map<string, AbgPolicySpec>();
+    for (const policy of policies) {
+        if (capabilities.includes(policy.capability)) {
+            lastByCapability.set(policy.capability, policy);
+        }
+    }
+    for (const policy of lastByCapability.values()) {
+        if (policy.decision !== 'allow') {
+            return policy;
+        }
+    }
+    return undefined;
 }
 
 function readBooleanConfig(node: AbgNodeSpec, key: string): boolean | undefined {

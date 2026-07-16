@@ -3,13 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { appendNotepad, assertAppendOnly, NotepadAppendOnlyError, readNotepad } from '../persistence/notepad-store';
 import { parsePlanSections } from '../persistence/plan-store';
 import {
-    createRunnerWorkflowGraph,
-    RUNNER_CHECKBOX_UPDATE_PROMPT,
-    RUNNER_DELEGATE_WORKER_PROMPT,
-    RUNNER_DELEGATION_SECTIONS,
-    RUNNER_INIT_NOTEPAD_PROMPT,
-    RUNNER_PARSE_PLAN_PROMPT,
-} from './runner-workflow-graph';
+    createExecuterWorkflowGraph,
+    EXECUTER_CHECKBOX_UPDATE_PROMPT,
+    EXECUTER_DELEGATE_WORKER_PROMPT,
+    EXECUTER_DELEGATION_SECTIONS,
+    EXECUTER_INIT_NOTEPAD_PROMPT,
+    EXECUTER_PARSE_PLAN_PROMPT,
+} from './executer-workflow-graph';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -18,12 +18,12 @@ function nodeConfig(node: AbgNodeSpec | undefined, key: string): unknown {
     return node?.config?.[key];
 }
 
-function nodeById(graph: ReturnType<typeof createRunnerWorkflowGraph>, id: string): AbgNodeSpec | undefined {
+function nodeById(graph: ReturnType<typeof createExecuterWorkflowGraph>, id: string): AbgNodeSpec | undefined {
     return graph.nodes.find((node) => node.id === id);
 }
 
-describe('runner workflow parity — section-scoped parsing wiring', () => {
-    const graph = createRunnerWorkflowGraph();
+describe('executer workflow parity — section-scoped parsing wiring', () => {
+    const graph = createExecuterWorkflowGraph();
 
     it('parse-plan node references the section-scoped parser contract', () => {
         const parsePlan = nodeById(graph, 'parse-plan');
@@ -81,8 +81,8 @@ describe('runner workflow parity — section-scoped parsing wiring', () => {
     });
 });
 
-describe('runner workflow parity — 6-section delegation contract', () => {
-    const graph = createRunnerWorkflowGraph();
+describe('executer workflow parity — 6-section delegation contract', () => {
+    const graph = createExecuterWorkflowGraph();
     const delegateWave = nodeById(graph, 'delegate-wave');
     const delegateWorker = nodeById(graph, 'delegate-worker');
 
@@ -92,8 +92,8 @@ describe('runner workflow parity — 6-section delegation contract', () => {
         expect(sections).toEqual(['TASK', 'EXPECTED OUTCOME', 'REQUIRED TOOLS', 'MUST DO', 'MUST NOT DO', 'CONTEXT']);
     });
 
-    it('RUNNER_DELEGATION_SECTIONS export matches the six mandatory sections', () => {
-        expect([...RUNNER_DELEGATION_SECTIONS]).toEqual([
+    it('EXECUTER_DELEGATION_SECTIONS export matches the six mandatory sections', () => {
+        expect([...EXECUTER_DELEGATION_SECTIONS]).toEqual([
             'TASK',
             'EXPECTED OUTCOME',
             'REQUIRED TOOLS',
@@ -106,7 +106,7 @@ describe('runner workflow parity — 6-section delegation contract', () => {
     it('delegate-worker prompt references all six delegation sections', () => {
         const prompt = String(nodeConfig(delegateWorker, 'systemPrompt') ?? '');
 
-        for (const section of RUNNER_DELEGATION_SECTIONS) {
+        for (const section of EXECUTER_DELEGATION_SECTIONS) {
             expect(prompt).toContain(section);
         }
     });
@@ -119,8 +119,8 @@ describe('runner workflow parity — 6-section delegation contract', () => {
     });
 });
 
-describe('runner workflow parity — parallel-by-default with dependency blocking', () => {
-    const graph = createRunnerWorkflowGraph();
+describe('executer workflow parity — parallel-by-default with dependency blocking', () => {
+    const graph = createExecuterWorkflowGraph();
     const delegateWave = nodeById(graph, 'delegate-wave');
     const nextWave = nodeById(graph, 'next-wave');
 
@@ -143,8 +143,8 @@ describe('runner workflow parity — parallel-by-default with dependency blockin
     });
 });
 
-describe('runner workflow parity — verify-before-checkbox discipline', () => {
-    const graph = createRunnerWorkflowGraph();
+describe('executer workflow parity — verify-before-checkbox discipline', () => {
+    const graph = createExecuterWorkflowGraph();
     const checkboxUpdate = nodeById(graph, 'checkbox-update');
     const perTaskVerify = nodeById(graph, 'per-task-verify');
 
@@ -183,8 +183,8 @@ describe('runner workflow parity — verify-before-checkbox discipline', () => {
     });
 });
 
-describe('runner workflow parity — append-only notepad discipline', () => {
-    const graph = createRunnerWorkflowGraph();
+describe('executer workflow parity — append-only notepad discipline', () => {
+    const graph = createExecuterWorkflowGraph();
     const initNotepad = nodeById(graph, 'init-notepad');
 
     it('init-notepad declares the learnings notepad path and append-only mode', () => {
@@ -200,9 +200,9 @@ describe('runner workflow parity — append-only notepad discipline', () => {
         expect(prompt).toMatch(/never overwrite/i);
     });
 
-    it('RUNNER_INIT_NOTEPAD_PROMPT instructs reading the notepad before delegation', () => {
-        expect(RUNNER_INIT_NOTEPAD_PROMPT).toMatch(/read.*learnings\.md|read.*notepad/i);
-        expect(RUNNER_INIT_NOTEPAD_PROMPT).toMatch(/before delegation|inherited.?wisdom/i);
+    it('EXECUTER_INIT_NOTEPAD_PROMPT instructs reading the notepad before delegation', () => {
+        expect(EXECUTER_INIT_NOTEPAD_PROMPT).toMatch(/read.*learnings\.md|read.*notepad/i);
+        expect(EXECUTER_INIT_NOTEPAD_PROMPT).toMatch(/before delegation|inherited.?wisdom/i);
     });
 
     it('appendNotepad appends without truncating and readNotepad preserves content', async () => {
@@ -229,7 +229,7 @@ describe('runner workflow parity — append-only notepad discipline', () => {
     });
 });
 
-describe('runner workflow parity — read-back confirmation integration', () => {
+describe('executer workflow parity — read-back confirmation integration', () => {
     it('a section-scoped re-parse after a checkbox flip confirms the unchecked count decreased', () => {
         const root = mkdtempSync(join(tmpdir(), 'runner-readback-'));
         try {
@@ -263,22 +263,22 @@ describe('runner workflow parity — read-back confirmation integration', () => 
     });
 });
 
-describe('runner workflow parity — exported prompt constants', () => {
-    it('RUNNER_PARSE_PLAN_PROMPT documents the section-scoped contract', () => {
-        expect(RUNNER_PARSE_PLAN_PROMPT).toMatch(/section-scoped/i);
-        expect(RUNNER_PARSE_PLAN_PROMPT).toMatch(/Todos/i);
-        expect(RUNNER_PARSE_PLAN_PROMPT).toMatch(/Final Verification Wave/i);
+describe('executer workflow parity — exported prompt constants', () => {
+    it('EXECUTER_PARSE_PLAN_PROMPT documents the section-scoped contract', () => {
+        expect(EXECUTER_PARSE_PLAN_PROMPT).toMatch(/section-scoped/i);
+        expect(EXECUTER_PARSE_PLAN_PROMPT).toMatch(/Todos/i);
+        expect(EXECUTER_PARSE_PLAN_PROMPT).toMatch(/Final Verification Wave/i);
     });
 
-    it('RUNNER_CHECKBOX_UPDATE_PROMPT documents verify-before-checkbox', () => {
-        expect(RUNNER_CHECKBOX_UPDATE_PROMPT).toMatch(/MUST NOT.*based only.*done/i);
-        expect(RUNNER_CHECKBOX_UPDATE_PROMPT).toMatch(/independently verify/i);
-        expect(RUNNER_CHECKBOX_UPDATE_PROMPT).toMatch(/\.omo\/plans/i);
+    it('EXECUTER_CHECKBOX_UPDATE_PROMPT documents verify-before-checkbox', () => {
+        expect(EXECUTER_CHECKBOX_UPDATE_PROMPT).toMatch(/MUST NOT.*based only.*done/i);
+        expect(EXECUTER_CHECKBOX_UPDATE_PROMPT).toMatch(/independently verify/i);
+        expect(EXECUTER_CHECKBOX_UPDATE_PROMPT).toMatch(/\.omo\/plans/i);
     });
 
-    it('RUNNER_DELEGATE_WORKER_PROMPT lists all six sections', () => {
-        for (const section of RUNNER_DELEGATION_SECTIONS) {
-            expect(RUNNER_DELEGATE_WORKER_PROMPT).toContain(section);
+    it('EXECUTER_DELEGATE_WORKER_PROMPT lists all six sections', () => {
+        for (const section of EXECUTER_DELEGATION_SECTIONS) {
+            expect(EXECUTER_DELEGATE_WORKER_PROMPT).toContain(section);
         }
     });
 });

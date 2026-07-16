@@ -3,9 +3,9 @@
  * ABG reference parity regression suite (plan Todo 1).
  *
  * Pins the CURRENT implementation state of the built-in workflows
- * (`#default`, `#planner`, `#runner`) against the reference behaviors
- * (Sisyphus / Prometheus / Atlas). See `docs/abg-reference-parity-matrix.md`
- * for the full row-by-row mapping.
+ * (`#default`, `#planner`, `#executer`/`#executer`, `#fixer`) against the
+ * ABG-aligned rebuild. See `docs/abg-reference-parity-matrix.md` for the
+ * full row-by-row mapping.
  *
  * All `it` blocks assert IMPLEMENTED behavior (graph fixtures, pure transforms,
  * policy algebra, plan parsing, and structured blackboard persistence). No
@@ -26,6 +26,7 @@ import { parsePlanChecklistText } from '../persistence/plan-store';
 import { materializeWorkflow } from '../workflows/materialize-workflow';
 import { collectSignals, createCompositeNodeTestContext } from './composite-node-test-helpers';
 import { createDefaultWorkflowGraph } from './default-workflow-graph';
+import { createFixerWorkflowGraph } from './fixer-workflow-graph';
 import { autopilotMode } from './modes/autopilot-mode';
 import { applyMode } from './modes/mode-application';
 import { type AbgNodeRunContext, runAbgNode } from './node-registry';
@@ -35,7 +36,7 @@ import {
     PLANNER_READONLY_MODE,
     PLANNER_READONLY_POLICIES,
 } from './planner-workflow-graph';
-import { createRunnerWorkflowGraph } from './runner-workflow-graph';
+import { createExecuterWorkflowGraph } from './executer-workflow-graph';
 
 /**
  * Read a string-typed value from an AbgNodeSpec config under strict indexing.
@@ -108,17 +109,41 @@ function mockTextModel(text: string): MockLanguageModelV3 {
     });
 }
 
-describe('abg reference parity: default workflow fallback and intent structure', () => {
+describe('abg reference parity: default workflow plan-first fallback', () => {
     it('produces a schema-valid default graph used as the no-# fallback', () => {
         const graph = createDefaultWorkflowGraph();
         const result = AbgGraphSpecSchema.safeParse(graph);
         expect(result.success).toBe(true);
         expect(graph.id).toBe('default');
+        expect(graph.entryNodeId).toBe('intake');
+    });
+
+    it('declares draft-plan → review-plan → approval-gate → write-plan path', () => {
+        const ids = new Set(createDefaultWorkflowGraph().nodes.map((node) => node.id));
+        expect(ids.has('draft-plan')).toBe(true);
+        expect(ids.has('review-plan')).toBe(true);
+        expect(ids.has('approval-gate')).toBe(true);
+        expect(ids.has('write-plan')).toBe(true);
+    });
+
+    it('does not implement via intent-gate / delegate-wave on the default path', () => {
+        const ids = new Set(createDefaultWorkflowGraph().nodes.map((node) => node.id));
+        expect(ids.has('intent-gate')).toBe(false);
+        expect(ids.has('delegate-wave')).toBe(false);
+    });
+});
+
+describe('abg reference parity: fixer workflow intent structure', () => {
+    it('produces a schema-valid fixer graph with intent-gate entry', () => {
+        const graph = createFixerWorkflowGraph();
+        const result = AbgGraphSpecSchema.safeParse(graph);
+        expect(result.success).toBe(true);
+        expect(graph.id).toBe('fixer');
         expect(graph.entryNodeId).toBe('intent-gate');
     });
 
     it('routes intent-gate to at least three targets (trivial, explicit, ambiguous)', () => {
-        const graph = createDefaultWorkflowGraph();
+        const graph = createFixerWorkflowGraph();
         const targets = new Set(graph.edges.filter((edge) => edge.source === 'intent-gate').map((edge) => edge.target));
         expect(targets.size).toBeGreaterThanOrEqual(3);
         expect(targets.has('direct-respond')).toBe(true);
@@ -127,7 +152,7 @@ describe('abg reference parity: default workflow fallback and intent structure',
     });
 
     it('declares a delegate-wave parallel node with a task-capable delegate-worker child', () => {
-        const graph = createDefaultWorkflowGraph();
+        const graph = createFixerWorkflowGraph();
         const delegateWave = graph.nodes.find((node) => node.id === 'delegate-wave');
         const delegateWorker = graph.nodes.find((node) => node.id === 'delegate-worker');
         expect(delegateWave?.kind).toBe('parallel');
@@ -136,15 +161,15 @@ describe('abg reference parity: default workflow fallback and intent structure',
     });
 
     it('intent-gate prompt requires a strict single-line class and uses richer classes than three', () => {
-        const graph = createDefaultWorkflowGraph();
+        const graph = createFixerWorkflowGraph();
         const intentGate = graph.nodes.find((node) => node.id === 'intent-gate');
         const prompt = configString(intentGate, 'systemPrompt') ?? '';
         expect(prompt).toMatch(/Output ONLY one class name/i);
         expect(prompt).not.toMatch(/LAST line/i);
     });
 
-    it('default graph carries an anti-dup exploration guard or delegation-bias check node', () => {
-        const graph = createDefaultWorkflowGraph();
+    it('fixer graph carries an anti-dup exploration guard or delegation-bias check node', () => {
+        const graph = createFixerWorkflowGraph();
         const guardNode = graph.nodes.find((node) => {
             const prompt = configString(node, 'systemPrompt') ?? '';
             const label = node.label ?? '';
@@ -153,8 +178,8 @@ describe('abg reference parity: default workflow fallback and intent structure',
         expect(guardNode).toBeDefined();
     });
 
-    it('default graph carries an evidence-requirement or 3-strike recovery node', () => {
-        const graph = createDefaultWorkflowGraph();
+    it('fixer graph carries an evidence-requirement or 3-strike recovery node', () => {
+        const graph = createFixerWorkflowGraph();
         const recoveryNode = graph.nodes.find((node) => {
             const prompt = configString(node, 'systemPrompt') ?? '';
             const label = node.label ?? '';
@@ -229,16 +254,16 @@ describe('abg reference parity: planner workflow mode and readonly enforcement',
     });
 });
 
-describe('abg reference parity: runner workflow plan parsing and final gate', () => {
-    it('produces a schema-valid runner graph with admit-plan entry node', () => {
-        const graph = createRunnerWorkflowGraph();
+describe('abg reference parity: executer workflow plan parsing and final gate', () => {
+    it('produces a schema-valid executer graph with admit-plan entry node', () => {
+        const graph = createExecuterWorkflowGraph();
         const result = AbgGraphSpecSchema.safeParse(graph);
         expect(result.success).toBe(true);
         expect(graph.entryNodeId).toBe('admit-plan');
     });
 
     it('declares a final-verification-wave with four LLM critic children f1-f4', () => {
-        const graph = createRunnerWorkflowGraph();
+        const graph = createExecuterWorkflowGraph();
         const finalWave = graph.nodes.find((node) => node.id === 'final-verification-wave');
         expect(finalWave?.kind).toBe('parallel');
         expect(finalWave?.children).toEqual(['f1', 'f2', 'f3', 'f4']);
@@ -250,7 +275,7 @@ describe('abg reference parity: runner workflow plan parsing and final gate', ()
     });
 
     it('routes final-verification-wave to complete (approved) and fix-loop (rejected)', () => {
-        const graph = createRunnerWorkflowGraph();
+        const graph = createExecuterWorkflowGraph();
         const targets = new Set(
             graph.edges.filter((edge) => edge.source === 'final-verification-wave').map((edge) => edge.target),
         );
@@ -294,7 +319,7 @@ describe('abg reference parity: runner workflow plan parsing and final gate', ()
     });
 
     it('final-verification-wave aggregates f1-f4 into a string final.verdict', () => {
-        const graph = createRunnerWorkflowGraph();
+        const graph = createExecuterWorkflowGraph();
         const finalWave = graph.nodes.find((node) => node.id === 'final-verification-wave');
         // The parallel node writes a boolean completionKey; the rules expect the string
         // "APPROVE" / "REJECT". Desired: an aggregation config maps children outputs to
@@ -306,7 +331,7 @@ describe('abg reference parity: runner workflow plan parsing and final gate', ()
     });
 
     it('checkbox-update node declares a plan-path write target gated on verification', () => {
-        const graph = createRunnerWorkflowGraph();
+        const graph = createExecuterWorkflowGraph();
         const checkboxUpdate = graph.nodes.find((node) => node.id === 'checkbox-update');
         const prompt = configString(checkboxUpdate, 'systemPrompt') ?? '';
         const planPath = configValue(checkboxUpdate, 'planPath');
@@ -318,7 +343,7 @@ describe('abg reference parity: runner workflow plan parsing and final gate', ()
     });
 
     it('fix-loop path carries a bounded 3-strike retry counter', () => {
-        const graph = createRunnerWorkflowGraph();
+        const graph = createExecuterWorkflowGraph();
         const fixLoop = graph.nodes.find((node) => node.id === 'fix-loop');
         const maxAttempts = configValue(fixLoop, 'maxAttempts');
         const strikeBudget = configValue(fixLoop, 'strikeBudget');
@@ -360,22 +385,22 @@ describe('abg reference parity: parallel fanOutKey and structured blackboard sta
 
     it('workflow llm node outputKey is persisted to the blackboard by a generic seam', async () => {
         const graph = createDefaultWorkflowGraph();
-        const intentGate = graph.nodes.find((node) => node.id === 'intent-gate');
-        expect(configString(intentGate, 'outputKey')).toBe('intent.classification');
-        if (intentGate === undefined) throw new Error('test setup: intent-gate missing');
+        const assessAmbiguity = graph.nodes.find((node) => node.id === 'assess-ambiguity');
+        expect(configString(assessAmbiguity, 'outputKey')).toBe('ambiguity.classification');
+        if (assessAmbiguity === undefined) throw new Error('test setup: assess-ambiguity missing');
 
         const blackboard = createBlackboard();
         blackboard.appendMessages([{ role: 'user', content: 'classify' }] as readonly ModelMessage[]);
         const context: AbgNodeRunContext = {
             graphId: 'g_row4',
             now: () => '2026-06-20T00:00:00.000Z',
-            sdkModel: mockTextModel('explicit-implementation'),
+            sdkModel: mockTextModel('clear'),
             blackboard,
         };
 
-        await collectSignals(runLlmActorNode(intentGate, context));
+        await collectSignals(runLlmActorNode(assessAmbiguity, context));
 
-        expect(blackboard.get('intent.classification')).toBe('explicit-implementation');
+        expect(blackboard.get('ambiguity.classification')).toBe('clear');
     });
 });
 
@@ -413,9 +438,9 @@ describe('abg reference parity: autopilot mode application on a real graph', () 
 });
 
 describe('abg reference parity: workflow fixture discovery round-trip', () => {
-    it('default, planner, and runner fixtures all parse via WorkflowSpecSchema', async () => {
+    it('default, planner, runner, executer, and fixer fixtures all parse via WorkflowSpecSchema', async () => {
         const { readFile } = await import('node:fs/promises');
-        for (const name of ['default', 'planner', 'runner']) {
+        for (const name of ['default', 'planner', 'executer', 'fixer']) {
             const contents = await readFile(`${process.cwd()}/examples/abg/${name}.workflow.json`, 'utf8');
             const result = WorkflowSpecSchema.safeParse(JSON.parse(contents));
             expect(result.success).toBe(true);

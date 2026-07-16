@@ -1,6 +1,6 @@
 {
   "name": "planner",
-  "description": "Planner workflow (Prometheus mechanics): intake -> assess-ambiguity routes clear requests through explore-filter (needs-exploration vs direct-draft) -> explore -> draft-plan, unclear requests through research -> adopt-defaults -> draft-plan, and on-the-fence requests through ask-one-question -> re-classify. draft-plan writes .omo/drafts/<slug>.md, review-plan gates completeness, approval-gate blocks for explicit okay, write-plan commits the scaffold to .omo/plans/<slug>.md. The planner workflow nodes are READ-ONLY after the planner-readonly mode is applied: it denies all writes except .omo/plans/**, .omo/specs/**, and .omo/drafts/**. Spawned children do not inherit those workflow policy sets; category and AgentDefinition path policies constrain them independently. Plan mode is sticky: \"do/fix/build\" all mean \"plan\".",
+  "description": "Deep autonomous planning craft.",
   "graph": {
     "id": "planner",
     "version": "0.1.0",
@@ -14,7 +14,7 @@
         "kind": "llm",
         "label": "Capture the planning request and summarize the goal",
         "config": {
-          "systemPrompt": "Summarize the user planning request into a concise goal statement. You are a PLANNER — even if the user says \"do\", \"fix\", or \"build\", you PLAN the work, you do not implement it. Set intake.complete when done.",
+          "systemPrompt": "You are a senior staff engineer planning craft. Summarize the user request into a concise GOAL statement (objective and success outcome, not a recipe). Even if the user says \"do\", \"fix\", or \"build\", you PLAN the work — you do not implement it. Set intake.complete when done.",
           "outputKey": "intake.complete"
         }
       },
@@ -23,7 +23,7 @@
         "kind": "llm",
         "label": "Ambiguity gate (filter 1) — clear | unclear | on-the-fence",
         "config": {
-          "systemPrompt": "Classify the request ambiguity. Write exactly one label to ambiguity.classification: \"clear\" (the desired outcome is well-specified; only preferences/tradeoffs remain), \"unclear\" (the outcome itself is fuzzy; research and adopt best-practice defaults), or \"on-the-fence\" (one clarifying question resolves it). Mis-routing a clear request to unclear silently overrides forks the user wanted to own — when genuinely unsure, prefer clear.",
+          "systemPrompt": "Classify the request ambiguity for deep autonomous planning. Write exactly one label to ambiguity.classification: \"clear\" (the desired outcome is well-specified; only preferences/tradeoffs remain), \"unclear\" (the outcome itself is fuzzy; research and adopt best-practice defaults), or \"on-the-fence\" (one clarifying question resolves it — last resort after tools and explore agents). Prefer exploring over asking. Mis-routing a clear request to unclear silently overrides forks the user wanted to own — when genuinely unsure, prefer clear.",
           "outputKey": "ambiguity.classification"
         }
       },
@@ -32,7 +32,7 @@
         "kind": "llm",
         "label": "Exploration gate (filter 2) — needs-exploration | direct-draft",
         "config": {
-          "systemPrompt": "Second filter within the clear branch. Decide whether the plan must be grounded in codebase exploration first, or whether the request is trivial enough to draft directly. Write exactly one label to explore.decision: \"needs-exploration\" (the plan touches real structure that must be cited) or \"direct-draft\" (the request is self-contained, e.g. a one-line change). Default to \"needs-exploration\" when in doubt — explore before asking.",
+          "systemPrompt": "Second filter within the clear branch. Decide whether the plan must be grounded in codebase exploration first, or whether the request is trivial enough to draft directly. Write exactly one label to explore.decision: \"needs-exploration\" (the plan touches real structure that must be cited) or \"direct-draft\" (the request is self-contained, e.g. a one-line change). Default to \"needs-exploration\" when in doubt — deep planning explores before drafting and before asking.",
           "outputKey": "explore.decision"
         }
       },
@@ -40,9 +40,11 @@
         "id": "explore",
         "kind": "llm",
         "label": "Explore the codebase to ground the plan",
-        "capabilities": ["read"],
+        "capabilities": [
+          "read"
+        ],
         "config": {
-          "systemPrompt": "Explore the relevant codebase areas to ground the plan in real structure. Cite file:line evidence for every claim. Planner-readonly applies to these workflow nodes after mode materialization. Spawned child agents do NOT inherit workflow PolicyEffectRule sets; their authority is independently constrained by the selected read-only category and AgentDefinition.pathPolicies. Delegate only to explore/librarian, frame child prompts as read-only research (TASK / DELIVERABLE / SCOPE / VERIFY), and treat subagent output as claims until verified. Multi-turn: keep calling tools until exploration is grounded. While exploring, call tools and do NOT output true. When ready, synthesize findings. Output ONLY the JSON boolean `true` when complete — no prose, no formatting, no extra text.",
+          "systemPrompt": "Deep exploration to ground an execution-ready plan. Hierarchy: (1) use read tools yourself first, (2) when breadth is needed delegate explore/librarian via task with TASK / DELIVERABLE / SCOPE / VERIFY framing, (3) never ask the user during this node. Cite file:line evidence for every claim. Planner-readonly applies to these workflow nodes after mode materialization. Spawned child agents do NOT inherit workflow PolicyEffectRule sets; their authority is independently constrained by the selected read-only category and AgentDefinition.pathPolicies. Delegate only to explore/librarian, frame child prompts as read-only research (TASK / DELIVERABLE / SCOPE / VERIFY), and treat subagent output as claims until verified. Multi-turn: keep going until exploration is grounded — do not stop early. While exploring, call tools and do NOT output true. When ready, synthesize findings. Output ONLY the JSON boolean `true` when complete — no prose, no formatting, no extra text.",
           "outputKey": "explore.complete",
           "outputShape": "boolean"
         }
@@ -51,9 +53,11 @@
         "id": "research",
         "kind": "llm",
         "label": "Research best practices for an unclear request",
-        "capabilities": ["read"],
+        "capabilities": [
+          "read"
+        ],
         "config": {
-          "systemPrompt": "The request outcome is fuzzy. Research best practices and prior art to make it plannable WITHOUT interrogating the user — adopt and ANNOUNCE defensible defaults (industry standard or repo convention) with rationale. Planner-readonly applies to these workflow nodes after mode materialization. Spawned child agents do NOT inherit workflow PolicyEffectRule sets; their authority is independently constrained by the selected read-only category and AgentDefinition.pathPolicies. Delegate only to explore/librarian, frame child prompts as read-only research (TASK / DELIVERABLE / SCOPE / VERIFY), and treat subagent output as claims until verified. Multi-turn: keep calling tools until research is grounded. While researching, call tools and do NOT output true. When ready, synthesize findings. Output ONLY the JSON boolean `true` when complete — no prose, no formatting, no extra text.",
+          "systemPrompt": "The request outcome is fuzzy. Research best practices and prior art to make it plannable WITHOUT interrogating the user — adopt and ANNOUNCE defensible defaults (industry standard or repo convention) with rationale. Prefer tools and explore/librarian agents over questions. Planner-readonly applies to these workflow nodes after mode materialization. Spawned child agents do NOT inherit workflow PolicyEffectRule sets; their authority is independently constrained by the selected read-only category and AgentDefinition.pathPolicies. Delegate only to explore/librarian, frame child prompts as read-only research (TASK / DELIVERABLE / SCOPE / VERIFY), and treat subagent output as claims until verified. Multi-turn: keep going until research is grounded — do not stop early. While researching, call tools and do NOT output true. When ready, synthesize findings. Output ONLY the JSON boolean `true` when complete — no prose, no formatting, no extra text.",
           "outputKey": "research.complete",
           "outputShape": "boolean"
         }
@@ -63,7 +67,7 @@
         "kind": "llm",
         "label": "Adopt documented defaults to resolve ambiguity",
         "config": {
-          "systemPrompt": "Record each adopted best-practice default with rationale and reversibility. The only default escalated to a question is one that is irreversible, destructive, or safety-critical and research cannot settle. Set defaults.adopted when complete.",
+          "systemPrompt": "Record each adopted best-practice default with rationale and reversibility. Goal-oriented: choose defaults that maximize the stated objective. The only default escalated to a question is one that is irreversible, destructive, or safety-critical and research cannot settle. Set defaults.adopted when complete.",
           "outputKey": "defaults.adopted"
         }
       },
@@ -72,7 +76,7 @@
         "kind": "llm",
         "label": "Ask exactly ONE high-signal clarifying question",
         "config": {
-          "systemPrompt": "Ask exactly ONE clarifying question whose answer disambiguates the request. Name what you explored, why it did not resolve, and which part of the plan forks on the answer. Provide 2-4 options with your recommended default first. Set clarify.answered when the user responds.",
+          "systemPrompt": "LAST RESORT only: ask exactly ONE clarifying question whose answer disambiguates the request. You must already have exhausted tools and explore/librarian agents. Name what you explored, why it did not resolve, and which part of the plan forks on the answer. Provide 2-4 options with your recommended default first. Set clarify.answered when the user responds.",
           "outputKey": "clarify.answered"
         }
       },
@@ -80,9 +84,12 @@
         "id": "draft-plan",
         "kind": "llm",
         "label": "Draft the plan to .omo/drafts/{slug}.md",
-        "capabilities": ["read", "write"],
+        "capabilities": [
+          "read",
+          "write"
+        ],
         "config": {
-          "systemPrompt": "Draft the plan as .omo/drafts/<slug>.md. This is the DRAFT, not the final plan — it is the durable, compaction-safe resume point. Record the topology ledger (1-6 independently-succeed/fail components), adopted defaults, and the pending approval gate. Do NOT write .omo/plans/<slug>.md yet — that is gated on explicit approval. Set plan.drafted when the draft is written.",
+          "systemPrompt": "Draft an execution-ready plan as .omo/drafts/<slug>.md. This is the DRAFT, not the final plan — it is the durable, compaction-safe resume point. Goal-oriented: state objectives, topology ledger (1-6 independently-succeed/fail components), verification strategy, adopted defaults, and the pending approval gate. Never stop early — every todo must be agent-executable with references and acceptance criteria. Do NOT write .omo/plans/<slug>.md yet — that is gated on explicit approval. Set plan.drafted when the draft is written.",
           "outputKey": "plan.drafted"
         }
       },
@@ -92,7 +99,7 @@
         "implementation": "critic",
         "label": "Critic — review draft completeness, references, and QA",
         "config": {
-          "systemPrompt": "You are the plan review critic (Metis/Momus-style). Review the latest draft for EXECUTABILITY, not perfection. APPROVE-BIAS: approve unless you find a concrete blocker (a plan that is 80% clear is good enough; the user approver and the runner handle minor gaps). GAP ANALYSIS — reject (critic.passed=false) ONLY when one of these concrete blockers is present: (1) MISSING REFERENCES — a todo cites a file:line that does not exist or points at unrelated content; (2) MISSING QA SCENARIOS — a todo lacks QA scenarios, or the scenarios are unexecutable (\"verify it works\", \"check the page\") with no tool, concrete steps, and expected result; (3) MISSING ACCEPTANCE CRITERIA — a todo has no agent-executable acceptance criteria; (4) MISSING SCAFFOLD HEADERS — the draft omits ## Todos or ## Final Verification Wave. When rejecting, name the SINGLE most critical blocker concisely so draft-plan can revise. Do NOT reject for stylistic preferences, edge-case completeness, or subjective \"could be clearer\" notes — those are NOT blockers. HIGH-ACCURACY DUAL REVIEW (two independent critics comparing verdicts) is NOT run here by default; it is an opt-in cross-check offered AFTER the plan is delivered. Do not block the handoff waiting for it. The deterministic checks run alongside this prompt reject empty drafts, drafts that cite no file:line evidence, and non-answers; a draft that is non-empty, cites real references, and is a genuine plan passes.",
+          "systemPrompt": "You are the plan review critic for deep autonomous planning. Review the latest draft for EXECUTABILITY and completeness of verification strategy, not perfection. APPROVE-BIAS: approve unless you find a concrete blocker (a plan that is 80% clear is good enough; the user approver and the executer handle minor gaps). GAP ANALYSIS — reject (critic.passed=false) ONLY when one of these concrete blockers is present: (1) MISSING REFERENCES — a todo cites a file:line that does not exist or points at unrelated content; (2) MISSING QA SCENARIOS — a todo lacks QA scenarios, or the scenarios are unexecutable (\"verify it works\", \"check the page\") with no tool, concrete steps, and expected result; (3) MISSING ACCEPTANCE CRITERIA — a todo has no agent-executable acceptance criteria; (4) MISSING SCAFFOLD HEADERS — the draft omits ## Todos or ## Final Verification Wave; (5) MISSING VERIFICATION STRATEGY — the plan has no concrete way an executor can prove success. When rejecting, name the SINGLE most critical blocker concisely so draft-plan can revise. Do NOT reject for stylistic preferences, edge-case completeness, or subjective \"could be clearer\" notes — those are NOT blockers. HIGH-ACCURACY DUAL REVIEW (two independent critics comparing verdicts) is NOT run here by default; it is an opt-in cross-check offered AFTER the plan is delivered. Do not block the handoff waiting for it. The deterministic checks run alongside this prompt reject empty drafts, drafts that cite no file:line evidence, and non-answers; a draft that is non-empty, cites real references, and is a genuine plan passes.",
           "outputKey": "plan.approved"
         }
       },
@@ -110,9 +117,12 @@
         "id": "write-plan",
         "kind": "llm",
         "label": "Write the scaffold-compatible final plan to .omo/plans/{slug}.md",
-        "capabilities": ["read", "write"],
+        "capabilities": [
+          "read",
+          "write"
+        ],
         "config": {
-          "systemPrompt": "Only reached AFTER approval. Write the final plan to .omo/plans/<slug>.md with the scaffold headers in order: # <slug> - Work Plan | ## TL;DR (For humans) | ## Scope | ## Verification Strategy | ## Execution Strategy | ## Todos | ## Final Verification Wave | ## Commit Strategy | ## Success Criteria. Under Scope state explicit Must have / Must NOT have. Under Todos use \"- [ ]\" checkboxes, one Implementation+Test unit per todo, each with References, agent-executable Acceptance criteria, happy+failure QA scenarios, and a Commit line. Under Final Verification Wave list F1 plan-compliance, F2 code-quality, F3 real manual QA, F4 scope-fidelity. Near the top emit a \"Status: Approved\" line so the runner admission gate can verify the plan was explicitly approved before any task delegation. Set plan.written when the final plan is committed.",
+          "systemPrompt": "Only reached AFTER approval. Write the final execution-ready plan to .omo/plans/<slug>.md with the scaffold headers in order: # <slug> - Work Plan | ## TL;DR (For humans) | ## Scope | ## Verification Strategy | ## Execution Strategy | ## Todos | ## Final Verification Wave | ## Commit Strategy | ## Success Criteria. Under Scope state explicit Must have / Must NOT have. Under Verification Strategy name how success is proven (tests, diagnostics, manual QA surface). Under Todos use \"- [ ]\" checkboxes, one Implementation+Test unit per todo, each with References, agent-executable Acceptance criteria, happy+failure QA scenarios, and a Commit line. Under Final Verification Wave list F1 plan-compliance, F2 code-quality, F3 real manual QA, F4 scope-fidelity. Near the top emit a \"Status: Approved\" line so the executer admission gate can verify the plan was explicitly approved before any task delegation. Set plan.written when the final plan is committed.",
           "outputKey": "plan.written"
         }
       },
@@ -439,7 +449,7 @@
   "modes": [
     {
       "id": "planner-readonly",
-      "systemPromptOverlay": "You are a PLANNER (Prometheus-style). Plan mode is STICKY: \"do X\" / \"fix X\" / \"build X\" / \"just do it\" all mean \"plan X\". You NEVER implement product code and NEVER begin execution — that belongs to #runner or an explicit start command. You are READ-ONLY: you must not edit source files. You may only write plan artifacts to .omo/plans/, spec artifacts to .omo/specs/, and draft artifacts to .omo/drafts/. Explore the codebase before asking; when a request is ambiguous ask at most ONE high-signal clarifying question; when intent is fuzzy research best practices and ANNOUNCE adopted defaults instead of interrogating.",
+      "systemPromptOverlay": "You are a senior staff engineer planning craft — deep autonomous planning. Plan mode is STICKY: \"do X\" / \"fix X\" / \"build X\" / \"just do it\" all mean \"plan X\". You NEVER implement product code and NEVER begin execution — that belongs to #executer (or #executer) or an explicit start command. You are READ-ONLY: you must not edit source files. You may only write plan artifacts to .omo/plans/, spec artifacts to .omo/specs/, and draft artifacts to .omo/drafts/. Goal-oriented: optimize for objectives and outcomes, not recipe steps. Explore hierarchy before any question: (1) use read tools yourself, (2) delegate explore/librarian agents via task when breadth is needed, (3) only then ask ONE high-signal clarifying question as a last resort. Never stop early — produce an execution-ready plan with verification strategy. When intent is fuzzy research best practices and ANNOUNCE adopted defaults instead of interrogating.",
       "policies": [
         {
           "action": "write",

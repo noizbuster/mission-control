@@ -1,6 +1,6 @@
-// allow: SIZE_OK -- HEAD 552 -> current 552 pure LOC; one declarative runner graph with inseparable retry and verdict routing tables.
+// allow: SIZE_OK -- HEAD 552 -> current 563 pure LOC; one declarative executer graph with inseparable retry and verdict routing tables.
 /**
- * The runner workflow graph: executes a plan produced by the planner workflow
+ * The executer workflow graph: executes a plan produced by the planner workflow
  * (plan Task 3.4, ABG Round 8 decomposition).
  *
  *   admit-plan -> {
@@ -17,7 +17,7 @@
  *   | plan-rejected-admission -> plan-rejected-terminal (clear failure, no delegation)
  *   }
  *
- * The runner FIRST admits the plan at the entry gate (plan Task 8): a plan must
+ * The executer FIRST admits the plan at the entry gate (plan Task 8): a plan must
  * exist, parse, carry the scaffold sections, have at least one todo, list a
  * Final Verification Wave, and be marked approved/ready. A missing, malformed,
  * or unapproved plan routes to `plan-rejected-terminal` and NEVER reaches task
@@ -31,7 +31,7 @@
  * completion is an approval gate, not a normal task. If any critic rejects, the
  * fix-loop node reopens the relevant tasks and routes back to `next-wave`, BUT
  * a bounded 3-strike counter caps the retries (plan Task 10): on the third
- * consecutive rejection the runner routes to `blocked-escalation`, records
+ * consecutive rejection the executer routes to `blocked-escalation`, records
  * state/evidence, and blocks for user intervention instead of looping forever.
  * Retries reuse each failed task's persisted child session id so the child
  * resumes with full prior context. The graph loop bound (`maxNodeRuns`) is an
@@ -41,26 +41,27 @@
  * workflow's precise, engine-agnostic declarative routing.
  *
  * allow: SIZE_OK — indivisible declarative graph spec. The factory returns one
- * object that `runner-workflow-graph.test.ts` asserts is byte-identical to
- * `examples/abg/runner.workflow.json` via `toEqual`. The admission gate (plan
+ * object that `executer-workflow-graph.test.ts` asserts is byte-identical to
+ * `examples/abg/executer.workflow.json` via `toEqual`. The admission gate (plan
  * Task 8) adds the admit-plan + plan-rejected-terminal nodes; the deterministic
- * admission helper lives in `runner-plan-admission.ts` to keep this factory a
+ * admission helper lives in `executer-plan-admission.ts` to keep this factory a
  * single data table.
  */
 import type { AbgGraphSpec, AbgNodeModelOptions } from '@mission-control/protocol';
 
-export const RUNNER_WORKFLOW_GRAPH_ID = 'runner';
-export const RUNNER_WORKFLOW_MAX_NODE_RUNS = 64;
+export const EXECUTER_WORKFLOW_GRAPH_ID = 'executer';
+export const EXECUTER_WORKFLOW_MAX_NODE_RUNS = 64;
 
 /**
  * Admission-gate prompt (plan Task 8). Instructs the model to verify the plan
  * is complete and approved BEFORE any delegation, writing `plan.admitted=true`
  * or `plan.admitted=false`. The deterministic contract lives in
- * `evaluatePlanAdmission` (`runner-plan-admission.ts`); this prompt mirrors it.
+ * `evaluatePlanAdmission` (`executer-plan-admission.ts`); this prompt mirrors it.
  */
-export const RUNNER_PLAN_ADMISSION_PROMPT =
-    'You are the runner plan admission gate. BEFORE any task delegation, verify the plan is ' +
-    'complete and approved. Read the plan from .omo/plans/<slug>.md and check ALL of: ' +
+export const EXECUTER_PLAN_ADMISSION_PROMPT =
+    'You are the Mission Control executer workflow plan-admission conductor. BEFORE any task ' +
+    'delegation, verify the plan is complete and approved. Read the plan from ' +
+    '.omo/plans/<slug>.md and check ALL of: ' +
     '(1) the plan exists and is non-empty; (2) it carries the scaffold sections ## TL;DR, ' +
     '## Scope, ## Todos, ## Final Verification Wave; (3) ## Todos contains at least one ' +
     '"- [ ]" checkbox; (4) ## Final Verification Wave is present; (5) the plan is marked ' +
@@ -72,11 +73,11 @@ export const RUNNER_PLAN_ADMISSION_PROMPT =
     'no prose, no formatting, no extra text.';
 
 /** Terminal failure prompt for a plan rejected at admission. */
-export const RUNNER_PLAN_REJECTED_PROMPT =
+export const EXECUTER_PLAN_REJECTED_PROMPT =
     'The plan was rejected at admission. Emit a clear, single failure event stating why the ' +
     'plan could not be admitted (missing, malformed, unapproved, or incomplete) and stop. Do ' +
-    'NOT attempt delegation, checkbox updates, or fix-loops — the runner cannot execute ' +
-    'without an admissible plan. Set plan.rejected=true.';
+    'NOT attempt delegation, checkbox updates, or fix-loops — the Mission Control executer ' +
+    'workflow cannot execute without an admissible plan. Set plan.rejected=true.';
 
 /**
  * Section-scoped plan-parsing prompt (plan Task 9). Instructs the model to
@@ -85,7 +86,7 @@ export const RUNNER_PLAN_REJECTED_PROMPT =
  * surface `nextTaskLabel` (the first unchecked todo). Mirrors the deterministic
  * `parsePlanSections` contract in `persistence/plan-store.ts`.
  */
-export const RUNNER_PARSE_PLAN_PROMPT =
+export const EXECUTER_PARSE_PLAN_PROMPT =
     'Read the plan file from .omo/plans/{slug}.md and parse it with section-scoped counting: ' +
     'only column-0 checkboxes (`- [ ]` / `- [x]`) that fall under a `## Todos` / `## TODOs` or ' +
     '`## Final Verification Wave` heading are counted as actionable tasks. Ignore nested or ' +
@@ -95,25 +96,26 @@ export const RUNNER_PARSE_PLAN_PROMPT =
     'delegate-wave can name it. Set plan.parsed when complete.';
 
 /**
- * Append-only notepad initialization prompt (plan Task 9). The runner must
+ * Append-only notepad initialization prompt (plan Task 9). The executer must
  * read `.omo/notepads/{plan}/learnings.md` BEFORE delegation so inherited
  * wisdom flows into every child prompt, and must require delegated tasks to
- * APPEND findings (never overwrite). Mirrors the Atlas notepad protocol.
+ * APPEND findings (never overwrite). Mirrors the Mission Control append-only notepad protocol.
  */
-export const RUNNER_INIT_NOTEPAD_PROMPT =
-    'Read the append-only notepad at .omo/notepads/{plan}/learnings.md (create it if absent). ' +
+export const EXECUTER_INIT_NOTEPAD_PROMPT =
+    'As the Mission Control executer workflow conductor, read the append-only notepad at ' +
+    '.omo/notepads/{plan}/learnings.md (create it if absent) BEFORE delegation. ' +
     'Extract prior learnings, decisions, and issues to pass as Inherited Wisdom to every ' +
     'delegated task. The notepad is append-only: delegated tasks MUST append findings via ' +
     'appendNotepad / assertAppendOnly — never overwrite or truncate. Set notepad.ready when ' +
     'the notepad is read and the inherited-wisdom block is prepared.';
 
 /**
- * The six mandatory sections of every runner delegation prompt (plan Task 9,
- * mirrors the Atlas `<delegation_system>` 6-section contract). Each delegated
+ * The six mandatory sections of every executer delegation prompt (plan Task 9,
+ * mirrors the Mission Control executer 6-section delegation contract). Each delegated
  * task prompt MUST include ALL six sections. Declared as config metadata on
  * the delegate-wave node so tests and graph readers can verify the contract.
  */
-export const RUNNER_DELEGATION_SECTIONS = [
+export const EXECUTER_DELEGATION_SECTIONS = [
     'TASK',
     'EXPECTED OUTCOME',
     'REQUIRED TOOLS',
@@ -127,9 +129,10 @@ export const RUNNER_DELEGATION_SECTIONS = [
  * and follow the 6-section delegation prompt structure emitted by the
  * delegate-wave fan-out.
  */
-export const RUNNER_DELEGATE_WORKER_PROMPT =
-    'Execute the delegated sub-task via the task tool. The delegation prompt you receive MUST ' +
-    'contain six sections: ## 1. TASK (exact checkbox item), ## 2. EXPECTED OUTCOME (files, ' +
+export const EXECUTER_DELEGATE_WORKER_PROMPT =
+    'You are a Mission Control executer workflow delegate worker. Execute the delegated ' +
+    'sub-task via the task tool. The orchestration prompt you receive MUST contain six ' +
+    'sections: ## 1. TASK (exact checkbox item), ## 2. EXPECTED OUTCOME (files, ' +
     'functionality, verification command), ## 3. REQUIRED TOOLS, ## 4. MUST DO, ## 5. MUST NOT ' +
     'DO, ## 6. CONTEXT (notepad paths, inherited wisdom, dependencies). Follow every section. ' +
     'Append findings to the notepad after completion (never overwrite).';
@@ -139,23 +142,23 @@ export const RUNNER_DELEGATE_WORKER_PROMPT =
  * NOT flip a checkbox based only on a child "done" claim. It must independently
  * verify (tests pass, files exist, lsp_diagnostics clean) before flipping, and
  * after flipping it must re-read the plan file to confirm the unchecked count
- * decreased. Mirrors the Atlas `<post_delegation_rule>` and verification
- * philosophy.
+ * decreased. Mirrors the Mission Control verify-before-checkbox discipline.
  */
-export const RUNNER_CHECKBOX_UPDATE_PROMPT =
-    'You are the checkbox-update gate. You MUST NOT flip a plan checkbox (`- [ ]` to `- [x]`) ' +
-    'based only on a child agent claiming "done". Independently verify each task BEFORE ' +
-    'flipping: confirm tests pass (run the plan verification command), confirm the expected ' +
-    'files exist and were modified, and confirm lsp_diagnostics is clean on changed files. ' +
-    'Only after verification passes, edit .omo/plans/{slug}.md to change the matching ' +
-    '`- [ ]` to `- [x]` and write verification evidence. After the edit, READ the plan file ' +
-    'again to confirm the unchecked count decreased — this read-back is mandatory. If ' +
-    'verification fails, leave the checkbox unchecked and route back to fix-loop. Set ' +
-    'checkbox.updated only after the read-back confirms the flip landed.';
+export const EXECUTER_CHECKBOX_UPDATE_PROMPT =
+    'You are the Mission Control executer workflow checkbox-update conductor. You MUST NOT ' +
+    'flip a plan checkbox (`- [ ]` to `- [x]`) based only on a child agent claiming "done". ' +
+    'Independently verify each task BEFORE flipping: confirm tests pass (run the plan ' +
+    'verification command), confirm the expected files exist and were modified, and confirm ' +
+    'lsp_diagnostics is clean on changed files. Only after verification passes, edit ' +
+    '.omo/plans/{slug}.md to change the matching `- [ ]` to `- [x]` and write verification ' +
+    'evidence. After the edit, READ the plan file again to confirm the unchecked count ' +
+    'decreased — this read-back is mandatory. If verification fails, leave the checkbox ' +
+    'unchecked and route back to fix-loop. Set checkbox.updated only after the read-back ' +
+    'confirms the flip landed.';
 
 /**
  * Hard ceiling on consecutive final-verification-wave failures before the
- * runner stops looping and escalates. Three strikes: the first two rejections
+ * executer stops looping and escalates. Three strikes: the first two rejections
  * reopen tasks and retry (reusing persisted child session ids); the third
  * rejection routes to `blocked-escalation` and blocks for user intervention.
  *
@@ -164,7 +167,7 @@ export const RUNNER_CHECKBOX_UPDATE_PROMPT =
  * (`maxNodeRuns`, default 64) is an independent backstop that still protects
  * against infinite loops if the strike counter ever has a bug.
  */
-export const RUNNER_FINAL_STRIKE_BUDGET = 3;
+export const EXECUTER_FINAL_STRIKE_BUDGET = 3;
 
 /**
  * Final-verification-wave verdict aggregation contract. The parallel node reads
@@ -174,7 +177,7 @@ export const RUNNER_FINAL_STRIKE_BUDGET = 3;
  * truth is {@linkcode aggregateFinalVerdict}; the runtime parallel node calls it
  * when `verdictStrategy === 'all-approve'` and writes the result to `verdictKey`.
  */
-export const RUNNER_VERDICT_STRATEGY_ALL_APPROVE = 'all-approve';
+export const EXECUTER_VERDICT_STRATEGY_ALL_APPROVE = 'all-approve';
 
 /**
  * Fix-loop gate prompt (plan Task 10). The final verification wave REJECTED the
@@ -182,12 +185,13 @@ export const RUNNER_VERDICT_STRATEGY_ALL_APPROVE = 'all-approve';
  * either a retry (reopening tasks, reusing persisted child session ids) or to
  * `blocked-escalation` once the 3-strike ceiling is hit. It MUST NOT loop forever.
  */
-export const RUNNER_FIX_LOOP_PROMPT =
-    'You are the runner fix-loop gate. The final verification wave REJECTED the ' +
-    'implementation (at least one of F1-F4 returned REJECT). Steps: ' +
+export const EXECUTER_FIX_LOOP_PROMPT =
+    'You are the Mission Control executer workflow fix-loop conductor. The final ' +
+    'verification wave REJECTED the implementation (at least one of F1-F4 returned REJECT). ' +
+    'Steps: ' +
     '(1) Read the current strike counter from the blackboard key fix.strikes (treat ' +
     'absent as 0). (2) Increment it by one and write the new value to fix.strikes. ' +
-    `The strike budget is ${RUNNER_FINAL_STRIKE_BUDGET} (RUNNER_FINAL_STRIKE_BUDGET). ` +
+    `The strike budget is ${EXECUTER_FINAL_STRIKE_BUDGET} (EXECUTER_FINAL_STRIKE_BUDGET). ` +
     '(3) If the new strike count is STRICTLY LESS THAN the budget, set fix.route="retry": ' +
     'reopen the rejected plan tasks (uncheck their checkboxes) AND reuse each failed ' +
     "task's persisted child session id from the run taskRetryState / childSessionIds " +
@@ -199,21 +203,22 @@ export const RUNNER_FIX_LOOP_PROMPT =
     'graph loop limit (maxNodeRuns) is a backstop but the strike counter is the intended bound.';
 
 /**
- * Blocked-escalation prompt (plan Task 10). The runner exhausted its 3-strike
+ * Blocked-escalation prompt (plan Task 10). The executer exhausted its 3-strike
  * fix budget without all four final critics approving. Terminal-for-now: record
- * state and evidence, then block for human intervention. The runner does not
+ * state and evidence, then block for human intervention. The executer does not
  * proceed autonomously past this gate.
  */
-export const RUNNER_BLOCKED_ESCALATION_PROMPT =
-    'The runner exhausted its 3-strike fix budget (fix.strikes reached the ceiling) ' +
-    'without all four final critics (F1-F4) approving. Emit a single blocked-escalation ' +
-    'event: record the current state (which critics rejected and why, which plan tasks ' +
-    'remain open, the last child session ids attempted) and write verifiable evidence to ' +
-    'the run record and the evidence directory. Set fix.blocked=true. Do NOT retry, do ' +
-    'NOT reopen tasks, do NOT route back to next-wave. Signal for human intervention: ' +
-    'the runner cannot proceed autonomously past the final approval gate. A user must ' +
-    'review the evidence, fix the root cause, and explicitly resume (clearing the stop ' +
-    'marker) before the runner may attempt another fix cycle.';
+export const EXECUTER_BLOCKED_ESCALATION_PROMPT =
+    'The Mission Control executer workflow exhausted its 3-strike fix budget ' +
+    '(fix.strikes reached the ceiling) without all four final critics (F1-F4) approving. ' +
+    'Emit a single blocked-escalation event: record the current state (which critics ' +
+    'rejected and why, which plan tasks remain open, the last child session ids attempted) ' +
+    'and write verifiable evidence to the run record and the evidence directory. Set ' +
+    'fix.blocked=true. Do NOT retry, do NOT reopen tasks, do NOT route back to next-wave. ' +
+    'Signal for human intervention: the executer workflow cannot proceed autonomously past ' +
+    'the final approval gate. A user must review the evidence, fix the root cause, and ' +
+    'explicitly resume (clearing the stop marker) before the executer may attempt another ' +
+    'fix cycle.';
 
 /**
  * Reduce four critic verdicts into a single final verdict. APPROVE iff every
@@ -254,7 +259,7 @@ export function routeFixLoop(strikes: number, budget: number): 'retry' | 'blocke
     return strikes >= budget ? 'blocked' : 'retry';
 }
 
-export type RunnerWorkflowGraphOptions = {
+export type ExecuterWorkflowGraphOptions = {
     /**
      * Provider/model pin for the graph's `defaults.model`. When omitted, the graph does NOT
      * declare a default model; the runtime resolves each LLM node's model from the session's
@@ -266,14 +271,14 @@ export type RunnerWorkflowGraphOptions = {
     readonly maxNodeRuns?: number;
 };
 
-export function createRunnerWorkflowGraph(options: RunnerWorkflowGraphOptions = {}): AbgGraphSpec {
+export function createExecuterWorkflowGraph(options: ExecuterWorkflowGraphOptions = {}): AbgGraphSpec {
     return {
-        id: RUNNER_WORKFLOW_GRAPH_ID,
+        id: EXECUTER_WORKFLOW_GRAPH_ID,
         version: '0.1.0',
         entryNodeId: 'admit-plan',
         defaults: {
             ...(options.model !== undefined ? { model: options.model } : {}),
-            maxNodeRuns: options.maxNodeRuns ?? RUNNER_WORKFLOW_MAX_NODE_RUNS,
+            maxNodeRuns: options.maxNodeRuns ?? EXECUTER_WORKFLOW_MAX_NODE_RUNS,
         },
         nodes: [
             {
@@ -281,7 +286,7 @@ export function createRunnerWorkflowGraph(options: RunnerWorkflowGraphOptions = 
                 kind: 'llm',
                 label: 'Plan admission gate — reject missing/malformed/unapproved plans',
                 config: {
-                    systemPrompt: RUNNER_PLAN_ADMISSION_PROMPT,
+                    systemPrompt: EXECUTER_PLAN_ADMISSION_PROMPT,
                     outputKey: 'plan.admitted',
                     outputShape: 'boolean',
                 },
@@ -291,7 +296,7 @@ export function createRunnerWorkflowGraph(options: RunnerWorkflowGraphOptions = 
                 kind: 'llm',
                 label: 'Terminal failure — plan rejected at admission, do not delegate',
                 config: {
-                    systemPrompt: RUNNER_PLAN_REJECTED_PROMPT,
+                    systemPrompt: EXECUTER_PLAN_REJECTED_PROMPT,
                     outputKey: 'plan.rejected',
                 },
             },
@@ -300,7 +305,7 @@ export function createRunnerWorkflowGraph(options: RunnerWorkflowGraphOptions = 
                 kind: 'llm',
                 label: 'Parse plan checklist (section-scoped: Todos + Final Verification Wave only)',
                 config: {
-                    systemPrompt: RUNNER_PARSE_PLAN_PROMPT,
+                    systemPrompt: EXECUTER_PARSE_PLAN_PROMPT,
                     outputKey: 'plan.parsed',
                     parser: 'parsePlanSections',
                     countedSections: ['Todos', 'Final Verification Wave'],
@@ -311,7 +316,7 @@ export function createRunnerWorkflowGraph(options: RunnerWorkflowGraphOptions = 
                 kind: 'llm',
                 label: 'Initialize append-only notepad and extract inherited wisdom',
                 config: {
-                    systemPrompt: RUNNER_INIT_NOTEPAD_PROMPT,
+                    systemPrompt: EXECUTER_INIT_NOTEPAD_PROMPT,
                     outputKey: 'notepad.ready',
                     notepadPath: '.omo/notepads/{plan}/learnings.md',
                     notepadMode: 'append-only',
@@ -323,8 +328,9 @@ export function createRunnerWorkflowGraph(options: RunnerWorkflowGraphOptions = 
                 label: 'Select next wave of unchecked tasks (parallel-by-default, dependency-blocked)',
                 config: {
                     systemPrompt:
-                        'Inspect the section-scoped plan checklist (plan.todos). If unchecked tasks ' +
-                        'remain, output ONLY the JSON boolean `true`. If all tasks are checked, output ' +
+                        'As the Mission Control executer workflow wave conductor, inspect the ' +
+                        'section-scoped plan checklist (plan.todos). If unchecked tasks remain, ' +
+                        'output ONLY the JSON boolean `true`. If all tasks are checked, output ' +
                         'ONLY the JSON boolean `false` — no prose, no formatting, no extra text.',
                     outputKey: 'wave.pending',
                     outputShape: 'boolean',
@@ -340,7 +346,7 @@ export function createRunnerWorkflowGraph(options: RunnerWorkflowGraphOptions = 
                     completionKey: 'delegate.complete',
                     parallelByDefault: true,
                     dependencyKey: 'plan.dependencies',
-                    delegationSections: [...RUNNER_DELEGATION_SECTIONS],
+                    delegationSections: [...EXECUTER_DELEGATION_SECTIONS],
                 },
             },
             {
@@ -349,7 +355,7 @@ export function createRunnerWorkflowGraph(options: RunnerWorkflowGraphOptions = 
                 label: 'Single task() delegation — 6-section prompt contract',
                 capabilities: ['subagent'],
                 config: {
-                    systemPrompt: RUNNER_DELEGATE_WORKER_PROMPT,
+                    systemPrompt: EXECUTER_DELEGATE_WORKER_PROMPT,
                 },
             },
             {
@@ -368,7 +374,7 @@ export function createRunnerWorkflowGraph(options: RunnerWorkflowGraphOptions = 
                 kind: 'llm',
                 label: 'Update plan checkboxes only after independent verification passes',
                 config: {
-                    systemPrompt: RUNNER_CHECKBOX_UPDATE_PROMPT,
+                    systemPrompt: EXECUTER_CHECKBOX_UPDATE_PROMPT,
                     outputKey: 'checkbox.updated',
                     planPath: '.omo/plans/{slug}.md',
                     verifyBeforeCheckbox: true,
@@ -383,7 +389,7 @@ export function createRunnerWorkflowGraph(options: RunnerWorkflowGraphOptions = 
                 config: {
                     completionKey: 'final.complete',
                     verdictKey: 'final.verdict',
-                    verdictStrategy: RUNNER_VERDICT_STRATEGY_ALL_APPROVE,
+                    verdictStrategy: EXECUTER_VERDICT_STRATEGY_ALL_APPROVE,
                     verdictSources: ['final.f1', 'final.f2', 'final.f3', 'final.f4'],
                     aggregateKey: 'final.critics',
                 },
@@ -394,7 +400,9 @@ export function createRunnerWorkflowGraph(options: RunnerWorkflowGraphOptions = 
                 label: 'F1 — Goal verification critic',
                 config: {
                     systemPrompt:
-                        'F1: Verify the implementation achieves the plan stated goal. Output ONLY one verdict — APPROVE or REJECT — with no prose or formatting.',
+                        'F1 (Mission Control executer final critic): Verify the implementation ' +
+                        'achieves the plan stated goal. Output ONLY one verdict — APPROVE or REJECT — ' +
+                        'with no prose or formatting.',
                     outputKey: 'final.f1',
                 },
             },
@@ -404,7 +412,8 @@ export function createRunnerWorkflowGraph(options: RunnerWorkflowGraphOptions = 
                 label: 'F2 — Constraint verification critic',
                 config: {
                     systemPrompt:
-                        'F2: Verify all explicit constraints were honored. Output ONLY one verdict — APPROVE or REJECT — with no prose or formatting.',
+                        'F2 (Mission Control executer final critic): Verify all explicit constraints ' +
+                        'were honored. Output ONLY one verdict — APPROVE or REJECT — with no prose or formatting.',
                     outputKey: 'final.f2',
                 },
             },
@@ -414,7 +423,8 @@ export function createRunnerWorkflowGraph(options: RunnerWorkflowGraphOptions = 
                 label: 'F3 — Test verification critic',
                 config: {
                     systemPrompt:
-                        'F3: Verify all tests pass. Output ONLY one verdict — APPROVE or REJECT — with no prose or formatting.',
+                        'F3 (Mission Control executer final critic): Verify all tests pass. Output ' +
+                        'ONLY one verdict — APPROVE or REJECT — with no prose or formatting.',
                     outputKey: 'final.f3',
                 },
             },
@@ -424,7 +434,8 @@ export function createRunnerWorkflowGraph(options: RunnerWorkflowGraphOptions = 
                 label: 'F4 — Code quality verification critic',
                 config: {
                     systemPrompt:
-                        'F4: Verify the code is clean and well-structured. Output ONLY one verdict — APPROVE or REJECT — with no prose or formatting.',
+                        'F4 (Mission Control executer final critic): Verify the code is clean and ' +
+                        'well-structured. Output ONLY one verdict — APPROVE or REJECT — with no prose or formatting.',
                     outputKey: 'final.f4',
                 },
             },
@@ -439,11 +450,11 @@ export function createRunnerWorkflowGraph(options: RunnerWorkflowGraphOptions = 
                 kind: 'llm',
                 label: 'Final verification rejected — bounded 3-strike fix loop',
                 config: {
-                    systemPrompt: RUNNER_FIX_LOOP_PROMPT,
+                    systemPrompt: EXECUTER_FIX_LOOP_PROMPT,
                     outputKey: 'fix.route',
                     strikeKey: 'fix.strikes',
-                    strikeBudget: RUNNER_FINAL_STRIKE_BUDGET,
-                    maxStrikes: RUNNER_FINAL_STRIKE_BUDGET,
+                    strikeBudget: EXECUTER_FINAL_STRIKE_BUDGET,
+                    maxStrikes: EXECUTER_FINAL_STRIKE_BUDGET,
                     lineageKey: 'run.childSessionIds',
                     retryStateKey: 'run.taskRetryState',
                 },
@@ -453,10 +464,10 @@ export function createRunnerWorkflowGraph(options: RunnerWorkflowGraphOptions = 
                 kind: 'llm',
                 label: 'Strike budget exhausted — record state/evidence and block for user',
                 config: {
-                    systemPrompt: RUNNER_BLOCKED_ESCALATION_PROMPT,
+                    systemPrompt: EXECUTER_BLOCKED_ESCALATION_PROMPT,
                     outputKey: 'fix.blocked',
                     evidencePath: '.omo/evidence/',
-                    strikeBudget: RUNNER_FINAL_STRIKE_BUDGET,
+                    strikeBudget: EXECUTER_FINAL_STRIKE_BUDGET,
                 },
             },
         ],

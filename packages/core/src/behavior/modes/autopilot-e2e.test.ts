@@ -63,9 +63,9 @@ describe('autopilot mode E2E: applyMode on real graph + policy gate enforcement'
         const prompt = configString(intakeNode, 'systemPrompt');
 
         expect(prompt).toContain('autopilot mode');
-        expect(prompt).toContain('Summarize the user planning request');
+        expect(prompt).toContain('Summarize the user request into a concise GOAL');
         const overlayIdx = prompt?.indexOf('autopilot mode') ?? -1;
-        const originalIdx = prompt?.indexOf('Summarize the user planning request') ?? -1;
+        const originalIdx = prompt?.indexOf('Summarize the user request into a concise GOAL') ?? -1;
         expect(overlayIdx).toBeLessThan(originalIdx);
     });
 

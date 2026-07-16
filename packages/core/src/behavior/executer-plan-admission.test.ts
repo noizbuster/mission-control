@@ -1,7 +1,7 @@
 /**
- * Runner plan-admission gate (plan Task 8).
+ * Executer plan-admission gate (plan Task 8).
  *
- * Proves the runner rejects missing, malformed, unapproved, or incomplete plans
+ * Proves the executer rejects missing, malformed, unapproved, or incomplete plans
  * before any task delegation, and accepts only a valid approved plan.
  *   1. The admit-plan node is the entry, routes admitted -> parse-plan and
  *      rejected -> plan-rejected-terminal (terminal, no delegation path).
@@ -22,24 +22,24 @@ import type { AbgNodeRunContext } from './node-registry';
 import { runLlmActorNode } from './nodes/llm-actor/llm-actor-node-runner';
 import {
     evaluatePlanAdmission,
-    RUNNER_APPROVED_STATUS_PATTERN,
-    RUNNER_REQUIRED_SCAFFOLD_SECTIONS,
-} from './runner-plan-admission';
+    EXECUTER_APPROVED_STATUS_PATTERN,
+    EXECUTER_REQUIRED_SCAFFOLD_SECTIONS,
+} from './executer-plan-admission';
 import {
-    createRunnerWorkflowGraph,
-    RUNNER_PLAN_ADMISSION_PROMPT,
-    RUNNER_PLAN_REJECTED_PROMPT,
-} from './runner-workflow-graph';
+    createExecuterWorkflowGraph,
+    EXECUTER_PLAN_ADMISSION_PROMPT,
+    EXECUTER_PLAN_REJECTED_PROMPT,
+} from './executer-workflow-graph';
 import { readFile } from 'node:fs/promises';
 
-const WORKFLOW_FIXTURE_PATH = `${process.cwd()}/examples/abg/runner.workflow.json`;
+const WORKFLOW_FIXTURE_PATH = `${process.cwd()}/examples/abg/executer.workflow.json`;
 
 function configString(node: AbgNodeSpec | undefined, key: string): string | undefined {
     const value = node?.config?.[key];
     return typeof value === 'string' ? value : undefined;
 }
 
-function findNode(graph: ReturnType<typeof createRunnerWorkflowGraph>, id: string): AbgNodeSpec {
+function findNode(graph: ReturnType<typeof createExecuterWorkflowGraph>, id: string): AbgNodeSpec {
     const node = graph.nodes.find((candidate) => candidate.id === id);
     if (node === undefined) {
         throw new Error(`test setup: runner graph missing node '${id}'`);
@@ -83,13 +83,13 @@ const VALID_APPROVED_PLAN = [
 
 describe('runner admission gate: graph structure', () => {
     it('admit-plan is the entry node', () => {
-        const graph = createRunnerWorkflowGraph();
+        const graph = createExecuterWorkflowGraph();
         expect(graph.entryNodeId).toBe('admit-plan');
         expect(graph.nodes.map((node) => node.id)).toContain('admit-plan');
     });
 
     it('admit-plan routes admitted -> parse-plan and rejected -> plan-rejected-terminal', () => {
-        const graph = createRunnerWorkflowGraph();
+        const graph = createExecuterWorkflowGraph();
         const admitEdges = graph.edges.filter((edge) => edge.source === 'admit-plan');
         const admitted = admitEdges.find((edge) => edge.target === 'parse-plan');
         const rejected = admitEdges.find((edge) => edge.target === 'plan-rejected-terminal');
@@ -98,7 +98,7 @@ describe('runner admission gate: graph structure', () => {
     });
 
     it('plan-admitted requires plan.admitted === true and plan-rejected-admission requires false', () => {
-        const graph = createRunnerWorkflowGraph();
+        const graph = createExecuterWorkflowGraph();
         const admitted = graph.rules.find((candidate) => candidate.id === 'plan-admitted');
         const rejected = graph.rules.find((candidate) => candidate.id === 'plan-rejected-admission');
         expect(admitted?.when).toEqual({ kind: 'blackboard.value.equals', key: 'plan.admitted', value: true });
@@ -106,7 +106,7 @@ describe('runner admission gate: graph structure', () => {
     });
 
     it('plan-rejected-terminal is terminal — no path to delegate-wave or parse-plan', () => {
-        const graph = createRunnerWorkflowGraph();
+        const graph = createExecuterWorkflowGraph();
         const outgoing = graph.edges.filter((edge) => edge.source === 'plan-rejected-terminal');
         expect(outgoing).toHaveLength(0);
         const delegationSources = graph.edges
@@ -116,23 +116,23 @@ describe('runner admission gate: graph structure', () => {
     });
 
     it('admit-plan carries the admission prompt and a boolean plan.admitted outputKey', () => {
-        const graph = createRunnerWorkflowGraph();
+        const graph = createExecuterWorkflowGraph();
         const admitPlan = findNode(graph, 'admit-plan');
-        expect(configString(admitPlan, 'systemPrompt')).toBe(RUNNER_PLAN_ADMISSION_PROMPT);
+        expect(configString(admitPlan, 'systemPrompt')).toBe(EXECUTER_PLAN_ADMISSION_PROMPT);
         expect(configString(admitPlan, 'outputKey')).toBe('plan.admitted');
         expect(configString(admitPlan, 'outputShape')).toBe('boolean');
     });
 
     it('plan-rejected-terminal carries the failure prompt', () => {
-        const graph = createRunnerWorkflowGraph();
+        const graph = createExecuterWorkflowGraph();
         const terminal = findNode(graph, 'plan-rejected-terminal');
-        expect(configString(terminal, 'systemPrompt')).toBe(RUNNER_PLAN_REJECTED_PROMPT);
+        expect(configString(terminal, 'systemPrompt')).toBe(EXECUTER_PLAN_REJECTED_PROMPT);
         expect(configString(terminal, 'outputKey')).toBe('plan.rejected');
     });
 
     it('the admission prompt names every required check', () => {
-        const prompt = RUNNER_PLAN_ADMISSION_PROMPT;
-        for (const section of RUNNER_REQUIRED_SCAFFOLD_SECTIONS) {
+        const prompt = EXECUTER_PLAN_ADMISSION_PROMPT;
+        for (const section of EXECUTER_REQUIRED_SCAFFOLD_SECTIONS) {
             expect(prompt).toContain(section);
         }
         expect(prompt).toMatch(/"- \[ \]"/);
@@ -194,11 +194,11 @@ describe('runner admission gate: deterministic evaluatePlanAdmission', () => {
         expect(result.admitted).toBe(true);
     });
 
-    it('RUNNER_APPROVED_STATUS_PATTERN matches Approved, Ready, and Accepted', () => {
-        expect(RUNNER_APPROVED_STATUS_PATTERN.test('Status: Approved')).toBe(true);
-        expect(RUNNER_APPROVED_STATUS_PATTERN.test('Status: Ready')).toBe(true);
-        expect(RUNNER_APPROVED_STATUS_PATTERN.test('Status: Accepted')).toBe(true);
-        expect(RUNNER_APPROVED_STATUS_PATTERN.test('Status: Draft')).toBe(false);
+    it('EXECUTER_APPROVED_STATUS_PATTERN matches Approved, Ready, and Accepted', () => {
+        expect(EXECUTER_APPROVED_STATUS_PATTERN.test('Status: Approved')).toBe(true);
+        expect(EXECUTER_APPROVED_STATUS_PATTERN.test('Status: Ready')).toBe(true);
+        expect(EXECUTER_APPROVED_STATUS_PATTERN.test('Status: Accepted')).toBe(true);
+        expect(EXECUTER_APPROVED_STATUS_PATTERN.test('Status: Draft')).toBe(false);
     });
 });
 
@@ -208,7 +208,7 @@ describe('runner admission gate: runtime outputKey seam', () => {
     });
 
     it('admit-plan llm-actor writes plan.admitted=true when the model admits', async () => {
-        const graph = createRunnerWorkflowGraph();
+        const graph = createExecuterWorkflowGraph();
         const admitPlan = findNode(graph, 'admit-plan');
         const blackboard = createBlackboard();
         blackboard.appendMessages([{ role: 'user', content: 'run plan X' }] as readonly ModelMessage[]);
@@ -229,7 +229,7 @@ describe('runner admission gate: runtime outputKey seam', () => {
     });
 
     it('admit-plan llm-actor writes plan.admitted=false when the model rejects', async () => {
-        const graph = createRunnerWorkflowGraph();
+        const graph = createExecuterWorkflowGraph();
         const admitPlan = findNode(graph, 'admit-plan');
         const blackboard = createBlackboard();
         blackboard.appendMessages([{ role: 'user', content: 'run plan Y' }] as readonly ModelMessage[]);
@@ -251,9 +251,9 @@ describe('runner admission gate: runtime outputKey seam', () => {
 });
 
 describe('runner admission gate: fixture parity', () => {
-    it('the fixture graph matches createRunnerWorkflowGraph (admit-plan entry)', async () => {
+    it('the fixture graph matches createExecuterWorkflowGraph (admit-plan entry)', async () => {
         const spec = WorkflowSpecSchema.parse(JSON.parse(await readFile(WORKFLOW_FIXTURE_PATH, 'utf8')));
-        expect(spec.graph).toEqual(createRunnerWorkflowGraph());
+        expect(spec.graph).toEqual(createExecuterWorkflowGraph());
         expect(spec.graph.entryNodeId).toBe('admit-plan');
     });
 });
