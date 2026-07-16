@@ -6,6 +6,8 @@ import { createSkillCommandMenuView } from '../state/interactive-chat-command-me
 import {
     buildBottomStatusBarProps,
     buildTopStatusBarProps,
+    chatBottomDockSliceEqual,
+    createStableChatBottomDockSelector,
     type ChatBottomDockSlice,
     selectChatBottomDockSlice,
 } from './ChatBottomDock';
@@ -115,6 +117,46 @@ describe('ChatBottomDockBase source topology', () => {
         expect(source).toContain('/ for commands');
         expect(source).toContain('# for workflows');
         expect(source).toContain('$ for skills');
+    });
+
+    it('uses a stable dock slice selector so stream output publishes do not thrash the dock', () => {
+        const source = readChatBottomDockSource();
+        expect(source).toContain('createStableChatBottomDockSelector');
+        expect(source).toContain('useSolidStoreSelector(props.store, selectDockSlice)');
+    });
+});
+
+describe('stable chat bottom dock slice', () => {
+    it('treats two slices with identical fields as equal', () => {
+        const left = sliceWith({ generating: true, agentStatusText: 'Working…' });
+        const right: ChatBottomDockSlice = { ...left };
+        expect(chatBottomDockSliceEqual(left, right)).toBe(true);
+    });
+
+    it('detects generating and agent status changes', () => {
+        const idle = sliceWith({ generating: false, agentStatusText: '' });
+        const busy: ChatBottomDockSlice = { ...idle, generating: true, agentStatusText: 'Working…' };
+        expect(chatBottomDockSliceEqual(idle, busy)).toBe(false);
+    });
+
+    it('returns the previous slice reference when only outputText changed', () => {
+        const store = createChatStore();
+        const select = createStableChatBottomDockSelector();
+        store.setGenerating(true);
+        const first = select(store.getSnapshot());
+        store.replaceOutputText(`${store.getOutput()}Assistant: hello world`);
+        const second = select(store.getSnapshot());
+        expect(second).toBe(first);
+    });
+
+    it('returns a new slice when generating flips', () => {
+        const store = createChatStore();
+        const select = createStableChatBottomDockSelector();
+        const first = select(store.getSnapshot());
+        store.setGenerating(true);
+        const second = select(store.getSnapshot());
+        expect(second).not.toBe(first);
+        expect(second.generating).toBe(true);
     });
 });
 

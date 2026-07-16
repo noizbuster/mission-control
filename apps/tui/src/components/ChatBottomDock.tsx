@@ -101,6 +101,47 @@ export function selectChatBottomDockSlice(snapshot: ChatStoreState): ChatBottomD
     };
 }
 
+/** True when dock-visible fields are unchanged (ignores transcript `outputText` publishes). */
+export function chatBottomDockSliceEqual(left: ChatBottomDockSlice, right: ChatBottomDockSlice): boolean {
+    return (
+        left.inputMode === right.inputMode &&
+        left.inputMirror === right.inputMirror &&
+        left.menuState === right.menuState &&
+        left.workflowNames === right.workflowNames &&
+        left.skillNames === right.skillNames &&
+        left.fileAutocomplete === right.fileAutocomplete &&
+        left.historyEntries === right.historyEntries &&
+        left.historyPicker === right.historyPicker &&
+        left.providerID === right.providerID &&
+        left.modelID === right.modelID &&
+        left.variantID === right.variantID &&
+        left.contextTokensUsed === right.contextTokensUsed &&
+        left.contextTokensMax === right.contextTokensMax &&
+        left.sessionId === right.sessionId &&
+        left.approvalLevel === right.approvalLevel &&
+        left.separatorState === right.separatorState &&
+        left.generating === right.generating &&
+        left.agentStatusText === right.agentStatusText
+    );
+}
+
+/**
+ * Selector that keeps a stable slice reference across transcript stream publishes.
+ * Without this, every 50ms `emitOutput` rebuilds a new dock slice object and forces
+ * bottom-dock layout work that resizes the transcript viewport (visible flicker).
+ */
+export function createStableChatBottomDockSelector(): (snapshot: ChatStoreState) => ChatBottomDockSlice {
+    let previous: ChatBottomDockSlice | undefined;
+    return (snapshot: ChatStoreState): ChatBottomDockSlice => {
+        const next = selectChatBottomDockSlice(snapshot);
+        if (previous !== undefined && chatBottomDockSliceEqual(previous, next)) {
+            return previous;
+        }
+        previous = next;
+        return next;
+    };
+}
+
 function renderPromptAdjacentPanels({
     dockSlice,
     menuPolicy,
@@ -244,7 +285,8 @@ export function ChatBottomDockBase(props: ChatBottomDockBaseProps): JSX.Element 
 }
 
 export function ChatBottomDock(props: ChatBottomDockProps): JSX.Element {
-    const dockSlice = useSolidStoreSelector(props.store, selectChatBottomDockSlice);
+    const selectDockSlice = createStableChatBottomDockSelector();
+    const dockSlice = useSolidStoreSelector(props.store, selectDockSlice);
     return (
         <ChatBottomDockBase
             store={props.store}

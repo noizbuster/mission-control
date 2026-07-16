@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { MacOSScrollAccel } from '@opentui/core';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -67,5 +69,17 @@ describe('ChatTranscript component exports', () => {
     it('keeps the scroll option type exact for maxHeight callers', () => {
         const opts = chatTranscriptScrollOptions(10) satisfies ChatTranscriptScrollOptions;
         expect(opts.maxHeight).toBe(10);
+    });
+});
+
+describe('ChatTranscript stream-stability topology', () => {
+    it('lists blocks with Index (position) not For (identity) to avoid remount flicker', () => {
+        const source = readFileSync(resolve(process.cwd(), 'apps/tui/src/components/ChatTranscript.tsx'), 'utf8');
+        const transcriptFn = source.slice(source.indexOf('export function ChatTranscript'));
+        expect(transcriptFn).toContain('<Index each={props.blocks}>');
+        expect(transcriptFn).not.toContain('<For each={props.blocks}>');
+        expect(source).toContain('isStreaming={props.generating && index === props.blocks.length - 1}');
+        expect(source).toContain('const joined = () => joinBlockText(lines(), prefix())');
+        expect(source).toContain('streaming={streaming()}');
     });
 });

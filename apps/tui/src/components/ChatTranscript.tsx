@@ -3,7 +3,7 @@
 import { blockPrefix, type ChatBlock, joinBlockText, readToolBlockTitle } from '@mission-control/tui/chat';
 import { MacOSScrollAccel, type ScrollAcceleration, type ScrollBoxRenderable, TextAttributes } from '@opentui/core';
 import { useTerminalDimensions } from '@opentui/solid';
-import { For, type JSX } from 'solid-js';
+import { For, Index, Match, Show, Switch, type JSX } from 'solid-js';
 import { darkTheme } from './markdown/interactive-theme';
 import { Markdown } from './markdown/Markdown';
 import type { TerminalMarkdownTheme } from './markdown/theme';
@@ -99,7 +99,7 @@ export function MarkdownPanelBase(props: MarkdownPanelProps): JSX.Element {
                     text={props.text}
                     theme={props.theme}
                     width={Math.max(1, props.viewportColumns - props.barWidth)}
-                    {...(props.streaming === true ? { streaming: true } : {})}
+                    streaming={props.streaming === true}
                 />
             </box>
         </box>
@@ -115,88 +115,100 @@ export type MessageBlockProps = {
     readonly viewportColumns: number;
 };
 
+/**
+ * Fully reactive block renderer. Must not freeze `props.block` into consts at
+ * mount time: streaming updates the last block in place (Solid `Index` keeps the
+ * component mounted), and native `<markdown streaming>` needs content prop
+ * updates without remounting the whole panel.
+ */
 export function MessageBlockBase(props: MessageBlockProps): JSX.Element {
-    const prefix = blockPrefix[props.block.kind];
+    const kind = () => props.block.kind;
+    const lines = () => props.block.lines;
+    const prefix = () => blockPrefix[kind()];
+    const joined = () => joinBlockText(lines(), prefix());
+    const streaming = () => props.isStreaming === true;
+    const toolTitle = () => readToolBlockTitle(lines());
+    const leftHex = () => BLOCK_LEFT_HEX[kind()];
+    const isError = () => kind() === 'error';
 
-    if (props.block.kind === 'system') {
-        return (
-            <box flexDirection="column">
-                <For each={props.block.lines}>
-                    {(line) => (
-                        <text selectable attributes={TextAttributes.DIM}>
-                            {line}
-                        </text>
-                    )}
-                </For>
-            </box>
-        );
-    }
-
-    if (props.block.kind === 'tool') {
-        const title = readToolBlockTitle(props.block.lines);
-        return (
-            <box marginTop={1}>
-                <ToolCard
-                    lines={props.block.lines}
-                    expanded={props.toolOutputExpanded}
-                    {...(title !== undefined ? { title } : {})}
-                />
-            </box>
-        );
-    }
-
-    if (props.block.kind === 'thinking') {
-        const joined = joinBlockText(props.block.lines, prefix);
-        return (
-            <MarkdownPanel
-                text={joined}
-                theme={thinkingTheme}
-                barColor="#ff00ff"
-                barWidth={2}
-                marginTop={1}
-                viewportColumns={props.viewportColumns}
-                {...(props.isStreaming === true ? { streaming: true } : {})}
-            />
-        );
-    }
-
-    if (props.block.kind === 'assistant') {
-        const joined = joinBlockText(props.block.lines, prefix);
-        return (
-            <MarkdownPanel
-                text={joined}
-                theme={darkTheme}
-                barColor="#00ff00"
-                barWidth={1}
-                viewportColumns={props.viewportColumns}
-                {...(props.isStreaming === true ? { streaming: true } : {})}
-            />
-        );
-    }
-
-    const leftHex = BLOCK_LEFT_HEX[props.block.kind];
-    const isError = props.block.kind === 'error';
     return (
-        <box flexDirection="row">
-            {leftHex !== undefined ? <box width={1} backgroundColor={leftHex} shouldFill={true} /> : null}
-            <box flexDirection="column" flexGrow={1} minWidth={0}>
-                <For each={props.block.lines}>
-                    {(line) => {
-                        const content = prefix.length > 0 && line.startsWith(prefix) ? line.slice(prefix.length) : line;
-                        return (
-                            <text selectable {...(isError ? { fg: '#ff0000' } : {})}>
-                                {content}
+        <Switch>
+            <Match when={kind() === 'system'}>
+                <box flexDirection="column">
+                    <For each={lines()}>
+                        {(line) => (
+                            <text selectable attributes={TextAttributes.DIM}>
+                                {line}
                             </text>
-                        );
-                    }}
-                </For>
-            </box>
-        </box>
+                        )}
+                    </For>
+                </box>
+            </Match>
+            <Match when={kind() === 'tool'}>
+                <box marginTop={1}>
+                    <ToolCard
+                        lines={lines()}
+                        expanded={props.toolOutputExpanded}
+                        {...(toolTitle() !== undefined ? { title: toolTitle() } : {})}
+                    />
+                </box>
+            </Match>
+            <Match when={kind() === 'thinking'}>
+                <MarkdownPanel
+                    text={joined()}
+                    theme={thinkingTheme}
+                    barColor="#ff00ff"
+                    barWidth={2}
+                    marginTop={1}
+                    viewportColumns={props.viewportColumns}
+                    streaming={streaming()}
+                />
+            </Match>
+            <Match when={kind() === 'assistant'}>
+                <MarkdownPanel
+                    text={joined()}
+                    theme={darkTheme}
+                    barColor="#00ff00"
+                    barWidth={1}
+                    viewportColumns={props.viewportColumns}
+                    streaming={streaming()}
+                />
+            </Match>
+            <Match when={kind() === 'user' || kind() === 'error'}>
+                <box flexDirection="row">
+                    <Show when={leftHex() !== undefined}>
+                        <box width={1} backgroundColor={leftHex()} shouldFill={true} />
+                    </Show>
+                    <box flexDirection="column" flexGrow={1} minWidth={0}>
+                        <For each={lines()}>
+                            {(line) => {
+                                const content = () => {
+                                    const p = prefix();
+                                    return p.length > 0 && line.startsWith(p) ? line.slice(p.length) : line;
+                                };
+                                return (
+                                    <text selectable {...(isError() ? { fg: '#ff0000' } : {})}>
+                                        {content()}
+                                    </text>
+                                );
+                            }}
+                        </For>
+                    </box>
+                </box>
+            </Match>
+        </Switch>
     );
 }
 
 export const MessageBlock = MessageBlockBase;
 
+/**
+ * Transcript list uses Solid `Index` (by position), not `For` (by referential
+ * identity). Streaming rewrites the last block every coalesce tick; `For` would
+ * destroy and remount that MessageBlock (and its native markdown) on every
+ * chunk, which paints as full-panel flicker. `Index` keeps the row mounted and
+ * only updates reactive props into the streaming markdown renderable.
+ */
 export function ChatTranscript(props: ChatTranscriptProps): JSX.Element {
     const dimensions = useTerminalDimensions();
 
@@ -206,22 +218,18 @@ export function ChatTranscript(props: ChatTranscriptProps): JSX.Element {
             focusable={false}
             {...chatTranscriptScrollOptions()}
         >
-            {props.blocks.length === 0 ? (
-                <text attributes={TextAttributes.DIM}>{''}</text>
-            ) : (
-                <For each={props.blocks}>
+            <Show when={props.blocks.length > 0} fallback={<text attributes={TextAttributes.DIM}>{''}</text>}>
+                <Index each={props.blocks}>
                     {(block, index) => (
                         <MessageBlock
-                            block={block}
+                            block={block()}
                             toolOutputExpanded={props.toolOutputExpanded}
                             viewportColumns={dimensions().width}
-                            {...(props.generating && index() === props.blocks.length - 1
-                                ? { isStreaming: true }
-                                : {})}
+                            isStreaming={props.generating && index === props.blocks.length - 1}
                         />
                     )}
-                </For>
-            )}
+                </Index>
+            </Show>
         </scrollbox>
     );
 }
