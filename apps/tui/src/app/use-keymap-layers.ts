@@ -48,6 +48,8 @@ function navigateOpenMenu(store: ChatStore, textareaHandle: ChatTextareaHandle, 
         store.navigateSlashMenu(direction);
     } else if (text.startsWith('#')) {
         store.navigateWorkflowMenu(direction);
+    } else if (text.startsWith('$')) {
+        store.navigateSkillMenu(direction);
     } else if (snap.fileAutocomplete.open) {
         store.navigateFileAutocomplete(direction);
     }
@@ -97,7 +99,7 @@ export function useKeymapLayers(deps: KeymapLayersDeps): void {
                     return false;
                 }
                 const text = textareaHandle.get()?.plainText ?? '';
-                if (text.startsWith('/') || text.startsWith('#')) {
+                if (text.startsWith('/') || text.startsWith('#') || text.startsWith('$')) {
                     const token = text.slice(1);
                     return !token.includes(' ') && !token.includes('\n') && !token.includes('\t');
                 }

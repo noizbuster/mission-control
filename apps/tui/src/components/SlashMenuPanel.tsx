@@ -2,6 +2,7 @@ import { terminalDisplayWidth } from '@mission-control/tui';
 import { TextAttributes } from '@opentui/core';
 import { For, type JSX } from 'solid-js';
 import {
+    createSkillCommandMenuView,
     createSlashCommandMenuView,
     createWorkflowCommandMenuView,
     type SlashCommandMenuState,
@@ -13,6 +14,7 @@ export type SlashMenuPanelProps = {
     readonly inputBuffer: string;
     readonly menuState: SlashCommandMenuState;
     readonly workflowNames: readonly string[];
+    readonly skillNames: readonly string[];
     readonly maxVisibleRows?: number;
     readonly showFooter?: boolean;
 };
@@ -24,17 +26,21 @@ export function SlashMenuPanel({
     inputBuffer,
     menuState,
     workflowNames,
+    skillNames,
     maxVisibleRows = MAX_VISIBLE,
     showFooter = true,
 }: SlashMenuPanelProps): JSX.Element | null {
     const isSlash = inputBuffer.startsWith('/');
     const isWorkflow = inputBuffer.startsWith('#');
-    if (!isSlash && !isWorkflow) return null;
+    const isSkill = inputBuffer.startsWith('$');
+    if (!isSlash && !isWorkflow && !isSkill) return null;
     if (maxVisibleRows <= 0) return null;
 
     const view = isSlash
         ? createSlashCommandMenuView(inputBuffer, menuState, maxVisibleRows)
-        : createWorkflowCommandMenuView(inputBuffer, menuState, maxVisibleRows, workflowNames);
+        : isWorkflow
+          ? createWorkflowCommandMenuView(inputBuffer, menuState, maxVisibleRows, workflowNames)
+          : createSkillCommandMenuView(inputBuffer, menuState, maxVisibleRows, skillNames);
 
     if (!view.open) return null;
 
@@ -42,10 +48,13 @@ export function SlashMenuPanel({
         ? view.query.length > 0
             ? ` Commands matching "${view.query}" `
             : ` Commands (${view.totalCount}) `
-        : view.query.length > 0
-          ? ` Workflows matching "${view.query}" `
-          : ` Workflows (${view.totalCount}) `;
-
+        : isWorkflow
+          ? view.query.length > 0
+              ? ` Workflows matching "${view.query}" `
+              : ` Workflows (${view.totalCount}) `
+          : view.query.length > 0
+            ? ` Skills matching "${view.query}" `
+            : ` Skills (${view.totalCount}) `;
     const idWidth =
         view.visibleChoices.length > 0 ? Math.max(8, ...view.visibleChoices.map((c) => terminalDisplayWidth(c.id))) : 8;
 

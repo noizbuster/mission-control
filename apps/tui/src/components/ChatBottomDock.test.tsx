@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createChatSelectorStore } from '../state/chat-selector-store';
 import { createChatStore } from '../state/chat-store';
 import { createSlashCommandMenuState } from '../state/interactive-chat-command-menu';
+import { createSkillCommandMenuView } from '../state/interactive-chat-command-menu';
 import {
     buildBottomStatusBarProps,
     buildTopStatusBarProps,
@@ -79,7 +80,7 @@ describe('ChatBottomDockBase source topology', () => {
         expect(readChatInputAreaSource()).toContain('useTuiPromptRef');
     });
 
-    it('derives prompt-adjacent menu visibility from slash, workflow, file, history picker, and menu-row state', () => {
+    it('derives prompt-adjacent menu visibility from slash, workflow, skill, file, history picker, and menu-row state', () => {
         const source = readChatBottomDockSource();
         const block = sliceBetween(
             source,
@@ -91,9 +92,11 @@ describe('ChatBottomDockBase source topology', () => {
         expect(block).toContain('<HistoryPickerPanel');
         expect(block).toContain("dockSlice.inputMirror.startsWith('/')");
         expect(block).toContain("dockSlice.inputMirror.startsWith('#')");
+        expect(block).toContain("dockSlice.inputMirror.startsWith('$')");
         expect(block).toContain('dockSlice.fileAutocomplete.open');
         expect(block).toContain('menuPolicy.rows > 0');
         expect(block).toContain('<SlashMenuPanel');
+        expect(block).toContain('skillNames={dockSlice.skillNames}');
         expect(block).toContain('<FileAutocompletePanel');
         expect(block).toContain('{promptAdjacentPanel ?? null}');
     });
@@ -105,6 +108,13 @@ describe('ChatBottomDockBase source topology', () => {
         expect(source).toContain('viewportRows');
         expect(source).toContain('halfPageScrollDelta(props.viewportRows)');
         expect(source).not.toContain(stdoutRowsToken);
+    });
+
+    it('pins input placeholder phrases for slash, workflow, and skill prefixes', () => {
+        const source = readChatInputAreaSource();
+        expect(source).toContain('/ for commands');
+        expect(source).toContain('# for workflows');
+        expect(source).toContain('$ for skills');
     });
 });
 
@@ -263,7 +273,7 @@ describe('selectChatBottomDockSlice', () => {
         dispose();
     });
 
-    it('carries slash menu, workflow names, and file autocomplete state into the dock slice', () => {
+    it('carries slash menu, workflow names, skill names, and file autocomplete state into the dock slice', () => {
         const store = createChatStore();
         const menuState = createSlashCommandMenuState();
         const fileAutocomplete = {
@@ -277,6 +287,7 @@ describe('selectChatBottomDockSlice', () => {
             inputMirror: '/',
             menuState,
             workflowNames: ['default', 'planner', 'executer'],
+            skillNames: ['planner', 'git-master'],
             fileAutocomplete,
         };
 
@@ -284,7 +295,23 @@ describe('selectChatBottomDockSlice', () => {
             inputMirror: '/',
             menuState,
             workflowNames: ['default', 'planner', 'executer'],
+            skillNames: ['planner', 'git-master'],
             fileAutocomplete,
         });
+    });
+
+    it('opens skill menu for $pl with skillNames so $planner is the selected choice', () => {
+        const store = createChatStore();
+        store.setSkillNames(['planner', 'git-master']);
+        const slice = selectChatBottomDockSlice({
+            ...store.getSnapshot(),
+            inputMirror: '$pl',
+        });
+        const view = createSkillCommandMenuView('$pl', slice.menuState, 5, slice.skillNames);
+
+        expect(slice.inputMirror.startsWith('$')).toBe(true);
+        expect(view.open).toBe(true);
+        expect(view.visibleChoices.map((choice) => choice.id)).toContain('$planner');
+        expect(view.visibleChoices[view.selectedIndex - view.startIndex]?.id).toBe('$planner');
     });
 });

@@ -129,4 +129,30 @@ describe('useSubmit', () => {
         expect(submitLine).toHaveBeenCalledWith('/help');
         expect(textarea.clearCount).toBe(1);
     });
+
+    it('inserts skill menu completion for $pl without calling submitLine', () => {
+        // Given: open skill menu on partial `$pl` with skillNames including planner
+        const store = createChatStore();
+        store.setSkillNames(['planner']);
+        const textarea = createRecordingTextarea('$pl');
+        const textareaHandle = asTextareaRef(textarea);
+        const submitLine = vi.spyOn(store, 'submitLine');
+        const setInputMirror = vi.spyOn(store, 'setInputMirror');
+        const handleSubmit = useSubmit({
+            store,
+            textareaHandle,
+            promptMenuInteractionsEnabled: () => true,
+        });
+
+        // When: Enter submit path runs
+        handleSubmit();
+        flushSubmitTimers();
+
+        // Then: inserts `$planner ` and does not submit
+        expect(submitLine).not.toHaveBeenCalled();
+        expect(textarea.setTextCalls).toContain('$planner ');
+        expect(textarea.gotoBufferEndCount).toBeGreaterThan(0);
+        expect(setInputMirror).toHaveBeenCalledWith('$planner ');
+        expect(textarea.clearCount).toBe(0);
+    });
 });

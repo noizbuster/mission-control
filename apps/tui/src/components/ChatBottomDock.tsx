@@ -32,6 +32,7 @@ export type ChatBottomDockSlice = {
     readonly inputMirror: string;
     readonly menuState: SlashCommandMenuState;
     readonly workflowNames: readonly string[];
+    readonly skillNames: readonly string[];
     readonly fileAutocomplete: FileAutocompleteState;
     readonly historyEntries: readonly HistoryPickerEntry[];
     readonly historyPicker: HistoryPickerState;
@@ -79,6 +80,7 @@ export function selectChatBottomDockSlice(snapshot: ChatStoreState): ChatBottomD
         inputMirror: snapshot.inputMirror,
         menuState: snapshot.menuState,
         workflowNames: snapshot.workflowNames,
+        skillNames: snapshot.skillNames,
         fileAutocomplete: snapshot.fileAutocomplete,
         historyEntries: snapshot.historyEntries,
         historyPicker: snapshot.historyPicker,
@@ -107,10 +109,13 @@ function renderPromptAdjacentPanels({
 }: PromptAdjacentPanelsInput & { readonly columns: number }): JSX.Element | null {
     const historyPickerOpen = dockSlice.historyPicker.open;
     const showHistoryPicker = historyPickerOpen && menuPolicy.rows > 0;
-    const showSlashOrWorkflow =
-        !historyPickerOpen && (dockSlice.inputMirror.startsWith('/') || dockSlice.inputMirror.startsWith('#'));
-    const showFileAutocomplete = !historyPickerOpen && !showSlashOrWorkflow && dockSlice.fileAutocomplete.open;
-    const showPolicyMenu = menuPolicy.rows > 0 && (showSlashOrWorkflow || showFileAutocomplete);
+    const showSlashWorkflowOrSkill =
+        !historyPickerOpen &&
+        (dockSlice.inputMirror.startsWith('/') ||
+            dockSlice.inputMirror.startsWith('#') ||
+            dockSlice.inputMirror.startsWith('$'));
+    const showFileAutocomplete = !historyPickerOpen && !showSlashWorkflowOrSkill && dockSlice.fileAutocomplete.open;
+    const showPolicyMenu = menuPolicy.rows > 0 && (showSlashWorkflowOrSkill || showFileAutocomplete);
     const hasPromptAdjacentPanel = promptAdjacentPanel !== undefined && promptAdjacentPanel !== null;
 
     if (!showHistoryPicker && !showPolicyMenu && !hasPromptAdjacentPanel) return null;
@@ -126,11 +131,12 @@ function renderPromptAdjacentPanels({
                     showFooter={menuPolicy.showPanelFooter}
                 />
             ) : null}
-            {showPolicyMenu && showSlashOrWorkflow ? (
+            {showPolicyMenu && showSlashWorkflowOrSkill ? (
                 <SlashMenuPanel
                     inputBuffer={dockSlice.inputMirror}
                     menuState={dockSlice.menuState}
                     workflowNames={dockSlice.workflowNames}
+                    skillNames={dockSlice.skillNames}
                     maxVisibleRows={menuPolicy.rows}
                     showFooter={menuPolicy.showPanelFooter}
                 />

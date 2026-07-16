@@ -1,6 +1,7 @@
 import type { Accessor } from 'solid-js';
 import type { ChatStore } from '../state/chat-store';
 import {
+    resolveSkillCommandMenuInsertText,
     resolveSlashCommandMenuInsertText,
     resolveWorkflowCommandMenuInsertText,
 } from '../state/interactive-chat-command-menu';
@@ -14,7 +15,7 @@ export type UseSubmitOptions = {
 
 /**
  * App Enter-submit path (keymap chat.submit layer). Preserves IME-safe
- * double setTimeout(0), re-entrancy guard, empty reject, and slash/workflow
+ * double setTimeout(0), re-entrancy guard, empty reject, and slash/workflow/skill
  * menu insert-before-submit behavior. Does not expand paste markers or handle
  * file-autocomplete completion (those stay on ChatInputArea).
  */
@@ -36,6 +37,20 @@ export function useSubmit(options: UseSubmitOptions): () => void {
                             captured,
                             snap.menuState,
                             snap.workflowNames,
+                        );
+                        if (insertText !== undefined) {
+                            textareaHandle.get()?.setText(insertText);
+                            textareaHandle.get()?.gotoBufferEnd();
+                            store.setInputMirror(insertText);
+                            return;
+                        }
+                    }
+
+                    if (promptMenuInteractionsEnabled() && captured.startsWith('$')) {
+                        const insertText = resolveSkillCommandMenuInsertText(
+                            captured,
+                            snap.menuState,
+                            snap.skillNames,
                         );
                         if (insertText !== undefined) {
                             textareaHandle.get()?.setText(insertText);

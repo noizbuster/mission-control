@@ -11,8 +11,11 @@ import { useSolidStoreSelector } from '../platform/use-solid-store-selector';
 import type { ChatAppActions } from '../state/chat-app-actions';
 import type { ChatStore, ChatStoreState } from '../state/chat-store';
 import {
+    isSkillCommandMenuOpen,
     isSlashCommandMenuOpen,
     isWorkflowCommandMenuOpen,
+    resolveSkillCommandMenuInsertText,
+    resolveSkillCommandMenuSubmission,
     resolveSlashCommandMenuInsertText,
     resolveSlashCommandMenuSubmission,
     resolveWorkflowCommandMenuInsertText,
@@ -115,6 +118,20 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
                         }
                     }
 
+                    if (promptMenuInteractionsEnabled() && captured.startsWith('$')) {
+                        const insertText = resolveSkillCommandMenuInsertText(
+                            captured,
+                            snap.menuState,
+                            snap.skillNames,
+                        );
+                        if (insertText !== undefined) {
+                            props.textareaRef.get()?.setText(insertText);
+                            props.textareaRef.get()?.gotoBufferEnd();
+                            props.store.setInputMirror(insertText);
+                            return;
+                        }
+                    }
+
                     if (promptMenuInteractionsEnabled() && captured.startsWith('/')) {
                         const insertText = resolveSlashCommandMenuInsertText(captured, snap.menuState);
                         if (insertText !== undefined && insertText.trimEnd() !== captured.trimEnd()) {
@@ -135,6 +152,13 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
                             captured,
                             snap.menuState,
                             snap.workflowNames,
+                        );
+                        if (resolved !== captured) value = resolved;
+                    } else if (promptMenuInteractionsEnabled() && captured.startsWith('$')) {
+                        const resolved = resolveSkillCommandMenuSubmission(
+                            captured,
+                            snap.menuState,
+                            snap.skillNames,
                         );
                         if (resolved !== captured) value = resolved;
                     }
@@ -373,6 +397,7 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
             const buffer = plainText();
             const slashMenuOpen = promptMenuInteractionsEnabled() && isSlashCommandMenuOpen(buffer);
             const workflowMenuOpen = promptMenuInteractionsEnabled() && isWorkflowCommandMenuOpen(buffer);
+            const skillMenuOpen = promptMenuInteractionsEnabled() && isSkillCommandMenuOpen(buffer);
             const fileAutoOpen = promptMenuInteractionsEnabled() && snap.fileAutocomplete.open;
 
             if (snap.historyPicker.open) {
@@ -391,6 +416,11 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
                 props.store.navigateWorkflowMenu(direction);
                 return;
             }
+            if (skillMenuOpen) {
+                key.preventDefault();
+                props.store.navigateSkillMenu(direction);
+                return;
+            }
             if (fileAutoOpen) {
                 key.preventDefault();
                 props.store.navigateFileAutocomplete(direction);
@@ -402,6 +432,7 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
                 (props.textareaRef.get()?.cursorOffset ?? 0) === 0 &&
                 !slashMenuOpen &&
                 !workflowMenuOpen &&
+                !skillMenuOpen &&
                 !fileAutoOpen
             ) {
                 key.preventDefault();
@@ -433,7 +464,7 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
                 placeholder={
                     snapshot().generating
                         ? 'Press Esc to stop, or wait for the response\u2026'
-                        : 'Type a message, / for commands, # for workflows, or Ctrl+C twice to exit'
+                        : 'Type a message, / for commands, # for workflows, $ for skills, or Ctrl+C twice to exit'
                 }
             />
         </box>
