@@ -15,6 +15,7 @@ import type { SessionControlEpoch } from '../runtime/session-control-cancellatio
 import type { ToolRegistry } from '../tools/tool-registry';
 import type { AgentModelLookup } from './agent-model-resolver';
 import type { PricingTable } from './budget/cost-ledger';
+import type { NodeRunBudgetExtensionRequester } from './budget/node-run-budget-extension';
 import { runBoundedAbgGraph } from './graph-coordinator';
 import type { AbgNodeRegistry } from './node-registry';
 import type { LlmActorModel } from './nodes/llm-actor/llm-actor-node';
@@ -27,6 +28,16 @@ export type AbgGraphRunnerInput = {
     readonly modelProviderSelection: ModelProviderSelection;
     readonly registry?: AbgNodeRegistry;
     readonly maxNodeRuns?: number;
+    /**
+     * Parent/supervisor agent callback asked when the graph exhausts `maxNodeRuns`.
+     * Not a human approval UI: an agent decides APPROVE/DENY for additional runs.
+     * Omitted → hard fail at the limit (legacy behavior).
+     */
+    readonly requestNodeRunBudgetExtension?: NodeRunBudgetExtensionRequester;
+    /** Additional runs proposed per agent grant. Default 40. */
+    readonly nodeRunBudgetGrantSize?: number;
+    /** Max times an agent may grant more budget in one graph run. Default 2. */
+    readonly maxNodeRunBudgetExtensions?: number;
     readonly graphNodeConcurrency?: number;
     readonly providerToolCallConcurrency?: number;
     readonly shellConcurrency?: number;

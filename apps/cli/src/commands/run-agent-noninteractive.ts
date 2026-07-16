@@ -1,6 +1,7 @@
 import {
     type AgentModelLookup,
     type AgentRuntime,
+    createAgentNodeRunBudgetGrantor,
     createCodingAgentNodeRegistry,
     createGraphTurnRunner,
     type ObservabilityRedactor,
@@ -160,6 +161,13 @@ export async function runNoninteractiveAgent(input: RunNoninteractiveAgentInput)
                             observabilityRedactor,
                             ...(projectInstructionResources.length > 0 ? { projectInstructionResources } : {}),
                             ...(pricingTable.length > 0 ? { pricingTable } : {}),
+                            requestNodeRunBudgetExtension: createAgentNodeRunBudgetGrantor({
+                                resolveSdkModel,
+                                model: {
+                                    providerID: selectedModelProvider.providerID,
+                                    modelID: selectedModelProvider.modelID,
+                                },
+                            }),
                         }),
                     ...(options.commandExecutor !== undefined ? { commandExecutor: options.commandExecutor } : {}),
                     authStore,

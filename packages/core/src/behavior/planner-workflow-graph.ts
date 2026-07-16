@@ -29,7 +29,7 @@
 import type { AbgGraphSpec, AbgNodeModelOptions, Mode, PolicyEffectRule } from '@mission-control/protocol';
 
 export const PLANNER_WORKFLOW_GRAPH_ID = 'planner';
-export const PLANNER_WORKFLOW_MAX_NODE_RUNS = 32;
+export const PLANNER_WORKFLOW_MAX_NODE_RUNS = 100;
 export const PLANNER_READONLY_MODE_ID = 'planner-readonly';
 
 /**
@@ -143,7 +143,7 @@ export type PlannerWorkflowGraphOptions = {
      * session provider.
      */
     readonly model?: AbgNodeModelOptions;
-    /** Graph loop bound. Default 32. */
+    /** Graph loop bound. Default 100. */
     readonly maxNodeRuns?: number;
 };
 

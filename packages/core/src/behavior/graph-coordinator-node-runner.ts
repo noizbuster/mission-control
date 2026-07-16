@@ -44,6 +44,10 @@ export async function runQueuedNode(
 
     const attempt = nextAttempt(state.attemptsByNodeId, node.id);
     state.totalNodeRuns += 1;
+    state.recentNodeIds.push(node.id);
+    if (state.recentNodeIds.length > 24) {
+        state.recentNodeIds.splice(0, state.recentNodeIds.length - 24);
+    }
     const model = nodeModel(graph, node.id, input.modelProviderSelection);
     state.events.push(attemptEvent('attempt.started', graph.id, node, input, attempt, state.maxAttempts));
     const runResult = gate.approvedHumanApproval

@@ -34,7 +34,7 @@ import {
 
 export const DEFAULT_WORKFLOW_GRAPH_ID = 'default';
 /** Graph loop bound for plan-first default (intake through present). */
-export const DEFAULT_WORKFLOW_MAX_NODE_RUNS = 32;
+export const DEFAULT_WORKFLOW_MAX_NODE_RUNS = 100;
 export const DEFAULT_PLAN_READONLY_MODE_ID = 'plan-readonly';
 
 /**
@@ -96,7 +96,7 @@ export type DefaultWorkflowGraphOptions = {
      * session provider.
      */
     readonly model?: AbgNodeModelOptions;
-    /** Graph loop bound. Default 32. */
+    /** Graph loop bound. Default 100. */
     readonly maxNodeRuns?: number;
 };
 

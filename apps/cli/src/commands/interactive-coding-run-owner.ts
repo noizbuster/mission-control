@@ -1,5 +1,6 @@
 import {
     type AskUserQuestionRequest,
+    createAgentNodeRunBudgetGrantor,
     createCodingAgentNodeRegistry,
     createGraphTurnRunner,
     extractUsageFromModelCallCompleted,
@@ -105,6 +106,16 @@ export async function createInteractiveRunOwner(
             extraObservers,
         );
         childHostCallbacks.onSignal = (signal) => onSignal(signal);
+        const requestNodeRunBudgetExtension =
+            resolveSdkModel !== undefined
+                ? createAgentNodeRunBudgetGrantor({
+                      resolveSdkModel,
+                      model: {
+                          providerID: options.modelProviderSelection.providerID,
+                          modelID: options.modelProviderSelection.modelID,
+                      },
+                  })
+                : undefined;
         const turnRunner = createGraphTurnRunner({
             graph: options.graph ?? buildCodingAgentGraphForSelection(options.modelProviderSelection),
             sessionId: options.sessionId,
@@ -120,6 +131,7 @@ export async function createInteractiveRunOwner(
             observabilityRedactor: redactor,
             ...(projectInstructionResources.length > 0 ? { projectInstructionResources } : {}),
             ...(options.pricingTable !== undefined ? { pricingTable: options.pricingTable } : {}),
+            ...(requestNodeRunBudgetExtension !== undefined ? { requestNodeRunBudgetExtension } : {}),
         });
         return { observabilityRedactor: redactor, graphSpec: spec, runProviderTurn: turnRunner };
     });

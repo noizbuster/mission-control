@@ -2,12 +2,21 @@
 import type { AbgNodeSpec, AbgPolicyDecision, AbgSignal, AgentEvent } from '@mission-control/protocol';
 import { type AuthorableAbgGraph, createAuthorableAbgGraph } from './authorable-graph';
 import {
+    applyNodeRunBudgetGrant,
+    DEFAULT_MAX_NODE_RUN_BUDGET_EXTENSIONS,
+    DEFAULT_NODE_RUN_BUDGET_GRANT,
+    hardCeilingForNodeRunBudget,
+    type NodeRunBudgetExtensionDecision,
+} from './budget/node-run-budget-extension';
+import { CANONICAL_FAILURE_CODES } from './failure-taxonomy';
+import {
     type CoordinatorState,
     createCoordinatorState,
     edgePriorityDescending,
     hasNode,
     nodeModel,
 } from './graph-coordinator-helpers';
+import { failureCodeFromSignal, failureMessageFromSignal } from './graph-coordinator-node-signals';
 import { runQueuedNode } from './graph-coordinator-node-runner';
 import {
     clearAllCorrections,
@@ -17,7 +26,6 @@ import {
     resolveEscalationTarget,
     setStructuredOutputCorrection,
 } from './graph-coordinator-progress-contract';
-import { failureCodeFromSignal, failureMessageFromSignal } from './graph-coordinator-node-signals';
 import { scheduleQueuedNodes } from './graph-coordinator-scheduler';
 import type { AbgGraphRunnerInput, AbgGraphRunResult, AbgGraphTerminalError } from './graph-runner';
 import { graphEvent } from './graph-runner-events';
@@ -30,7 +38,6 @@ import {
 } from './loop-safety';
 import { createDefaultAbgNodeRegistry } from './node-registry';
 import { projectAbgSignalToEvent } from './signals';
-import { CANONICAL_FAILURE_CODES } from './failure-taxonomy';
 
 export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<AbgGraphRunResult> {
     const graph = createAuthorableAbgGraph(input.graph, input.agentModelLookup);
@@ -54,8 +61,11 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
             );
         }
         if (state.totalNodeRuns >= state.maxNodeRuns) {
-            clearAllCorrections(state);
-            return failGraph(graph.id, input, state.events, 'graph_loop_limit', 'ABG graph loop limit exceeded');
+            const extended = await tryAgentNodeRunBudgetExtension(graph, state, input);
+            if (!extended) {
+                clearAllCorrections(state);
+                return failGraph(graph.id, input, state.events, 'graph_loop_limit', 'ABG graph loop limit exceeded');
+            }
         }
         const scheduledNodes = scheduleQueuedNodes(graph, state, input);
         if (scheduledNodes.length === 0) {
@@ -515,4 +525,84 @@ function forceCompleteBooleanOutputKey(node: AbgNodeSpec, state: CoordinatorStat
         return;
     }
     state.blackboard.set(outputKey, true);
+}
+
+async function tryAgentNodeRunBudgetExtension(
+    graph: AuthorableAbgGraph,
+    state: CoordinatorState,
+    input: AbgGraphRunnerInput,
+): Promise<boolean> {
+    const requester = input.requestNodeRunBudgetExtension;
+    if (requester === undefined) {
+        return false;
+    }
+    const maxExtensions = input.maxNodeRunBudgetExtensions ?? DEFAULT_MAX_NODE_RUN_BUDGET_EXTENSIONS;
+    if (state.budgetExtensionsUsed >= maxExtensions) {
+        return false;
+    }
+    const proposedGrant = input.nodeRunBudgetGrantSize ?? DEFAULT_NODE_RUN_BUDGET_GRANT;
+    const hardCeiling = hardCeilingForNodeRunBudget({
+        initialMax: state.initialMaxNodeRuns,
+        grantSize: proposedGrant,
+        maxExtensions,
+    });
+    if (state.maxNodeRuns >= hardCeiling) {
+        return false;
+    }
+
+    let decision: NodeRunBudgetExtensionDecision;
+    try {
+        decision = await requester({
+            graphId: graph.id,
+            sessionId: input.sessionId,
+            used: state.totalNodeRuns,
+            limit: state.maxNodeRuns,
+            proposedGrant,
+            extensionsUsed: state.budgetExtensionsUsed,
+            maxExtensions,
+            hardCeiling,
+            recentNodeIds: state.recentNodeIds.slice(-12),
+        });
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        state.events.push({
+            type: 'log',
+            timestamp: input.now(),
+            sessionId: input.sessionId,
+            message: `node-run budget supervisor agent error: ${message}`,
+            durability: 'durable',
+            abg: { graphId: graph.id },
+        });
+        return false;
+    }
+
+    const applied = applyNodeRunBudgetGrant({
+        currentMax: state.maxNodeRuns,
+        hardCeiling,
+        proposedGrant,
+        decision,
+    });
+    if (!applied.applied) {
+        state.events.push({
+            type: 'log',
+            timestamp: input.now(),
+            sessionId: input.sessionId,
+            message: `node-run budget extension denied: ${applied.reason}`,
+            durability: 'durable',
+            abg: { graphId: graph.id },
+        });
+        return false;
+    }
+
+    state.maxNodeRuns = applied.nextMax;
+    state.budgetExtensionsUsed += 1;
+    state.events.push({
+        type: 'log',
+        timestamp: input.now(),
+        sessionId: input.sessionId,
+        message: `node-run budget extended by agent: +${applied.grant} (limit ${applied.nextMax}, extension ${state.budgetExtensionsUsed}/${maxExtensions})`,
+        durability: 'durable',
+        abg: { graphId: graph.id },
+    });
+    return true;
 }

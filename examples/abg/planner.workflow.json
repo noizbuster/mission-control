@@ -6,7 +6,7 @@
     "version": "0.1.0",
     "entryNodeId": "intake",
     "defaults": {
-      "maxNodeRuns": 32,
+      "maxNodeRuns": 100,
       "escalationTarget": "present"
     },
     "nodes": [

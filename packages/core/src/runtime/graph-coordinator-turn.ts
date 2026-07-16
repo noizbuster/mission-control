@@ -22,6 +22,7 @@ import type {
 } from '@mission-control/protocol';
 import { ProtocolErrorCodeSchema } from '@mission-control/protocol';
 import type { PricingTable } from '../behavior/budget/cost-ledger';
+import type { NodeRunBudgetExtensionRequester } from '../behavior/budget/node-run-budget-extension';
 import { type AbgGraphRunResult, runAbgGraph } from '../behavior/graph-runner';
 import type { AbgNodeRegistry } from '../behavior/node-registry';
 import type { LlmActorModel } from '../behavior/nodes/llm-actor/llm-actor-node';
@@ -95,6 +96,9 @@ export type GraphTurnRunnerWiring = {
      */
     readonly projectInstructionResources?: readonly ProjectInstructionResource[];
     readonly observabilityRedactor?: ObservabilityRedactor;
+    readonly requestNodeRunBudgetExtension?: NodeRunBudgetExtensionRequester;
+    readonly nodeRunBudgetGrantSize?: number;
+    readonly maxNodeRunBudgetExtensions?: number;
 };
 
 /**

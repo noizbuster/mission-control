@@ -38,7 +38,14 @@ export type CoordinatorState = {
     readonly loopSafetyByNodeId: Map<string, LoopSafetyNodeState>;
     readonly correctionByNodeId: Map<string, string>;
     readonly maxAttempts: number;
-    readonly maxNodeRuns: number;
+    /** Effective node-run budget; may grow after agent-granted extensions. */
+    maxNodeRuns: number;
+    /** Budget at run start (before any agent extension). */
+    readonly initialMaxNodeRuns: number;
+    /** How many times an agent has granted additional node-run budget this run. */
+    budgetExtensionsUsed: number;
+    /** Rolling recent node ids for the budget supervisor agent prompt. */
+    recentNodeIds: string[];
     readonly graphNodeConcurrency: number;
     readonly providerToolCallConcurrency: number;
     readonly shellConcurrency: number;
@@ -95,6 +102,7 @@ export function createCoordinatorState(graph: AuthorableAbgGraph, input: AbgGrap
         ...(input.pricingTable !== undefined ? { pricingTable: input.pricingTable } : {}),
         ...(budgetCents !== undefined ? { budget: { budgetCents } } : {}),
     });
+    const initialMaxNodeRuns = graph.defaults?.maxNodeRuns ?? input.maxNodeRuns ?? defaultMaxNodeRuns;
     const state: CoordinatorState = {
         events: [],
         nodeStatuses: {},
@@ -105,7 +113,10 @@ export function createCoordinatorState(graph: AuthorableAbgGraph, input: AbgGrap
         loopSafetyByNodeId: new Map(),
         correctionByNodeId: new Map(),
         maxAttempts: (graph.defaults?.retryLimit ?? defaultRetryLimit) + 1,
-        maxNodeRuns: graph.defaults?.maxNodeRuns ?? input.maxNodeRuns ?? defaultMaxNodeRuns,
+        maxNodeRuns: initialMaxNodeRuns,
+        initialMaxNodeRuns,
+        budgetExtensionsUsed: 0,
+        recentNodeIds: [],
         graphNodeConcurrency: input.graphNodeConcurrency ?? defaultGraphNodeConcurrency,
         providerToolCallConcurrency: input.providerToolCallConcurrency ?? defaultProviderToolCallConcurrency,
         shellConcurrency: input.shellConcurrency ?? defaultShellConcurrency,

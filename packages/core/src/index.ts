@@ -30,6 +30,23 @@ export {
     resolvePricing,
     type TokenUsage,
 } from './behavior/budget/cost-ledger';
+export {
+    createAgentNodeRunBudgetGrantor,
+    formatBudgetRequestPrompt,
+    type AgentNodeRunBudgetGrantorOptions,
+} from './behavior/budget/agent-node-run-budget-grantor';
+export {
+    applyNodeRunBudgetGrant,
+    DEFAULT_MAX_NODE_RUN_BUDGET_EXTENSIONS,
+    DEFAULT_NODE_RUN_BUDGET_GRANT,
+    hardCeilingForNodeRunBudget,
+    parseAgentBudgetDecisionText,
+    type ApplyNodeRunBudgetGrantInput,
+    type ApplyNodeRunBudgetGrantResult,
+    type NodeRunBudgetExtensionDecision,
+    type NodeRunBudgetExtensionRequest,
+    type NodeRunBudgetExtensionRequester,
+} from './behavior/budget/node-run-budget-extension';
 export { BUILTIN_MODES, BUILTIN_WORKFLOWS, registerBuiltinWorkflows } from './behavior/builtin-workflows';
 export {
     CODING_AGENT_GRAPH_ID,

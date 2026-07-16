@@ -141,6 +141,61 @@ describe('bounded ABG graph coordinator', () => {
         });
     });
 
+    it('extends maxNodeRuns when a parent agent grants more budget', async () => {
+        // Given: a self-loop and an agent that grants +3 once
+        let grantCalls = 0;
+        const result = await runAbgGraph({
+            ...baseInput,
+            requestNodeRunBudgetExtension: async () => {
+                grantCalls += 1;
+                return grantCalls === 1
+                    ? { granted: true, grant: 3, reason: 'APPROVE 3' }
+                    : { granted: false, reason: 'DENY no more' };
+            },
+            nodeRunBudgetGrantSize: 3,
+            maxNodeRunBudgetExtensions: 2,
+            graph: {
+                id: 'agent-budget-loop',
+                entryNodeId: 'again',
+                defaults: { maxNodeRuns: 3 },
+                nodes: [{ id: 'again', kind: 'action' }],
+                edges: [{ source: 'again', target: 'again' }],
+                rules: [],
+                policies: [],
+            },
+        });
+
+        // Then: first grant lets the loop continue past 3; second deny ends with loop limit
+        expect(grantCalls).toBe(2);
+        expect(attemptsFor(result.events, 'again').length).toBe(6);
+        expect(result.status).toBe('failed');
+        expect(result.events.some((event) => event.message?.includes('node-run budget extended by agent'))).toBe(true);
+        expect(result.events.at(-1)).toMatchObject({
+            type: 'graph.failed',
+            abg: { error: { code: 'graph_loop_limit' } },
+        });
+    });
+
+    it('fails at the limit when the parent agent denies budget extension', async () => {
+        const result = await runAbgGraph({
+            ...baseInput,
+            requestNodeRunBudgetExtension: async () => ({ granted: false, reason: 'DENY stuck' }),
+            graph: {
+                id: 'agent-budget-deny',
+                entryNodeId: 'again',
+                defaults: { maxNodeRuns: 2 },
+                nodes: [{ id: 'again', kind: 'action' }],
+                edges: [{ source: 'again', target: 'again' }],
+                rules: [],
+                policies: [],
+            },
+        });
+
+        expect(result.status).toBe('failed');
+        expect(attemptsFor(result.events, 'again')).toEqual([1, 2]);
+        expect(result.events.some((event) => event.message?.includes('node-run budget extension denied'))).toBe(true);
+    });
+
     it('soft-lands a tool loop near maxNodeRuns instead of graph_loop_limit', async () => {
         // Given: infinite productive tool self-loop
         // When: totalNodeRuns reaches maxNodeRuns - 1
