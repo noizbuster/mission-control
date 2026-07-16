@@ -10,10 +10,12 @@ import type { AbgNodeSpec } from '@mission-control/protocol';
 import { type Tool, type ToolSet, tool } from 'ai';
 import { z } from 'zod';
 import {
+    admitStructuredValue,
     type ParseStructuredOutputResult,
     parseStructuredOutput,
 } from '../../structured-blackboard';
 import {
+    applyEnumConstraint,
     buildStructuredOutputContract,
     readOutputEnum,
     readOutputShape,
@@ -104,6 +106,15 @@ export function createPureStructuredGateTools(
     };
 }
 
+/**
+ * Admit structured output from a turn: either a forced `generate_object` capture
+ * or free-text. Capture MUST run shape + enum admission (never raw `ok: true`).
+ *
+ * Root-cause chain this closes: missing `outputEnum` on pure gates → Zod
+ * `z.unknown()` admits blobs → capture returned raw ok → blackboard poison →
+ * empty queue → silent `graph.completed`. When `outputEnum` is declared, this
+ * gate rejects non-enum captures even if a looser tool schema admitted them.
+ */
 export function resolveStructuredOutputFromTurn(options: {
     readonly node: AbgNodeSpec;
     readonly pureStructuredGate: boolean;
@@ -111,11 +122,18 @@ export function resolveStructuredOutputFromTurn(options: {
     readonly turnText: string;
 }): ParseStructuredOutputResult {
     if (options.generateObjectCapture !== undefined) {
-        return { ok: true, value: options.generateObjectCapture.value };
+        const shapeResult = admitStructuredValue(
+            options.generateObjectCapture.value,
+            readOutputShape(options.node),
+        );
+        return applyEnumConstraint(options.node, shapeResult);
     }
     const trimmed = options.turnText.trim();
     if (trimmed.length > 0) {
-        return parseStructuredOutput(trimmed, readOutputShape(options.node));
+        return applyEnumConstraint(
+            options.node,
+            parseStructuredOutput(trimmed, readOutputShape(options.node)),
+        );
     }
     return {
         ok: false,

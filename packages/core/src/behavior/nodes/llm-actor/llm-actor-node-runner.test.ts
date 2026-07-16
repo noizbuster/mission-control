@@ -470,6 +470,108 @@ describe('runLlmActorNode — outputKey structured-output persistence', () => {
         expect(blackboard.get('llm.loop_active')).toBe(false);
     });
 
+    it('P3: does not blackboard.set when generate_object capture is outside outputEnum', async () => {
+        // Given: pure gate with outputEnum; model calls generate_object with a non-enum blob
+        // When: runLlmActorNode admits the capture
+        // Then: no blackboard.set for the key; failure code invalid_structured_output
+        const blackboard = seedBlackboard();
+        const poison = { reasoning: 'needs more research', nested: { label: 'unclear' } };
+        const chunks: LanguageModelV3StreamPart[] = [
+            { type: 'stream-start', warnings: [] },
+            { type: 'tool-input-start', id: 'call_go', toolName: 'generate_object' },
+            {
+                type: 'tool-input-delta',
+                id: 'call_go',
+                delta: JSON.stringify({ value: poison }),
+            },
+            { type: 'tool-input-end', id: 'call_go' },
+            {
+                type: 'tool-call',
+                toolCallId: 'call_go',
+                toolName: 'generate_object',
+                input: JSON.stringify({ value: poison }),
+            },
+            { type: 'finish', finishReason: { unified: 'tool-calls', raw: undefined }, usage: buildUsage() },
+        ];
+        const model = new MockLanguageModelV3({
+            provider: 'test',
+            modelId: 'mock-generate-object-poison',
+            doStream: async () => ({ stream: convertArrayToReadableStream(chunks) }),
+        });
+        const context: AbgNodeRunContext = {
+            graphId: 'g_p3_poison',
+            now: () => NOW,
+            sdkModel: model,
+            blackboard,
+        };
+        const node = {
+            id: 'assess-ambiguity',
+            kind: 'llm' as const,
+            config: {
+                outputKey: 'ambiguity.classification',
+                outputEnum: ['clear', 'unclear', 'on-the-fence'],
+            },
+        };
+
+        const signals = await collectSignals(runLlmActorNode(node, context));
+
+        expect(blackboard.has('ambiguity.classification')).toBe(false);
+        const blackboardSets = signals.filter(
+            (signal) => signal.type === 'emit' && signal.event.type === 'blackboard.set',
+        );
+        expect(blackboardSets).toEqual([]);
+        const failure = signals.find((signal) => signal.type === 'failure');
+        expect(failure).toMatchObject({
+            type: 'failure',
+            error: { code: 'invalid_structured_output' },
+        });
+    });
+
+    it('P3/P4: persists exact generate_object enum label "unclear"', async () => {
+        const blackboard = seedBlackboard();
+        const chunks: LanguageModelV3StreamPart[] = [
+            { type: 'stream-start', warnings: [] },
+            { type: 'tool-input-start', id: 'call_go', toolName: 'generate_object' },
+            {
+                type: 'tool-input-delta',
+                id: 'call_go',
+                delta: JSON.stringify({ value: 'unclear' }),
+            },
+            { type: 'tool-input-end', id: 'call_go' },
+            {
+                type: 'tool-call',
+                toolCallId: 'call_go',
+                toolName: 'generate_object',
+                input: JSON.stringify({ value: 'unclear' }),
+            },
+            { type: 'finish', finishReason: { unified: 'tool-calls', raw: undefined }, usage: buildUsage() },
+        ];
+        const model = new MockLanguageModelV3({
+            provider: 'test',
+            modelId: 'mock-generate-object-unclear',
+            doStream: async () => ({ stream: convertArrayToReadableStream(chunks) }),
+        });
+        const context: AbgNodeRunContext = {
+            graphId: 'g_p3_unclear',
+            now: () => NOW,
+            sdkModel: model,
+            blackboard,
+        };
+        const node = {
+            id: 'assess-ambiguity',
+            kind: 'llm' as const,
+            config: {
+                outputKey: 'ambiguity.classification',
+                outputEnum: ['clear', 'unclear', 'on-the-fence'],
+            },
+        };
+
+        await collectSignals(runLlmActorNode(node, context));
+
+        expect(blackboard.get('ambiguity.classification')).toBe('unclear');
+        expect(blackboard.get('llm.loop_active')).toBe(false);
+    });
+
     it('fails closed when pure gate emits prose without generate_object', async () => {
         const blackboard = seedBlackboard();
         const context: AbgNodeRunContext = {

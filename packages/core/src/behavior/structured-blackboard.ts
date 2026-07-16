@@ -76,32 +76,41 @@ export function parseStructuredOutput(
             const message = error instanceof Error ? error.message : String(error);
             return { ok: false, error: `invalid JSON: ${message}` };
         }
-        return validateShape(parsed, expectedShape);
+        return admitStructuredValue(parsed, expectedShape);
     }
 
     if (trimmed === 'true') {
-        return validateShape(true, expectedShape);
+        return admitStructuredValue(true, expectedShape);
     }
     if (trimmed === 'false') {
-        return validateShape(false, expectedShape);
+        return admitStructuredValue(false, expectedShape);
     }
 
     if (/[\r\n]/.test(trimmed)) {
         return { ok: false, error: 'structured output must be a single line' };
     }
 
-    return validateShape(trimmed, expectedShape);
+    return admitStructuredValue(trimmed, expectedShape);
 }
 
-function validateShape(value: unknown, expected: StructuredOutputShape): ParseStructuredOutputResult {
-    if (expected === 'any') {
+/**
+ * Admit an already-decoded structured value against a shape constraint.
+ *
+ * Used by the free-text parser and by `generate_object` capture admission so
+ * neither path can short-circuit to `{ ok: true }` without shape checking.
+ */
+export function admitStructuredValue(
+    value: unknown,
+    expectedShape: StructuredOutputShape = 'any',
+): ParseStructuredOutputResult {
+    if (expectedShape === 'any') {
         return { ok: true, value };
     }
     const actual = shapeOf(value);
-    if (actual === expected) {
+    if (actual === expectedShape) {
         return { ok: true, value };
     }
-    return { ok: false, error: `expected shape '${expected}', got '${actual}'` };
+    return { ok: false, error: `expected shape '${expectedShape}', got '${actual}'` };
 }
 
 type ActualStructuredOutputShape = Exclude<StructuredOutputShape, 'any'> | 'null' | 'number';
