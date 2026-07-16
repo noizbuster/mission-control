@@ -150,29 +150,33 @@ function createBaseArgs(command: CliCommand): Omit<CliArgs, 'modelProviderSelect
 }
 
 export function parseArgs(argv: readonly string[]): CliArgs {
-    const command = argv[0];
+    // `pnpm dev:cli -- --no-tui` and `node dist/index.js -- --no-tui` forward a leading `--`
+    // separator into argv. Strip it so command dispatch and flag parsing work as documented.
+    // A mid-stream `--` is handled as POSIX end-of-options inside parseRunArgs.
+    const args = argv[0] === '--' ? argv.slice(1) : argv;
+    const command = args[0];
     if (command === 'auth') {
-        return parseAuthArgs(argv.slice(1));
+        return parseAuthArgs(args.slice(1));
     }
     if (command === 'models') {
-        return parseModelsArgs(argv.slice(1));
+        return parseModelsArgs(args.slice(1));
     }
     if (command === 'session') {
-        return parseSessionArgs(argv.slice(1));
+        return parseSessionArgs(args.slice(1));
     }
     if (command === 'mcp') {
-        return parseMcpArgs(argv.slice(1));
+        return parseMcpArgs(args.slice(1));
     }
     if (command === 'agents') {
-        return { ...createBaseArgs('agents'), agentsArgv: argv.slice(1) };
+        return { ...createBaseArgs('agents'), agentsArgv: args.slice(1) };
     }
     if (command === 'graph') {
-        return parseGraphArgs(argv.slice(1));
+        return parseGraphArgs(args.slice(1));
     }
     if (command === 'run') {
-        return parseRunArgs(argv.slice(1), {});
+        return parseRunArgs(args.slice(1), {});
     }
-    return parseRunArgs(argv, {});
+    return parseRunArgs(args, {});
 }
 
 function parseModelsArgs(argv: readonly string[]): CliArgs {

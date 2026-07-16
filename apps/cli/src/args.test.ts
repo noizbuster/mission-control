@@ -47,6 +47,31 @@ describe('parseArgs', () => {
         expect(() => parseArgs(['--bad-flag'])).toThrow('Unsupported argument: --bad-flag');
     });
 
+    it('strips a leading `--` separator forwarded by pnpm/npm scripts', () => {
+        expect(parseArgs(['--', '--no-tui', 'hi'])).toMatchObject({
+            mode: 'plain',
+            prompt: 'hi',
+        });
+        expect(parseArgs(['--', '--no-tui'])).toMatchObject({
+            mode: 'plain',
+        });
+        expect(parseArgs(['--'])).toMatchObject({
+            mode: 'tui',
+            command: 'run',
+        });
+    });
+
+    it('treats a mid-stream `--` as POSIX end-of-options', () => {
+        expect(parseArgs(['--no-tui', '--', 'hello world'])).toMatchObject({
+            mode: 'plain',
+            prompt: 'hello world',
+        });
+        expect(parseArgs(['--no-tui', '--', '--json'])).toMatchObject({
+            mode: 'plain',
+            prompt: '--json',
+        });
+    });
+
     it('parses explicit provider and model flags', () => {
         expect(parseArgs(['--provider', 'local', '--model', 'local-echo'])).toMatchObject({
             modelProviderSelection: {

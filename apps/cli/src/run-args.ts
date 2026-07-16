@@ -99,6 +99,15 @@ export function parseRunArgs(argv: readonly string[], initial: InitialRunArgs): 
                 showHelp = true;
                 index += 1;
                 break;
+            case '--':
+                for (let rest = index + 1; rest < argv.length; rest += 1) {
+                    const token = argv[rest];
+                    if (token !== undefined) {
+                        promptParts.push(token);
+                    }
+                }
+                index = argv.length;
+                break;
             default:
                 // Reject single-dash tokens too: `-p`/`-m` are auth-subcommand-only shorthands and
                 // must not silently become a prompt or be mistaken for the long-only `--profile`.
