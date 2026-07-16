@@ -51,16 +51,24 @@ export function useGlobalKeyboard(deps: GlobalKeyboardDeps): void {
             store.sendInterrupt('ctrl-c');
             return;
         }
-        // Global sink is overlay-only: when the textarea holds focus, its onKeyDown
-        // (in ChatInputArea) owns chords like Ctrl+G. Without this guard, the opening
-        // Ctrl+G would double-toggle: textarea opens the overlay, then this sink reads
-        // the updated snapshot and immediately closes it.
+        // When the textarea holds focus, ChatInputArea onKeyDown owns chords like
+        // Ctrl+G. Without this guard, opening Ctrl+G would double-toggle.
         if (textareaHandle.get()?.focused) {
             return;
         }
         const snap = store.getSnapshot();
+        if (key.ctrl && key.name === 'g') {
+            key.preventDefault();
+            try {
+                store.toggleAbgOverlay();
+            } catch (error: unknown) {
+                const message = error instanceof Error ? error.message : String(error);
+                store.emitOutput(`Error: ABG overlay toggle failed: ${message}\n`);
+            }
+            return;
+        }
         if (snap.overlayMode === 'abg') {
-            if (key.name === 'escape' || (key.ctrl && key.name === 'g')) {
+            if (key.name === 'escape') {
                 key.preventDefault();
                 store.toggleAbgOverlay();
                 return;

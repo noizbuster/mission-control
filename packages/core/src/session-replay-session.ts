@@ -24,11 +24,17 @@ export function deriveReplaySession(sessionId: string, events: readonly AgentEve
         if (clearsAwaiting(event, awaiting)) {
             awaiting = undefined;
         }
-        if (event.type === 'run.started') {
+        if (event.type === 'run.started' || event.type === 'task.started') {
             sawRunLifecycle = true;
             hasActiveRun = true;
         }
-        if (event.type === 'run.completed' || event.type === 'run.failed' || event.type === 'run.interrupted') {
+        if (
+            event.type === 'run.completed' ||
+            event.type === 'run.failed' ||
+            event.type === 'run.interrupted' ||
+            event.type === 'task.failed' ||
+            event.type === 'task.completed'
+        ) {
             sawRunLifecycle = true;
             hasActiveRun = false;
         }
@@ -147,6 +153,8 @@ function isRunSettlement(event: AgentEvent): boolean {
         case 'run.failed':
         case 'run.interrupted':
         case 'run.idle':
+        case 'task.failed':
+        case 'task.completed':
             return true;
         default:
             return false;

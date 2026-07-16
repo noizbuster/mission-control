@@ -39,16 +39,25 @@ export function interactiveGraphStreamSignal(
     extraObservers: readonly InteractiveGraphSignalObserver[] = [],
 ): (signal: AbgSignal) => Promise<void> {
     return async (signal) => {
-        let renderError: unknown;
         try {
             const renderResult = renderInteractiveGraphSignal(output, state, workspaceRoot, signal);
             if (renderResult !== undefined) await renderResult;
         } catch (error: unknown) {
-            renderError = error;
+            reportGraphRenderFailure(output, error);
         }
         notifyInteractiveGraphSignalObservers(extraObservers, signal);
-        if (renderError !== undefined) throw renderError;
     };
+}
+
+function reportGraphRenderFailure(output: ChatOutput, error: unknown): void {
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`Interactive graph render failed: ${message}\n`);
+    try {
+        output.write(`Error: ${message}\n`);
+    } catch (writeError: unknown) {
+        const writeMessage = writeError instanceof Error ? writeError.message : String(writeError);
+        process.stderr.write(`Interactive graph render error write failed: ${writeMessage}\n`);
+    }
 }
 
 export function renderInteractiveGraphDurableEvent(

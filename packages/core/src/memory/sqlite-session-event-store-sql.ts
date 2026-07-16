@@ -161,8 +161,11 @@ function sessionStatusAfterEvent(event: AgentEvent): 'stopped' | 'awaiting' | 'r
         case 'run.completed':
         case 'run.failed':
         case 'run.interrupted':
+        case 'task.failed':
+        case 'task.completed':
             return 'idle';
         case 'run.started':
+        case 'task.started':
         case 'approval.updated':
         case 'approval.resumed':
         case 'tool.completed':

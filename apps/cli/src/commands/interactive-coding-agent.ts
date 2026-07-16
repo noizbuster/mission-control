@@ -2,6 +2,7 @@ import {
     createObservabilityRedactor,
     createProviderAuthStoreObservabilityRedactor,
     type ObservabilityRedactor,
+    redactAgentEventForObservability,
     type SessionRunOwner,
     type SessionRunOwnerReceipt,
 } from '@mission-control/core';
@@ -81,7 +82,7 @@ async function startOwnedCodingAgentTurn(
         .catch((error: unknown) => {
             const message = approvalRedactor.redactText(error instanceof Error ? error.message : String(error));
             options.output.write(`Error: ${message}\n`);
-            emitInteractiveTaskEvent(options, { type: 'task.failed', message }, approvalRedactor);
+            settleCrashedCodingTurn(options, message, approvalRedactor, owner.status().runId);
             return 'failed' as const;
         })
         .finally(async () => {
@@ -121,4 +122,40 @@ function interruptOwnerUntilSettled(owner: SessionRunOwner, isSettled: () => boo
     for (const delayMs of [0, 5, 25]) {
         setTimeout(interrupt, delayMs);
     }
+}
+
+function settleCrashedCodingTurn(
+    options: Omit<CodingAgentTurnOptions, 'prompt'> & { readonly prompt?: string },
+    message: string,
+    observabilityRedactor: ObservabilityRedactor,
+    runId: string | undefined,
+): void {
+    const timestamp = new Date().toISOString();
+    const run = {
+        command: 'run' as const,
+        state: 'failed' as const,
+        reason: message,
+        ...(runId !== undefined ? { runId } : {}),
+    };
+    options.emitEvent(
+        redactAgentEventForObservability(
+            {
+                type: 'run.failed',
+                timestamp,
+                sessionId: options.sessionId,
+                message,
+                run,
+            },
+            observabilityRedactor,
+        ),
+    );
+    emitInteractiveTaskEvent(
+        options,
+        {
+            type: 'task.failed',
+            message,
+            run,
+        },
+        observabilityRedactor,
+    );
 }

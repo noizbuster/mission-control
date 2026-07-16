@@ -34,6 +34,24 @@ describe('session replay lifecycle', () => {
         expect(session).toMatchObject({ status: 'idle' });
         expect(session).not.toHaveProperty('awaiting');
     });
+
+    it('returns idle after task.failed without a matching run.failed', () => {
+        // Given: a turn started and then crashed outside the coordinator.
+        // When: only task.failed is projected (no run.failed).
+        const session = deriveReplaySession(SESSION_ID, [
+            runStarted(),
+            {
+                type: 'task.failed',
+                timestamp: '2026-07-11T10:00:05.000Z',
+                sessionId: SESSION_ID,
+                taskId: 'turn_1',
+                message: 'Failed to create SyntaxStyle',
+            },
+        ]);
+
+        // Then: the session is idle, not stuck running.
+        expect(session.status).toBe('idle');
+    });
 });
 
 function runStarted(runId = 'run_active', timestamp = '2026-07-11T10:00:00.000Z'): AgentEvent {

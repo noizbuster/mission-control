@@ -60,6 +60,17 @@ export function taskCompletedEvent(sessionId: string): AgentEvent {
     };
 }
 
+export function taskFailedEvent(sessionId: string, message = 'Failed to create SyntaxStyle'): AgentEvent {
+    return {
+        type: 'task.failed',
+        timestamp: '2026-06-04T10:00:02.000Z',
+        sessionId,
+        taskId: 'task_sqlite',
+        message,
+        nativeSidecarStatus: 'mock',
+    };
+}
+
 export function eventWithoutSession(): AgentEvent {
     return {
         type: 'session.started',

@@ -203,6 +203,25 @@ describe('highlightTreeSitter - sync entry point', () => {
         expect(isMonochrome(second)).toBe(true);
         expect(isMonochrome(first)).toBe(true);
     });
+
+    it('stays monochrome when buildSyntaxStyle throws', async () => {
+        const stderrWrite = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+        const { runtime, highlightOnce } = setupMockRuntime({
+            chunks: [{ __isChunk: true, text: 'const x', fg: RGBA.fromHex('#00ff00') }],
+        });
+        runtime.buildSyntaxStyle = vi.fn(() => {
+            throw new Error('Failed to create SyntaxStyle');
+        });
+        setHighlighterRuntime(runtime);
+
+        highlightTreeSitter('const x', 'ts');
+        await flushPending();
+
+        expect(isMonochrome(highlightTreeSitter('const x', 'ts'))).toBe(true);
+        expect(highlightOnce).not.toHaveBeenCalled();
+        expect(stderrWrite).toHaveBeenCalledWith(expect.stringContaining('Failed to create SyntaxStyle'));
+        stderrWrite.mockRestore();
+    });
 });
 
 describe('chunksToLines - multiline split', () => {

@@ -256,7 +256,12 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
         if (key.ctrl) {
             if (key.name === 'g') {
                 key.preventDefault();
-                props.store.toggleAbgOverlay();
+                try {
+                    props.store.toggleAbgOverlay();
+                } catch (error: unknown) {
+                    const message = error instanceof Error ? error.message : String(error);
+                    props.store.emitOutput(`Error: ABG overlay toggle failed: ${message}\n`);
+                }
                 return;
             }
             if (key.name === 'z') {

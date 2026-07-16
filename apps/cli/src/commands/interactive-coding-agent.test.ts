@@ -148,6 +148,37 @@ describe('ABG overlay wiring — 33ms coalescing + non-throwing observer (Wave 2
 
             await expect(tap(emitDeltaSignal('n1', 'a'))).rejects.toBe('non-error observer failure');
         });
+
+        it('keeps the turn alive when graph render throws a native UI error', async () => {
+            // Given: output.write fails the way OpenTUI SyntaxStyle creation fails.
+            const chunks: string[] = [];
+            let writes = 0;
+            const output = {
+                write: (text: string) => {
+                    writes += 1;
+                    if (writes === 1) {
+                        throw new Error('Failed to create SyntaxStyle');
+                    }
+                    chunks.push(text);
+                },
+            };
+            const stderrWrite = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+            const tap = interactiveGraphStreamSignal(
+                output,
+                { streamingText: false, streamingThinking: false, toolCount: 0, toolNames: [] },
+                '/ws',
+            );
+
+            // When: a stream delta triggers render.
+            await expect(tap(emitDeltaSignal('n1', 'hello'))).resolves.toBeUndefined();
+
+            // Then: the error is reported without aborting the signal pipeline.
+            expect(stderrWrite).toHaveBeenCalledWith(
+                expect.stringContaining('Failed to create SyntaxStyle'),
+            );
+            expect(chunks.join('')).toContain('Error: Failed to create SyntaxStyle');
+            stderrWrite.mockRestore();
+        });
     });
 
     describe('QA: Coalescing (Metis 2.2) — 100 deltas in one window = 1 update', () => {

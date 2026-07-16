@@ -19,6 +19,7 @@ import {
     openSqliteSessionEventStoreForTests,
     sessionStartedEvent,
     taskCompletedEvent,
+    taskFailedEvent,
 } from './sqlite-session-event-store-test-support';
 import { openSqliteSessionProjectionStoreForTests } from './sqlite-session-projection-test-support';
 
@@ -334,6 +335,27 @@ describe('SqliteSessionEventStore', () => {
                 sessionId,
             ]);
             expect(afterInterrupted.rows).toEqual([{ status: 'idle' }]);
+
+            await store.append(
+                runEvent(sessionId, 'run.started', 'run started fourth', {
+                    command: 'run',
+                    state: 'running',
+                    runId: 'run_4',
+                }),
+            );
+            await store.append(
+                runEvent(sessionId, 'run.failed', 'Failed to create SyntaxStyle', {
+                    command: 'run',
+                    state: 'failed',
+                    runId: 'run_4',
+                    reason: 'Failed to create SyntaxStyle',
+                }),
+            );
+            await store.append(taskFailedEvent(sessionId, 'Failed to create SyntaxStyle'));
+            const afterTaskFailed = await client.execute('SELECT status FROM sessions WHERE session_id = ?', [
+                sessionId,
+            ]);
+            expect(afterTaskFailed.rows).toEqual([{ status: 'idle' }]);
             client.close();
         } finally {
             await store.close();

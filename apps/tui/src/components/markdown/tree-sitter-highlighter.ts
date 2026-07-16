@@ -163,7 +163,13 @@ async function doInit(): Promise<void> {
         runtime.registerParsers(TREE_SITTER_PARSERS);
         parsersRegistered = true;
     }
-    syntaxStyle = runtime.buildSyntaxStyle();
+    try {
+        syntaxStyle = runtime.buildSyntaxStyle();
+    } catch (error: unknown) {
+        syntaxStyle = null;
+        const message = error instanceof Error ? error.message : String(error);
+        process.stderr.write(`tree-sitter SyntaxStyle unavailable: ${message}\n`);
+    }
 }
 
 // ---------------------------------------------------------------------------
