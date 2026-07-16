@@ -1,12 +1,12 @@
 import type { LanguageModelV3Message, LanguageModelV3StreamPart } from '@ai-sdk/provider';
 import { describe, expect, it } from 'vitest';
-import { createDefaultWorkflowGraph } from '../../behavior/default-workflow-graph';
+import { createFixerWorkflowGraph } from '../../behavior/fixer-workflow-graph';
 import { createLocalEchoSdkModel } from './local-echo-sdk-model';
 
 const SYSTEM_PROMPT_KEY = 'systemPrompt';
 
 describe('createLocalEchoSdkModel structured workflow contracts', () => {
-    it('emits the exact trivial token when the active system prompt is the default intent gate', async () => {
+    it('emits the exact trivial token when the active system prompt is the fixer intent gate', async () => {
         // Given
         const systemPrompt = systemPromptForNode('intent-gate');
 
@@ -78,7 +78,7 @@ describe('createLocalEchoSdkModel structured workflow contracts', () => {
 });
 
 function systemPromptForNode(nodeId: string): string {
-    const node = createDefaultWorkflowGraph().nodes.find((candidate) => candidate.id === nodeId);
+    const node = createFixerWorkflowGraph().nodes.find((candidate) => candidate.id === nodeId);
     const systemPrompt = node?.config?.[SYSTEM_PROMPT_KEY];
     if (typeof systemPrompt !== 'string') {
         throw new TypeError(`expected system prompt for ${nodeId}`);

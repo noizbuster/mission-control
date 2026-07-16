@@ -6,20 +6,9 @@ import type { ProviderTurnRequest } from './provider-turn-types';
 const SYSTEM_PROMPT_KEY = 'systemPrompt';
 
 describe('createLocalCodingProvider structured workflow contracts', () => {
-    it('emits the exact trivial token for the default intent gate request', async () => {
+    it('emits true for the plan-first intake request', async () => {
         // Given
-        const request = requestWithSystem('intent-gate', 'hello');
-
-        // When
-        const content = await completedContent(request);
-
-        // Then
-        expect(content).toBe('trivial');
-    });
-
-    it('emits the exact true token for the safe research completion request', async () => {
-        // Given
-        const request = requestWithSystem('research-explore', 'explain how the build works');
+        const request = requestWithSystem('intake', 'hello');
 
         // When
         const content = await completedContent(request);
@@ -28,15 +17,26 @@ describe('createLocalCodingProvider structured workflow contracts', () => {
         expect(content).toBe('true');
     });
 
-    it('fails the delegation guard closed when the local scaffold cannot perform its checks', async () => {
+    it('emits clear for a well-specified planning request at the ambiguity gate', async () => {
         // Given
-        const request = requestWithSystem('anti-dup-guard', 'implement a tiny change');
+        const request = requestWithSystem('assess-ambiguity', 'add rate limiting to the login endpoint');
 
         // When
         const content = await completedContent(request);
 
         // Then
-        expect(content).toBe('false');
+        expect(content).toBe('clear');
+    });
+
+    it('emits true for the explore completion gate', async () => {
+        // Given
+        const request = requestWithSystem('explore', 'ground the plan in the codebase');
+
+        // When
+        const content = await completedContent(request);
+
+        // Then
+        expect(content).toBe('true');
     });
 });
 
