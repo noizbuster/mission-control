@@ -10,6 +10,8 @@ export type UseRepaintEffectsDeps = {
     readonly overlayMode: Accessor<ChatStoreOverlayMode>;
     readonly generating: Accessor<boolean>;
     readonly promptRepaintKey: Accessor<string>;
+    /** ABG tab index + scroll offset; changes must paint without close/reopen. */
+    readonly abgNavKey?: Accessor<string>;
 };
 
 /**
@@ -18,7 +20,7 @@ export type UseRepaintEffectsDeps = {
  * Only schedule a normal requestRender on discrete UI changes.
  */
 export function useRepaintEffects(deps: UseRepaintEffectsDeps): void {
-    const { renderer, overlayMode, generating, promptRepaintKey } = deps;
+    const { renderer, overlayMode, generating, promptRepaintKey, abgNavKey } = deps;
 
     let prevOverlayMode = overlayMode();
     createEffect(() => {
@@ -43,4 +45,14 @@ export function useRepaintEffects(deps: UseRepaintEffectsDeps): void {
         }
         prevGenerating = generating();
     });
+
+    if (abgNavKey !== undefined) {
+        let prevAbgNavKey = abgNavKey();
+        createEffect(() => {
+            if (prevAbgNavKey !== abgNavKey()) {
+                prevAbgNavKey = abgNavKey();
+                renderer.requestRender();
+            }
+        });
+    }
 }
