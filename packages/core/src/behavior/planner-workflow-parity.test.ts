@@ -314,6 +314,49 @@ describe('planner workflow parity: independently constrained child consultations
     });
 });
 
+describe('planner workflow progress-contract routing matrix', () => {
+    it('locks ambiguity.classification and explore.decision outputEnum labels', () => {
+        const graph = createPlannerWorkflowGraph();
+        const assess = findNode(graph, 'assess-ambiguity');
+        const exploreFilter = findNode(graph, 'explore-filter');
+        expect(configString(assess, 'outputKey')).toBe('ambiguity.classification');
+        expect(assess.config?.['outputEnum']).toEqual(['clear', 'unclear', 'on-the-fence']);
+        expect(configString(exploreFilter, 'outputKey')).toBe('explore.decision');
+        expect(exploreFilter.config?.['outputEnum']).toEqual(['needs-exploration', 'direct-draft']);
+    });
+
+    it('locks equals-used booleans with outputShape boolean', () => {
+        const graph = createPlannerWorkflowGraph();
+        for (const [id, key] of [
+            ['explore', 'explore.complete'],
+            ['research', 'research.complete'],
+            ['approval-gate', 'plan.ready'],
+        ] as const) {
+            const node = findNode(graph, id);
+            expect(configString(node, 'outputKey')).toBe(key);
+            expect(configString(node, 'outputShape')).toBe('boolean');
+        }
+    });
+
+    it('marks pure routing gates with empty capabilities', () => {
+        const graph = createPlannerWorkflowGraph();
+        for (const id of ['assess-ambiguity', 'explore-filter', 'approval-gate'] as const) {
+            expect(findNode(graph, id).capabilities).toEqual([]);
+        }
+    });
+
+    it('declares defaults.escalationTarget present for pure-gate exhaust', () => {
+        const graph = createPlannerWorkflowGraph();
+        expect(graph.defaults?.escalationTarget).toBe('present');
+        expect(findNode(graph, 'present').id).toBe('present');
+    });
+
+    it('fixture graph matches factory including enum locks and exhaust path', async () => {
+        const spec = WorkflowSpecSchema.parse(await loadPlannerSpec());
+        expect(spec.graph).toEqual(createPlannerWorkflowGraph());
+    });
+});
+
 describe('planner workflow parity: runtime outputKey persistence', () => {
     afterEach(() => {
         createCompositeNodeTestContext();

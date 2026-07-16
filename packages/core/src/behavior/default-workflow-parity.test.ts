@@ -73,3 +73,46 @@ describe('default workflow fixture parity', () => {
         expect(result.data.modes?.[0]?.id).toBe(DEFAULT_PLAN_READONLY_MODE.id);
     });
 });
+
+describe('default workflow progress-contract routing matrix', () => {
+    function nodeById(id: string) {
+        const node = createDefaultWorkflowGraph().nodes.find((candidate) => candidate.id === id);
+        if (node === undefined) {
+            throw new Error(`missing node ${id}`);
+        }
+        return node;
+    }
+
+    it('locks ambiguity.classification and explore.decision outputEnum labels', () => {
+        const assess = nodeById('assess-ambiguity');
+        const exploreFilter = nodeById('explore-filter');
+        expect(assess.config?.['outputKey']).toBe('ambiguity.classification');
+        expect(assess.config?.['outputEnum']).toEqual(['clear', 'unclear', 'on-the-fence']);
+        expect(exploreFilter.config?.['outputKey']).toBe('explore.decision');
+        expect(exploreFilter.config?.['outputEnum']).toEqual(['needs-exploration', 'direct-draft']);
+    });
+
+    it('locks equals-used booleans with outputShape boolean', () => {
+        for (const [id, key] of [
+            ['explore', 'explore.complete'],
+            ['research', 'research.complete'],
+            ['approval-gate', 'plan.ready'],
+        ] as const) {
+            const node = nodeById(id);
+            expect(node.config?.['outputKey']).toBe(key);
+            expect(node.config?.['outputShape']).toBe('boolean');
+        }
+    });
+
+    it('marks pure routing gates with empty capabilities', () => {
+        for (const id of ['assess-ambiguity', 'explore-filter', 'approval-gate'] as const) {
+            expect(nodeById(id).capabilities).toEqual([]);
+        }
+    });
+
+    it('declares defaults.escalationTarget present for pure-gate exhaust', () => {
+        expect(createDefaultWorkflowGraph().defaults?.escalationTarget).toBe('present');
+        const present = nodeById('present');
+        expect(present.id).toBe('present');
+    });
+});

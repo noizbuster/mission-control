@@ -155,6 +155,10 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
         defaults: {
             ...(options.model !== undefined ? { model: options.model } : {}),
             maxNodeRuns: options.maxNodeRuns ?? PLANNER_WORKFLOW_MAX_NODE_RUNS,
+            // Progress-contract exhaust: pure conditional gates re-admit under budget, then
+            // escalate to present (never silent graph.completed). Recovery only — sticky
+            // plan-first product policy is unchanged.
+            escalationTarget: 'present',
         },
         nodes: [
             {
@@ -174,6 +178,8 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
                 id: 'assess-ambiguity',
                 kind: 'llm',
                 label: 'Ambiguity gate (filter 1) — clear | unclear | on-the-fence',
+                // Pure routing gate: empty capabilities keep pureStructuredGate true.
+                capabilities: [],
                 config: {
                     systemPrompt:
                         'Classify the request ambiguity for deep autonomous planning. Write exactly ' +
@@ -185,12 +191,15 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
                         'request to unclear silently overrides forks the user wanted to own — when ' +
                         'genuinely unsure, prefer clear.',
                     outputKey: 'ambiguity.classification',
+                    outputEnum: ['clear', 'unclear', 'on-the-fence'],
                 },
             },
             {
                 id: 'explore-filter',
                 kind: 'llm',
                 label: 'Exploration gate (filter 2) — needs-exploration | direct-draft',
+                // Pure routing gate: empty capabilities keep pureStructuredGate true.
+                capabilities: [],
                 config: {
                     systemPrompt:
                         'Second filter within the clear branch. Decide whether the plan must be ' +
@@ -201,6 +210,7 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
                         'Default to "needs-exploration" when in doubt — deep planning explores before ' +
                         'drafting and before asking.',
                     outputKey: 'explore.decision',
+                    outputEnum: ['needs-exploration', 'direct-draft'],
                 },
             },
             {
@@ -301,6 +311,8 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
                 id: 'approval-gate',
                 kind: 'llm',
                 label: 'Approval gate — block for explicit okay before the final plan',
+                // Pure boolean gate: empty capabilities keep pureStructuredGate true.
+                capabilities: [],
                 config: {
                     systemPrompt:
                         'Present the approval brief ONCE: what you found (key facts with paths), the ' +

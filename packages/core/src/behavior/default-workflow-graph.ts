@@ -108,6 +108,10 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
         defaults: {
             ...(options.model !== undefined ? { model: options.model } : {}),
             maxNodeRuns: options.maxNodeRuns ?? DEFAULT_WORKFLOW_MAX_NODE_RUNS,
+            // Progress-contract exhaust: pure conditional gates re-admit under budget, then
+            // escalate to present (never silent graph.completed). Recovery only — plan-first
+            // sticky policy is unchanged.
+            escalationTarget: 'present',
         },
         nodes: [
             {
@@ -126,6 +130,8 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
                 id: 'assess-ambiguity',
                 kind: 'llm',
                 label: 'Ambiguity gate (filter 1) — clear | unclear | on-the-fence',
+                // Pure routing gate: empty capabilities keep pureStructuredGate true.
+                capabilities: [],
                 config: {
                     systemPrompt:
                         'Classify the request ambiguity. Write exactly one label to ' +
@@ -136,12 +142,15 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
                         'silently overrides forks the user wanted to own — when genuinely unsure, ' +
                         'prefer clear. Explore before asking.',
                     outputKey: 'ambiguity.classification',
+                    outputEnum: ['clear', 'unclear', 'on-the-fence'],
                 },
             },
             {
                 id: 'explore-filter',
                 kind: 'llm',
                 label: 'Exploration gate (filter 2) — needs-exploration | direct-draft',
+                // Pure routing gate: empty capabilities keep pureStructuredGate true.
+                capabilities: [],
                 config: {
                     systemPrompt:
                         'Second filter within the clear branch. Decide whether the plan must be ' +
@@ -151,6 +160,7 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
                         '"direct-draft" (the request is self-contained, e.g. a one-line change). ' +
                         'Default to "needs-exploration" when in doubt — explore before asking.',
                     outputKey: 'explore.decision',
+                    outputEnum: ['needs-exploration', 'direct-draft'],
                 },
             },
             {
@@ -243,6 +253,8 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
                 id: 'approval-gate',
                 kind: 'llm',
                 label: 'Approval gate — block for explicit okay before the final plan',
+                // Pure boolean gate: empty capabilities keep pureStructuredGate true.
+                capabilities: [],
                 config: {
                     systemPrompt:
                         'Present the approval brief ONCE: what you found (key facts with paths), the ' +
