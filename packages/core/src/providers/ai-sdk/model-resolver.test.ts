@@ -43,6 +43,33 @@ describe('createSdkModelResolver', () => {
         expect(model.modelId).toBe('glm-5.2');
     });
 
+    it('extracts the bearer token from an oauth-type credential (xAI SuperGrok OAuth)', async () => {
+        const credentialResolver = {
+            resolveProviderCredential: async () => ({
+                providerID: 'xai',
+                type: 'oauth' as const,
+                accessToken: 'xai-oauth-access',
+                refreshToken: 'xai-oauth-refresh',
+                createdAt: '2026-06-16T00:00:00.000Z',
+                updatedAt: '2026-06-16T00:00:00.000Z',
+            }),
+            resolveRequiredProviderCredential: async () => ({
+                providerID: 'xai',
+                type: 'oauth' as const,
+                accessToken: 'xai-oauth-access',
+                refreshToken: 'xai-oauth-refresh',
+                createdAt: '2026-06-16T00:00:00.000Z',
+                updatedAt: '2026-06-16T00:00:00.000Z',
+            }),
+            summarizeProviderCredential: async () => undefined,
+            redactForOutput: (text: string) => text,
+        };
+        const resolve = await createSdkModelResolver({ providerID: 'xai', credentialResolver });
+        const model = resolve({ providerID: 'xai', modelID: 'grok-4.3' }) as ResolvedModel;
+        expect(model.provider).toBe('openai.chat');
+        expect(model.modelId).toBe('grok-4.3');
+    });
+
     it('extracts the API key from a fields-type credential (zai stores ZHIPU_API_KEY as a field)', async () => {
         // The auth store persists zai-coding-plan as a `fields` credential (authLabel ZHIPU_API_KEY),
         // not an `apiKey`-type. The resolver must extract the secret field value as the bearer key.

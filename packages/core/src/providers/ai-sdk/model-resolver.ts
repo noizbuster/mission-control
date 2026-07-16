@@ -69,10 +69,9 @@ function buildSdkModel(input: {
     readonly apiKey: string | undefined;
     readonly baseURL?: string;
 }): LlmActorModel {
-    // Real OpenAI-compatible providers (zai-coding-plan, openrouter, groq, deepseek, mistral) are
-    // identified by their spec entry, which carries the full chat-completions endpoint. @ai-sdk/openai
-    // appends '/chat/completions' to its base, so derive the base by stripping that suffix. An
-    // explicit `baseURL` override (escape hatch) wins over the spec endpoint.
+    // Real OpenAI-compatible providers are identified by their spec entry, which carries the full
+    // chat-completions endpoint. @ai-sdk/openai appends '/chat/completions' to its base, so derive
+    // the base by stripping that suffix. An explicit `baseURL` override wins over the spec endpoint.
     const compatibleSpec = openAICompatibleProviderSpec(input.providerID);
     if (compatibleSpec !== undefined) {
         return createOpenAI({
@@ -137,15 +136,15 @@ function extractApiKey(credential: ProviderCredential | undefined): string | und
     if (credential === undefined || typeof credential !== 'object') {
         return undefined;
     }
-    // The auth store persists an `apiKey`-type credential OR a `fields`-type credential (e.g.
-    // zai-coding-plan stores `ZHIPU_API_KEY` as a named field). Both carry the bearer secret; pull
-    // it from whichever shape is present. OAuth credentials are not bearer API keys → undefined.
     if (credential.type === 'apiKey') {
         return credential.apiKey.length > 0 ? credential.apiKey : undefined;
     }
     if (credential.type === 'fields') {
         const secret = Object.values(credential.fields).find((field) => field.secret)?.value;
         return typeof secret === 'string' && secret.length > 0 ? secret : undefined;
+    }
+    if (credential.type === 'oauth') {
+        return credential.accessToken.length > 0 ? credential.accessToken : undefined;
     }
     return undefined;
 }
