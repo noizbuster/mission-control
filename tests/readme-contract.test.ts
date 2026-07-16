@@ -126,8 +126,12 @@ describe('README stage-01 contract', () => {
             'Workspace trust is controlled interactively with `/trust`',
             '`/trust deny` (deny project-local resources for the workspace)',
             '`/trust reset` (clear the trust decision)',
-            '$skill <name> [args]` loads the named skill',
+            '`$name [args]` loads the named skill',
             'real skill loading, replacing the old scaffold recorder',
+            'Skill chat syntax is dollar-prefix only',
+            '`!command` runs a shell command and submits the output to the model',
+            '`!!command` runs a shell command and displays the output only',
+            'Both bash prefixes require a trusted workspace',
             'Normal prompt text still sends a prompt',
             'Ctrl+C twice exits',
             'does not run actual Codex host skills',
@@ -135,11 +139,22 @@ describe('README stage-01 contract', () => {
             '`/agents` with no argument opens the agent control dashboard',
             '`/agents list` prints the discovered-agents list as text',
             'The reserved subcommands `dashboard`, `list`, `reload`, and `disable`',
+            'loaded on demand via the `skill` tool or the `$name [args]` chat prefix',
         ] as const;
 
         for (const term of requiredTerms) {
             expect(content, `README missing ${term}`).toContain(term);
         }
+
+        expect(content, 'README must not claim slash is a skill equivalent').not.toContain(
+            'slash-command equivalent',
+        );
+        expect(content, 'README must not use dual-path $skill <name> wording').not.toContain(
+            '$skill <name>',
+        );
+        expect(content, 'README must not document /<skill-name> as skill chat input').not.toContain(
+            '/<skill-name>',
+        );
     });
 
     it('documents mc agents CLI and /agents dashboard', () => {

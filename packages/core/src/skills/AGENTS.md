@@ -2,7 +2,7 @@
 
 ## Overview
 
-`packages/core/src/skills` owns `SKILL.md` discovery (multi-scope, first-wins) and metadata parsing. The on-demand `skill` tool and `/<skill-name>` slash expansion live in `apps/cli` + `packages/core/src/tools/skill-tool.ts`.
+`packages/core/src/skills` owns `SKILL.md` discovery (multi-scope, first-wins) and metadata parsing. The on-demand `skill` tool lives in `packages/core/src/tools/skill-tool.ts`. Interactive chat loads skills via `$name [args]` in `apps/cli` (dollar-prefix only; slash never expands to skill).
 
 ## Where To Look
 
