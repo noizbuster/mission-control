@@ -1,6 +1,36 @@
 [
   {
     "providerID": "302ai",
+    "modelID": "MiniMax-M1",
+    "inputCentsPerMillion": 13,
+    "outputCentsPerMillion": 125
+  },
+  {
+    "providerID": "302ai",
+    "modelID": "MiniMax-M2",
+    "inputCentsPerMillion": 33,
+    "outputCentsPerMillion": 132
+  },
+  {
+    "providerID": "302ai",
+    "modelID": "MiniMax-M2.1",
+    "inputCentsPerMillion": 30,
+    "outputCentsPerMillion": 120
+  },
+  {
+    "providerID": "302ai",
+    "modelID": "MiniMax-M2.7",
+    "inputCentsPerMillion": 30,
+    "outputCentsPerMillion": 120
+  },
+  {
+    "providerID": "302ai",
+    "modelID": "MiniMax-M2.7-highspeed",
+    "inputCentsPerMillion": 60,
+    "outputCentsPerMillion": 480
+  },
+  {
+    "providerID": "302ai",
     "modelID": "chatgpt-4o-latest",
     "inputCentsPerMillion": 500,
     "outputCentsPerMillion": 1500
@@ -496,36 +526,6 @@
   },
   {
     "providerID": "302ai",
-    "modelID": "MiniMax-M1",
-    "inputCentsPerMillion": 13,
-    "outputCentsPerMillion": 125
-  },
-  {
-    "providerID": "302ai",
-    "modelID": "MiniMax-M2",
-    "inputCentsPerMillion": 33,
-    "outputCentsPerMillion": 132
-  },
-  {
-    "providerID": "302ai",
-    "modelID": "MiniMax-M2.1",
-    "inputCentsPerMillion": 30,
-    "outputCentsPerMillion": 120
-  },
-  {
-    "providerID": "302ai",
-    "modelID": "MiniMax-M2.7",
-    "inputCentsPerMillion": 30,
-    "outputCentsPerMillion": 120
-  },
-  {
-    "providerID": "302ai",
-    "modelID": "MiniMax-M2.7-highspeed",
-    "inputCentsPerMillion": 60,
-    "outputCentsPerMillion": 480
-  },
-  {
-    "providerID": "302ai",
     "modelID": "ministral-14b-2512",
     "inputCentsPerMillion": 33,
     "outputCentsPerMillion": 33
@@ -583,6 +583,36 @@
     "modelID": "qwen3-max-2025-09-23",
     "inputCentsPerMillion": 86,
     "outputCentsPerMillion": 343
+  },
+  {
+    "providerID": "abacus",
+    "modelID": "Qwen/QwQ-32B",
+    "inputCentsPerMillion": 40,
+    "outputCentsPerMillion": 40
+  },
+  {
+    "providerID": "abacus",
+    "modelID": "Qwen/Qwen2.5-72B-Instruct",
+    "inputCentsPerMillion": 11,
+    "outputCentsPerMillion": 38
+  },
+  {
+    "providerID": "abacus",
+    "modelID": "Qwen/Qwen3-235B-A22B-Instruct-2507",
+    "inputCentsPerMillion": 13,
+    "outputCentsPerMillion": 60
+  },
+  {
+    "providerID": "abacus",
+    "modelID": "Qwen/Qwen3-32B",
+    "inputCentsPerMillion": 9,
+    "outputCentsPerMillion": 29
+  },
+  {
+    "providerID": "abacus",
+    "modelID": "Qwen/qwen3-coder-480b-a35b-instruct",
+    "inputCentsPerMillion": 29,
+    "outputCentsPerMillion": 120
   },
   {
     "providerID": "abacus",
@@ -908,36 +938,6 @@
     "modelID": "qwen-2.5-coder-32b",
     "inputCentsPerMillion": 79,
     "outputCentsPerMillion": 79
-  },
-  {
-    "providerID": "abacus",
-    "modelID": "Qwen/Qwen2.5-72B-Instruct",
-    "inputCentsPerMillion": 11,
-    "outputCentsPerMillion": 38
-  },
-  {
-    "providerID": "abacus",
-    "modelID": "Qwen/Qwen3-235B-A22B-Instruct-2507",
-    "inputCentsPerMillion": 13,
-    "outputCentsPerMillion": 60
-  },
-  {
-    "providerID": "abacus",
-    "modelID": "Qwen/Qwen3-32B",
-    "inputCentsPerMillion": 9,
-    "outputCentsPerMillion": 29
-  },
-  {
-    "providerID": "abacus",
-    "modelID": "Qwen/qwen3-coder-480b-a35b-instruct",
-    "inputCentsPerMillion": 29,
-    "outputCentsPerMillion": 120
-  },
-  {
-    "providerID": "abacus",
-    "modelID": "Qwen/QwQ-32B",
-    "inputCentsPerMillion": 40,
-    "outputCentsPerMillion": 40
   },
   {
     "providerID": "abacus",
@@ -1660,6 +1660,19 @@
   },
   {
     "providerID": "alibaba-cn",
+    "modelID": "MiniMax-M2.5",
+    "inputCentsPerMillion": 30,
+    "outputCentsPerMillion": 120
+  },
+  {
+    "providerID": "alibaba-cn",
+    "modelID": "MiniMax/MiniMax-M2.7",
+    "inputCentsPerMillion": 30,
+    "outputCentsPerMillion": 120,
+    "cacheReadCentsPerMillion": 6
+  },
+  {
+    "providerID": "alibaba-cn",
     "modelID": "deepseek-r1",
     "inputCentsPerMillion": 57,
     "outputCentsPerMillion": 229
@@ -1775,19 +1788,6 @@
     "inputCentsPerMillion": 60,
     "outputCentsPerMillion": 300,
     "cacheReadCentsPerMillion": 10
-  },
-  {
-    "providerID": "alibaba-cn",
-    "modelID": "MiniMax-M2.5",
-    "inputCentsPerMillion": 30,
-    "outputCentsPerMillion": 120
-  },
-  {
-    "providerID": "alibaba-cn",
-    "modelID": "MiniMax/MiniMax-M2.7",
-    "inputCentsPerMillion": 30,
-    "outputCentsPerMillion": 120,
-    "cacheReadCentsPerMillion": 6
   },
   {
     "providerID": "alibaba-cn",
@@ -2167,6 +2167,13 @@
   },
   {
     "providerID": "alibaba-coding-plan",
+    "modelID": "MiniMax-M2.5",
+    "inputCentsPerMillion": 0,
+    "outputCentsPerMillion": 0,
+    "cacheReadCentsPerMillion": 0
+  },
+  {
+    "providerID": "alibaba-coding-plan",
     "modelID": "glm-4.7",
     "inputCentsPerMillion": 0,
     "outputCentsPerMillion": 0,
@@ -2182,13 +2189,6 @@
   {
     "providerID": "alibaba-coding-plan",
     "modelID": "kimi-k2.5",
-    "inputCentsPerMillion": 0,
-    "outputCentsPerMillion": 0,
-    "cacheReadCentsPerMillion": 0
-  },
-  {
-    "providerID": "alibaba-coding-plan",
-    "modelID": "MiniMax-M2.5",
     "inputCentsPerMillion": 0,
     "outputCentsPerMillion": 0,
     "cacheReadCentsPerMillion": 0
@@ -2250,6 +2250,13 @@
   },
   {
     "providerID": "alibaba-coding-plan-cn",
+    "modelID": "MiniMax-M2.5",
+    "inputCentsPerMillion": 0,
+    "outputCentsPerMillion": 0,
+    "cacheReadCentsPerMillion": 0
+  },
+  {
+    "providerID": "alibaba-coding-plan-cn",
     "modelID": "glm-4.7",
     "inputCentsPerMillion": 0,
     "outputCentsPerMillion": 0,
@@ -2265,13 +2272,6 @@
   {
     "providerID": "alibaba-coding-plan-cn",
     "modelID": "kimi-k2.5",
-    "inputCentsPerMillion": 0,
-    "outputCentsPerMillion": 0,
-    "cacheReadCentsPerMillion": 0
-  },
-  {
-    "providerID": "alibaba-coding-plan-cn",
-    "modelID": "MiniMax-M2.5",
     "inputCentsPerMillion": 0,
     "outputCentsPerMillion": 0,
     "cacheReadCentsPerMillion": 0
@@ -2327,6 +2327,13 @@
   {
     "providerID": "alibaba-coding-plan-cn",
     "modelID": "qwen3.7-plus",
+    "inputCentsPerMillion": 0,
+    "outputCentsPerMillion": 0,
+    "cacheReadCentsPerMillion": 0
+  },
+  {
+    "providerID": "alibaba-token-plan",
+    "modelID": "MiniMax-M2.5",
     "inputCentsPerMillion": 0,
     "outputCentsPerMillion": 0,
     "cacheReadCentsPerMillion": 0
@@ -2389,13 +2396,6 @@
   {
     "providerID": "alibaba-token-plan",
     "modelID": "kimi-k2.7-code",
-    "inputCentsPerMillion": 0,
-    "outputCentsPerMillion": 0,
-    "cacheReadCentsPerMillion": 0
-  },
-  {
-    "providerID": "alibaba-token-plan",
-    "modelID": "MiniMax-M2.5",
     "inputCentsPerMillion": 0,
     "outputCentsPerMillion": 0,
     "cacheReadCentsPerMillion": 0
@@ -2454,6 +2454,13 @@
   },
   {
     "providerID": "alibaba-token-plan-cn",
+    "modelID": "MiniMax-M2.5",
+    "inputCentsPerMillion": 0,
+    "outputCentsPerMillion": 0,
+    "cacheReadCentsPerMillion": 0
+  },
+  {
+    "providerID": "alibaba-token-plan-cn",
     "modelID": "deepseek-v3.2",
     "inputCentsPerMillion": 0,
     "outputCentsPerMillion": 0
@@ -2510,13 +2517,6 @@
   {
     "providerID": "alibaba-token-plan-cn",
     "modelID": "kimi-k2.7-code",
-    "inputCentsPerMillion": 0,
-    "outputCentsPerMillion": 0,
-    "cacheReadCentsPerMillion": 0
-  },
-  {
-    "providerID": "alibaba-token-plan-cn",
-    "modelID": "MiniMax-M2.5",
     "inputCentsPerMillion": 0,
     "outputCentsPerMillion": 0,
     "cacheReadCentsPerMillion": 0
@@ -3399,18 +3399,6 @@
   },
   {
     "providerID": "atomic-chat",
-    "modelID": "gemma-4-E4B-it-IQ4_XS",
-    "inputCentsPerMillion": 0,
-    "outputCentsPerMillion": 0
-  },
-  {
-    "providerID": "atomic-chat",
-    "modelID": "gemma-4-E4B-it-MLX-4bit",
-    "inputCentsPerMillion": 0,
-    "outputCentsPerMillion": 0
-  },
-  {
-    "providerID": "atomic-chat",
     "modelID": "Meta-Llama-3_1-8B-Instruct-GGUF",
     "inputCentsPerMillion": 0,
     "outputCentsPerMillion": 0
@@ -3424,6 +3412,18 @@
   {
     "providerID": "atomic-chat",
     "modelID": "Qwen3_5-9B-Q4_K_M",
+    "inputCentsPerMillion": 0,
+    "outputCentsPerMillion": 0
+  },
+  {
+    "providerID": "atomic-chat",
+    "modelID": "gemma-4-E4B-it-IQ4_XS",
+    "inputCentsPerMillion": 0,
+    "outputCentsPerMillion": 0
+  },
+  {
+    "providerID": "atomic-chat",
+    "modelID": "gemma-4-E4B-it-MLX-4bit",
     "inputCentsPerMillion": 0,
     "outputCentsPerMillion": 0
   },
@@ -4842,6 +4842,12 @@
   },
   {
     "providerID": "baseten",
+    "modelID": "MiniMaxAI/MiniMax-M2.5",
+    "inputCentsPerMillion": 30,
+    "outputCentsPerMillion": 120
+  },
+  {
+    "providerID": "baseten",
     "modelID": "deepseek-ai/DeepSeek-V3.1",
     "inputCentsPerMillion": 50,
     "outputCentsPerMillion": 150
@@ -4852,12 +4858,6 @@
     "inputCentsPerMillion": 174,
     "outputCentsPerMillion": 348,
     "cacheReadCentsPerMillion": 14
-  },
-  {
-    "providerID": "baseten",
-    "modelID": "MiniMaxAI/MiniMax-M2.5",
-    "inputCentsPerMillion": 30,
-    "outputCentsPerMillion": 120
   },
   {
     "providerID": "baseten",
@@ -4882,17 +4882,17 @@
   },
   {
     "providerID": "baseten",
-    "modelID": "nvidia/Nemotron-120B-A12B",
-    "inputCentsPerMillion": 30,
-    "outputCentsPerMillion": 75,
-    "cacheReadCentsPerMillion": 6
-  },
-  {
-    "providerID": "baseten",
     "modelID": "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B",
     "inputCentsPerMillion": 60,
     "outputCentsPerMillion": 240,
     "cacheReadCentsPerMillion": 12
+  },
+  {
+    "providerID": "baseten",
+    "modelID": "nvidia/Nemotron-120B-A12B",
+    "inputCentsPerMillion": 30,
+    "outputCentsPerMillion": 75,
+    "cacheReadCentsPerMillion": 6
   },
   {
     "providerID": "baseten",
@@ -4992,38 +4992,10 @@
   },
   {
     "providerID": "chutes",
-    "modelID": "deepseek-ai/DeepSeek-V3.2-TEE",
-    "inputCentsPerMillion": 100,
-    "outputCentsPerMillion": 100,
-    "cacheReadCentsPerMillion": 50
-  },
-  {
-    "providerID": "chutes",
-    "modelID": "google/gemma-4-31B-turbo-TEE",
-    "inputCentsPerMillion": 12,
-    "outputCentsPerMillion": 37,
-    "cacheReadCentsPerMillion": 6
-  },
-  {
-    "providerID": "chutes",
     "modelID": "MiniMaxAI/MiniMax-M2.5-TEE",
     "inputCentsPerMillion": 15,
     "outputCentsPerMillion": 120,
     "cacheReadCentsPerMillion": 8
-  },
-  {
-    "providerID": "chutes",
-    "modelID": "moonshotai/Kimi-K2.5-TEE",
-    "inputCentsPerMillion": 44,
-    "outputCentsPerMillion": 200,
-    "cacheReadCentsPerMillion": 22
-  },
-  {
-    "providerID": "chutes",
-    "modelID": "moonshotai/Kimi-K2.6-TEE",
-    "inputCentsPerMillion": 66,
-    "outputCentsPerMillion": 350,
-    "cacheReadCentsPerMillion": 33
   },
   {
     "providerID": "chutes",
@@ -5052,6 +5024,34 @@
     "inputCentsPerMillion": 30,
     "outputCentsPerMillion": 200,
     "cacheReadCentsPerMillion": 15
+  },
+  {
+    "providerID": "chutes",
+    "modelID": "deepseek-ai/DeepSeek-V3.2-TEE",
+    "inputCentsPerMillion": 100,
+    "outputCentsPerMillion": 100,
+    "cacheReadCentsPerMillion": 50
+  },
+  {
+    "providerID": "chutes",
+    "modelID": "google/gemma-4-31B-turbo-TEE",
+    "inputCentsPerMillion": 12,
+    "outputCentsPerMillion": 37,
+    "cacheReadCentsPerMillion": 6
+  },
+  {
+    "providerID": "chutes",
+    "modelID": "moonshotai/Kimi-K2.5-TEE",
+    "inputCentsPerMillion": 44,
+    "outputCentsPerMillion": 200,
+    "cacheReadCentsPerMillion": 22
+  },
+  {
+    "providerID": "chutes",
+    "modelID": "moonshotai/Kimi-K2.6-TEE",
+    "inputCentsPerMillion": 66,
+    "outputCentsPerMillion": 350,
+    "cacheReadCentsPerMillion": 33
   },
   {
     "providerID": "chutes",
@@ -5169,15 +5169,15 @@
   },
   {
     "providerID": "cloudferro-sherlock",
-    "modelID": "meta-llama/Llama-3.3-70B-Instruct",
-    "inputCentsPerMillion": 292,
-    "outputCentsPerMillion": 292
-  },
-  {
-    "providerID": "cloudferro-sherlock",
     "modelID": "MiniMaxAI/MiniMax-M2.5",
     "inputCentsPerMillion": 30,
     "outputCentsPerMillion": 120
+  },
+  {
+    "providerID": "cloudferro-sherlock",
+    "modelID": "meta-llama/Llama-3.3-70B-Instruct",
+    "inputCentsPerMillion": 292,
+    "outputCentsPerMillion": 292
   },
   {
     "providerID": "cloudferro-sherlock",
@@ -6574,6 +6574,53 @@
   },
   {
     "providerID": "deepinfra",
+    "modelID": "MiniMaxAI/MiniMax-M2.5",
+    "inputCentsPerMillion": 15,
+    "outputCentsPerMillion": 115,
+    "cacheReadCentsPerMillion": 3
+  },
+  {
+    "providerID": "deepinfra",
+    "modelID": "Qwen/Qwen3-Coder-480B-A35B-Instruct-Turbo",
+    "inputCentsPerMillion": 30,
+    "outputCentsPerMillion": 100
+  },
+  {
+    "providerID": "deepinfra",
+    "modelID": "Qwen/Qwen3.5-35B-A3B",
+    "inputCentsPerMillion": 14,
+    "outputCentsPerMillion": 100,
+    "cacheReadCentsPerMillion": 5
+  },
+  {
+    "providerID": "deepinfra",
+    "modelID": "Qwen/Qwen3.5-397B-A17B",
+    "inputCentsPerMillion": 45,
+    "outputCentsPerMillion": 300,
+    "cacheReadCentsPerMillion": 22
+  },
+  {
+    "providerID": "deepinfra",
+    "modelID": "Qwen/Qwen3.6-35B-A3B",
+    "inputCentsPerMillion": 15,
+    "outputCentsPerMillion": 95
+  },
+  {
+    "providerID": "deepinfra",
+    "modelID": "XiaomiMiMo/MiMo-V2.5",
+    "inputCentsPerMillion": 40,
+    "outputCentsPerMillion": 200,
+    "cacheReadCentsPerMillion": 8
+  },
+  {
+    "providerID": "deepinfra",
+    "modelID": "XiaomiMiMo/MiMo-V2.5-Pro",
+    "inputCentsPerMillion": 100,
+    "outputCentsPerMillion": 300,
+    "cacheReadCentsPerMillion": 20
+  },
+  {
+    "providerID": "deepinfra",
     "modelID": "deepseek-ai/DeepSeek-R1-0528",
     "inputCentsPerMillion": 50,
     "outputCentsPerMillion": 215,
@@ -6632,13 +6679,6 @@
   },
   {
     "providerID": "deepinfra",
-    "modelID": "MiniMaxAI/MiniMax-M2.5",
-    "inputCentsPerMillion": 15,
-    "outputCentsPerMillion": 115,
-    "cacheReadCentsPerMillion": 3
-  },
-  {
-    "providerID": "deepinfra",
     "modelID": "moonshotai/Kimi-K2.5",
     "inputCentsPerMillion": 45,
     "outputCentsPerMillion": 225,
@@ -6662,46 +6702,6 @@
     "modelID": "openai/gpt-oss-20b",
     "inputCentsPerMillion": 3,
     "outputCentsPerMillion": 14
-  },
-  {
-    "providerID": "deepinfra",
-    "modelID": "Qwen/Qwen3-Coder-480B-A35B-Instruct-Turbo",
-    "inputCentsPerMillion": 30,
-    "outputCentsPerMillion": 100
-  },
-  {
-    "providerID": "deepinfra",
-    "modelID": "Qwen/Qwen3.5-35B-A3B",
-    "inputCentsPerMillion": 14,
-    "outputCentsPerMillion": 100,
-    "cacheReadCentsPerMillion": 5
-  },
-  {
-    "providerID": "deepinfra",
-    "modelID": "Qwen/Qwen3.5-397B-A17B",
-    "inputCentsPerMillion": 45,
-    "outputCentsPerMillion": 300,
-    "cacheReadCentsPerMillion": 22
-  },
-  {
-    "providerID": "deepinfra",
-    "modelID": "Qwen/Qwen3.6-35B-A3B",
-    "inputCentsPerMillion": 15,
-    "outputCentsPerMillion": 95
-  },
-  {
-    "providerID": "deepinfra",
-    "modelID": "XiaomiMiMo/MiMo-V2.5",
-    "inputCentsPerMillion": 40,
-    "outputCentsPerMillion": 200,
-    "cacheReadCentsPerMillion": 8
-  },
-  {
-    "providerID": "deepinfra",
-    "modelID": "XiaomiMiMo/MiMo-V2.5-Pro",
-    "inputCentsPerMillion": 100,
-    "outputCentsPerMillion": 300,
-    "cacheReadCentsPerMillion": 20
   },
   {
     "providerID": "deepinfra",
@@ -7252,6 +7252,36 @@
   },
   {
     "providerID": "evroc",
+    "modelID": "KBLab/kb-whisper-large",
+    "inputCentsPerMillion": 0,
+    "outputCentsPerMillion": 0
+  },
+  {
+    "providerID": "evroc",
+    "modelID": "Qwen/Qwen3-Embedding-8B",
+    "inputCentsPerMillion": 12,
+    "outputCentsPerMillion": 12
+  },
+  {
+    "providerID": "evroc",
+    "modelID": "Qwen/Qwen3-Reranker-4B",
+    "inputCentsPerMillion": 6,
+    "outputCentsPerMillion": 0
+  },
+  {
+    "providerID": "evroc",
+    "modelID": "Qwen/Qwen3-VL-30B-A3B-Instruct",
+    "inputCentsPerMillion": 23,
+    "outputCentsPerMillion": 92
+  },
+  {
+    "providerID": "evroc",
+    "modelID": "Qwen/Qwen3.6-35B-A3B-FP8",
+    "inputCentsPerMillion": 35,
+    "outputCentsPerMillion": 138
+  },
+  {
+    "providerID": "evroc",
     "modelID": "evroc/roc",
     "inputCentsPerMillion": 288,
     "outputCentsPerMillion": 1152
@@ -7267,12 +7297,6 @@
     "modelID": "intfloat/multilingual-e5-large-instruct",
     "inputCentsPerMillion": 11,
     "outputCentsPerMillion": 11
-  },
-  {
-    "providerID": "evroc",
-    "modelID": "KBLab/kb-whisper-large",
-    "inputCentsPerMillion": 0,
-    "outputCentsPerMillion": 0
   },
   {
     "providerID": "evroc",
@@ -7315,30 +7339,6 @@
     "modelID": "openai/whisper-large-v3-turbo",
     "inputCentsPerMillion": 0,
     "outputCentsPerMillion": 0
-  },
-  {
-    "providerID": "evroc",
-    "modelID": "Qwen/Qwen3-Embedding-8B",
-    "inputCentsPerMillion": 12,
-    "outputCentsPerMillion": 12
-  },
-  {
-    "providerID": "evroc",
-    "modelID": "Qwen/Qwen3-Reranker-4B",
-    "inputCentsPerMillion": 6,
-    "outputCentsPerMillion": 0
-  },
-  {
-    "providerID": "evroc",
-    "modelID": "Qwen/Qwen3-VL-30B-A3B-Instruct",
-    "inputCentsPerMillion": 23,
-    "outputCentsPerMillion": 92
-  },
-  {
-    "providerID": "evroc",
-    "modelID": "Qwen/Qwen3.6-35B-A3B-FP8",
-    "inputCentsPerMillion": 35,
-    "outputCentsPerMillion": 138
   },
   {
     "providerID": "fastrouter",
@@ -7755,19 +7755,6 @@
   },
   {
     "providerID": "friendli",
-    "modelID": "deepseek-ai/DeepSeek-V3.2",
-    "inputCentsPerMillion": 50,
-    "outputCentsPerMillion": 150,
-    "cacheReadCentsPerMillion": 25
-  },
-  {
-    "providerID": "friendli",
-    "modelID": "google/gemma-4-31B-it",
-    "inputCentsPerMillion": 14,
-    "outputCentsPerMillion": 40
-  },
-  {
-    "providerID": "friendli",
     "modelID": "MiniMaxAI/MiniMax-M2.5",
     "inputCentsPerMillion": 30,
     "outputCentsPerMillion": 120,
@@ -7778,6 +7765,19 @@
     "modelID": "Qwen/Qwen3-235B-A22B-Instruct-2507",
     "inputCentsPerMillion": 20,
     "outputCentsPerMillion": 80
+  },
+  {
+    "providerID": "friendli",
+    "modelID": "deepseek-ai/DeepSeek-V3.2",
+    "inputCentsPerMillion": 50,
+    "outputCentsPerMillion": 150,
+    "cacheReadCentsPerMillion": 25
+  },
+  {
+    "providerID": "friendli",
+    "modelID": "google/gemma-4-31B-it",
+    "inputCentsPerMillion": 14,
+    "outputCentsPerMillion": 40
   },
   {
     "providerID": "friendli",
@@ -8575,6 +8575,13 @@
   },
   {
     "providerID": "gmicloud",
+    "modelID": "Qwen/Qwen3.7-Max",
+    "inputCentsPerMillion": 250,
+    "outputCentsPerMillion": 750,
+    "cacheReadCentsPerMillion": 25
+  },
+  {
+    "providerID": "gmicloud",
     "modelID": "anthropic/claude-opus-4.6",
     "inputCentsPerMillion": 500,
     "outputCentsPerMillion": 2500,
@@ -8621,13 +8628,6 @@
     "inputCentsPerMillion": 190,
     "outputCentsPerMillion": 800,
     "cacheReadCentsPerMillion": 38
-  },
-  {
-    "providerID": "gmicloud",
-    "modelID": "Qwen/Qwen3.7-Max",
-    "inputCentsPerMillion": 250,
-    "outputCentsPerMillion": 750,
-    "cacheReadCentsPerMillion": 25
   },
   {
     "providerID": "gmicloud",
@@ -9764,55 +9764,6 @@
   },
   {
     "providerID": "huggingface",
-    "modelID": "deepseek-ai/DeepSeek-R1",
-    "inputCentsPerMillion": 70,
-    "outputCentsPerMillion": 250
-  },
-  {
-    "providerID": "huggingface",
-    "modelID": "deepseek-ai/DeepSeek-R1-0528",
-    "inputCentsPerMillion": 300,
-    "outputCentsPerMillion": 500
-  },
-  {
-    "providerID": "huggingface",
-    "modelID": "deepseek-ai/DeepSeek-V3.2",
-    "inputCentsPerMillion": 28,
-    "outputCentsPerMillion": 40
-  },
-  {
-    "providerID": "huggingface",
-    "modelID": "deepseek-ai/DeepSeek-V4-Flash",
-    "inputCentsPerMillion": 14,
-    "outputCentsPerMillion": 28
-  },
-  {
-    "providerID": "huggingface",
-    "modelID": "deepseek-ai/DeepSeek-V4-Pro",
-    "inputCentsPerMillion": 44,
-    "outputCentsPerMillion": 87,
-    "cacheReadCentsPerMillion": 0
-  },
-  {
-    "providerID": "huggingface",
-    "modelID": "google/gemma-4-26B-A4B-it",
-    "inputCentsPerMillion": 13,
-    "outputCentsPerMillion": 40
-  },
-  {
-    "providerID": "huggingface",
-    "modelID": "google/gemma-4-31B-it",
-    "inputCentsPerMillion": 14,
-    "outputCentsPerMillion": 40
-  },
-  {
-    "providerID": "huggingface",
-    "modelID": "meta-llama/Llama-3.3-70B-Instruct",
-    "inputCentsPerMillion": 59,
-    "outputCentsPerMillion": 79
-  },
-  {
-    "providerID": "huggingface",
     "modelID": "MiniMaxAI/MiniMax-M2",
     "inputCentsPerMillion": 30,
     "outputCentsPerMillion": 120
@@ -9842,51 +9793,6 @@
     "modelID": "MiniMaxAI/MiniMax-M3",
     "inputCentsPerMillion": 30,
     "outputCentsPerMillion": 120
-  },
-  {
-    "providerID": "huggingface",
-    "modelID": "moonshotai/Kimi-K2-Instruct",
-    "inputCentsPerMillion": 100,
-    "outputCentsPerMillion": 300
-  },
-  {
-    "providerID": "huggingface",
-    "modelID": "moonshotai/Kimi-K2-Instruct-0905",
-    "inputCentsPerMillion": 100,
-    "outputCentsPerMillion": 300
-  },
-  {
-    "providerID": "huggingface",
-    "modelID": "moonshotai/Kimi-K2-Thinking",
-    "inputCentsPerMillion": 60,
-    "outputCentsPerMillion": 250,
-    "cacheReadCentsPerMillion": 15
-  },
-  {
-    "providerID": "huggingface",
-    "modelID": "moonshotai/Kimi-K2.5",
-    "inputCentsPerMillion": 60,
-    "outputCentsPerMillion": 300,
-    "cacheReadCentsPerMillion": 10
-  },
-  {
-    "providerID": "huggingface",
-    "modelID": "moonshotai/Kimi-K2.6",
-    "inputCentsPerMillion": 95,
-    "outputCentsPerMillion": 400,
-    "cacheReadCentsPerMillion": 16
-  },
-  {
-    "providerID": "huggingface",
-    "modelID": "moonshotai/Kimi-K2.7-Code",
-    "inputCentsPerMillion": 95,
-    "outputCentsPerMillion": 400
-  },
-  {
-    "providerID": "huggingface",
-    "modelID": "openai/gpt-oss-120b",
-    "inputCentsPerMillion": 25,
-    "outputCentsPerMillion": 69
   },
   {
     "providerID": "huggingface",
@@ -9992,18 +9898,6 @@
   },
   {
     "providerID": "huggingface",
-    "modelID": "stepfun-ai/Step-3.5-Flash",
-    "inputCentsPerMillion": 10,
-    "outputCentsPerMillion": 30
-  },
-  {
-    "providerID": "huggingface",
-    "modelID": "stepfun-ai/Step-3.7-Flash",
-    "inputCentsPerMillion": 20,
-    "outputCentsPerMillion": 115
-  },
-  {
-    "providerID": "huggingface",
     "modelID": "XiaomiMiMo/MiMo-V2-Flash",
     "inputCentsPerMillion": 10,
     "outputCentsPerMillion": 30
@@ -10013,6 +9907,112 @@
     "modelID": "XiaomiMiMo/MiMo-V2.5-Pro",
     "inputCentsPerMillion": 100,
     "outputCentsPerMillion": 300
+  },
+  {
+    "providerID": "huggingface",
+    "modelID": "deepseek-ai/DeepSeek-R1",
+    "inputCentsPerMillion": 70,
+    "outputCentsPerMillion": 250
+  },
+  {
+    "providerID": "huggingface",
+    "modelID": "deepseek-ai/DeepSeek-R1-0528",
+    "inputCentsPerMillion": 300,
+    "outputCentsPerMillion": 500
+  },
+  {
+    "providerID": "huggingface",
+    "modelID": "deepseek-ai/DeepSeek-V3.2",
+    "inputCentsPerMillion": 28,
+    "outputCentsPerMillion": 40
+  },
+  {
+    "providerID": "huggingface",
+    "modelID": "deepseek-ai/DeepSeek-V4-Flash",
+    "inputCentsPerMillion": 14,
+    "outputCentsPerMillion": 28
+  },
+  {
+    "providerID": "huggingface",
+    "modelID": "deepseek-ai/DeepSeek-V4-Pro",
+    "inputCentsPerMillion": 44,
+    "outputCentsPerMillion": 87,
+    "cacheReadCentsPerMillion": 0
+  },
+  {
+    "providerID": "huggingface",
+    "modelID": "google/gemma-4-26B-A4B-it",
+    "inputCentsPerMillion": 13,
+    "outputCentsPerMillion": 40
+  },
+  {
+    "providerID": "huggingface",
+    "modelID": "google/gemma-4-31B-it",
+    "inputCentsPerMillion": 14,
+    "outputCentsPerMillion": 40
+  },
+  {
+    "providerID": "huggingface",
+    "modelID": "meta-llama/Llama-3.3-70B-Instruct",
+    "inputCentsPerMillion": 59,
+    "outputCentsPerMillion": 79
+  },
+  {
+    "providerID": "huggingface",
+    "modelID": "moonshotai/Kimi-K2-Instruct",
+    "inputCentsPerMillion": 100,
+    "outputCentsPerMillion": 300
+  },
+  {
+    "providerID": "huggingface",
+    "modelID": "moonshotai/Kimi-K2-Instruct-0905",
+    "inputCentsPerMillion": 100,
+    "outputCentsPerMillion": 300
+  },
+  {
+    "providerID": "huggingface",
+    "modelID": "moonshotai/Kimi-K2-Thinking",
+    "inputCentsPerMillion": 60,
+    "outputCentsPerMillion": 250,
+    "cacheReadCentsPerMillion": 15
+  },
+  {
+    "providerID": "huggingface",
+    "modelID": "moonshotai/Kimi-K2.5",
+    "inputCentsPerMillion": 60,
+    "outputCentsPerMillion": 300,
+    "cacheReadCentsPerMillion": 10
+  },
+  {
+    "providerID": "huggingface",
+    "modelID": "moonshotai/Kimi-K2.6",
+    "inputCentsPerMillion": 95,
+    "outputCentsPerMillion": 400,
+    "cacheReadCentsPerMillion": 16
+  },
+  {
+    "providerID": "huggingface",
+    "modelID": "moonshotai/Kimi-K2.7-Code",
+    "inputCentsPerMillion": 95,
+    "outputCentsPerMillion": 400
+  },
+  {
+    "providerID": "huggingface",
+    "modelID": "openai/gpt-oss-120b",
+    "inputCentsPerMillion": 25,
+    "outputCentsPerMillion": 69
+  },
+  {
+    "providerID": "huggingface",
+    "modelID": "stepfun-ai/Step-3.5-Flash",
+    "inputCentsPerMillion": 10,
+    "outputCentsPerMillion": 30
+  },
+  {
+    "providerID": "huggingface",
+    "modelID": "stepfun-ai/Step-3.7-Flash",
+    "inputCentsPerMillion": 20,
+    "outputCentsPerMillion": 115
   },
   {
     "providerID": "huggingface",
@@ -10267,17 +10267,38 @@
   },
   {
     "providerID": "io-net",
-    "modelID": "deepseek-ai/DeepSeek-R1-0528",
-    "inputCentsPerMillion": 200,
-    "outputCentsPerMillion": 875,
-    "cacheReadCentsPerMillion": 100
-  },
-  {
-    "providerID": "io-net",
     "modelID": "Intel/Qwen3-Coder-480B-A35B-Instruct-int4-mixed-ar",
     "inputCentsPerMillion": 22,
     "outputCentsPerMillion": 95,
     "cacheReadCentsPerMillion": 11
+  },
+  {
+    "providerID": "io-net",
+    "modelID": "Qwen/Qwen2.5-VL-32B-Instruct",
+    "inputCentsPerMillion": 5,
+    "outputCentsPerMillion": 22,
+    "cacheReadCentsPerMillion": 3
+  },
+  {
+    "providerID": "io-net",
+    "modelID": "Qwen/Qwen3-235B-A22B-Thinking-2507",
+    "inputCentsPerMillion": 11,
+    "outputCentsPerMillion": 60,
+    "cacheReadCentsPerMillion": 6
+  },
+  {
+    "providerID": "io-net",
+    "modelID": "Qwen/Qwen3-Next-80B-A3B-Instruct",
+    "inputCentsPerMillion": 10,
+    "outputCentsPerMillion": 80,
+    "cacheReadCentsPerMillion": 5
+  },
+  {
+    "providerID": "io-net",
+    "modelID": "deepseek-ai/DeepSeek-R1-0528",
+    "inputCentsPerMillion": 200,
+    "outputCentsPerMillion": 875,
+    "cacheReadCentsPerMillion": 100
   },
   {
     "providerID": "io-net",
@@ -10355,27 +10376,6 @@
     "inputCentsPerMillion": 3,
     "outputCentsPerMillion": 14,
     "cacheReadCentsPerMillion": 2
-  },
-  {
-    "providerID": "io-net",
-    "modelID": "Qwen/Qwen2.5-VL-32B-Instruct",
-    "inputCentsPerMillion": 5,
-    "outputCentsPerMillion": 22,
-    "cacheReadCentsPerMillion": 3
-  },
-  {
-    "providerID": "io-net",
-    "modelID": "Qwen/Qwen3-235B-A22B-Thinking-2507",
-    "inputCentsPerMillion": 11,
-    "outputCentsPerMillion": 60,
-    "cacheReadCentsPerMillion": 6
-  },
-  {
-    "providerID": "io-net",
-    "modelID": "Qwen/Qwen3-Next-80B-A3B-Instruct",
-    "inputCentsPerMillion": 10,
-    "outputCentsPerMillion": 80,
-    "cacheReadCentsPerMillion": 5
   },
   {
     "providerID": "io-net",
@@ -10749,62 +10749,6 @@
     "modelID": "zai-org/glm-4.7-flash",
     "inputCentsPerMillion": 7,
     "outputCentsPerMillion": 40
-  },
-  {
-    "providerID": "kilo",
-    "modelID": "~anthropic/claude-haiku-latest",
-    "inputCentsPerMillion": 100,
-    "outputCentsPerMillion": 500,
-    "cacheReadCentsPerMillion": 10
-  },
-  {
-    "providerID": "kilo",
-    "modelID": "~anthropic/claude-opus-latest",
-    "inputCentsPerMillion": 500,
-    "outputCentsPerMillion": 2500,
-    "cacheReadCentsPerMillion": 50
-  },
-  {
-    "providerID": "kilo",
-    "modelID": "~anthropic/claude-sonnet-latest",
-    "inputCentsPerMillion": 300,
-    "outputCentsPerMillion": 1500,
-    "cacheReadCentsPerMillion": 30
-  },
-  {
-    "providerID": "kilo",
-    "modelID": "~google/gemini-flash-latest",
-    "inputCentsPerMillion": 50,
-    "outputCentsPerMillion": 300,
-    "cacheReadCentsPerMillion": 5
-  },
-  {
-    "providerID": "kilo",
-    "modelID": "~google/gemini-pro-latest",
-    "inputCentsPerMillion": 200,
-    "outputCentsPerMillion": 1200,
-    "cacheReadCentsPerMillion": 20
-  },
-  {
-    "providerID": "kilo",
-    "modelID": "~moonshotai/kimi-latest",
-    "inputCentsPerMillion": 74,
-    "outputCentsPerMillion": 349,
-    "cacheReadCentsPerMillion": 14
-  },
-  {
-    "providerID": "kilo",
-    "modelID": "~openai/gpt-latest",
-    "inputCentsPerMillion": 500,
-    "outputCentsPerMillion": 3000,
-    "cacheReadCentsPerMillion": 50
-  },
-  {
-    "providerID": "kilo",
-    "modelID": "~openai/gpt-mini-latest",
-    "inputCentsPerMillion": 75,
-    "outputCentsPerMillion": 450,
-    "cacheReadCentsPerMillion": 8
   },
   {
     "providerID": "kilo",
@@ -12955,6 +12899,62 @@
     "cacheReadCentsPerMillion": 24
   },
   {
+    "providerID": "kilo",
+    "modelID": "~anthropic/claude-haiku-latest",
+    "inputCentsPerMillion": 100,
+    "outputCentsPerMillion": 500,
+    "cacheReadCentsPerMillion": 10
+  },
+  {
+    "providerID": "kilo",
+    "modelID": "~anthropic/claude-opus-latest",
+    "inputCentsPerMillion": 500,
+    "outputCentsPerMillion": 2500,
+    "cacheReadCentsPerMillion": 50
+  },
+  {
+    "providerID": "kilo",
+    "modelID": "~anthropic/claude-sonnet-latest",
+    "inputCentsPerMillion": 300,
+    "outputCentsPerMillion": 1500,
+    "cacheReadCentsPerMillion": 30
+  },
+  {
+    "providerID": "kilo",
+    "modelID": "~google/gemini-flash-latest",
+    "inputCentsPerMillion": 50,
+    "outputCentsPerMillion": 300,
+    "cacheReadCentsPerMillion": 5
+  },
+  {
+    "providerID": "kilo",
+    "modelID": "~google/gemini-pro-latest",
+    "inputCentsPerMillion": 200,
+    "outputCentsPerMillion": 1200,
+    "cacheReadCentsPerMillion": 20
+  },
+  {
+    "providerID": "kilo",
+    "modelID": "~moonshotai/kimi-latest",
+    "inputCentsPerMillion": 74,
+    "outputCentsPerMillion": 349,
+    "cacheReadCentsPerMillion": 14
+  },
+  {
+    "providerID": "kilo",
+    "modelID": "~openai/gpt-latest",
+    "inputCentsPerMillion": 500,
+    "outputCentsPerMillion": 3000,
+    "cacheReadCentsPerMillion": 50
+  },
+  {
+    "providerID": "kilo",
+    "modelID": "~openai/gpt-mini-latest",
+    "inputCentsPerMillion": 75,
+    "outputCentsPerMillion": 450,
+    "cacheReadCentsPerMillion": 8
+  },
+  {
     "providerID": "kimi-for-coding",
     "modelID": "k2p5",
     "inputCentsPerMillion": 0,
@@ -14329,6 +14329,42 @@
   },
   {
     "providerID": "meganova",
+    "modelID": "MiniMaxAI/MiniMax-M2.1",
+    "inputCentsPerMillion": 28,
+    "outputCentsPerMillion": 120
+  },
+  {
+    "providerID": "meganova",
+    "modelID": "MiniMaxAI/MiniMax-M2.5",
+    "inputCentsPerMillion": 30,
+    "outputCentsPerMillion": 120
+  },
+  {
+    "providerID": "meganova",
+    "modelID": "Qwen/Qwen2.5-VL-32B-Instruct",
+    "inputCentsPerMillion": 20,
+    "outputCentsPerMillion": 60
+  },
+  {
+    "providerID": "meganova",
+    "modelID": "Qwen/Qwen3-235B-A22B-Instruct-2507",
+    "inputCentsPerMillion": 9,
+    "outputCentsPerMillion": 60
+  },
+  {
+    "providerID": "meganova",
+    "modelID": "Qwen/Qwen3.5-Plus",
+    "inputCentsPerMillion": 40,
+    "outputCentsPerMillion": 240
+  },
+  {
+    "providerID": "meganova",
+    "modelID": "XiaomiMiMo/MiMo-V2-Flash",
+    "inputCentsPerMillion": 10,
+    "outputCentsPerMillion": 30
+  },
+  {
+    "providerID": "meganova",
     "modelID": "deepseek-ai/DeepSeek-R1-0528",
     "inputCentsPerMillion": 50,
     "outputCentsPerMillion": 215
@@ -14365,18 +14401,6 @@
   },
   {
     "providerID": "meganova",
-    "modelID": "MiniMaxAI/MiniMax-M2.1",
-    "inputCentsPerMillion": 28,
-    "outputCentsPerMillion": 120
-  },
-  {
-    "providerID": "meganova",
-    "modelID": "MiniMaxAI/MiniMax-M2.5",
-    "inputCentsPerMillion": 30,
-    "outputCentsPerMillion": 120
-  },
-  {
-    "providerID": "meganova",
     "modelID": "mistralai/Mistral-Nemo-Instruct-2407",
     "inputCentsPerMillion": 2,
     "outputCentsPerMillion": 4
@@ -14398,30 +14422,6 @@
     "modelID": "moonshotai/Kimi-K2.5",
     "inputCentsPerMillion": 45,
     "outputCentsPerMillion": 280
-  },
-  {
-    "providerID": "meganova",
-    "modelID": "Qwen/Qwen2.5-VL-32B-Instruct",
-    "inputCentsPerMillion": 20,
-    "outputCentsPerMillion": 60
-  },
-  {
-    "providerID": "meganova",
-    "modelID": "Qwen/Qwen3-235B-A22B-Instruct-2507",
-    "inputCentsPerMillion": 9,
-    "outputCentsPerMillion": 60
-  },
-  {
-    "providerID": "meganova",
-    "modelID": "Qwen/Qwen3.5-Plus",
-    "inputCentsPerMillion": 40,
-    "outputCentsPerMillion": 240
-  },
-  {
-    "providerID": "meganova",
-    "modelID": "XiaomiMiMo/MiMo-V2-Flash",
-    "inputCentsPerMillion": 10,
-    "outputCentsPerMillion": 30
   },
   {
     "providerID": "meganova",
@@ -15646,6 +15646,780 @@
   },
   {
     "providerID": "nano-gpt",
+    "modelID": "Alibaba-NLP/Tongyi-DeepResearch-30B-A3B",
+    "inputCentsPerMillion": 8,
+    "outputCentsPerMillion": 24
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Baichuan-M2",
+    "inputCentsPerMillion": 1573,
+    "outputCentsPerMillion": 1573
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Baichuan4-Air",
+    "inputCentsPerMillion": 16,
+    "outputCentsPerMillion": 16
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Baichuan4-Turbo",
+    "inputCentsPerMillion": 242,
+    "outputCentsPerMillion": 242
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Doctor-Shotgun/MS3.2-24B-Magnum-Diamond",
+    "inputCentsPerMillion": 49,
+    "outputCentsPerMillion": 49
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "EVA-UNIT-01/EVA-LLaMA-3.33-70B-v0.0",
+    "inputCentsPerMillion": 201,
+    "outputCentsPerMillion": 201
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "EVA-UNIT-01/EVA-LLaMA-3.33-70B-v0.1",
+    "inputCentsPerMillion": 201,
+    "outputCentsPerMillion": 201
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "EVA-UNIT-01/EVA-Qwen2.5-32B-v0.2",
+    "inputCentsPerMillion": 80,
+    "outputCentsPerMillion": 80
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "EVA-UNIT-01/EVA-Qwen2.5-72B-v0.2",
+    "inputCentsPerMillion": 80,
+    "outputCentsPerMillion": 80
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Envoid/Llama-3.05-NT-Storybreaker-Ministral-70B",
+    "inputCentsPerMillion": 49,
+    "outputCentsPerMillion": 49
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Envoid/Llama-3.05-Nemotron-Tenyxchat-Storybreaker-70B",
+    "inputCentsPerMillion": 49,
+    "outputCentsPerMillion": 49
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "GLM-4.6-Derestricted-v5",
+    "inputCentsPerMillion": 40,
+    "outputCentsPerMillion": 150
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "GalrionSoftworks/MN-LooseCannon-12B-v1",
+    "inputCentsPerMillion": 49,
+    "outputCentsPerMillion": 49
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Gemma-4-31B-Claude-4.6-Opus-Reasoning-Distilled",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31,
+    "cacheReadCentsPerMillion": 3
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Gemma-4-31B-Cognitive-Unshackled",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Gemma-4-31B-DarkIdol",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Gemma-4-31B-GarnetV2",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Gemma-4-31B-Gemopus",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Gemma-4-31B-Musica-v1",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Gemma-4-31B-Queen",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Gemma-4-31B-it",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Gryphe/MythoMax-L2-13b",
+    "inputCentsPerMillion": 10,
+    "outputCentsPerMillion": 10
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Infermatic/MN-12B-Inferor-v0.0",
+    "inputCentsPerMillion": 25,
+    "outputCentsPerMillion": 49
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "KAT-Coder-Air-V1",
+    "inputCentsPerMillion": 10,
+    "outputCentsPerMillion": 20
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "KAT-Coder-Exp-72B-1010",
+    "inputCentsPerMillion": 10,
+    "outputCentsPerMillion": 20
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "LLM360/K2-Think",
+    "inputCentsPerMillion": 17,
+    "outputCentsPerMillion": 68
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "LatitudeGames/Wayfarer-Large-70B-Llama-3.3",
+    "inputCentsPerMillion": 70,
+    "outputCentsPerMillion": 70
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Magistral-Small-2506",
+    "inputCentsPerMillion": 40,
+    "outputCentsPerMillion": 140
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "MarinaraSpaghetti/NemoMix-Unleashed-12B",
+    "inputCentsPerMillion": 49,
+    "outputCentsPerMillion": 49
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Meta-Llama-3-1-8B-Instruct-FP8",
+    "inputCentsPerMillion": 2,
+    "outputCentsPerMillion": 3
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "MiniMax-M1",
+    "inputCentsPerMillion": 14,
+    "outputCentsPerMillion": 133
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "MiniMax-M2",
+    "inputCentsPerMillion": 17,
+    "outputCentsPerMillion": 153
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "MiniMaxAI/MiniMax-M1-80k",
+    "inputCentsPerMillion": 61,
+    "outputCentsPerMillion": 242
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "NeverSleep/Lumimaid-v0.2-70B",
+    "inputCentsPerMillion": 100,
+    "outputCentsPerMillion": 150
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "NousResearch/DeepHermes-3-Mistral-24B-Preview",
+    "inputCentsPerMillion": 30,
+    "outputCentsPerMillion": 30
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "NousResearch/Hermes-4-70B:thinking",
+    "inputCentsPerMillion": 20,
+    "outputCentsPerMillion": 40
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "NousResearch/hermes-3-llama-3.1-70b",
+    "inputCentsPerMillion": 41,
+    "outputCentsPerMillion": 41
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "NousResearch/hermes-4-405b",
+    "inputCentsPerMillion": 30,
+    "outputCentsPerMillion": 120
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "NousResearch/hermes-4-405b:thinking",
+    "inputCentsPerMillion": 30,
+    "outputCentsPerMillion": 120
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "NousResearch/hermes-4-70b",
+    "inputCentsPerMillion": 20,
+    "outputCentsPerMillion": 40
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Qwen2.5-32B-EVA-v0.2",
+    "inputCentsPerMillion": 49,
+    "outputCentsPerMillion": 49
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Qwen3.5-27B-Anko",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Qwen3.5-27B-BlueStar-Derestricted",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Qwen3.5-27B-BlueStar-Derestricted-Lite",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Qwen3.5-27B-BlueStar-v2-Derestricted",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Qwen3.5-27B-BlueStar-v2-Derestricted-Lite",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Qwen3.5-27B-BlueStar-v3-Derestricted",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Qwen3.5-27B-BlueStar-v3-Derestricted-Lite",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Qwen3.5-27B-Derestricted",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Qwen3.5-27B-Infracelestial",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Qwen3.5-27B-Marvin-DPO-V2-Derestricted",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Qwen3.5-27B-Marvin-DPO-V2-Derestricted-Lite",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Qwen3.5-27B-Marvin-V2-Derestricted",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Qwen3.5-27B-Marvin-V2-Derestricted-Lite",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Qwen3.5-27B-Musica-v1",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Qwen3.5-27B-NaNovel-Derestricted",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Qwen3.5-27B-NaNovel-Derestricted-Lite",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Qwen3.5-27B-Omega-Evolution-v2.0-Derestricted",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Qwen3.5-27B-Omega-Evolution-v2.0-Derestricted-Lite",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Qwen3.5-27B-Omega-Evolution-v2.2-Derestricted",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Qwen3.5-27B-Omega-Evolution-v2.2-Derestricted-Lite",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Qwen3.5-27B-Queen-Derestricted",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Qwen3.5-27B-Queen-Derestricted-Lite",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Qwen3.5-27B-RpRMax-v1",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Qwen3.5-27B-Vivid-Durian",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Qwen3.5-27B-Writer-Derestricted",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Qwen3.5-27B-Writer-Derestricted-Lite",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Qwen3.5-27B-Writer-V2-Derestricted",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Qwen3.5-27B-Writer-V2-Derestricted-Lite",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Qwen3.5-27B-earica-Derestricted",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Qwen3.5-27B-earica-Derestricted-Lite",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "ReadyArt/MS3.2-The-Omega-Directive-24B-Unslop-v2.0",
+    "inputCentsPerMillion": 50,
+    "outputCentsPerMillion": 50
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Salesforce/Llama-xLAM-2-70b-fc-r",
+    "inputCentsPerMillion": 250,
+    "outputCentsPerMillion": 250
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Sao10K/L3-8B-Stheno-v3.2",
+    "inputCentsPerMillion": 20,
+    "outputCentsPerMillion": 20
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Sao10K/L3.1-70B-Euryale-v2.2",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 36
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Sao10K/L3.1-70B-Hanami-x1",
+    "inputCentsPerMillion": 49,
+    "outputCentsPerMillion": 49
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Sao10K/L3.3-70B-Euryale-v2.3",
+    "inputCentsPerMillion": 49,
+    "outputCentsPerMillion": 49
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Steelskull/L3.3-Cu-Mai-R1-70b",
+    "inputCentsPerMillion": 49,
+    "outputCentsPerMillion": 49
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Steelskull/L3.3-Electra-R1-70b",
+    "inputCentsPerMillion": 70,
+    "outputCentsPerMillion": 70
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Steelskull/L3.3-MS-Evalebis-70b",
+    "inputCentsPerMillion": 49,
+    "outputCentsPerMillion": 49
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Steelskull/L3.3-MS-Evayale-70B",
+    "inputCentsPerMillion": 49,
+    "outputCentsPerMillion": 49
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Steelskull/L3.3-MS-Nevoria-70b",
+    "inputCentsPerMillion": 49,
+    "outputCentsPerMillion": 49
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Steelskull/L3.3-Nevoria-R1-70b",
+    "inputCentsPerMillion": 49,
+    "outputCentsPerMillion": 49
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TEE/deepseek-v3.1",
+    "inputCentsPerMillion": 100,
+    "outputCentsPerMillion": 250
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TEE/deepseek-v3.2",
+    "inputCentsPerMillion": 50,
+    "outputCentsPerMillion": 100
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TEE/deepseek-v4-pro",
+    "inputCentsPerMillion": 150,
+    "outputCentsPerMillion": 525,
+    "cacheReadCentsPerMillion": 15
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TEE/deepseek-v4-pro:thinking",
+    "inputCentsPerMillion": 150,
+    "outputCentsPerMillion": 525,
+    "cacheReadCentsPerMillion": 15
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TEE/gemma-3-27b-it",
+    "inputCentsPerMillion": 20,
+    "outputCentsPerMillion": 80
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TEE/gemma-4-26b-a4b-uncensored",
+    "inputCentsPerMillion": 15,
+    "outputCentsPerMillion": 70
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TEE/gemma-4-31b-it",
+    "inputCentsPerMillion": 15,
+    "outputCentsPerMillion": 46
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TEE/gemma4-31b",
+    "inputCentsPerMillion": 45,
+    "outputCentsPerMillion": 100
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TEE/gemma4-31b:thinking",
+    "inputCentsPerMillion": 45,
+    "outputCentsPerMillion": 100
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TEE/glm-4.7",
+    "inputCentsPerMillion": 85,
+    "outputCentsPerMillion": 330
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TEE/glm-4.7-flash",
+    "inputCentsPerMillion": 15,
+    "outputCentsPerMillion": 50
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TEE/glm-5",
+    "inputCentsPerMillion": 120,
+    "outputCentsPerMillion": 350
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TEE/glm-5.1",
+    "inputCentsPerMillion": 150,
+    "outputCentsPerMillion": 525,
+    "cacheReadCentsPerMillion": 30
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TEE/glm-5.1-thinking",
+    "inputCentsPerMillion": 150,
+    "outputCentsPerMillion": 525,
+    "cacheReadCentsPerMillion": 30
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TEE/gpt-oss-120b",
+    "inputCentsPerMillion": 200,
+    "outputCentsPerMillion": 200
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TEE/gpt-oss-20b",
+    "inputCentsPerMillion": 20,
+    "outputCentsPerMillion": 80
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TEE/kimi-k2.5",
+    "inputCentsPerMillion": 30,
+    "outputCentsPerMillion": 190
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TEE/kimi-k2.5-thinking",
+    "inputCentsPerMillion": 30,
+    "outputCentsPerMillion": 190
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TEE/kimi-k2.6",
+    "inputCentsPerMillion": 150,
+    "outputCentsPerMillion": 525,
+    "cacheReadCentsPerMillion": 38
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TEE/llama3-3-70b",
+    "inputCentsPerMillion": 200,
+    "outputCentsPerMillion": 200
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TEE/minimax-m2.5",
+    "inputCentsPerMillion": 20,
+    "outputCentsPerMillion": 138
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TEE/qwen2.5-vl-72b-instruct",
+    "inputCentsPerMillion": 70,
+    "outputCentsPerMillion": 70
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TEE/qwen3-30b-a3b-instruct-2507",
+    "inputCentsPerMillion": 15,
+    "outputCentsPerMillion": 45
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TEE/qwen3.5-122b-a10b",
+    "inputCentsPerMillion": 46,
+    "outputCentsPerMillion": 368
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TEE/qwen3.5-27b",
+    "inputCentsPerMillion": 30,
+    "outputCentsPerMillion": 240
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TEE/qwen3.5-397b-a17b",
+    "inputCentsPerMillion": 60,
+    "outputCentsPerMillion": 360
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TEE/qwen3.6-35b-a3b-uncensored",
+    "inputCentsPerMillion": 30,
+    "outputCentsPerMillion": 150
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "THUDM/GLM-4-32B-0414",
+    "inputCentsPerMillion": 20,
+    "outputCentsPerMillion": 20
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "THUDM/GLM-4-9B-0414",
+    "inputCentsPerMillion": 20,
+    "outputCentsPerMillion": 20
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "THUDM/GLM-Z1-32B-0414",
+    "inputCentsPerMillion": 20,
+    "outputCentsPerMillion": 20
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "THUDM/GLM-Z1-9B-0414",
+    "inputCentsPerMillion": 20,
+    "outputCentsPerMillion": 20
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TheDrummer/Anubis-70B-v1",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TheDrummer/Anubis-70B-v1.1",
+    "inputCentsPerMillion": 31,
+    "outputCentsPerMillion": 31
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TheDrummer/Cydonia-24B-v2",
+    "inputCentsPerMillion": 10,
+    "outputCentsPerMillion": 12
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TheDrummer/Cydonia-24B-v4",
+    "inputCentsPerMillion": 20,
+    "outputCentsPerMillion": 24
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TheDrummer/Cydonia-24B-v4.1",
+    "inputCentsPerMillion": 10,
+    "outputCentsPerMillion": 12
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TheDrummer/Cydonia-24B-v4.3",
+    "inputCentsPerMillion": 10,
+    "outputCentsPerMillion": 12
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TheDrummer/Magidonia-24B-v4.3",
+    "inputCentsPerMillion": 10,
+    "outputCentsPerMillion": 12
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TheDrummer/Rocinante-12B-v1.1",
+    "inputCentsPerMillion": 41,
+    "outputCentsPerMillion": 60
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TheDrummer/Skyfall-31B-v4.2",
+    "inputCentsPerMillion": 55,
+    "outputCentsPerMillion": 80
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TheDrummer/UnslopNemo-12B-v4.1",
+    "inputCentsPerMillion": 49,
+    "outputCentsPerMillion": 49
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "TheDrummer/skyfall-36b-v2",
+    "inputCentsPerMillion": 49,
+    "outputCentsPerMillion": 49
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Tongyi-Zhiwen/QwenLong-L1-32B",
+    "inputCentsPerMillion": 14,
+    "outputCentsPerMillion": 60
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "Unbabel/M-Prometheus-14B",
+    "inputCentsPerMillion": 20,
+    "outputCentsPerMillion": 20
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "VongolaChouko/Starcannon-Unleashed-12B-v1.0",
+    "inputCentsPerMillion": 49,
+    "outputCentsPerMillion": 49
+  },
+  {
+    "providerID": "nano-gpt",
     "modelID": "abacusai/Dracarys-72B-Instruct",
     "inputCentsPerMillion": 49,
     "outputCentsPerMillion": 49
@@ -15680,12 +16454,6 @@
     "modelID": "aion-labs/aion-rp-llama-3.1-8b",
     "inputCentsPerMillion": 20,
     "outputCentsPerMillion": 20
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Alibaba-NLP/Tongyi-DeepResearch-30B-A3B",
-    "inputCentsPerMillion": 8,
-    "outputCentsPerMillion": 24
   },
   {
     "providerID": "nano-gpt",
@@ -15909,24 +16677,6 @@
     "modelID": "azure-o3-mini",
     "inputCentsPerMillion": 109,
     "outputCentsPerMillion": 440
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Baichuan-M2",
-    "inputCentsPerMillion": 1573,
-    "outputCentsPerMillion": 1573
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Baichuan4-Air",
-    "inputCentsPerMillion": 16,
-    "outputCentsPerMillion": 16
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Baichuan4-Turbo",
-    "inputCentsPerMillion": 242,
-    "outputCentsPerMillion": 242
   },
   {
     "providerID": "nano-gpt",
@@ -16359,12 +17109,6 @@
   },
   {
     "providerID": "nano-gpt",
-    "modelID": "Doctor-Shotgun/MS3.2-24B-Magnum-Diamond",
-    "inputCentsPerMillion": 49,
-    "outputCentsPerMillion": 49
-  },
-  {
-    "providerID": "nano-gpt",
     "modelID": "doubao-1-5-thinking-pro-250415",
     "inputCentsPerMillion": 60,
     "outputCentsPerMillion": 240
@@ -16449,18 +17193,6 @@
   },
   {
     "providerID": "nano-gpt",
-    "modelID": "Envoid/Llama-3.05-Nemotron-Tenyxchat-Storybreaker-70B",
-    "inputCentsPerMillion": 49,
-    "outputCentsPerMillion": 49
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Envoid/Llama-3.05-NT-Storybreaker-Ministral-70B",
-    "inputCentsPerMillion": 49,
-    "outputCentsPerMillion": 49
-  },
-  {
-    "providerID": "nano-gpt",
     "modelID": "ernie-4.5-8k-preview",
     "inputCentsPerMillion": 66,
     "outputCentsPerMillion": 260
@@ -16529,30 +17261,6 @@
   },
   {
     "providerID": "nano-gpt",
-    "modelID": "EVA-UNIT-01/EVA-LLaMA-3.33-70B-v0.0",
-    "inputCentsPerMillion": 201,
-    "outputCentsPerMillion": 201
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "EVA-UNIT-01/EVA-LLaMA-3.33-70B-v0.1",
-    "inputCentsPerMillion": 201,
-    "outputCentsPerMillion": 201
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "EVA-UNIT-01/EVA-Qwen2.5-32B-v0.2",
-    "inputCentsPerMillion": 80,
-    "outputCentsPerMillion": 80
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "EVA-UNIT-01/EVA-Qwen2.5-72B-v0.2",
-    "inputCentsPerMillion": 80,
-    "outputCentsPerMillion": 80
-  },
-  {
-    "providerID": "nano-gpt",
     "modelID": "exa-answer",
     "inputCentsPerMillion": 250,
     "outputCentsPerMillion": 250
@@ -16586,12 +17294,6 @@
     "modelID": "featherless-ai/Qwerky-72B",
     "inputCentsPerMillion": 50,
     "outputCentsPerMillion": 50
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "GalrionSoftworks/MN-LooseCannon-12B-v1",
-    "inputCentsPerMillion": 49,
-    "outputCentsPerMillion": 49
   },
   {
     "providerID": "nano-gpt",
@@ -16745,25 +17447,6 @@
   },
   {
     "providerID": "nano-gpt",
-    "modelID": "Gemma-4-31B-Claude-4.6-Opus-Reasoning-Distilled",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31,
-    "cacheReadCentsPerMillion": 3
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Gemma-4-31B-Cognitive-Unshackled",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Gemma-4-31B-DarkIdol",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
     "modelID": "gemma-4-31B-Fabled",
     "inputCentsPerMillion": 31,
     "outputCentsPerMillion": 31
@@ -16771,24 +17454,6 @@
   {
     "providerID": "nano-gpt",
     "modelID": "gemma-4-31B-Garnet",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Gemma-4-31B-GarnetV2",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Gemma-4-31B-Gemopus",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Gemma-4-31B-it",
     "inputCentsPerMillion": 31,
     "outputCentsPerMillion": 31
   },
@@ -16807,18 +17472,6 @@
   {
     "providerID": "nano-gpt",
     "modelID": "gemma-4-31B-MeroMero",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Gemma-4-31B-Musica-v1",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Gemma-4-31B-Queen",
     "inputCentsPerMillion": 31,
     "outputCentsPerMillion": 31
   },
@@ -16881,12 +17534,6 @@
     "modelID": "glm-4.1v-thinking-flashx",
     "inputCentsPerMillion": 30,
     "outputCentsPerMillion": 30
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "GLM-4.6-Derestricted-v5",
-    "inputCentsPerMillion": 40,
-    "outputCentsPerMillion": 150
   },
   {
     "providerID": "nano-gpt",
@@ -17020,12 +17667,6 @@
   },
   {
     "providerID": "nano-gpt",
-    "modelID": "Gryphe/MythoMax-L2-13b",
-    "inputCentsPerMillion": 10,
-    "outputCentsPerMillion": 10
-  },
-  {
-    "providerID": "nano-gpt",
     "modelID": "hermes-high",
     "inputCentsPerMillion": 500,
     "outputCentsPerMillion": 2501
@@ -17113,12 +17754,6 @@
   },
   {
     "providerID": "nano-gpt",
-    "modelID": "Infermatic/MN-12B-Inferor-v0.0",
-    "inputCentsPerMillion": 25,
-    "outputCentsPerMillion": 49
-  },
-  {
-    "providerID": "nano-gpt",
     "modelID": "inflatebot/MN-12B-Mag-Mell-R1",
     "inputCentsPerMillion": 49,
     "outputCentsPerMillion": 49
@@ -17173,18 +17808,6 @@
   },
   {
     "providerID": "nano-gpt",
-    "modelID": "KAT-Coder-Air-V1",
-    "inputCentsPerMillion": 10,
-    "outputCentsPerMillion": 20
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "KAT-Coder-Exp-72B-1010",
-    "inputCentsPerMillion": 10,
-    "outputCentsPerMillion": 20
-  },
-  {
-    "providerID": "nano-gpt",
     "modelID": "kimi-k2-instruct-fast",
     "inputCentsPerMillion": 10,
     "outputCentsPerMillion": 200
@@ -17203,12 +17826,6 @@
   },
   {
     "providerID": "nano-gpt",
-    "modelID": "LatitudeGames/Wayfarer-Large-70B-Llama-3.3",
-    "inputCentsPerMillion": 70,
-    "outputCentsPerMillion": 70
-  },
-  {
-    "providerID": "nano-gpt",
     "modelID": "learnlm-1.5-pro-experimental",
     "inputCentsPerMillion": 350,
     "outputCentsPerMillion": 1051
@@ -17218,24 +17835,6 @@
     "modelID": "liquid/lfm-2-24b-a2b",
     "inputCentsPerMillion": 3,
     "outputCentsPerMillion": 12
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "LLM360/K2-Think",
-    "inputCentsPerMillion": 17,
-    "outputCentsPerMillion": 68
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Magistral-Small-2506",
-    "inputCentsPerMillion": 40,
-    "outputCentsPerMillion": 140
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "MarinaraSpaghetti/NemoMix-Unleashed-12B",
-    "inputCentsPerMillion": 49,
-    "outputCentsPerMillion": 49
   },
   {
     "providerID": "nano-gpt",
@@ -17261,12 +17860,6 @@
     "inputCentsPerMillion": 25,
     "outputCentsPerMillion": 75,
     "cacheReadCentsPerMillion": 3
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Meta-Llama-3-1-8B-Instruct-FP8",
-    "inputCentsPerMillion": 2,
-    "outputCentsPerMillion": 3
   },
   {
     "providerID": "nano-gpt",
@@ -17303,18 +17896,6 @@
     "modelID": "microsoft/wizardlm-2-8x22b",
     "inputCentsPerMillion": 49,
     "outputCentsPerMillion": 49
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "MiniMax-M1",
-    "inputCentsPerMillion": 14,
-    "outputCentsPerMillion": 133
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "MiniMax-M2",
-    "inputCentsPerMillion": 17,
-    "outputCentsPerMillion": 153
   },
   {
     "providerID": "nano-gpt",
@@ -17375,12 +17956,6 @@
   },
   {
     "providerID": "nano-gpt",
-    "modelID": "MiniMaxAI/MiniMax-M1-80k",
-    "inputCentsPerMillion": 61,
-    "outputCentsPerMillion": 242
-  },
-  {
-    "providerID": "nano-gpt",
     "modelID": "mirothinker-1-7-deepresearch",
     "inputCentsPerMillion": 400,
     "outputCentsPerMillion": 2500
@@ -17423,6 +17998,18 @@
   },
   {
     "providerID": "nano-gpt",
+    "modelID": "mistralai/Devstral-Small-2505",
+    "inputCentsPerMillion": 6,
+    "outputCentsPerMillion": 6
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "mistralai/Mistral-Nemo-Instruct-2407",
+    "inputCentsPerMillion": 10,
+    "outputCentsPerMillion": 12
+  },
+  {
+    "providerID": "nano-gpt",
     "modelID": "mistralai/codestral-2508",
     "inputCentsPerMillion": 30,
     "outputCentsPerMillion": 90
@@ -17432,12 +18019,6 @@
     "modelID": "mistralai/devstral-2-123b-instruct-2512",
     "inputCentsPerMillion": 40,
     "outputCentsPerMillion": 140
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "mistralai/Devstral-Small-2505",
-    "inputCentsPerMillion": 6,
-    "outputCentsPerMillion": 6
   },
   {
     "providerID": "nano-gpt",
@@ -17489,12 +18070,6 @@
   },
   {
     "providerID": "nano-gpt",
-    "modelID": "mistralai/Mistral-Nemo-Instruct-2407",
-    "inputCentsPerMillion": 10,
-    "outputCentsPerMillion": 12
-  },
-  {
-    "providerID": "nano-gpt",
     "modelID": "mistralai/mistral-saba",
     "inputCentsPerMillion": 20,
     "outputCentsPerMillion": 60
@@ -17531,6 +18106,12 @@
   },
   {
     "providerID": "nano-gpt",
+    "modelID": "moonshotai/Kimi-K2-Instruct-0905",
+    "inputCentsPerMillion": 40,
+    "outputCentsPerMillion": 200
+  },
+  {
+    "providerID": "nano-gpt",
     "modelID": "moonshotai/kimi-k2-instruct",
     "inputCentsPerMillion": 10,
     "outputCentsPerMillion": 200
@@ -17539,12 +18120,6 @@
     "providerID": "nano-gpt",
     "modelID": "moonshotai/kimi-k2-instruct-0711",
     "inputCentsPerMillion": 10,
-    "outputCentsPerMillion": 200
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "moonshotai/Kimi-K2-Instruct-0905",
-    "inputCentsPerMillion": 40,
     "outputCentsPerMillion": 200
   },
   {
@@ -17633,12 +18208,6 @@
   },
   {
     "providerID": "nano-gpt",
-    "modelID": "NeverSleep/Lumimaid-v0.2-70B",
-    "inputCentsPerMillion": 100,
-    "outputCentsPerMillion": 150
-  },
-  {
-    "providerID": "nano-gpt",
     "modelID": "nex-agi/deepseek-v3.1-nex-n1",
     "inputCentsPerMillion": 28,
     "outputCentsPerMillion": 42
@@ -17651,48 +18220,6 @@
   },
   {
     "providerID": "nano-gpt",
-    "modelID": "NousResearch/DeepHermes-3-Mistral-24B-Preview",
-    "inputCentsPerMillion": 30,
-    "outputCentsPerMillion": 30
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "NousResearch/hermes-3-llama-3.1-70b",
-    "inputCentsPerMillion": 41,
-    "outputCentsPerMillion": 41
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "NousResearch/hermes-4-405b",
-    "inputCentsPerMillion": 30,
-    "outputCentsPerMillion": 120
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "NousResearch/hermes-4-405b:thinking",
-    "inputCentsPerMillion": 30,
-    "outputCentsPerMillion": 120
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "NousResearch/hermes-4-70b",
-    "inputCentsPerMillion": 20,
-    "outputCentsPerMillion": 40
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "NousResearch/Hermes-4-70B:thinking",
-    "inputCentsPerMillion": 20,
-    "outputCentsPerMillion": 40
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "nvidia/Llama-3_3-Nemotron-Super-49B-v1_5",
-    "inputCentsPerMillion": 5,
-    "outputCentsPerMillion": 25
-  },
-  {
-    "providerID": "nano-gpt",
     "modelID": "nvidia/Llama-3.1-Nemotron-70B-Instruct-HF",
     "inputCentsPerMillion": 36,
     "outputCentsPerMillion": 41
@@ -17702,6 +18229,12 @@
     "modelID": "nvidia/Llama-3.3-Nemotron-Super-49B-v1",
     "inputCentsPerMillion": 15,
     "outputCentsPerMillion": 15
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "nvidia/Llama-3_3-Nemotron-Super-49B-v1_5",
+    "inputCentsPerMillion": 5,
+    "outputCentsPerMillion": 25
   },
   {
     "providerID": "nano-gpt",
@@ -18109,27 +18642,9 @@
   },
   {
     "providerID": "nano-gpt",
-    "modelID": "qwen/qwen-2.5-72b-instruct",
-    "inputCentsPerMillion": 36,
-    "outputCentsPerMillion": 41
-  },
-  {
-    "providerID": "nano-gpt",
     "modelID": "qwen/Qwen2.5-Coder-32B-Instruct",
     "inputCentsPerMillion": 20,
     "outputCentsPerMillion": 20
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "qwen/qwen3-14b",
-    "inputCentsPerMillion": 8,
-    "outputCentsPerMillion": 24
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "qwen/qwen3-235b-a22b",
-    "inputCentsPerMillion": 30,
-    "outputCentsPerMillion": 50
   },
   {
     "providerID": "nano-gpt",
@@ -18151,6 +18666,54 @@
   },
   {
     "providerID": "nano-gpt",
+    "modelID": "qwen/Qwen3-8B",
+    "inputCentsPerMillion": 47,
+    "outputCentsPerMillion": 47
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "qwen/Qwen3-Next-80B-A3B-Instruct",
+    "inputCentsPerMillion": 15,
+    "outputCentsPerMillion": 65
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "qwen/Qwen3-VL-235B-A22B-Instruct",
+    "inputCentsPerMillion": 30,
+    "outputCentsPerMillion": 120
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "qwen/Qwen3.6-35B-A3B",
+    "inputCentsPerMillion": 11,
+    "outputCentsPerMillion": 80
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "qwen/Qwen3.6-35B-A3B:thinking",
+    "inputCentsPerMillion": 11,
+    "outputCentsPerMillion": 80
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "qwen/qwen-2.5-72b-instruct",
+    "inputCentsPerMillion": 36,
+    "outputCentsPerMillion": 41
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "qwen/qwen3-14b",
+    "inputCentsPerMillion": 8,
+    "outputCentsPerMillion": 24
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "qwen/qwen3-235b-a22b",
+    "inputCentsPerMillion": 30,
+    "outputCentsPerMillion": 50
+  },
+  {
+    "providerID": "nano-gpt",
     "modelID": "qwen/qwen3-30b-a3b",
     "inputCentsPerMillion": 10,
     "outputCentsPerMillion": 30
@@ -18160,12 +18723,6 @@
     "modelID": "qwen/qwen3-32b",
     "inputCentsPerMillion": 10,
     "outputCentsPerMillion": 30
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "qwen/Qwen3-8B",
-    "inputCentsPerMillion": 47,
-    "outputCentsPerMillion": 47
   },
   {
     "providerID": "nano-gpt",
@@ -18199,21 +18756,9 @@
   },
   {
     "providerID": "nano-gpt",
-    "modelID": "qwen/Qwen3-Next-80B-A3B-Instruct",
-    "inputCentsPerMillion": 15,
-    "outputCentsPerMillion": 65
-  },
-  {
-    "providerID": "nano-gpt",
     "modelID": "qwen/qwen3-next-80b-a3b-thinking",
     "inputCentsPerMillion": 15,
     "outputCentsPerMillion": 65
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "qwen/Qwen3-VL-235B-A22B-Instruct",
-    "inputCentsPerMillion": 30,
-    "outputCentsPerMillion": 120
   },
   {
     "providerID": "nano-gpt",
@@ -18249,27 +18794,9 @@
   },
   {
     "providerID": "nano-gpt",
-    "modelID": "qwen/Qwen3.6-35B-A3B",
-    "inputCentsPerMillion": 11,
-    "outputCentsPerMillion": 80
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "qwen/Qwen3.6-35B-A3B:thinking",
-    "inputCentsPerMillion": 11,
-    "outputCentsPerMillion": 80
-  },
-  {
-    "providerID": "nano-gpt",
     "modelID": "qwen/qwq-32b-preview",
     "inputCentsPerMillion": 20,
     "outputCentsPerMillion": 20
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Qwen2.5-32B-EVA-v0.2",
-    "inputCentsPerMillion": 49,
-    "outputCentsPerMillion": 49
   },
   {
     "providerID": "nano-gpt",
@@ -18324,186 +18851,6 @@
     "modelID": "qwen3.5-27b",
     "inputCentsPerMillion": 27,
     "outputCentsPerMillion": 216
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Qwen3.5-27B-Anko",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Qwen3.5-27B-BlueStar-Derestricted",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Qwen3.5-27B-BlueStar-Derestricted-Lite",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Qwen3.5-27B-BlueStar-v2-Derestricted",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Qwen3.5-27B-BlueStar-v2-Derestricted-Lite",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Qwen3.5-27B-BlueStar-v3-Derestricted",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Qwen3.5-27B-BlueStar-v3-Derestricted-Lite",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Qwen3.5-27B-Derestricted",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Qwen3.5-27B-earica-Derestricted",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Qwen3.5-27B-earica-Derestricted-Lite",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Qwen3.5-27B-Infracelestial",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Qwen3.5-27B-Marvin-DPO-V2-Derestricted",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Qwen3.5-27B-Marvin-DPO-V2-Derestricted-Lite",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Qwen3.5-27B-Marvin-V2-Derestricted",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Qwen3.5-27B-Marvin-V2-Derestricted-Lite",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Qwen3.5-27B-Musica-v1",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Qwen3.5-27B-NaNovel-Derestricted",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Qwen3.5-27B-NaNovel-Derestricted-Lite",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Qwen3.5-27B-Omega-Evolution-v2.0-Derestricted",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Qwen3.5-27B-Omega-Evolution-v2.0-Derestricted-Lite",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Qwen3.5-27B-Omega-Evolution-v2.2-Derestricted",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Qwen3.5-27B-Omega-Evolution-v2.2-Derestricted-Lite",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Qwen3.5-27B-Queen-Derestricted",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Qwen3.5-27B-Queen-Derestricted-Lite",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Qwen3.5-27B-RpRMax-v1",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Qwen3.5-27B-Vivid-Durian",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Qwen3.5-27B-Writer-Derestricted",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Qwen3.5-27B-Writer-Derestricted-Lite",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Qwen3.5-27B-Writer-V2-Derestricted",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Qwen3.5-27B-Writer-V2-Derestricted-Lite",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
   },
   {
     "providerID": "nano-gpt",
@@ -18589,42 +18936,6 @@
   },
   {
     "providerID": "nano-gpt",
-    "modelID": "ReadyArt/MS3.2-The-Omega-Directive-24B-Unslop-v2.0",
-    "inputCentsPerMillion": 50,
-    "outputCentsPerMillion": 50
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Salesforce/Llama-xLAM-2-70b-fc-r",
-    "inputCentsPerMillion": 250,
-    "outputCentsPerMillion": 250
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Sao10K/L3-8B-Stheno-v3.2",
-    "inputCentsPerMillion": 20,
-    "outputCentsPerMillion": 20
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Sao10K/L3.1-70B-Euryale-v2.2",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 36
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Sao10K/L3.1-70B-Hanami-x1",
-    "inputCentsPerMillion": 49,
-    "outputCentsPerMillion": 49
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Sao10K/L3.3-70B-Euryale-v2.3",
-    "inputCentsPerMillion": 49,
-    "outputCentsPerMillion": 49
-  },
-  {
-    "providerID": "nano-gpt",
     "modelID": "sarvam-105b",
     "inputCentsPerMillion": 5,
     "outputCentsPerMillion": 18,
@@ -18675,12 +18986,6 @@
   },
   {
     "providerID": "nano-gpt",
-    "modelID": "soob3123/amoral-gemma3-27B-v2",
-    "inputCentsPerMillion": 30,
-    "outputCentsPerMillion": 30
-  },
-  {
-    "providerID": "nano-gpt",
     "modelID": "soob3123/GrayLine-Qwen3-8B",
     "inputCentsPerMillion": 30,
     "outputCentsPerMillion": 30
@@ -18693,39 +18998,9 @@
   },
   {
     "providerID": "nano-gpt",
-    "modelID": "Steelskull/L3.3-Cu-Mai-R1-70b",
-    "inputCentsPerMillion": 49,
-    "outputCentsPerMillion": 49
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Steelskull/L3.3-Electra-R1-70b",
-    "inputCentsPerMillion": 70,
-    "outputCentsPerMillion": 70
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Steelskull/L3.3-MS-Evalebis-70b",
-    "inputCentsPerMillion": 49,
-    "outputCentsPerMillion": 49
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Steelskull/L3.3-MS-Evayale-70B",
-    "inputCentsPerMillion": 49,
-    "outputCentsPerMillion": 49
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Steelskull/L3.3-MS-Nevoria-70b",
-    "inputCentsPerMillion": 49,
-    "outputCentsPerMillion": 49
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Steelskull/L3.3-Nevoria-R1-70b",
-    "inputCentsPerMillion": 49,
-    "outputCentsPerMillion": 49
+    "modelID": "soob3123/amoral-gemma3-27B-v2",
+    "inputCentsPerMillion": 30,
+    "outputCentsPerMillion": 30
   },
   {
     "providerID": "nano-gpt",
@@ -18772,173 +19047,6 @@
   },
   {
     "providerID": "nano-gpt",
-    "modelID": "TEE/deepseek-v3.1",
-    "inputCentsPerMillion": 100,
-    "outputCentsPerMillion": 250
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TEE/deepseek-v3.2",
-    "inputCentsPerMillion": 50,
-    "outputCentsPerMillion": 100
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TEE/deepseek-v4-pro",
-    "inputCentsPerMillion": 150,
-    "outputCentsPerMillion": 525,
-    "cacheReadCentsPerMillion": 15
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TEE/deepseek-v4-pro:thinking",
-    "inputCentsPerMillion": 150,
-    "outputCentsPerMillion": 525,
-    "cacheReadCentsPerMillion": 15
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TEE/gemma-3-27b-it",
-    "inputCentsPerMillion": 20,
-    "outputCentsPerMillion": 80
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TEE/gemma-4-26b-a4b-uncensored",
-    "inputCentsPerMillion": 15,
-    "outputCentsPerMillion": 70
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TEE/gemma-4-31b-it",
-    "inputCentsPerMillion": 15,
-    "outputCentsPerMillion": 46
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TEE/gemma4-31b",
-    "inputCentsPerMillion": 45,
-    "outputCentsPerMillion": 100
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TEE/gemma4-31b:thinking",
-    "inputCentsPerMillion": 45,
-    "outputCentsPerMillion": 100
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TEE/glm-4.7",
-    "inputCentsPerMillion": 85,
-    "outputCentsPerMillion": 330
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TEE/glm-4.7-flash",
-    "inputCentsPerMillion": 15,
-    "outputCentsPerMillion": 50
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TEE/glm-5",
-    "inputCentsPerMillion": 120,
-    "outputCentsPerMillion": 350
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TEE/glm-5.1",
-    "inputCentsPerMillion": 150,
-    "outputCentsPerMillion": 525,
-    "cacheReadCentsPerMillion": 30
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TEE/glm-5.1-thinking",
-    "inputCentsPerMillion": 150,
-    "outputCentsPerMillion": 525,
-    "cacheReadCentsPerMillion": 30
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TEE/gpt-oss-120b",
-    "inputCentsPerMillion": 200,
-    "outputCentsPerMillion": 200
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TEE/gpt-oss-20b",
-    "inputCentsPerMillion": 20,
-    "outputCentsPerMillion": 80
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TEE/kimi-k2.5",
-    "inputCentsPerMillion": 30,
-    "outputCentsPerMillion": 190
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TEE/kimi-k2.5-thinking",
-    "inputCentsPerMillion": 30,
-    "outputCentsPerMillion": 190
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TEE/kimi-k2.6",
-    "inputCentsPerMillion": 150,
-    "outputCentsPerMillion": 525,
-    "cacheReadCentsPerMillion": 38
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TEE/llama3-3-70b",
-    "inputCentsPerMillion": 200,
-    "outputCentsPerMillion": 200
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TEE/minimax-m2.5",
-    "inputCentsPerMillion": 20,
-    "outputCentsPerMillion": 138
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TEE/qwen2.5-vl-72b-instruct",
-    "inputCentsPerMillion": 70,
-    "outputCentsPerMillion": 70
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TEE/qwen3-30b-a3b-instruct-2507",
-    "inputCentsPerMillion": 15,
-    "outputCentsPerMillion": 45
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TEE/qwen3.5-122b-a10b",
-    "inputCentsPerMillion": 46,
-    "outputCentsPerMillion": 368
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TEE/qwen3.5-27b",
-    "inputCentsPerMillion": 30,
-    "outputCentsPerMillion": 240
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TEE/qwen3.5-397b-a17b",
-    "inputCentsPerMillion": 60,
-    "outputCentsPerMillion": 360
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TEE/qwen3.6-35b-a3b-uncensored",
-    "inputCentsPerMillion": 30,
-    "outputCentsPerMillion": 150
-  },
-  {
-    "providerID": "nano-gpt",
     "modelID": "tencent/Hunyuan-MT-7B",
     "inputCentsPerMillion": 1000,
     "outputCentsPerMillion": 2000
@@ -18949,108 +19057,6 @@
     "inputCentsPerMillion": 7,
     "outputCentsPerMillion": 26,
     "cacheReadCentsPerMillion": 3
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TheDrummer/Anubis-70B-v1",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TheDrummer/Anubis-70B-v1.1",
-    "inputCentsPerMillion": 31,
-    "outputCentsPerMillion": 31
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TheDrummer/Cydonia-24B-v2",
-    "inputCentsPerMillion": 10,
-    "outputCentsPerMillion": 12
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TheDrummer/Cydonia-24B-v4",
-    "inputCentsPerMillion": 20,
-    "outputCentsPerMillion": 24
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TheDrummer/Cydonia-24B-v4.1",
-    "inputCentsPerMillion": 10,
-    "outputCentsPerMillion": 12
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TheDrummer/Cydonia-24B-v4.3",
-    "inputCentsPerMillion": 10,
-    "outputCentsPerMillion": 12
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TheDrummer/Magidonia-24B-v4.3",
-    "inputCentsPerMillion": 10,
-    "outputCentsPerMillion": 12
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TheDrummer/Rocinante-12B-v1.1",
-    "inputCentsPerMillion": 41,
-    "outputCentsPerMillion": 60
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TheDrummer/Skyfall-31B-v4.2",
-    "inputCentsPerMillion": 55,
-    "outputCentsPerMillion": 80
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TheDrummer/skyfall-36b-v2",
-    "inputCentsPerMillion": 49,
-    "outputCentsPerMillion": 49
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "TheDrummer/UnslopNemo-12B-v4.1",
-    "inputCentsPerMillion": 49,
-    "outputCentsPerMillion": 49
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "THUDM/GLM-4-32B-0414",
-    "inputCentsPerMillion": 20,
-    "outputCentsPerMillion": 20
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "THUDM/GLM-4-9B-0414",
-    "inputCentsPerMillion": 20,
-    "outputCentsPerMillion": 20
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "THUDM/GLM-Z1-32B-0414",
-    "inputCentsPerMillion": 20,
-    "outputCentsPerMillion": 20
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "THUDM/GLM-Z1-9B-0414",
-    "inputCentsPerMillion": 20,
-    "outputCentsPerMillion": 20
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Tongyi-Zhiwen/QwenLong-L1-32B",
-    "inputCentsPerMillion": 14,
-    "outputCentsPerMillion": 60
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "Unbabel/M-Prometheus-14B",
-    "inputCentsPerMillion": 20,
-    "outputCentsPerMillion": 20
   },
   {
     "providerID": "nano-gpt",
@@ -19118,12 +19124,6 @@
     "modelID": "venice-uncensored:web",
     "inputCentsPerMillion": 40,
     "outputCentsPerMillion": 40
-  },
-  {
-    "providerID": "nano-gpt",
-    "modelID": "VongolaChouko/Starcannon-Unleashed-12B-v1.0",
-    "inputCentsPerMillion": 49,
-    "outputCentsPerMillion": 49
   },
   {
     "providerID": "nano-gpt",
@@ -19275,12 +19275,6 @@
   },
   {
     "providerID": "nano-gpt",
-    "modelID": "zai-org/glm-4.5",
-    "inputCentsPerMillion": 30,
-    "outputCentsPerMillion": 130
-  },
-  {
-    "providerID": "nano-gpt",
     "modelID": "zai-org/GLM-4.5-Air",
     "inputCentsPerMillion": 12,
     "outputCentsPerMillion": 80
@@ -19299,12 +19293,6 @@
   },
   {
     "providerID": "nano-gpt",
-    "modelID": "zai-org/glm-4.6-original",
-    "inputCentsPerMillion": 35,
-    "outputCentsPerMillion": 140
-  },
-  {
-    "providerID": "nano-gpt",
     "modelID": "zai-org/GLM-4.6-turbo",
     "inputCentsPerMillion": 100,
     "outputCentsPerMillion": 300
@@ -19314,6 +19302,18 @@
     "modelID": "zai-org/GLM-4.6-turbo:thinking",
     "inputCentsPerMillion": 100,
     "outputCentsPerMillion": 300
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "zai-org/glm-4.5",
+    "inputCentsPerMillion": 30,
+    "outputCentsPerMillion": 130
+  },
+  {
+    "providerID": "nano-gpt",
+    "modelID": "zai-org/glm-4.6-original",
+    "inputCentsPerMillion": 35,
+    "outputCentsPerMillion": 140
   },
   {
     "providerID": "nano-gpt",
@@ -19405,12 +19405,6 @@
   },
   {
     "providerID": "nano-gpt",
-    "modelID": "zai-org/glm-5:thinking",
-    "inputCentsPerMillion": 30,
-    "outputCentsPerMillion": 255
-  },
-  {
-    "providerID": "nano-gpt",
     "modelID": "zai-org/glm-5.1",
     "inputCentsPerMillion": 30,
     "outputCentsPerMillion": 255
@@ -19423,10 +19417,53 @@
   },
   {
     "providerID": "nano-gpt",
+    "modelID": "zai-org/glm-5:thinking",
+    "inputCentsPerMillion": 30,
+    "outputCentsPerMillion": 255
+  },
+  {
+    "providerID": "nano-gpt",
     "modelID": "zai-org/glm-latest",
     "inputCentsPerMillion": 75,
     "outputCentsPerMillion": 260,
     "cacheReadCentsPerMillion": 15
+  },
+  {
+    "providerID": "nearai",
+    "modelID": "Qwen/Qwen3-30B-A3B-Instruct-2507",
+    "inputCentsPerMillion": 15,
+    "outputCentsPerMillion": 55
+  },
+  {
+    "providerID": "nearai",
+    "modelID": "Qwen/Qwen3-Embedding-0.6B",
+    "inputCentsPerMillion": 1,
+    "outputCentsPerMillion": 0
+  },
+  {
+    "providerID": "nearai",
+    "modelID": "Qwen/Qwen3-Reranker-0.6B",
+    "inputCentsPerMillion": 1,
+    "outputCentsPerMillion": 1
+  },
+  {
+    "providerID": "nearai",
+    "modelID": "Qwen/Qwen3-VL-30B-A3B-Instruct",
+    "inputCentsPerMillion": 15,
+    "outputCentsPerMillion": 55
+  },
+  {
+    "providerID": "nearai",
+    "modelID": "Qwen/Qwen3.5-122B-A10B",
+    "inputCentsPerMillion": 40,
+    "outputCentsPerMillion": 320
+  },
+  {
+    "providerID": "nearai",
+    "modelID": "Qwen/Qwen3.6-35B-A3B-FP8",
+    "inputCentsPerMillion": 17,
+    "outputCentsPerMillion": 110,
+    "cacheReadCentsPerMillion": 6
   },
   {
     "providerID": "nearai",
@@ -19637,81 +19674,9 @@
   },
   {
     "providerID": "nearai",
-    "modelID": "Qwen/Qwen3-30B-A3B-Instruct-2507",
-    "inputCentsPerMillion": 15,
-    "outputCentsPerMillion": 55
-  },
-  {
-    "providerID": "nearai",
-    "modelID": "Qwen/Qwen3-Embedding-0.6B",
-    "inputCentsPerMillion": 1,
-    "outputCentsPerMillion": 0
-  },
-  {
-    "providerID": "nearai",
-    "modelID": "Qwen/Qwen3-Reranker-0.6B",
-    "inputCentsPerMillion": 1,
-    "outputCentsPerMillion": 1
-  },
-  {
-    "providerID": "nearai",
-    "modelID": "Qwen/Qwen3-VL-30B-A3B-Instruct",
-    "inputCentsPerMillion": 15,
-    "outputCentsPerMillion": 55
-  },
-  {
-    "providerID": "nearai",
-    "modelID": "Qwen/Qwen3.5-122B-A10B",
-    "inputCentsPerMillion": 40,
-    "outputCentsPerMillion": 320
-  },
-  {
-    "providerID": "nearai",
-    "modelID": "Qwen/Qwen3.6-35B-A3B-FP8",
-    "inputCentsPerMillion": 17,
-    "outputCentsPerMillion": 110,
-    "cacheReadCentsPerMillion": 6
-  },
-  {
-    "providerID": "nearai",
     "modelID": "zai-org/GLM-5.1-FP8",
     "inputCentsPerMillion": 85,
     "outputCentsPerMillion": 330
-  },
-  {
-    "providerID": "nebius",
-    "modelID": "deepseek-ai/DeepSeek-V3.2",
-    "inputCentsPerMillion": 30,
-    "outputCentsPerMillion": 45,
-    "cacheReadCentsPerMillion": 3
-  },
-  {
-    "providerID": "nebius",
-    "modelID": "deepseek-ai/DeepSeek-V3.2-fast",
-    "inputCentsPerMillion": 40,
-    "outputCentsPerMillion": 200,
-    "cacheReadCentsPerMillion": 4
-  },
-  {
-    "providerID": "nebius",
-    "modelID": "deepseek-ai/DeepSeek-V4-Pro",
-    "inputCentsPerMillion": 175,
-    "outputCentsPerMillion": 350,
-    "cacheReadCentsPerMillion": 15
-  },
-  {
-    "providerID": "nebius",
-    "modelID": "google/gemma-3-27b-it",
-    "inputCentsPerMillion": 10,
-    "outputCentsPerMillion": 30,
-    "cacheReadCentsPerMillion": 1
-  },
-  {
-    "providerID": "nebius",
-    "modelID": "meta-llama/Llama-3.3-70B-Instruct",
-    "inputCentsPerMillion": 13,
-    "outputCentsPerMillion": 40,
-    "cacheReadCentsPerMillion": 1
   },
   {
     "providerID": "nebius",
@@ -19729,20 +19694,6 @@
   },
   {
     "providerID": "nebius",
-    "modelID": "moonshotai/Kimi-K2.5",
-    "inputCentsPerMillion": 50,
-    "outputCentsPerMillion": 250,
-    "cacheReadCentsPerMillion": 5
-  },
-  {
-    "providerID": "nebius",
-    "modelID": "moonshotai/Kimi-K2.5-fast",
-    "inputCentsPerMillion": 50,
-    "outputCentsPerMillion": 250,
-    "cacheReadCentsPerMillion": 5
-  },
-  {
-    "providerID": "nebius",
     "modelID": "NousResearch/Hermes-4-405B",
     "inputCentsPerMillion": 100,
     "outputCentsPerMillion": 300,
@@ -19753,47 +19704,6 @@
     "modelID": "NousResearch/Hermes-4-70B",
     "inputCentsPerMillion": 13,
     "outputCentsPerMillion": 40,
-    "cacheReadCentsPerMillion": 1
-  },
-  {
-    "providerID": "nebius",
-    "modelID": "nvidia/Llama-3_1-Nemotron-Ultra-253B-v1",
-    "inputCentsPerMillion": 60,
-    "outputCentsPerMillion": 180,
-    "cacheReadCentsPerMillion": 6
-  },
-  {
-    "providerID": "nebius",
-    "modelID": "nvidia/Nemotron-3-Nano-Omni",
-    "inputCentsPerMillion": 6,
-    "outputCentsPerMillion": 24,
-    "cacheReadCentsPerMillion": 1
-  },
-  {
-    "providerID": "nebius",
-    "modelID": "nvidia/nemotron-3-super-120b-a12b",
-    "inputCentsPerMillion": 30,
-    "outputCentsPerMillion": 90
-  },
-  {
-    "providerID": "nebius",
-    "modelID": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
-    "inputCentsPerMillion": 6,
-    "outputCentsPerMillion": 24,
-    "cacheReadCentsPerMillion": 1
-  },
-  {
-    "providerID": "nebius",
-    "modelID": "openai/gpt-oss-120b",
-    "inputCentsPerMillion": 15,
-    "outputCentsPerMillion": 60,
-    "cacheReadCentsPerMillion": 2
-  },
-  {
-    "providerID": "nebius",
-    "modelID": "openai/gpt-oss-120b-fast",
-    "inputCentsPerMillion": 10,
-    "outputCentsPerMillion": 50,
     "cacheReadCentsPerMillion": 1
   },
   {
@@ -19870,6 +19780,96 @@
     "inputCentsPerMillion": 60,
     "outputCentsPerMillion": 360,
     "cacheReadCentsPerMillion": 6
+  },
+  {
+    "providerID": "nebius",
+    "modelID": "deepseek-ai/DeepSeek-V3.2",
+    "inputCentsPerMillion": 30,
+    "outputCentsPerMillion": 45,
+    "cacheReadCentsPerMillion": 3
+  },
+  {
+    "providerID": "nebius",
+    "modelID": "deepseek-ai/DeepSeek-V3.2-fast",
+    "inputCentsPerMillion": 40,
+    "outputCentsPerMillion": 200,
+    "cacheReadCentsPerMillion": 4
+  },
+  {
+    "providerID": "nebius",
+    "modelID": "deepseek-ai/DeepSeek-V4-Pro",
+    "inputCentsPerMillion": 175,
+    "outputCentsPerMillion": 350,
+    "cacheReadCentsPerMillion": 15
+  },
+  {
+    "providerID": "nebius",
+    "modelID": "google/gemma-3-27b-it",
+    "inputCentsPerMillion": 10,
+    "outputCentsPerMillion": 30,
+    "cacheReadCentsPerMillion": 1
+  },
+  {
+    "providerID": "nebius",
+    "modelID": "meta-llama/Llama-3.3-70B-Instruct",
+    "inputCentsPerMillion": 13,
+    "outputCentsPerMillion": 40,
+    "cacheReadCentsPerMillion": 1
+  },
+  {
+    "providerID": "nebius",
+    "modelID": "moonshotai/Kimi-K2.5",
+    "inputCentsPerMillion": 50,
+    "outputCentsPerMillion": 250,
+    "cacheReadCentsPerMillion": 5
+  },
+  {
+    "providerID": "nebius",
+    "modelID": "moonshotai/Kimi-K2.5-fast",
+    "inputCentsPerMillion": 50,
+    "outputCentsPerMillion": 250,
+    "cacheReadCentsPerMillion": 5
+  },
+  {
+    "providerID": "nebius",
+    "modelID": "nvidia/Llama-3_1-Nemotron-Ultra-253B-v1",
+    "inputCentsPerMillion": 60,
+    "outputCentsPerMillion": 180,
+    "cacheReadCentsPerMillion": 6
+  },
+  {
+    "providerID": "nebius",
+    "modelID": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+    "inputCentsPerMillion": 6,
+    "outputCentsPerMillion": 24,
+    "cacheReadCentsPerMillion": 1
+  },
+  {
+    "providerID": "nebius",
+    "modelID": "nvidia/Nemotron-3-Nano-Omni",
+    "inputCentsPerMillion": 6,
+    "outputCentsPerMillion": 24,
+    "cacheReadCentsPerMillion": 1
+  },
+  {
+    "providerID": "nebius",
+    "modelID": "nvidia/nemotron-3-super-120b-a12b",
+    "inputCentsPerMillion": 30,
+    "outputCentsPerMillion": 90
+  },
+  {
+    "providerID": "nebius",
+    "modelID": "openai/gpt-oss-120b",
+    "inputCentsPerMillion": 15,
+    "outputCentsPerMillion": 60,
+    "cacheReadCentsPerMillion": 2
+  },
+  {
+    "providerID": "nebius",
+    "modelID": "openai/gpt-oss-120b-fast",
+    "inputCentsPerMillion": 10,
+    "outputCentsPerMillion": 50,
+    "cacheReadCentsPerMillion": 1
   },
   {
     "providerID": "nebius",
@@ -20059,6 +20059,20 @@
   },
   {
     "providerID": "neuralwatt",
+    "modelID": "Qwen/Qwen3.5-397B-A17B-FP8",
+    "inputCentsPerMillion": 69,
+    "outputCentsPerMillion": 414,
+    "cacheReadCentsPerMillion": 17
+  },
+  {
+    "providerID": "neuralwatt",
+    "modelID": "Qwen/Qwen3.6-35B-A3B",
+    "inputCentsPerMillion": 29,
+    "outputCentsPerMillion": 115,
+    "cacheReadCentsPerMillion": 7
+  },
+  {
+    "providerID": "neuralwatt",
     "modelID": "glm-5.2",
     "inputCentsPerMillion": 145,
     "outputCentsPerMillion": 450,
@@ -20154,20 +20168,6 @@
     "inputCentsPerMillion": 95,
     "outputCentsPerMillion": 400,
     "cacheReadCentsPerMillion": 24
-  },
-  {
-    "providerID": "neuralwatt",
-    "modelID": "Qwen/Qwen3.5-397B-A17B-FP8",
-    "inputCentsPerMillion": 69,
-    "outputCentsPerMillion": 414,
-    "cacheReadCentsPerMillion": 17
-  },
-  {
-    "providerID": "neuralwatt",
-    "modelID": "Qwen/Qwen3.6-35B-A3B",
-    "inputCentsPerMillion": 29,
-    "outputCentsPerMillion": 115,
-    "cacheReadCentsPerMillion": 7
   },
   {
     "providerID": "neuralwatt",
@@ -20740,6 +20740,12 @@
   },
   {
     "providerID": "novita-ai",
+    "modelID": "sao10K/L3-8B-stheno-v3.2",
+    "inputCentsPerMillion": 5,
+    "outputCentsPerMillion": 5
+  },
+  {
+    "providerID": "novita-ai",
     "modelID": "sao10K/l3-70b-euryale-v2.1",
     "inputCentsPerMillion": 148,
     "outputCentsPerMillion": 148
@@ -20747,12 +20753,6 @@
   {
     "providerID": "novita-ai",
     "modelID": "sao10K/l3-8b-lunaris",
-    "inputCentsPerMillion": 5,
-    "outputCentsPerMillion": 5
-  },
-  {
-    "providerID": "novita-ai",
-    "modelID": "sao10K/L3-8B-stheno-v3.2",
     "inputCentsPerMillion": 5,
     "outputCentsPerMillion": 5
   },
@@ -20872,6 +20872,12 @@
   },
   {
     "providerID": "nvidia",
+    "modelID": "black-forest-labs/flux.1-dev",
+    "inputCentsPerMillion": 0,
+    "outputCentsPerMillion": 0
+  },
+  {
+    "providerID": "nvidia",
     "modelID": "black-forest-labs/flux_1-kontext-dev",
     "inputCentsPerMillion": 0,
     "outputCentsPerMillion": 0
@@ -20885,12 +20891,6 @@
   {
     "providerID": "nvidia",
     "modelID": "black-forest-labs/flux_2-klein-4b",
-    "inputCentsPerMillion": 0,
-    "outputCentsPerMillion": 0
-  },
-  {
-    "providerID": "nvidia",
-    "modelID": "black-forest-labs/flux.1-dev",
     "inputCentsPerMillion": 0,
     "outputCentsPerMillion": 0
   },
@@ -22306,69 +22306,6 @@
     "inputCentsPerMillion": 40,
     "outputCentsPerMillion": 160,
     "cacheReadCentsPerMillion": 4
-  },
-  {
-    "providerID": "openrouter",
-    "modelID": "~anthropic/claude-fable-latest",
-    "inputCentsPerMillion": 1000,
-    "outputCentsPerMillion": 5000,
-    "cacheReadCentsPerMillion": 100
-  },
-  {
-    "providerID": "openrouter",
-    "modelID": "~anthropic/claude-haiku-latest",
-    "inputCentsPerMillion": 100,
-    "outputCentsPerMillion": 500,
-    "cacheReadCentsPerMillion": 10
-  },
-  {
-    "providerID": "openrouter",
-    "modelID": "~anthropic/claude-opus-latest",
-    "inputCentsPerMillion": 500,
-    "outputCentsPerMillion": 2500,
-    "cacheReadCentsPerMillion": 50
-  },
-  {
-    "providerID": "openrouter",
-    "modelID": "~anthropic/claude-sonnet-latest",
-    "inputCentsPerMillion": 300,
-    "outputCentsPerMillion": 1500,
-    "cacheReadCentsPerMillion": 30
-  },
-  {
-    "providerID": "openrouter",
-    "modelID": "~google/gemini-flash-latest",
-    "inputCentsPerMillion": 150,
-    "outputCentsPerMillion": 900,
-    "cacheReadCentsPerMillion": 15
-  },
-  {
-    "providerID": "openrouter",
-    "modelID": "~google/gemini-pro-latest",
-    "inputCentsPerMillion": 200,
-    "outputCentsPerMillion": 1200,
-    "cacheReadCentsPerMillion": 20
-  },
-  {
-    "providerID": "openrouter",
-    "modelID": "~moonshotai/kimi-latest",
-    "inputCentsPerMillion": 55,
-    "outputCentsPerMillion": 320,
-    "cacheReadCentsPerMillion": 11
-  },
-  {
-    "providerID": "openrouter",
-    "modelID": "~openai/gpt-latest",
-    "inputCentsPerMillion": 500,
-    "outputCentsPerMillion": 3000,
-    "cacheReadCentsPerMillion": 50
-  },
-  {
-    "providerID": "openrouter",
-    "modelID": "~openai/gpt-mini-latest",
-    "inputCentsPerMillion": 75,
-    "outputCentsPerMillion": 450,
-    "cacheReadCentsPerMillion": 8
   },
   {
     "providerID": "openrouter",
@@ -24459,6 +24396,69 @@
     "inputCentsPerMillion": 120,
     "outputCentsPerMillion": 400,
     "cacheReadCentsPerMillion": 24
+  },
+  {
+    "providerID": "openrouter",
+    "modelID": "~anthropic/claude-fable-latest",
+    "inputCentsPerMillion": 1000,
+    "outputCentsPerMillion": 5000,
+    "cacheReadCentsPerMillion": 100
+  },
+  {
+    "providerID": "openrouter",
+    "modelID": "~anthropic/claude-haiku-latest",
+    "inputCentsPerMillion": 100,
+    "outputCentsPerMillion": 500,
+    "cacheReadCentsPerMillion": 10
+  },
+  {
+    "providerID": "openrouter",
+    "modelID": "~anthropic/claude-opus-latest",
+    "inputCentsPerMillion": 500,
+    "outputCentsPerMillion": 2500,
+    "cacheReadCentsPerMillion": 50
+  },
+  {
+    "providerID": "openrouter",
+    "modelID": "~anthropic/claude-sonnet-latest",
+    "inputCentsPerMillion": 300,
+    "outputCentsPerMillion": 1500,
+    "cacheReadCentsPerMillion": 30
+  },
+  {
+    "providerID": "openrouter",
+    "modelID": "~google/gemini-flash-latest",
+    "inputCentsPerMillion": 150,
+    "outputCentsPerMillion": 900,
+    "cacheReadCentsPerMillion": 15
+  },
+  {
+    "providerID": "openrouter",
+    "modelID": "~google/gemini-pro-latest",
+    "inputCentsPerMillion": 200,
+    "outputCentsPerMillion": 1200,
+    "cacheReadCentsPerMillion": 20
+  },
+  {
+    "providerID": "openrouter",
+    "modelID": "~moonshotai/kimi-latest",
+    "inputCentsPerMillion": 55,
+    "outputCentsPerMillion": 320,
+    "cacheReadCentsPerMillion": 11
+  },
+  {
+    "providerID": "openrouter",
+    "modelID": "~openai/gpt-latest",
+    "inputCentsPerMillion": 500,
+    "outputCentsPerMillion": 3000,
+    "cacheReadCentsPerMillion": 50
+  },
+  {
+    "providerID": "openrouter",
+    "modelID": "~openai/gpt-mini-latest",
+    "inputCentsPerMillion": 75,
+    "outputCentsPerMillion": 450,
+    "cacheReadCentsPerMillion": 8
   },
   {
     "providerID": "orcarouter",
@@ -26761,82 +26761,8 @@
   },
   {
     "providerID": "siliconflow",
-    "modelID": "baidu/ERNIE-4.5-300B-A47B",
-    "inputCentsPerMillion": 28,
-    "outputCentsPerMillion": 110
-  },
-  {
-    "providerID": "siliconflow",
     "modelID": "ByteDance-Seed/Seed-OSS-36B-Instruct",
     "inputCentsPerMillion": 21,
-    "outputCentsPerMillion": 57
-  },
-  {
-    "providerID": "siliconflow",
-    "modelID": "deepseek-ai/DeepSeek-R1",
-    "inputCentsPerMillion": 50,
-    "outputCentsPerMillion": 218
-  },
-  {
-    "providerID": "siliconflow",
-    "modelID": "deepseek-ai/DeepSeek-V3",
-    "inputCentsPerMillion": 25,
-    "outputCentsPerMillion": 100
-  },
-  {
-    "providerID": "siliconflow",
-    "modelID": "deepseek-ai/DeepSeek-V3.1",
-    "inputCentsPerMillion": 27,
-    "outputCentsPerMillion": 100
-  },
-  {
-    "providerID": "siliconflow",
-    "modelID": "deepseek-ai/DeepSeek-V3.1-Terminus",
-    "inputCentsPerMillion": 27,
-    "outputCentsPerMillion": 100
-  },
-  {
-    "providerID": "siliconflow",
-    "modelID": "deepseek-ai/DeepSeek-V3.2",
-    "inputCentsPerMillion": 27,
-    "outputCentsPerMillion": 42
-  },
-  {
-    "providerID": "siliconflow",
-    "modelID": "deepseek-ai/DeepSeek-V3.2-Exp",
-    "inputCentsPerMillion": 27,
-    "outputCentsPerMillion": 41
-  },
-  {
-    "providerID": "siliconflow",
-    "modelID": "deepseek-ai/DeepSeek-V4-Flash",
-    "inputCentsPerMillion": 14,
-    "outputCentsPerMillion": 28,
-    "cacheReadCentsPerMillion": 3
-  },
-  {
-    "providerID": "siliconflow",
-    "modelID": "deepseek-ai/DeepSeek-V4-Pro",
-    "inputCentsPerMillion": 174,
-    "outputCentsPerMillion": 348,
-    "cacheReadCentsPerMillion": 14
-  },
-  {
-    "providerID": "siliconflow",
-    "modelID": "google/gemma-4-26B-A4B-it",
-    "inputCentsPerMillion": 12,
-    "outputCentsPerMillion": 40
-  },
-  {
-    "providerID": "siliconflow",
-    "modelID": "google/gemma-4-31B-it",
-    "inputCentsPerMillion": 13,
-    "outputCentsPerMillion": 40
-  },
-  {
-    "providerID": "siliconflow",
-    "modelID": "inclusionAI/Ling-flash-2.0",
-    "inputCentsPerMillion": 14,
     "outputCentsPerMillion": 57
   },
   {
@@ -26844,31 +26770,6 @@
     "modelID": "MiniMaxAI/MiniMax-M2.5",
     "inputCentsPerMillion": 30,
     "outputCentsPerMillion": 120
-  },
-  {
-    "providerID": "siliconflow",
-    "modelID": "moonshotai/Kimi-K2.5",
-    "inputCentsPerMillion": 45,
-    "outputCentsPerMillion": 225
-  },
-  {
-    "providerID": "siliconflow",
-    "modelID": "moonshotai/Kimi-K2.6",
-    "inputCentsPerMillion": 77,
-    "outputCentsPerMillion": 400,
-    "cacheReadCentsPerMillion": 20
-  },
-  {
-    "providerID": "siliconflow",
-    "modelID": "openai/gpt-oss-120b",
-    "inputCentsPerMillion": 5,
-    "outputCentsPerMillion": 45
-  },
-  {
-    "providerID": "siliconflow",
-    "modelID": "openai/gpt-oss-20b",
-    "inputCentsPerMillion": 4,
-    "outputCentsPerMillion": 18
   },
   {
     "providerID": "siliconflow",
@@ -27010,6 +26911,105 @@
   },
   {
     "providerID": "siliconflow",
+    "modelID": "baidu/ERNIE-4.5-300B-A47B",
+    "inputCentsPerMillion": 28,
+    "outputCentsPerMillion": 110
+  },
+  {
+    "providerID": "siliconflow",
+    "modelID": "deepseek-ai/DeepSeek-R1",
+    "inputCentsPerMillion": 50,
+    "outputCentsPerMillion": 218
+  },
+  {
+    "providerID": "siliconflow",
+    "modelID": "deepseek-ai/DeepSeek-V3",
+    "inputCentsPerMillion": 25,
+    "outputCentsPerMillion": 100
+  },
+  {
+    "providerID": "siliconflow",
+    "modelID": "deepseek-ai/DeepSeek-V3.1",
+    "inputCentsPerMillion": 27,
+    "outputCentsPerMillion": 100
+  },
+  {
+    "providerID": "siliconflow",
+    "modelID": "deepseek-ai/DeepSeek-V3.1-Terminus",
+    "inputCentsPerMillion": 27,
+    "outputCentsPerMillion": 100
+  },
+  {
+    "providerID": "siliconflow",
+    "modelID": "deepseek-ai/DeepSeek-V3.2",
+    "inputCentsPerMillion": 27,
+    "outputCentsPerMillion": 42
+  },
+  {
+    "providerID": "siliconflow",
+    "modelID": "deepseek-ai/DeepSeek-V3.2-Exp",
+    "inputCentsPerMillion": 27,
+    "outputCentsPerMillion": 41
+  },
+  {
+    "providerID": "siliconflow",
+    "modelID": "deepseek-ai/DeepSeek-V4-Flash",
+    "inputCentsPerMillion": 14,
+    "outputCentsPerMillion": 28,
+    "cacheReadCentsPerMillion": 3
+  },
+  {
+    "providerID": "siliconflow",
+    "modelID": "deepseek-ai/DeepSeek-V4-Pro",
+    "inputCentsPerMillion": 174,
+    "outputCentsPerMillion": 348,
+    "cacheReadCentsPerMillion": 14
+  },
+  {
+    "providerID": "siliconflow",
+    "modelID": "google/gemma-4-26B-A4B-it",
+    "inputCentsPerMillion": 12,
+    "outputCentsPerMillion": 40
+  },
+  {
+    "providerID": "siliconflow",
+    "modelID": "google/gemma-4-31B-it",
+    "inputCentsPerMillion": 13,
+    "outputCentsPerMillion": 40
+  },
+  {
+    "providerID": "siliconflow",
+    "modelID": "inclusionAI/Ling-flash-2.0",
+    "inputCentsPerMillion": 14,
+    "outputCentsPerMillion": 57
+  },
+  {
+    "providerID": "siliconflow",
+    "modelID": "moonshotai/Kimi-K2.5",
+    "inputCentsPerMillion": 45,
+    "outputCentsPerMillion": 225
+  },
+  {
+    "providerID": "siliconflow",
+    "modelID": "moonshotai/Kimi-K2.6",
+    "inputCentsPerMillion": 77,
+    "outputCentsPerMillion": 400,
+    "cacheReadCentsPerMillion": 20
+  },
+  {
+    "providerID": "siliconflow",
+    "modelID": "openai/gpt-oss-120b",
+    "inputCentsPerMillion": 5,
+    "outputCentsPerMillion": 45
+  },
+  {
+    "providerID": "siliconflow",
+    "modelID": "openai/gpt-oss-20b",
+    "inputCentsPerMillion": 4,
+    "outputCentsPerMillion": 18
+  },
+  {
+    "providerID": "siliconflow",
     "modelID": "stepfun-ai/Step-3.5-Flash",
     "inputCentsPerMillion": 10,
     "outputCentsPerMillion": 30
@@ -27059,64 +27059,8 @@
   },
   {
     "providerID": "siliconflow-cn",
-    "modelID": "baidu/ERNIE-4.5-300B-A47B",
-    "inputCentsPerMillion": 28,
-    "outputCentsPerMillion": 110
-  },
-  {
-    "providerID": "siliconflow-cn",
     "modelID": "ByteDance-Seed/Seed-OSS-36B-Instruct",
     "inputCentsPerMillion": 21,
-    "outputCentsPerMillion": 57
-  },
-  {
-    "providerID": "siliconflow-cn",
-    "modelID": "deepseek-ai/DeepSeek-OCR",
-    "inputCentsPerMillion": 0,
-    "outputCentsPerMillion": 0
-  },
-  {
-    "providerID": "siliconflow-cn",
-    "modelID": "deepseek-ai/DeepSeek-R1",
-    "inputCentsPerMillion": 50,
-    "outputCentsPerMillion": 218
-  },
-  {
-    "providerID": "siliconflow-cn",
-    "modelID": "deepseek-ai/DeepSeek-V3",
-    "inputCentsPerMillion": 25,
-    "outputCentsPerMillion": 100
-  },
-  {
-    "providerID": "siliconflow-cn",
-    "modelID": "deepseek-ai/DeepSeek-V3.1-Terminus",
-    "inputCentsPerMillion": 27,
-    "outputCentsPerMillion": 100
-  },
-  {
-    "providerID": "siliconflow-cn",
-    "modelID": "deepseek-ai/DeepSeek-V3.2",
-    "inputCentsPerMillion": 27,
-    "outputCentsPerMillion": 42
-  },
-  {
-    "providerID": "siliconflow-cn",
-    "modelID": "deepseek-ai/DeepSeek-V4-Flash",
-    "inputCentsPerMillion": 14,
-    "outputCentsPerMillion": 28,
-    "cacheReadCentsPerMillion": 0
-  },
-  {
-    "providerID": "siliconflow-cn",
-    "modelID": "deepseek-ai/DeepSeek-V4-Pro",
-    "inputCentsPerMillion": 174,
-    "outputCentsPerMillion": 348,
-    "cacheReadCentsPerMillion": 14
-  },
-  {
-    "providerID": "siliconflow-cn",
-    "modelID": "inclusionAI/Ling-flash-2.0",
-    "inputCentsPerMillion": 14,
     "outputCentsPerMillion": 57
   },
   {
@@ -27124,6 +27068,12 @@
     "modelID": "PaddlePaddle/PaddleOCR-VL-1.5",
     "inputCentsPerMillion": 0,
     "outputCentsPerMillion": 0
+  },
+  {
+    "providerID": "siliconflow-cn",
+    "modelID": "Pro/MiniMaxAI/MiniMax-M2.5",
+    "inputCentsPerMillion": 30,
+    "outputCentsPerMillion": 122
   },
   {
     "providerID": "siliconflow-cn",
@@ -27148,12 +27098,6 @@
     "modelID": "Pro/deepseek-ai/DeepSeek-V3.2",
     "inputCentsPerMillion": 27,
     "outputCentsPerMillion": 42
-  },
-  {
-    "providerID": "siliconflow-cn",
-    "modelID": "Pro/MiniMaxAI/MiniMax-M2.5",
-    "inputCentsPerMillion": 30,
-    "outputCentsPerMillion": 122
   },
   {
     "providerID": "siliconflow-cn",
@@ -27320,6 +27264,62 @@
   },
   {
     "providerID": "siliconflow-cn",
+    "modelID": "baidu/ERNIE-4.5-300B-A47B",
+    "inputCentsPerMillion": 28,
+    "outputCentsPerMillion": 110
+  },
+  {
+    "providerID": "siliconflow-cn",
+    "modelID": "deepseek-ai/DeepSeek-OCR",
+    "inputCentsPerMillion": 0,
+    "outputCentsPerMillion": 0
+  },
+  {
+    "providerID": "siliconflow-cn",
+    "modelID": "deepseek-ai/DeepSeek-R1",
+    "inputCentsPerMillion": 50,
+    "outputCentsPerMillion": 218
+  },
+  {
+    "providerID": "siliconflow-cn",
+    "modelID": "deepseek-ai/DeepSeek-V3",
+    "inputCentsPerMillion": 25,
+    "outputCentsPerMillion": 100
+  },
+  {
+    "providerID": "siliconflow-cn",
+    "modelID": "deepseek-ai/DeepSeek-V3.1-Terminus",
+    "inputCentsPerMillion": 27,
+    "outputCentsPerMillion": 100
+  },
+  {
+    "providerID": "siliconflow-cn",
+    "modelID": "deepseek-ai/DeepSeek-V3.2",
+    "inputCentsPerMillion": 27,
+    "outputCentsPerMillion": 42
+  },
+  {
+    "providerID": "siliconflow-cn",
+    "modelID": "deepseek-ai/DeepSeek-V4-Flash",
+    "inputCentsPerMillion": 14,
+    "outputCentsPerMillion": 28,
+    "cacheReadCentsPerMillion": 0
+  },
+  {
+    "providerID": "siliconflow-cn",
+    "modelID": "deepseek-ai/DeepSeek-V4-Pro",
+    "inputCentsPerMillion": 174,
+    "outputCentsPerMillion": 348,
+    "cacheReadCentsPerMillion": 14
+  },
+  {
+    "providerID": "siliconflow-cn",
+    "modelID": "inclusionAI/Ling-flash-2.0",
+    "inputCentsPerMillion": 14,
+    "outputCentsPerMillion": 57
+  },
+  {
+    "providerID": "siliconflow-cn",
     "modelID": "stepfun-ai/Step-3.5-Flash",
     "inputCentsPerMillion": 10,
     "outputCentsPerMillion": 30
@@ -27341,6 +27341,18 @@
     "modelID": "zai-org/GLM-5.2",
     "inputCentsPerMillion": 140,
     "outputCentsPerMillion": 440
+  },
+  {
+    "providerID": "stackit",
+    "modelID": "Qwen/Qwen3-VL-235B-A22B-Instruct-FP8",
+    "inputCentsPerMillion": 164,
+    "outputCentsPerMillion": 191
+  },
+  {
+    "providerID": "stackit",
+    "modelID": "Qwen/Qwen3-VL-Embedding-8B",
+    "inputCentsPerMillion": 9,
+    "outputCentsPerMillion": 9
   },
   {
     "providerID": "stackit",
@@ -27377,18 +27389,6 @@
     "modelID": "openai/gpt-oss-120b",
     "inputCentsPerMillion": 49,
     "outputCentsPerMillion": 71
-  },
-  {
-    "providerID": "stackit",
-    "modelID": "Qwen/Qwen3-VL-235B-A22B-Instruct-FP8",
-    "inputCentsPerMillion": 164,
-    "outputCentsPerMillion": 191
-  },
-  {
-    "providerID": "stackit",
-    "modelID": "Qwen/Qwen3-VL-Embedding-8B",
-    "inputCentsPerMillion": 9,
-    "outputCentsPerMillion": 9
   },
   {
     "providerID": "stepfun",
@@ -27447,6 +27447,24 @@
   },
   {
     "providerID": "submodel",
+    "modelID": "Qwen/Qwen3-235B-A22B-Instruct-2507",
+    "inputCentsPerMillion": 20,
+    "outputCentsPerMillion": 30
+  },
+  {
+    "providerID": "submodel",
+    "modelID": "Qwen/Qwen3-235B-A22B-Thinking-2507",
+    "inputCentsPerMillion": 20,
+    "outputCentsPerMillion": 60
+  },
+  {
+    "providerID": "submodel",
+    "modelID": "Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8",
+    "inputCentsPerMillion": 20,
+    "outputCentsPerMillion": 80
+  },
+  {
+    "providerID": "submodel",
     "modelID": "deepseek-ai/DeepSeek-R1-0528",
     "inputCentsPerMillion": 50,
     "outputCentsPerMillion": 215
@@ -27471,24 +27489,6 @@
   },
   {
     "providerID": "submodel",
-    "modelID": "Qwen/Qwen3-235B-A22B-Instruct-2507",
-    "inputCentsPerMillion": 20,
-    "outputCentsPerMillion": 30
-  },
-  {
-    "providerID": "submodel",
-    "modelID": "Qwen/Qwen3-235B-A22B-Thinking-2507",
-    "inputCentsPerMillion": 20,
-    "outputCentsPerMillion": 60
-  },
-  {
-    "providerID": "submodel",
-    "modelID": "Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8",
-    "inputCentsPerMillion": 20,
-    "outputCentsPerMillion": 80
-  },
-  {
-    "providerID": "submodel",
     "modelID": "zai-org/GLM-4.5-Air",
     "inputCentsPerMillion": 10,
     "outputCentsPerMillion": 50
@@ -27505,6 +27505,20 @@
     "inputCentsPerMillion": 60,
     "outputCentsPerMillion": 120,
     "cacheReadCentsPerMillion": 60
+  },
+  {
+    "providerID": "synthetic",
+    "modelID": "hf:Qwen/Qwen3.5-397B-A17B",
+    "inputCentsPerMillion": 60,
+    "outputCentsPerMillion": 360,
+    "cacheReadCentsPerMillion": 60
+  },
+  {
+    "providerID": "synthetic",
+    "modelID": "hf:Qwen/Qwen3.6-27B",
+    "inputCentsPerMillion": 45,
+    "outputCentsPerMillion": 360,
+    "cacheReadCentsPerMillion": 45
   },
   {
     "providerID": "synthetic",
@@ -27526,20 +27540,6 @@
     "inputCentsPerMillion": 10,
     "outputCentsPerMillion": 10,
     "cacheReadCentsPerMillion": 10
-  },
-  {
-    "providerID": "synthetic",
-    "modelID": "hf:Qwen/Qwen3.5-397B-A17B",
-    "inputCentsPerMillion": 60,
-    "outputCentsPerMillion": 360,
-    "cacheReadCentsPerMillion": 60
-  },
-  {
-    "providerID": "synthetic",
-    "modelID": "hf:Qwen/Qwen3.6-27B",
-    "inputCentsPerMillion": 45,
-    "outputCentsPerMillion": 360,
-    "cacheReadCentsPerMillion": 45
   },
   {
     "providerID": "synthetic",
@@ -27676,6 +27676,81 @@
   },
   {
     "providerID": "togetherai",
+    "modelID": "LiquidAI/LFM2-24B-A2B",
+    "inputCentsPerMillion": 3,
+    "outputCentsPerMillion": 12
+  },
+  {
+    "providerID": "togetherai",
+    "modelID": "MiniMaxAI/MiniMax-M2.5",
+    "inputCentsPerMillion": 30,
+    "outputCentsPerMillion": 120,
+    "cacheReadCentsPerMillion": 6
+  },
+  {
+    "providerID": "togetherai",
+    "modelID": "MiniMaxAI/MiniMax-M2.7",
+    "inputCentsPerMillion": 30,
+    "outputCentsPerMillion": 120,
+    "cacheReadCentsPerMillion": 6
+  },
+  {
+    "providerID": "togetherai",
+    "modelID": "MiniMaxAI/MiniMax-M3",
+    "inputCentsPerMillion": 30,
+    "outputCentsPerMillion": 120,
+    "cacheReadCentsPerMillion": 6
+  },
+  {
+    "providerID": "togetherai",
+    "modelID": "Qwen/Qwen2.5-7B-Instruct-Turbo",
+    "inputCentsPerMillion": 30,
+    "outputCentsPerMillion": 30
+  },
+  {
+    "providerID": "togetherai",
+    "modelID": "Qwen/Qwen3-235B-A22B-Instruct-2507-tput",
+    "inputCentsPerMillion": 20,
+    "outputCentsPerMillion": 60
+  },
+  {
+    "providerID": "togetherai",
+    "modelID": "Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8",
+    "inputCentsPerMillion": 200,
+    "outputCentsPerMillion": 200
+  },
+  {
+    "providerID": "togetherai",
+    "modelID": "Qwen/Qwen3-Coder-Next-FP8",
+    "inputCentsPerMillion": 50,
+    "outputCentsPerMillion": 120
+  },
+  {
+    "providerID": "togetherai",
+    "modelID": "Qwen/Qwen3.5-397B-A17B",
+    "inputCentsPerMillion": 60,
+    "outputCentsPerMillion": 360
+  },
+  {
+    "providerID": "togetherai",
+    "modelID": "Qwen/Qwen3.5-9B",
+    "inputCentsPerMillion": 17,
+    "outputCentsPerMillion": 25
+  },
+  {
+    "providerID": "togetherai",
+    "modelID": "Qwen/Qwen3.6-Plus",
+    "inputCentsPerMillion": 50,
+    "outputCentsPerMillion": 300
+  },
+  {
+    "providerID": "togetherai",
+    "modelID": "Qwen/Qwen3.7-Max",
+    "inputCentsPerMillion": 125,
+    "outputCentsPerMillion": 375
+  },
+  {
+    "providerID": "togetherai",
     "modelID": "deepcogito/cogito-v2-1-671b",
     "inputCentsPerMillion": 125,
     "outputCentsPerMillion": 125
@@ -27725,12 +27800,6 @@
   },
   {
     "providerID": "togetherai",
-    "modelID": "LiquidAI/LFM2-24B-A2B",
-    "inputCentsPerMillion": 3,
-    "outputCentsPerMillion": 12
-  },
-  {
-    "providerID": "togetherai",
     "modelID": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
     "inputCentsPerMillion": 88,
     "outputCentsPerMillion": 88
@@ -27740,27 +27809,6 @@
     "modelID": "meta-llama/Meta-Llama-3-8B-Instruct-Lite",
     "inputCentsPerMillion": 14,
     "outputCentsPerMillion": 14
-  },
-  {
-    "providerID": "togetherai",
-    "modelID": "MiniMaxAI/MiniMax-M2.5",
-    "inputCentsPerMillion": 30,
-    "outputCentsPerMillion": 120,
-    "cacheReadCentsPerMillion": 6
-  },
-  {
-    "providerID": "togetherai",
-    "modelID": "MiniMaxAI/MiniMax-M2.7",
-    "inputCentsPerMillion": 30,
-    "outputCentsPerMillion": 120,
-    "cacheReadCentsPerMillion": 6
-  },
-  {
-    "providerID": "togetherai",
-    "modelID": "MiniMaxAI/MiniMax-M3",
-    "inputCentsPerMillion": 30,
-    "outputCentsPerMillion": 120,
-    "cacheReadCentsPerMillion": 6
   },
   {
     "providerID": "togetherai",
@@ -27806,54 +27854,6 @@
     "modelID": "pearl-ai/gemma-4-31b-it",
     "inputCentsPerMillion": 28,
     "outputCentsPerMillion": 86
-  },
-  {
-    "providerID": "togetherai",
-    "modelID": "Qwen/Qwen2.5-7B-Instruct-Turbo",
-    "inputCentsPerMillion": 30,
-    "outputCentsPerMillion": 30
-  },
-  {
-    "providerID": "togetherai",
-    "modelID": "Qwen/Qwen3-235B-A22B-Instruct-2507-tput",
-    "inputCentsPerMillion": 20,
-    "outputCentsPerMillion": 60
-  },
-  {
-    "providerID": "togetherai",
-    "modelID": "Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8",
-    "inputCentsPerMillion": 200,
-    "outputCentsPerMillion": 200
-  },
-  {
-    "providerID": "togetherai",
-    "modelID": "Qwen/Qwen3-Coder-Next-FP8",
-    "inputCentsPerMillion": 50,
-    "outputCentsPerMillion": 120
-  },
-  {
-    "providerID": "togetherai",
-    "modelID": "Qwen/Qwen3.5-397B-A17B",
-    "inputCentsPerMillion": 60,
-    "outputCentsPerMillion": 360
-  },
-  {
-    "providerID": "togetherai",
-    "modelID": "Qwen/Qwen3.5-9B",
-    "inputCentsPerMillion": 17,
-    "outputCentsPerMillion": 25
-  },
-  {
-    "providerID": "togetherai",
-    "modelID": "Qwen/Qwen3.6-Plus",
-    "inputCentsPerMillion": 50,
-    "outputCentsPerMillion": 300
-  },
-  {
-    "providerID": "togetherai",
-    "modelID": "Qwen/Qwen3.7-Max",
-    "inputCentsPerMillion": 125,
-    "outputCentsPerMillion": 375
   },
   {
     "providerID": "togetherai",
@@ -29959,20 +29959,6 @@
   },
   {
     "providerID": "wafer.ai",
-    "modelID": "deepseek-v4-flash",
-    "inputCentsPerMillion": 14,
-    "outputCentsPerMillion": 28,
-    "cacheReadCentsPerMillion": 1
-  },
-  {
-    "providerID": "wafer.ai",
-    "modelID": "deepseek-v4-pro",
-    "inputCentsPerMillion": 174,
-    "outputCentsPerMillion": 348,
-    "cacheReadCentsPerMillion": 2
-  },
-  {
-    "providerID": "wafer.ai",
     "modelID": "GLM-5.1",
     "inputCentsPerMillion": 100,
     "outputCentsPerMillion": 320,
@@ -30008,10 +29994,60 @@
   },
   {
     "providerID": "wafer.ai",
+    "modelID": "deepseek-v4-flash",
+    "inputCentsPerMillion": 14,
+    "outputCentsPerMillion": 28,
+    "cacheReadCentsPerMillion": 1
+  },
+  {
+    "providerID": "wafer.ai",
+    "modelID": "deepseek-v4-pro",
+    "inputCentsPerMillion": 174,
+    "outputCentsPerMillion": 348,
+    "cacheReadCentsPerMillion": 2
+  },
+  {
+    "providerID": "wafer.ai",
     "modelID": "qwen3.7-max",
     "inputCentsPerMillion": 500,
     "outputCentsPerMillion": 1500,
     "cacheReadCentsPerMillion": 50
+  },
+  {
+    "providerID": "wandb",
+    "modelID": "MiniMaxAI/MiniMax-M2.5",
+    "inputCentsPerMillion": 30,
+    "outputCentsPerMillion": 120
+  },
+  {
+    "providerID": "wandb",
+    "modelID": "OpenPipe/Qwen3-14B-Instruct",
+    "inputCentsPerMillion": 5,
+    "outputCentsPerMillion": 22
+  },
+  {
+    "providerID": "wandb",
+    "modelID": "Qwen/Qwen3-235B-A22B-Instruct-2507",
+    "inputCentsPerMillion": 10,
+    "outputCentsPerMillion": 10
+  },
+  {
+    "providerID": "wandb",
+    "modelID": "Qwen/Qwen3-235B-A22B-Thinking-2507",
+    "inputCentsPerMillion": 10,
+    "outputCentsPerMillion": 10
+  },
+  {
+    "providerID": "wandb",
+    "modelID": "Qwen/Qwen3-30B-A3B-Instruct-2507",
+    "inputCentsPerMillion": 10,
+    "outputCentsPerMillion": 30
+  },
+  {
+    "providerID": "wandb",
+    "modelID": "Qwen/Qwen3-Coder-480B-A35B-Instruct",
+    "inputCentsPerMillion": 100,
+    "outputCentsPerMillion": 150
   },
   {
     "providerID": "wandb",
@@ -30051,12 +30087,6 @@
   },
   {
     "providerID": "wandb",
-    "modelID": "MiniMaxAI/MiniMax-M2.5",
-    "inputCentsPerMillion": 30,
-    "outputCentsPerMillion": 120
-  },
-  {
-    "providerID": "wandb",
     "modelID": "moonshotai/Kimi-K2.5",
     "inputCentsPerMillion": 50,
     "outputCentsPerMillion": 285
@@ -30078,36 +30108,6 @@
     "modelID": "openai/gpt-oss-20b",
     "inputCentsPerMillion": 5,
     "outputCentsPerMillion": 20
-  },
-  {
-    "providerID": "wandb",
-    "modelID": "OpenPipe/Qwen3-14B-Instruct",
-    "inputCentsPerMillion": 5,
-    "outputCentsPerMillion": 22
-  },
-  {
-    "providerID": "wandb",
-    "modelID": "Qwen/Qwen3-235B-A22B-Instruct-2507",
-    "inputCentsPerMillion": 10,
-    "outputCentsPerMillion": 10
-  },
-  {
-    "providerID": "wandb",
-    "modelID": "Qwen/Qwen3-235B-A22B-Thinking-2507",
-    "inputCentsPerMillion": 10,
-    "outputCentsPerMillion": 10
-  },
-  {
-    "providerID": "wandb",
-    "modelID": "Qwen/Qwen3-30B-A3B-Instruct-2507",
-    "inputCentsPerMillion": 10,
-    "outputCentsPerMillion": 30
-  },
-  {
-    "providerID": "wandb",
-    "modelID": "Qwen/Qwen3-Coder-480B-A35B-Instruct",
-    "inputCentsPerMillion": 100,
-    "outputCentsPerMillion": 150
   },
   {
     "providerID": "wandb",
@@ -30149,6 +30149,13 @@
     "inputCentsPerMillion": 125,
     "outputCentsPerMillion": 250,
     "cacheReadCentsPerMillion": 20
+  },
+  {
+    "providerID": "xai",
+    "modelID": "grok-4.5",
+    "inputCentsPerMillion": 200,
+    "outputCentsPerMillion": 600,
+    "cacheReadCentsPerMillion": 50
   },
   {
     "providerID": "xai",

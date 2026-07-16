@@ -1,9 +1,9 @@
 {
   "source": "https://models.dev/api.json",
-  "generatedAt": "2026-06-30T09:36:58.898Z",
+  "generatedAt": "2026-07-16T04:03:46.159Z",
   "providerCount": 146,
-  "modelCount": 5254,
-  "pricedModelCount": 4874,
+  "modelCount": 5255,
+  "pricedModelCount": 4875,
   "providers": [
     {
       "id": "302ai",
@@ -46770,7 +46770,7 @@
         },
         {
           "id": "gemini-2.5-flash-lite-preview-09-2025-thinking",
-          "name": "Gemini 2.5 Flash Lite Preview (09/2025) – Thinking",
+          "name": "Gemini 2.5 Flash Lite Preview (09/2025) \u2013 Thinking",
           "status": "active",
           "cost": {
             "inputCentsPerMillion": 10,
@@ -46899,7 +46899,7 @@
         },
         {
           "id": "gemini-2.5-flash-preview-09-2025-thinking",
-          "name": "Gemini 2.5 Flash Preview (09/2025) – Thinking",
+          "name": "Gemini 2.5 Flash Preview (09/2025) \u2013 Thinking",
           "status": "active",
           "cost": {
             "inputCentsPerMillion": 30,
@@ -86985,6 +86985,30 @@
               "type": "effort",
               "values": [
                 "none",
+                "low",
+                "medium",
+                "high"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "grok-4.5",
+          "name": "Grok 4.5",
+          "status": "active",
+          "cost": {
+            "inputCentsPerMillion": 200,
+            "outputCentsPerMillion": 600,
+            "cacheReadCentsPerMillion": 50
+          },
+          "limit": {
+            "context": 500000,
+            "output": 500000
+          },
+          "reasoning_options": [
+            {
+              "type": "effort",
+              "values": [
                 "low",
                 "medium",
                 "high"
