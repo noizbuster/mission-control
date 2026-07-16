@@ -529,7 +529,6 @@ export async function runInteractiveChatSession(
                   ...(pluginSkillDirs.length > 0 ? { additionalSkillDirs: pluginSkillDirs } : {}),
               })
             : { skills: [], diagnostics: [] };
-    const knownSkillNames = new Set<string>(discoveredSkills.skills.map((skill) => skill.name));
     const sessionSkills: readonly Skill[] = discoveredSkills.skills;
 
     const discoveredWorkflows =
@@ -665,7 +664,6 @@ export async function runInteractiveChatSession(
 
             const action = parseChatLine(event.value, {
                 modelChoices,
-                knownSkillNames,
                 knownWorkflowNames,
                 ...(currentSessionId !== undefined ? { currentSessionId } : {}),
             });

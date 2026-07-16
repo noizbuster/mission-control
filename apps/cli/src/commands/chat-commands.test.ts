@@ -25,6 +25,16 @@ describe('chat command parser', () => {
     });
 
     it('parses skill invocations when input starts with a dollar sign', () => {
+        expect(parseChatLine('$planner')).toEqual({
+            kind: 'skill',
+            name: 'planner',
+            instruction: '',
+        });
+        expect(parseChatLine('$git-master')).toEqual({
+            kind: 'skill',
+            name: 'git-master',
+            instruction: '',
+        });
         const action = parseChatLine('$planner draft a rollout checklist');
 
         expect(action).toEqual({
@@ -96,39 +106,18 @@ describe('chat command parser', () => {
         });
     });
 
-    it('expands /<known-skill> into a skill action when the name is discovered', () => {
-        const known = new Set(['git-master', 'planner']);
-
-        expect(parseChatLine('/git-master', { knownSkillNames: known })).toEqual({
-            kind: 'skill',
-            name: 'git-master',
-            instruction: '',
+    it('treats /<name> as unknown-slash even when the name matches a skill (skills are $-only)', () => {
+        expect(parseChatLine('/git-master')).toEqual({
+            kind: 'unknown-slash',
+            command: 'git-master',
         });
-        expect(parseChatLine('/planner refactor the auth module', { knownSkillNames: known })).toEqual({
-            kind: 'skill',
-            name: 'planner',
-            instruction: 'refactor the auth module',
+        expect(parseChatLine('/planner refactor the auth module')).toEqual({
+            kind: 'unknown-slash',
+            command: 'planner',
         });
-    });
-
-    it('reserves slash commands take precedence over a same-named skill', () => {
-        const known = new Set(['exit', 'model', 'new', 'session', 'tree', 'compact', 'trust']);
-
-        expect(parseChatLine('/exit', { knownSkillNames: known })).toEqual({ kind: 'exit' });
-        expect(parseChatLine('/model', { knownSkillNames: known })).toEqual({ kind: 'model-pick' });
-        expect(parseChatLine('/new', { knownSkillNames: known })).toEqual({ kind: 'new-session' });
-        expect(parseChatLine('/sessions', { knownSkillNames: known })).toEqual({ kind: 'sessions' });
-        expect(parseChatLine('/compact', { knownSkillNames: known })).toEqual({ kind: 'compact' });
-        expect(parseChatLine('/trust', { knownSkillNames: known })).toEqual({ kind: 'trust', action: 'trust' });
     });
 
     it('falls through to the unknown-slash path for an undiscovered /<name>', () => {
-        const known = new Set(['git-master']);
-
-        expect(parseChatLine('/mystery', { knownSkillNames: known })).toEqual({
-            kind: 'unknown-slash',
-            command: 'mystery',
-        });
         expect(parseChatLine('/mystery')).toEqual({
             kind: 'unknown-slash',
             command: 'mystery',
@@ -360,14 +349,6 @@ describe('chat command parser', () => {
         expect(parseChatLine('/skills list')).toEqual({
             kind: 'skills',
             skills: { kind: 'invalid', message: '/skills supports: reload' },
-        });
-    });
-
-    it('shadows a same-named skill with the reserved /skills command', () => {
-        const known = new Set(['skills']);
-        expect(parseChatLine('/skills reload', { knownSkillNames: known })).toEqual({
-            kind: 'skills',
-            skills: { kind: 'reload' },
         });
     });
 

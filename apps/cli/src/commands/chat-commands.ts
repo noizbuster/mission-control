@@ -175,14 +175,6 @@ export type TrustCommandAction = 'trust' | 'status' | 'deny' | 'reset';
 export type ChatLineOptions = {
     readonly modelChoices?: readonly ModelChoice[];
     /**
-     * Discovered skill names for `/<skill-name>` slash expansion (todo 10).
-     * Reserved slash commands and session-navigation commands always take
-     * precedence over a skill name; a name is only matched here in the default
-     * branch after those checks. When omitted, `/<name>` falls through to the
-     * unknown-slash path (skill loading via `$skill` still works).
-     */
-    readonly knownSkillNames?: ReadonlySet<string>;
-    /**
      * Discovered workflow names for `#<workflow-name>` invocation (Task 2.2). When
      * provided, a name that parses cleanly but is absent from the set is rejected as
      * an invalid action. When omitted, any valid-format name is accepted (the
@@ -299,20 +291,14 @@ function parseSlashCommand(line: string, options: ChatLineOptions): ChatLineActi
             return { kind: 'mission' };
         }
         default:
-            return resolveUnreservedSlash(parts, options);
+            return resolveUnreservedSlash(parts);
     }
 }
 
-function resolveUnreservedSlash(
-    parts: { readonly head: string; readonly tail: string },
-    options: ChatLineOptions,
-): ChatLineAction {
+function resolveUnreservedSlash(parts: { readonly head: string; readonly tail: string }): ChatLineAction {
     const sessionAction = parseSessionSlashCommand(parts.head, parts.tail);
     if (sessionAction !== undefined) {
         return sessionAction;
-    }
-    if (options.knownSkillNames?.has(parts.head)) {
-        return { kind: 'skill', name: parts.head, instruction: parts.tail };
     }
     return { kind: 'unknown-slash', command: parts.head };
 }

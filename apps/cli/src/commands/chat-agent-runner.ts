@@ -53,7 +53,6 @@ export type AgentRunnerOptions = {
     readonly sessionId?: string;
     readonly initialApprovalLevel?: ApprovalLevel;
     readonly permissionSession?: PermissionSession;
-    readonly knownSkillNames?: ReadonlySet<string>;
     readonly knownWorkflowNames?: ReadonlySet<string>;
     readonly modelChoices?: readonly ModelChoice[];
     readonly dispatchAction?: (action: ChatLineAction, context: DispatchActionContext) => Promise<ChatActionResult>;
@@ -142,7 +141,6 @@ export function startChatAgentRunner(options: AgentRunnerOptions): AgentRunnerHa
         ((value: string) => {
             const parseOptions: ChatLineOptions = {
                 ...(options.modelChoices !== undefined ? { modelChoices: options.modelChoices } : {}),
-                ...(options.knownSkillNames !== undefined ? { knownSkillNames: options.knownSkillNames } : {}),
                 ...(options.knownWorkflowNames !== undefined ? { knownWorkflowNames: options.knownWorkflowNames } : {}),
                 ...(currentSessionId !== undefined ? { currentSessionId } : {}),
             };
