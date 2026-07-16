@@ -4,6 +4,7 @@ import { truncateTerminalText } from '@mission-control/tui';
 import { For, type JSX, Show } from 'solid-js';
 import type { TerminalViewport } from '../platform/terminal-viewport';
 import type { AbgOverlayState } from '../state/abg-overlay-state';
+import { scrolledSlice } from './abg-scroll';
 import { graphStatusTheme, nodeStatusTheme, STATUS_FG_GRAY } from './abg-status-theme';
 import { useSpinnerFrame } from './spinner';
 import {
@@ -17,6 +18,7 @@ import {
 export interface PaneProps {
     readonly state: AbgOverlayState;
     readonly modelLabel: string;
+    readonly scrollOffset?: number;
 }
 
 export type GraphPaneProps = PaneProps & {
@@ -48,79 +50,88 @@ const yellowFg = '#ffff00';
 const redFg = '#ff0000';
 const focusedStyle = { fg: cyanFg, bold: true };
 
-export function OverviewPane({ state, modelLabel }: PaneProps): JSX.Element {
-    if (isEmptyState(state)) {
-        return (
-            <box flexDirection="column" marginTop={1}>
-                <text {...dimAttrs}>No active ABG run</text>
-            </box>
+export function OverviewPane(props: PaneProps): JSX.Element {
+    const empty = () => isEmptyState(props.state);
+    const graphId = () => props.state.focusedGraphId ?? props.state.activeGraphId ?? '(no graph)';
+    const statusFgVal = () =>
+        props.state.graphStatus !== undefined ? graphStatusTheme(props.state.graphStatus).foreground : STATUS_FG_GRAY;
+    const statusText = () => props.state.graphStatus ?? 'idle';
+    const liveOutputLines = () =>
+        scrolledSlice(props.state.lastLiveDelta.split('\n').slice(-8), props.scrollOffset ?? 0);
+    const knownGraphs = () =>
+        scrolledSlice(
+            [...props.state.graphs.values()].sort((left, right) => left.graphId.localeCompare(right.graphId)),
+            props.scrollOffset ?? 0,
         );
-    }
-
-    const graphId = state.focusedGraphId ?? state.activeGraphId ?? '(no graph)';
-    const statusFgVal =
-        state.graphStatus !== undefined ? graphStatusTheme(state.graphStatus).foreground : STATUS_FG_GRAY;
-    const statusText = state.graphStatus ?? 'idle';
-
-    const liveOutputLines = state.lastLiveDelta.split('\n').slice(-8);
-    const knownGraphs = [...state.graphs.values()].sort((left, right) => left.graphId.localeCompare(right.graphId));
+    const knownGraphCount = () => props.state.graphs.size;
 
     return (
-        <box flexDirection="column" marginTop={1}>
-            <box flexDirection="row">
-                <text {...boldAttrs}>{truncate(graphId, 20)}</text>
-                <text> </text>
-                <text {...(statusFgVal !== undefined ? { fg: statusFgVal } : {})} {...boldAttrs}>
-                    [{statusText}]
-                </text>
-                <text> </text>
-                <text {...dimAttrs}>{state.runState}</text>
-                <text> </text>
-                <text {...dimAttrs}>{modelLabel}</text>
-                <text> </text>
-                <text {...dimAttrs}>sidecar:{state.nativeSidecarStatus || 'unknown'}</text>
-                <text> </text>
-                <text {...dimAttrs}>{formatCostSummary(state)}</text>
-            </box>
-            {knownGraphs.length > 1 ? (
-                <box marginTop={1} flexDirection="column">
-                    <box flexDirection="row">
-                        <text {...boldAttrs}>{`Graphs (${knownGraphs.length})  `}</text>
-                        <text {...dimAttrs}>press 'g' to cycle focus</text>
-                    </box>
-                    <For each={knownGraphs}>
-                        {(summary) => {
-                            const isFocused = summary.graphId === state.focusedGraphId;
-                            const themeFg = graphStatusTheme(summary.status).foreground;
-                            const graphFg = themeFg !== STATUS_FG_GRAY ? themeFg : undefined;
-                            return (
-                                <box flexDirection="row">
-                                    <text {...(isFocused ? focusedStyle : dimAttrs)}>{isFocused ? '▸ ' : '  '}</text>
-                                    <text {...(graphFg !== undefined ? { fg: graphFg } : dimAttrs)}>
-                                        {summary.status}
-                                    </text>
-                                    <text> </text>
-                                    <text {...(isFocused ? boldAttrs : {})}>{truncate(summary.graphId, 30)}</text>
-                                    <text {...dimAttrs}> events={summary.eventCount}</text>
-                                    {summary.parentGraphId !== undefined ? (
-                                        <text {...dimAttrs}> ← {truncate(summary.parentGraphId, 20)}</text>
-                                    ) : null}
-                                </box>
-                            );
-                        }}
-                    </For>
+        <Show
+            when={!empty()}
+            fallback={
+                <box flexDirection="column" marginTop={1}>
+                    <text {...dimAttrs}>No active ABG run</text>
                 </box>
-            ) : null}
-            {state.lastError !== undefined ? (
-                <box marginTop={1}>
-                    <text {...(redFg !== undefined ? { fg: redFg } : {})}>Error: {state.lastError}</text>
-                </box>
-            ) : null}
+            }
+        >
             <box flexDirection="column" marginTop={1}>
-                <text {...boldAttrs}>Live Output:</text>
-                <For each={liveOutputLines}>{(line) => <text {...dimAttrs}>{line}</text>}</For>
+                <box flexDirection="row">
+                    <text {...boldAttrs}>{truncate(graphId(), 20)}</text>
+                    <text> </text>
+                    <text {...(statusFgVal() !== undefined ? { fg: statusFgVal() } : {})} {...boldAttrs}>
+                        [{statusText()}]
+                    </text>
+                    <text> </text>
+                    <text {...dimAttrs}>{props.state.runState}</text>
+                    <text> </text>
+                    <text {...dimAttrs}>{props.modelLabel}</text>
+                    <text> </text>
+                    <text {...dimAttrs}>sidecar:{props.state.nativeSidecarStatus || 'unknown'}</text>
+                    <text> </text>
+                    <text {...dimAttrs}>{formatCostSummary(props.state)}</text>
+                </box>
+                {knownGraphCount() > 1 ? (
+                    <box marginTop={1} flexDirection="column">
+                        <box flexDirection="row">
+                            <text {...boldAttrs}>{`Graphs (${knownGraphCount()})  `}</text>
+                            <text {...dimAttrs}>press 'g' to cycle focus</text>
+                        </box>
+                        <For each={knownGraphs()}>
+                            {(summary) => {
+                                const isFocused = () => summary.graphId === props.state.focusedGraphId;
+                                const themeFg = graphStatusTheme(summary.status).foreground;
+                                const graphFg = themeFg !== STATUS_FG_GRAY ? themeFg : undefined;
+                                return (
+                                    <box flexDirection="row">
+                                        <text {...(isFocused() ? focusedStyle : dimAttrs)}>
+                                            {isFocused() ? '▸ ' : '  '}
+                                        </text>
+                                        <text {...(graphFg !== undefined ? { fg: graphFg } : dimAttrs)}>
+                                            {summary.status}
+                                        </text>
+                                        <text> </text>
+                                        <text {...(isFocused() ? boldAttrs : {})}>{truncate(summary.graphId, 30)}</text>
+                                        <text {...dimAttrs}> events={summary.eventCount}</text>
+                                        {summary.parentGraphId !== undefined ? (
+                                            <text {...dimAttrs}> ← {truncate(summary.parentGraphId, 20)}</text>
+                                        ) : null}
+                                    </box>
+                                );
+                            }}
+                        </For>
+                    </box>
+                ) : null}
+                {props.state.lastError !== undefined ? (
+                    <box marginTop={1}>
+                        <text {...(redFg !== undefined ? { fg: redFg } : {})}>Error: {props.state.lastError}</text>
+                    </box>
+                ) : null}
+                <box flexDirection="column" marginTop={1}>
+                    <text {...boldAttrs}>Live Output:</text>
+                    <For each={liveOutputLines()}>{(line) => <text {...dimAttrs}>{line}</text>}</For>
+                </box>
             </box>
-        </box>
+        </Show>
     );
 }
 
@@ -166,6 +177,11 @@ export function GraphPane(props: GraphPaneProps): JSX.Element {
             maxWidth: bounds.maxWidth,
         });
     };
+    const scrolledRows = () => {
+        const rendered = visual();
+        if (rendered === undefined) return [];
+        return scrolledSlice(rendered.rows, props.scrollOffset ?? 0);
+    };
 
     return (
         <Show
@@ -194,7 +210,7 @@ export function GraphPane(props: GraphPaneProps): JSX.Element {
                     <box flexDirection="column" marginTop={1}>
                         <text {...boldAttrs}>{graphId}</text>
                         <scrollbox marginLeft={2} maxHeight={graphBounds().maxHeight} stickyScroll>
-                            <For each={rendered.rows}>{(row) => renderVisualRow(row, spinnerGlyph())}</For>
+                            <For each={scrolledRows()}>{(row) => renderVisualRow(row, spinnerGlyph())}</For>
                         </scrollbox>
                         {childGraphs.length > 0 ? (
                             <box marginTop={1} flexDirection="column">
@@ -228,46 +244,49 @@ export function GraphPane(props: GraphPaneProps): JSX.Element {
     );
 }
 
-export function NodesPane({ state }: PaneProps): JSX.Element {
-    if (isEmptyState(state)) {
-        return (
-            <box flexDirection="column" marginTop={1}>
-                <text {...dimAttrs}>No active ABG run</text>
-            </box>
-        );
-    }
-
-    const nodes = [...state.nodes.entries()];
+export function NodesPane(props: PaneProps): JSX.Element {
+    const empty = () => isEmptyState(props.state);
+    const nodes = () => scrolledSlice([...props.state.nodes.entries()], props.scrollOffset ?? 0);
+    const nodeCount = () => props.state.nodes.size;
 
     return (
-        <box flexDirection="column" marginTop={1}>
-            <box flexDirection="row">
-                <text {...boldAttrs}>ID</text>
-                <text> </text>
-                <text {...boldAttrs}>Status</text>
-            </box>
-            {nodes.length === 0 ? (
-                <box flexDirection="row">
-                    <text {...dimAttrs}>(no nodes)</text>
+        <Show
+            when={!empty()}
+            fallback={
+                <box flexDirection="column" marginTop={1}>
+                    <text {...dimAttrs}>No active ABG run</text>
                 </box>
-            ) : (
-                <For each={nodes}>
-                    {([nodeId, status]) => {
-                        const nodeTheme = nodeStatusTheme(status);
-                        const fg = nodeTheme.foreground;
-                        const glyph = nodeTheme.glyph;
-                        return (
-                            <box flexDirection="row">
-                                <text {...(fg !== undefined ? { fg } : dimAttrs)}>{glyph}</text>
-                                <text> </text>
-                                <text>{truncate(nodeId, 10)}</text>
-                                <text> </text>
-                                <text {...(fg !== undefined ? { fg } : dimAttrs)}>[{status}]</text>
-                            </box>
-                        );
-                    }}
-                </For>
-            )}
-        </box>
+            }
+        >
+            <box flexDirection="column" marginTop={1}>
+                <box flexDirection="row">
+                    <text {...boldAttrs}>ID</text>
+                    <text> </text>
+                    <text {...boldAttrs}>Status</text>
+                </box>
+                {nodeCount() === 0 ? (
+                    <box flexDirection="row">
+                        <text {...dimAttrs}>(no nodes)</text>
+                    </box>
+                ) : (
+                    <For each={nodes()}>
+                        {([nodeId, status]) => {
+                            const nodeTheme = nodeStatusTheme(status);
+                            const fg = nodeTheme.foreground;
+                            const glyph = nodeTheme.glyph;
+                            return (
+                                <box flexDirection="row">
+                                    <text {...(fg !== undefined ? { fg } : dimAttrs)}>{glyph}</text>
+                                    <text> </text>
+                                    <text>{truncate(nodeId, 10)}</text>
+                                    <text> </text>
+                                    <text {...(fg !== undefined ? { fg } : dimAttrs)}>[{status}]</text>
+                                </box>
+                            );
+                        }}
+                    </For>
+                )}
+            </box>
+        </Show>
     );
 }

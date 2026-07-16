@@ -3,14 +3,17 @@ import type { AbgToolOutcomeSnapshot, ApprovalRecord } from '@mission-control/pr
 import { truncateTerminalText } from '@mission-control/tui';
 import { For, type JSX } from 'solid-js';
 import type { AbgOverlayState, RecentEvent } from '../state/abg-overlay-state';
+import { scrolledSlice } from './abg-scroll';
 
 export interface AbgOverlayPaneProps {
     readonly state: AbgOverlayState;
+    readonly scrollOffset?: number;
 }
 
 export interface CostPolicyPaneProps {
     readonly state: AbgOverlayState;
     readonly modelLabel?: string;
+    readonly scrollOffset?: number;
 }
 
 const dimAttrs = { dim: true };
@@ -76,14 +79,15 @@ function approvalStateFg(state: ApprovalRecord['state']): string | undefined {
     }
 }
 
-export function ToolsPane({ state }: AbgOverlayPaneProps): JSX.Element {
-    const outcomes = state.toolOutcomes;
+export function ToolsPane(props: AbgOverlayPaneProps): JSX.Element {
+    const outcomes = () => scrolledSlice(props.state.toolOutcomes, props.scrollOffset ?? 0);
+    const outcomeCount = () => props.state.toolOutcomes.length;
     return (
         <box flexDirection="column" marginTop={1}>
-            {outcomes.length === 0 ? (
+            {outcomeCount() === 0 ? (
                 <text {...dimAttrs}>No tool calls yet</text>
             ) : (
-                <For each={outcomes}>
+                <For each={outcomes()}>
                     {(outcome: AbgToolOutcomeSnapshot) => {
                         const { glyph, fg } = statusGlyph(outcome.status);
                         const toolId = truncate(outcome.toolId, 20);
@@ -137,14 +141,15 @@ function timelineModelMessage(event: RecentEvent): string {
     return truncate(event.emitPayloadText ?? event.message, 60);
 }
 
-export function TimelinePane({ state }: AbgOverlayPaneProps): JSX.Element {
-    const events = state.recentEvents;
+export function TimelinePane(props: AbgOverlayPaneProps): JSX.Element {
+    const events = () => scrolledSlice(props.state.recentEvents, props.scrollOffset ?? 0);
+    const eventCount = () => props.state.recentEvents.length;
     return (
         <box flexDirection="column" marginTop={1}>
-            {events.length === 0 ? (
+            {eventCount() === 0 ? (
                 <text {...dimAttrs}>No timeline events</text>
             ) : (
-                <For each={events}>
+                <For each={events()}>
                     {(event: RecentEvent) => {
                         const type = truncate(event.type, 24);
                         const timestamp = event.timestamp !== '' ? shortTime(event.timestamp) : '';
@@ -171,14 +176,15 @@ export function TimelinePane({ state }: AbgOverlayPaneProps): JSX.Element {
     );
 }
 
-export function ApprovalsPane({ state }: AbgOverlayPaneProps): JSX.Element {
-    const approvals = state.pendingApprovals;
+export function ApprovalsPane(props: AbgOverlayPaneProps): JSX.Element {
+    const approvals = () => scrolledSlice(props.state.pendingApprovals, props.scrollOffset ?? 0);
+    const approvalCount = () => props.state.pendingApprovals.length;
     return (
         <box flexDirection="column" marginTop={1}>
-            {approvals.length === 0 ? (
+            {approvalCount() === 0 ? (
                 <text {...dimAttrs}>No pending approvals</text>
             ) : (
-                <For each={approvals}>
+                <For each={approvals()}>
                     {(approval: ApprovalRecord) => {
                         const approvalId = truncate(approval.approvalId, 16);
                         const stateFg = approvalStateFg(approval.state);
@@ -238,15 +244,13 @@ function policyEventFg(eventType: string): string | undefined {
     return undefined;
 }
 
-export function CostPolicyPane({ state, modelLabel }: CostPolicyPaneProps): JSX.Element {
-    const cost = state.costCents !== undefined ? `$${(state.costCents / 100).toFixed(2)}` : '$0.00';
-    const inputTokens = state.inputTokens;
-    const outputTokens = state.outputTokens;
-    const modelCalls = state.modelCalls;
-    const policyEvents = state.recentEvents.filter(isPolicyEvent);
-    const hasWarning = policyEvents.some((event) => event.type === 'policy.budget.warning');
-    const hasExceeded = policyEvents.some((event) => event.type === 'policy.budget.exceeded');
-    const costFg = hasExceeded ? '#ff0000' : hasWarning ? '#ffff00' : undefined;
+export function CostPolicyPane(props: CostPolicyPaneProps): JSX.Element {
+    const cost = () => (props.state.costCents !== undefined ? `$${(props.state.costCents / 100).toFixed(2)}` : '$0.00');
+    const policyEventsAll = () => props.state.recentEvents.filter(isPolicyEvent);
+    const policyEvents = () => scrolledSlice(policyEventsAll(), props.scrollOffset ?? 0);
+    const hasWarning = () => policyEventsAll().some((event) => event.type === 'policy.budget.warning');
+    const hasExceeded = () => policyEventsAll().some((event) => event.type === 'policy.budget.exceeded');
+    const costFg = () => (hasExceeded() ? '#ff0000' : hasWarning() ? '#ffff00' : undefined);
     const redFg = '#ff0000';
     const yellowFg = '#ffff00';
 
@@ -254,20 +258,20 @@ export function CostPolicyPane({ state, modelLabel }: CostPolicyPaneProps): JSX.
         <box flexDirection="column" marginTop={1}>
             <box flexDirection="column">
                 <text {...boldAttrs}>Cost Summary</text>
-                {modelLabel !== undefined ? <text {...dimAttrs}>model: {modelLabel}</text> : null}
+                {props.modelLabel !== undefined ? <text {...dimAttrs}>model: {props.modelLabel}</text> : null}
                 <box flexDirection="row">
-                    <text {...(costFg !== undefined ? { fg: costFg } : {})}>{cost}</text>
+                    <text {...(costFg() !== undefined ? { fg: costFg() } : {})}>{cost()}</text>
                     <text> / </text>
-                    <text>{inputTokens} in</text>
+                    <text>{props.state.inputTokens} in</text>
                     <text> / </text>
-                    <text>{outputTokens} out</text>
+                    <text>{props.state.outputTokens} out</text>
                 </box>
-                <text {...dimAttrs}>model calls: {modelCalls}</text>
-                {hasExceeded ? (
+                <text {...dimAttrs}>model calls: {props.state.modelCalls}</text>
+                {hasExceeded() ? (
                     <text {...(redFg !== undefined ? { fg: redFg } : {})} {...boldAttrs}>
                         BUDGET EXCEEDED
                     </text>
-                ) : hasWarning ? (
+                ) : hasWarning() ? (
                     <text {...(yellowFg !== undefined ? { fg: yellowFg } : {})} {...boldAttrs}>
                         approaching budget threshold
                     </text>
@@ -275,10 +279,10 @@ export function CostPolicyPane({ state, modelLabel }: CostPolicyPaneProps): JSX.
             </box>
             <box marginTop={1} flexDirection="column">
                 <text {...boldAttrs}>Policy Events</text>
-                {policyEvents.length === 0 ? (
+                {policyEventsAll().length === 0 ? (
                     <text {...dimAttrs}>No policy events</text>
                 ) : (
-                    <For each={policyEvents}>
+                    <For each={policyEvents()}>
                         {(event: RecentEvent) => {
                             const type = truncate(event.type, 24);
                             const timestamp = event.timestamp !== '' ? shortTime(event.timestamp) : '';
@@ -326,12 +330,15 @@ function blackboardKeyFg(key: string): string | undefined {
     return undefined;
 }
 
-export function BlackboardPane({ state }: AbgOverlayPaneProps): JSX.Element {
-    const entries = [...state.blackboardEntries.entries()].sort(([left], [right]) => left.localeCompare(right));
-    const recentMutations = state.recentEvents.filter(
-        (event) => event.type === 'blackboard.set' || event.type === 'blackboard.delete',
-    );
-    const recentMutationRows = recentMutations.slice(-10).reverse();
+export function BlackboardPane(props: AbgOverlayPaneProps): JSX.Element {
+    const entriesAll = () =>
+        [...props.state.blackboardEntries.entries()].sort(([left], [right]) => left.localeCompare(right));
+    const entries = () => scrolledSlice(entriesAll(), props.scrollOffset ?? 0);
+    const recentMutations = () =>
+        props.state.recentEvents.filter(
+            (event) => event.type === 'blackboard.set' || event.type === 'blackboard.delete',
+        );
+    const recentMutationRows = () => recentMutations().slice(-10).reverse();
     const greenFg = '#00ff00';
     const redFg = '#ff0000';
 
@@ -339,14 +346,14 @@ export function BlackboardPane({ state }: AbgOverlayPaneProps): JSX.Element {
         <box flexDirection="column" marginTop={1}>
             <box flexDirection="column">
                 <text {...boldAttrs}>Blackboard</text>
-                <text {...dimAttrs}>working memory: {entries.length} entries</text>
-                {entries.length === 0 ? (
+                <text {...dimAttrs}>working memory: {entriesAll().length} entries</text>
+                {entriesAll().length === 0 ? (
                     <text {...dimAttrs}>
                         No blackboard entries — node runners (MemoryNode, LLMActor, Supervisor) will populate goals,
                         hypotheses, and observations here.
                     </text>
                 ) : (
-                    <For each={entries}>
+                    <For each={entries()}>
                         {([key, value]) => {
                             const valueText = truncate(formatBlackboardValue(value), 80);
                             const keyFg = blackboardKeyFg(key);
@@ -363,10 +370,10 @@ export function BlackboardPane({ state }: AbgOverlayPaneProps): JSX.Element {
                     </For>
                 )}
             </box>
-            {recentMutations.length > 0 ? (
+            {recentMutations().length > 0 ? (
                 <box marginTop={1} flexDirection="column">
                     <text {...boldAttrs}>Recent Mutations</text>
-                    <For each={recentMutationRows}>
+                    <For each={recentMutationRows()}>
                         {(event) => {
                             const type = event.type === 'blackboard.set' ? 'set' : 'del';
                             const timestamp = event.timestamp !== '' ? shortTime(event.timestamp) : '';

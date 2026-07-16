@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 
 import { truncateTerminalText } from '@mission-control/tui';
-import { For, type JSX } from 'solid-js';
+import { For, type JSX, Match, Switch } from 'solid-js';
 import type { TerminalViewport } from '../platform/terminal-viewport';
 import { useSolidStoreSelector } from '../platform/use-solid-store-selector';
 import type { AbgOverlayState, AbgOverlayStore } from '../state/abg-overlay-state';
@@ -9,6 +9,8 @@ import { DEFAULT_REFRESH_MS } from '../state/abg-overlay-state';
 import { GraphPane, NodesPane, OverviewPane } from './AbgOverlayPanesA';
 import { ApprovalsPane, BlackboardPane, CostPolicyPane, TimelinePane, ToolsPane } from './AbgOverlayPanesB';
 import { graphStatusTheme, STATUS_FG_GRAY } from './abg-status-theme';
+
+export { scrolledSlice } from './abg-scroll';
 
 export type AbgOverlayTab =
     | 'overview'
@@ -91,53 +93,45 @@ function formatCostSummary(state: AbgOverlayState): string {
     return `${cost} / ${state.inputTokens} in / ${state.outputTokens} out`;
 }
 
-function Header({
-    state,
-    modelLabel,
-    refreshMs,
-}: {
-    state: AbgOverlayState;
-    modelLabel: string;
-    refreshMs: number;
-}): JSX.Element {
-    const fps = Math.round(1000 / refreshMs);
-    // Preserve the pre-refactor default: an undefined graph status renders gray, not terminal-default.
-    const statusFg = state.graphStatus !== undefined ? graphStatusTheme(state.graphStatus).foreground : STATUS_FG_GRAY;
+function Header(props: { state: AbgOverlayState; modelLabel: string; refreshMs: number }): JSX.Element {
+    const fps = () => Math.round(1000 / props.refreshMs);
+    const statusFg = () =>
+        props.state.graphStatus !== undefined ? graphStatusTheme(props.state.graphStatus).foreground : STATUS_FG_GRAY;
     return (
         <box flexDirection="row" justifyContent="space-between">
             <box flexDirection="row">
-                <text {...boldAttrs}>{truncateGraphId(state.activeGraphId)}</text>
+                <text {...boldAttrs}>{truncateGraphId(props.state.activeGraphId)}</text>
                 <text> </text>
-                <text {...(statusFg !== undefined ? { fg: statusFg } : {})} {...boldAttrs}>
-                    [{state.graphStatus ?? 'idle'}]
+                <text {...(statusFg() !== undefined ? { fg: statusFg() } : {})} {...boldAttrs}>
+                    [{props.state.graphStatus ?? 'idle'}]
                 </text>
                 <text> </text>
-                <text {...dimAttrs}>{state.runState}</text>
+                <text {...dimAttrs}>{props.state.runState}</text>
             </box>
             <box flexDirection="row">
-                <text {...dimAttrs}>{modelLabel}</text>
+                <text {...dimAttrs}>{props.modelLabel}</text>
                 <text> </text>
-                <text {...dimAttrs}>sidecar:{state.nativeSidecarStatus || 'unknown'}</text>
+                <text {...dimAttrs}>sidecar:{props.state.nativeSidecarStatus || 'unknown'}</text>
                 <text> </text>
-                <text {...dimAttrs}>{formatCostSummary(state)}</text>
+                <text {...dimAttrs}>{formatCostSummary(props.state)}</text>
                 <text> </text>
-                <text {...dimAttrs}>{fps}fps</text>
+                <text {...dimAttrs}>{fps()}fps</text>
             </box>
         </box>
     );
 }
 
-function TabStrip({ activeTab }: { activeTab: AbgOverlayTab }): JSX.Element {
+function TabStrip(props: { activeTab: AbgOverlayTab }): JSX.Element {
     return (
         <box flexDirection="row">
             <For each={TABS}>
                 {(tab, index) => {
-                    const isActive = tab === activeTab;
+                    const isActive = () => tab === props.activeTab;
                     const label = TAB_LABELS[tab];
                     return (
                         <box flexDirection="row">
                             {index() > 0 ? <text {...dimAttrs}> | </text> : null}
-                            {isActive ? (
+                            {isActive() ? (
                                 <text {...(cyanFg !== undefined ? { fg: cyanFg } : {})} {...boldAttrs}>
                                     {label}
                                 </text>
@@ -152,56 +146,66 @@ function TabStrip({ activeTab }: { activeTab: AbgOverlayTab }): JSX.Element {
     );
 }
 
-function PaneBody({
-    activeTab,
-    state,
-    modelLabel,
-    viewport,
-}: {
+type PaneBodyProps = {
     activeTab: AbgOverlayTab;
     state: AbgOverlayState;
     modelLabel: string;
     viewport: TerminalViewport;
-}): JSX.Element {
-    switch (activeTab) {
-        case 'overview':
-            return <OverviewPane state={state} modelLabel={modelLabel} />;
-        case 'graph':
-            return <GraphPane state={state} modelLabel={modelLabel} viewport={viewport} />;
-        case 'nodes':
-            return <NodesPane state={state} modelLabel={modelLabel} />;
-        case 'tools':
-            return <ToolsPane state={state} />;
-        case 'timeline':
-            return <TimelinePane state={state} />;
-        case 'approvals':
-            return <ApprovalsPane state={state} />;
-        case 'cost-policy':
-            return <CostPolicyPane state={state} modelLabel={modelLabel} />;
-        case 'blackboard':
-            return <BlackboardPane state={state} />;
-        default:
-            return (
+    scrollOffset: number;
+};
+
+function PaneBody(props: PaneBodyProps): JSX.Element {
+    return (
+        <Switch
+            fallback={
                 <box flexDirection="column" marginTop={1}>
                     <text {...dimAttrs}>(unknown pane)</text>
                 </box>
-            );
-    }
+            }
+        >
+            <Match when={props.activeTab === 'overview'}>
+                <OverviewPane state={props.state} modelLabel={props.modelLabel} scrollOffset={props.scrollOffset} />
+            </Match>
+            <Match when={props.activeTab === 'graph'}>
+                <GraphPane
+                    state={props.state}
+                    modelLabel={props.modelLabel}
+                    viewport={props.viewport}
+                    scrollOffset={props.scrollOffset}
+                />
+            </Match>
+            <Match when={props.activeTab === 'nodes'}>
+                <NodesPane state={props.state} modelLabel={props.modelLabel} scrollOffset={props.scrollOffset} />
+            </Match>
+            <Match when={props.activeTab === 'tools'}>
+                <ToolsPane state={props.state} scrollOffset={props.scrollOffset} />
+            </Match>
+            <Match when={props.activeTab === 'timeline'}>
+                <TimelinePane state={props.state} scrollOffset={props.scrollOffset} />
+            </Match>
+            <Match when={props.activeTab === 'approvals'}>
+                <ApprovalsPane state={props.state} scrollOffset={props.scrollOffset} />
+            </Match>
+            <Match when={props.activeTab === 'cost-policy'}>
+                <CostPolicyPane state={props.state} modelLabel={props.modelLabel} scrollOffset={props.scrollOffset} />
+            </Match>
+            <Match when={props.activeTab === 'blackboard'}>
+                <BlackboardPane state={props.state} scrollOffset={props.scrollOffset} />
+            </Match>
+        </Switch>
+    );
 }
 
-function FooterHint({ narrow }: { narrow: boolean }): JSX.Element {
-    if (narrow) {
-        return (
-            <box marginTop={1}>
+function FooterHint(props: { narrow: boolean }): JSX.Element {
+    return (
+        <box marginTop={1}>
+            {props.narrow ? (
                 <text {...(yellowFg !== undefined ? { fg: yellowFg } : {})}>
                     Terminal too narrow for full overlay — widen to ≥100 cols for all panes
                 </text>
-            </box>
-        );
-    }
-    return (
-        <box marginTop={1}>
-            <text {...dimAttrs}>1-8 tabs | Tab cycle | ↑↓ scroll | r refresh | c clear | Ctrl+G/Esc close</text>
+            ) : (
+                <text {...dimAttrs}>1-8 tabs | Tab cycle | ↑↓ scroll | r refresh | c clear | Ctrl+G/Esc close</text>
+            )}
         </box>
     );
 }
@@ -222,6 +226,7 @@ export function AbgOverlay(props: AbgOverlayProps): JSX.Element {
                     state={state()}
                     modelLabel={props.modelLabel}
                     viewport={props.viewport}
+                    scrollOffset={props.scrollOffset}
                 />
             </box>
             <FooterHint narrow={narrow()} />
