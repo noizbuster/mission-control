@@ -8,6 +8,7 @@ import {
     parseCommandRunPreview,
     parseFileEditPreview,
     parseFileWritePreview,
+    parseHashlineEditPreview,
     parsePatchPreview,
     parseTaskDescription,
     parseWebfetchUrl,
@@ -144,6 +145,17 @@ function permissionTarget(toolCall: ToolCall): PermissionTarget | undefined {
         return input === undefined
             ? undefined
             : { action: 'file.edit', reason: `edit exact text in ${input.path}`, kind: 'edit', patterns: [input.path] };
+    }
+    if (toolCall.toolName === 'hashline_edit') {
+        const input = parseHashlineEditPreview(toolCall.argumentsJson);
+        return input === undefined
+            ? undefined
+            : {
+                  action: 'hashline_edit',
+                  reason: `hashline edit in ${input.path}`,
+                  kind: 'edit',
+                  patterns: [input.path],
+              };
     }
     if (toolCall.toolName === 'file.patch') {
         const patch = parsePatchPreview(toolCall.argumentsJson);

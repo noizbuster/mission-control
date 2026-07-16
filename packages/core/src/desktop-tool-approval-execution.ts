@@ -16,6 +16,7 @@ import {
 import { registerFileEditTool } from './tools/file-edit';
 import { registerFilePatchTool } from './tools/file-patch';
 import { registerFileWriteTool } from './tools/file-write';
+import { registerHashlineEditTool } from './tools/hashline-edit';
 import { ToolRegistry } from './tools/tool-registry';
 
 export async function executeApprovedDesktopTool(input: {
@@ -37,6 +38,10 @@ export async function executeApprovedDesktopTool(input: {
         requestPermission: permissionResolver(input.record),
     });
     await registerFilePatchTool(registry, {
+        workspaceRoot: input.workspaceRoot,
+        requestPermission: permissionResolver(input.record),
+    });
+    await registerHashlineEditTool(registry, {
         workspaceRoot: input.workspaceRoot,
         requestPermission: permissionResolver(input.record),
     });

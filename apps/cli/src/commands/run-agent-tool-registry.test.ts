@@ -96,6 +96,7 @@ describe('runAgent interactive coding tool registry', () => {
             'file.edit',
             'file.write',
             'file.patch',
+            'hashline_edit',
             'command.run',
             'task',
             'lsp',

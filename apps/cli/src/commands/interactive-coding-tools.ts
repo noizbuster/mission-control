@@ -24,6 +24,7 @@ import {
     registerFileEditTool,
     registerFilePatchTool,
     registerFileWriteTool,
+    registerHashlineEditTool,
     registerFullParityTaskTool,
     registerGlobTool,
     registerNamespacedMcpTools,
@@ -178,6 +179,10 @@ export async function createInteractiveToolRegistry(
         requestPermission: approvals.requestPermission,
     });
     await registerFilePatchTool(registry, {
+        workspaceRoot: options.workspaceRoot,
+        requestPermission: approvals.requestPermission,
+    });
+    await registerHashlineEditTool(registry, {
         workspaceRoot: options.workspaceRoot,
         requestPermission: approvals.requestPermission,
     });

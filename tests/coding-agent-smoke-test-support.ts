@@ -27,6 +27,7 @@ const smokeSessionToolNames = [
     'file.edit',
     'file.write',
     'file.patch',
+    'hashline_edit',
     'command.run',
     'bash.run',
 ];

@@ -44,6 +44,7 @@ import { registerCommandRunTool } from './tools/command-run';
 import { registerFileEditTool } from './tools/file-edit';
 import { registerFilePatchTool } from './tools/file-patch';
 import { registerFileWriteTool } from './tools/file-write';
+import { registerHashlineEditTool } from './tools/hashline-edit';
 import { ToolRegistry } from './tools/tool-registry';
 
 export type DesktopPromptCommandInput = {
@@ -400,6 +401,7 @@ class DefaultDesktopSessionCommandService implements DesktopSessionCommandServic
         await registerFileEditTool(registry, { workspaceRoot: this.options.workspaceRoot, requestPermission });
         await registerFileWriteTool(registry, { workspaceRoot: this.options.workspaceRoot, requestPermission });
         await registerFilePatchTool(registry, { workspaceRoot: this.options.workspaceRoot, requestPermission });
+        await registerHashlineEditTool(registry, { workspaceRoot: this.options.workspaceRoot, requestPermission });
         await registerCommandRunTool(registry, {
             workspaceRoot: this.options.workspaceRoot,
             requestPermission,

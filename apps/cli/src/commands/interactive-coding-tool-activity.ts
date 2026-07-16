@@ -56,6 +56,7 @@ export function formatToolArgsSummary(toolName: string, argumentsJson: string): 
             return pickString(parsed, 'path') ?? pickString(parsed, 'target') ?? '';
         case 'file.edit':
         case 'file.write':
+        case 'hashline_edit':
             return pickString(parsed, 'path') ?? '';
         case 'file.patch':
             return 'patch';

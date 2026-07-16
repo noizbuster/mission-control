@@ -39,6 +39,17 @@ export function parseFileEditPreview(argumentsJson: string): { readonly path: st
     return { path: value.path };
 }
 
+export function parseHashlineEditPreview(argumentsJson: string): { readonly path: string } | undefined {
+    const value = parseArguments(argumentsJson);
+    if (!isRecord(value) || typeof value.path !== 'string' || value.path.length === 0) return undefined;
+    if (value.delete === true) {
+        if (value.edits !== undefined && !(Array.isArray(value.edits) && value.edits.length === 0)) return undefined;
+        return { path: value.path };
+    }
+    if (!Array.isArray(value.edits) || value.edits.length === 0) return undefined;
+    return { path: value.path };
+}
+
 export function parseWebfetchUrl(argumentsJson: string): string | undefined {
     const value = parseArguments(argumentsJson);
     return isRecord(value) && typeof value.url === 'string' && value.url.length > 0 ? value.url : undefined;
@@ -112,7 +123,9 @@ function isRecord(value: unknown): value is {
     readonly commandLine?: unknown;
     readonly content?: unknown;
     readonly createParents?: unknown;
+    readonly delete?: unknown;
     readonly description?: unknown;
+    readonly edits?: unknown;
     readonly newText?: unknown;
     readonly occurrence?: unknown;
     readonly oldText?: unknown;
