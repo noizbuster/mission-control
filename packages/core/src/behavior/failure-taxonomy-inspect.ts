@@ -55,11 +55,56 @@ export function hasClassifiableSignal(error: unknown): boolean {
     return false;
 }
 
+export function isUsageExhaustionFailure(input: {
+    readonly statusCode: number | undefined;
+    readonly message: string;
+    readonly code: string | undefined;
+}): boolean {
+    const code = (input.code ?? '').toLowerCase();
+    if (
+        code === 'insufficient_quota' ||
+        code === 'quota_exceeded' ||
+        code === 'resource_exhausted' ||
+        code === 'billing_hard_limit_reached' ||
+        code === 'provider_usage_exhausted'
+    ) {
+        return true;
+    }
+    // HTTP 402 Payment Required is treated as usage/billing exhaustion.
+    if (input.statusCode === 402) {
+        return true;
+    }
+    const message = input.message.toLowerCase();
+    return (
+        message.includes('insufficient_quota') ||
+        message.includes('quota exceeded') ||
+        message.includes('quota_exceeded') ||
+        message.includes('usage limit') ||
+        message.includes('usage_limit') ||
+        message.includes('resource_exhausted') ||
+        message.includes('resource exhausted') ||
+        message.includes('billing hard limit') ||
+        message.includes('exceeded your current quota') ||
+        message.includes('monthly limit') ||
+        message.includes('daily limit') ||
+        message.includes('tokens per day') ||
+        message.includes('credit balance is too low') ||
+        message.includes('out of credits') ||
+        message.includes('payment required')
+    );
+}
+
 export function isTransientProviderFailure(input: {
     readonly statusCode: number | undefined;
     readonly message: string;
     readonly code: string | undefined;
 }): boolean {
+    if (isUsageExhaustionFailure(input)) {
+        // Usage exhaustion is handled as its own indefinite-wait class; still "transient"
+        // for rate-limit heuristics that share message markers like "rate_limit_exceeded".
+        // Prefer the dedicated classifier when both could match.
+        return false;
+    }
     if (
         input.statusCode === 429 ||
         input.statusCode === 502 ||

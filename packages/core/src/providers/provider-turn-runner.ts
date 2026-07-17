@@ -9,6 +9,14 @@ import { createProviderStreamObservability } from './provider-stream-observabili
 import { eventForProviderChunk, responseFailedChunk, responseStartedChunk } from './provider-turn-events';
 import { closeProviderChunkIterator, nextProviderChunk } from './provider-turn-timeout';
 import {
+    abortableRetrySleep,
+    computeProviderRetryDelayMs,
+    DEFAULT_PROVIDER_MAX_RETRY_DELAY_MS,
+    DEFAULT_PROVIDER_RETRY_BASE_DELAY_MS,
+    DEFAULT_PROVIDER_RETRY_LIMIT,
+    shouldContinueProviderRetry,
+} from './provider-retry-policy';
+import {
     ProviderTurnError,
     type ProviderTurnRunInput,
     type ProviderTurnRunnerOptions,
@@ -16,10 +24,7 @@ import {
 } from './provider-turn-types';
 
 const DEFAULT_TIMEOUT_MS = 120_000;
-const DEFAULT_RETRY_LIMIT = 7;
 const DEFAULT_TOOL_CALL_LOOP_LIMIT = 8;
-const DEFAULT_RETRY_BASE_DELAY_MS = 1_000;
-const DEFAULT_MAX_RETRY_DELAY_MS = 30_000;
 
 export class ProviderTurnRunner {
     private readonly options: Required<
@@ -38,10 +43,10 @@ export class ProviderTurnRunner {
         this.createEventId = options.createEventId ?? ((_event, sequence) => `provider_event_${sequence}`);
         this.options = {
             timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-            retryLimit: options.retryLimit ?? DEFAULT_RETRY_LIMIT,
+            retryLimit: options.retryLimit ?? DEFAULT_PROVIDER_RETRY_LIMIT,
             toolCallLoopLimit: options.toolCallLoopLimit ?? DEFAULT_TOOL_CALL_LOOP_LIMIT,
-            retryBaseDelayMs: options.retryBaseDelayMs ?? DEFAULT_RETRY_BASE_DELAY_MS,
-            maxRetryDelayMs: options.maxRetryDelayMs ?? DEFAULT_MAX_RETRY_DELAY_MS,
+            retryBaseDelayMs: options.retryBaseDelayMs ?? DEFAULT_PROVIDER_RETRY_BASE_DELAY_MS,
+            maxRetryDelayMs: options.maxRetryDelayMs ?? DEFAULT_PROVIDER_MAX_RETRY_DELAY_MS,
         };
     }
 
@@ -54,7 +59,7 @@ export class ProviderTurnRunner {
         const signal = input.signal ?? new AbortController().signal;
         const maxAttempts = this.options.retryLimit + 1;
 
-        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        for (let attempt = 1; ; attempt += 1) {
             const started = responseStartedChunk(input, attempt);
             await this.emitEnvelope(input, state, started, 'durable');
             const result = await this.runAttempt(input, signal, state, attempt);
@@ -82,7 +87,14 @@ export class ProviderTurnRunner {
                     envelopes: state.durableEnvelopes,
                 };
             }
-            if (!result.error.retryable || attempt === maxAttempts) {
+            const mayContinue =
+                result.error.retryable &&
+                shouldContinueProviderRetry({
+                    error: result.error,
+                    attempt,
+                    maxAttempts,
+                });
+            if (!mayContinue) {
                 const failedChunk = redactProviderChunkForObservability(
                     responseFailedChunk(input, state.nextProviderSequence, result.error),
                     observabilityRedactor,
@@ -120,14 +132,6 @@ export class ProviderTurnRunner {
                 };
             }
         }
-
-        const error = unknownProviderError('provider retry loop ended unexpectedly');
-        return {
-            status: 'failed',
-            error,
-            attempts: maxAttempts,
-            envelopes: state.durableEnvelopes,
-        };
     }
 
     private async runAttempt(
@@ -337,7 +341,8 @@ function toolLoopLimitError(limit: number): ProtocolError {
 }
 
 // Retryable: `unknown` is the carrier for transient network/stream drops (thrown fetch errors,
-// premature stream close) — the case retries exist for. `attempt === maxAttempts` still bounds it.
+// premature stream close) — the case retries exist for. Finite retryLimit still bounds ordinary
+// retryables; rate-limit / usage-exhaustion waits continue indefinitely until abort.
 function unknownProviderError(message: string): ProtocolError {
     return {
         code: 'unknown',
@@ -346,29 +351,7 @@ function unknownProviderError(message: string): ProtocolError {
     };
 }
 
-function computeRetryDelayMs(retryNumber: number, baseMs: number, capMs: number): number {
-    const exponent = retryNumber - 1;
-    const candidate = baseMs * 2 ** exponent;
-    return Math.min(capMs, candidate);
-}
-
 async function sleepBeforeRetry(signal: AbortSignal, attempt: number, baseMs: number, capMs: number): Promise<void> {
-    const delay = computeRetryDelayMs(attempt, baseMs, capMs);
-    if (delay <= 0) return;
-    await abortableSleep(delay, signal);
-}
-
-function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
-    if (signal.aborted) return Promise.resolve();
-    return new Promise<void>((resolve) => {
-        const onAbort = (): void => {
-            clearTimeout(timer);
-            resolve();
-        };
-        const timer = setTimeout(() => {
-            signal.removeEventListener('abort', onAbort);
-            resolve();
-        }, ms);
-        signal.addEventListener('abort', onAbort, { once: true });
-    });
+    const delay = computeProviderRetryDelayMs(attempt, baseMs, capMs);
+    await abortableRetrySleep(delay, signal);
 }

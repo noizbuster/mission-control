@@ -15,6 +15,7 @@ import {
     inspectFailureSignals,
     isNetworkProviderFailure,
     isTransientProviderFailure,
+    isUsageExhaustionFailure,
 } from './failure-taxonomy-inspect';
 
 export const FAILURE_CLASSES = ['transient', 'rejected', 'denied', 'terminal'] as const;
@@ -35,6 +36,7 @@ export const CANONICAL_FAILURE_CODES = {
     ROUTING_DEAD_END: 'routing_dead_end',
     PROVIDER_TIMEOUT: 'provider_timeout',
     PROVIDER_RATE_LIMITED: 'provider_rate_limited',
+    PROVIDER_USAGE_EXHAUSTED: 'provider_usage_exhausted',
     PROVIDER_AUTH_FAILED: 'provider_auth_failed',
     PROVIDER_ABORTED: 'provider_aborted',
     PROVIDER_CONTEXT_OVERFLOW: 'provider_context_overflow',
@@ -62,6 +64,10 @@ export function classifyFailure(input: unknown): FailureClassification {
     const byCode = classifyKnownCode(normalizedCode);
     if (byCode !== undefined) return byCode;
 
+    if (isUsageExhaustionFailure({ statusCode, message, code: explicitCode ?? joinedCodes })) {
+        return transient(CANONICAL_FAILURE_CODES.PROVIDER_USAGE_EXHAUSTED);
+    }
+
     if (isTransientProviderFailure({ statusCode, message, code: explicitCode ?? joinedCodes })) {
         return transient(CANONICAL_FAILURE_CODES.PROVIDER_RATE_LIMITED);
     }
@@ -72,6 +78,7 @@ export function classifyFailure(input: unknown): FailureClassification {
 
     if (
         normalizedCode === CANONICAL_FAILURE_CODES.PROVIDER_RATE_LIMITED ||
+        normalizedCode === CANONICAL_FAILURE_CODES.PROVIDER_USAGE_EXHAUSTED ||
         normalizedCode === CANONICAL_FAILURE_CODES.PROVIDER_TIMEOUT
     ) {
         return transient(normalizedCode);

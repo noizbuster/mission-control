@@ -52,6 +52,7 @@ export type AbgGraphRunnerInput = {
      * so cancellable nodes honor it.
      */
     readonly abortSignal?: AbortSignal;
+    readonly providerRetrySleep?: (delayMs: number, signal: AbortSignal | undefined) => Promise<void>;
     readonly controlEpoch?: SessionControlEpoch;
     /**
      * Seed conversation for the Blackboard message list (typically the user turn). The

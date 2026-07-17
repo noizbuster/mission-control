@@ -22,6 +22,13 @@ import type { AbgSignal } from '@mission-control/protocol';
 import type { ModelMessage, ToolSet } from 'ai';
 import { stepCountIs, streamText } from 'ai';
 import { createObservabilityRedactor, type ObservabilityRedactor } from '../../../providers/observability-redactor';
+import {
+    abortableRetrySleep,
+    computeProviderRetryDelayMs,
+    DEFAULT_PROVIDER_MAX_RETRY_DELAY_MS,
+    DEFAULT_PROVIDER_RETRY_BASE_DELAY_MS,
+    isIndefiniteProviderWaitError,
+} from '../../../providers/provider-retry-policy';
 import { errorToString } from '../../../util/error-to-string';
 import { createAbgEmitSignal } from '../../abg-emit';
 import type { AbgToolSettlementLedger } from './abg-tool-bridge';
@@ -69,6 +76,9 @@ export type LlmActorRunInput = {
     readonly haltOnFailedToolSettlement?: boolean;
     readonly observabilityRedactor?: ObservabilityRedactor;
     readonly captureRawTurnResult?: (result: LlmActorTurnResult) => void;
+    readonly retrySleep?: (delayMs: number, signal: AbortSignal | undefined) => Promise<void>;
+    readonly retryBaseDelayMs?: number;
+    readonly maxRetryDelayMs?: number;
 };
 
 export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSignal> {
@@ -93,17 +103,6 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
         timestamp: now(),
     });
 
-    const result = streamText({
-        model: input.model,
-        system: input.system,
-        messages: input.messages,
-        stopWhen: stepCountIs(1),
-        onError: () => undefined,
-        ...(input.tools !== undefined ? { tools: input.tools } : {}),
-        ...(input.toolChoice !== undefined ? { toolChoice: input.toolChoice } : {}),
-        ...(input.signal !== undefined ? { abortSignal: input.signal } : {}),
-    });
-
     let turnText = '';
     let turnUsage: unknown;
     let turnResponseMessages: readonly ModelMessage[] = [];
@@ -111,61 +110,139 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
     // SDK dispatches execute in non-deterministic order under a serialized batch; the ledger
     // records in completion order. Using the first-PROPOSED matches flat "first tool call" parity.
     const proposedToolCallIds: string[] = [];
-    try {
-        for await (const part of result.fullStream) {
-            for (const signal of abgSignalsFromStreamPart(part, adapterContext)) {
-                if (signal.type === 'emit' && signal.event.type === 'llm.tool_call.proposed') {
-                    const proposedId = extractToolCallId(signal.event.payload);
-                    if (proposedId !== undefined) {
-                        proposedToolCallIds.push(proposedId);
+    const retrySleep = input.retrySleep ?? abortableRetrySleep;
+    const retryBaseDelayMs = input.retryBaseDelayMs ?? DEFAULT_PROVIDER_RETRY_BASE_DELAY_MS;
+    const maxRetryDelayMs = input.maxRetryDelayMs ?? DEFAULT_PROVIDER_MAX_RETRY_DELAY_MS;
+    let providerWaitAttempt = 0;
+
+    // Rate-limit / usage-exhaustion: wait indefinitely with exponential backoff (cap ~30m).
+    // Only retry when no stream parts escaped — mid-stream failure must not re-execute tools.
+    while (true) {
+        let sawStreamPart = false;
+        try {
+            const result = streamText({
+                model: input.model,
+                system: input.system,
+                messages: input.messages,
+                stopWhen: stepCountIs(1),
+                // Own rate-limit waits below; disable AI SDK's short finite retry budget.
+                maxRetries: 0,
+                onError: () => undefined,
+                ...(input.tools !== undefined ? { tools: input.tools } : {}),
+                ...(input.toolChoice !== undefined ? { toolChoice: input.toolChoice } : {}),
+                ...(input.signal !== undefined ? { abortSignal: input.signal } : {}),
+            });
+
+            for await (const part of result.fullStream) {
+                sawStreamPart = true;
+                for (const signal of abgSignalsFromStreamPart(part, adapterContext)) {
+                    if (signal.type === 'emit' && signal.event.type === 'llm.tool_call.proposed') {
+                        const proposedId = extractToolCallId(signal.event.payload);
+                        if (proposedId !== undefined) {
+                            proposedToolCallIds.push(proposedId);
+                        }
                     }
+                    yield signal;
                 }
-                yield signal;
             }
+            const [text, usage, response] = await Promise.all([result.text, result.usage, result.response]);
+            turnText = text;
+            turnUsage = usage;
+            turnResponseMessages = response.messages;
+            break;
+        } catch (error) {
+            if (
+                !sawStreamPart &&
+                input.signal?.aborted !== true &&
+                isIndefiniteProviderWaitError(error)
+            ) {
+                providerWaitAttempt += 1;
+                const delayMs = computeProviderRetryDelayMs(
+                    providerWaitAttempt,
+                    retryBaseDelayMs,
+                    maxRetryDelayMs,
+                );
+                yield createAbgEmitSignal({
+                    graphId: input.graphId,
+                    nodeId,
+                    source: 'llm-actor',
+                    eventType: 'llm.provider_wait',
+                    payload: observabilityRedactor.redactValue({
+                        attempt: providerWaitAttempt,
+                        delayMs,
+                        reason: classifyProviderStreamError(error)?.code ?? 'provider_rate_limited',
+                        message: observabilityRedactor.redactText(errorToString(error)),
+                    }),
+                    timestamp: now(),
+                });
+                await retrySleep(delayMs, input.signal);
+                if (input.signal?.aborted === true) {
+                    yield createAbgEmitSignal({
+                        graphId: input.graphId,
+                        nodeId,
+                        source: 'llm-actor',
+                        eventType: 'llm.error',
+                        payload: observabilityRedactor.redactValue({
+                            error: 'provider turn aborted',
+                            errorCode: 'provider_aborted',
+                        }),
+                        timestamp: now(),
+                    });
+                    yield {
+                        type: 'failure',
+                        nodeId,
+                        ...graphIdPart,
+                        error: observabilityRedactor.redactValue({
+                            message: 'provider turn aborted',
+                            code: 'provider_aborted',
+                            providerError: true,
+                            retryable: false,
+                        }),
+                    };
+                    return;
+                }
+                continue;
+            }
+
+            // Redact credentials from the surfaced error message (parity with the flat path, which
+            // redacts provider error messages at the provider-event layer) so a provider failure
+            // carrying a secret does not leak into the `llm.error` emit (rendered + persisted).
+            const message = observabilityRedactor.redactText(errorToString(error));
+            const classified = classifyProviderStreamError(error);
+            const errorCode = classified?.code ?? extractProviderErrorCode(error);
+            const retryable = classified?.retryable ?? extractProviderErrorRetryable(error);
+            const retryExhausted = extractProviderRetryExhausted(error);
+            yield createAbgEmitSignal({
+                graphId: input.graphId,
+                nodeId,
+                source: 'llm-actor',
+                eventType: 'llm.error',
+                payload: observabilityRedactor.redactValue({
+                    error: message,
+                    ...(errorCode !== undefined ? { errorCode } : {}),
+                }),
+                timestamp: now(),
+            });
+            // Structured provider failures carry code + retryable so the coordinator can retry
+            // transient overload instead of treating missing retryable as terminal.
+            yield {
+                type: 'failure',
+                nodeId,
+                ...graphIdPart,
+                error: observabilityRedactor.redactValue(
+                    errorCode !== undefined
+                        ? {
+                              message,
+                              code: errorCode,
+                              providerError: true,
+                              retryable: retryable ?? false,
+                              ...(retryExhausted ? { retryExhausted: true } : {}),
+                          }
+                        : message,
+                ),
+            };
+            return;
         }
-        const [text, usage, response] = await Promise.all([result.text, result.usage, result.response]);
-        turnText = text;
-        turnUsage = usage;
-        turnResponseMessages = response.messages;
-    } catch (error) {
-        // Redact credentials from the surfaced error message (parity with the flat path, which
-        // redacts provider error messages at the provider-event layer) so a provider failure
-        // carrying a secret does not leak into the `llm.error` emit (rendered + persisted).
-        const message = observabilityRedactor.redactText(errorToString(error));
-        const classified = classifyProviderStreamError(error);
-        const errorCode = classified?.code ?? extractProviderErrorCode(error);
-        const retryable = classified?.retryable ?? extractProviderErrorRetryable(error);
-        const retryExhausted = extractProviderRetryExhausted(error);
-        yield createAbgEmitSignal({
-            graphId: input.graphId,
-            nodeId,
-            source: 'llm-actor',
-            eventType: 'llm.error',
-            payload: observabilityRedactor.redactValue({
-                error: message,
-                ...(errorCode !== undefined ? { errorCode } : {}),
-            }),
-            timestamp: now(),
-        });
-        // Structured provider failures carry code + retryable so the coordinator can retry
-        // transient overload instead of treating missing retryable as terminal.
-        yield {
-            type: 'failure',
-            nodeId,
-            ...graphIdPart,
-            error: observabilityRedactor.redactValue(
-                errorCode !== undefined
-                    ? {
-                          message,
-                          code: errorCode,
-                          providerError: true,
-                          retryable: retryable ?? false,
-                          ...(retryExhausted ? { retryExhausted: true } : {}),
-                      }
-                    : message,
-            ),
-        };
-        return;
     }
 
     // Approval-block short-circuit: if a tool settled as `approval_required` (a permission gate

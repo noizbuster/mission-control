@@ -34,6 +34,8 @@ export type CoordinatorState = {
     readonly attemptsByNodeId: Map<string, number>;
     readonly consecutiveFailuresByNodeId: Map<string, number>;
     readonly consecutiveToolFailuresByNodeId: Map<string, number>;
+    /** Per-node count of indefinite provider waits (rate limit / usage) for backoff. */
+    readonly indefiniteProviderWaitByNodeId: Map<string, number>;
     /** Per-node identical-turn / identical-failure detectors (infinite-loop safety). */
     readonly loopSafetyByNodeId: Map<string, LoopSafetyNodeState>;
     readonly correctionByNodeId: Map<string, string>;
@@ -110,6 +112,7 @@ export function createCoordinatorState(graph: AuthorableAbgGraph, input: AbgGrap
         attemptsByNodeId: new Map(),
         consecutiveFailuresByNodeId: new Map(),
         consecutiveToolFailuresByNodeId: new Map(),
+        indefiniteProviderWaitByNodeId: new Map(),
         loopSafetyByNodeId: new Map(),
         correctionByNodeId: new Map(),
         maxAttempts: (graph.defaults?.retryLimit ?? defaultRetryLimit) + 1,

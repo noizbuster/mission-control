@@ -664,36 +664,44 @@ describe('bounded ABG graph coordinator', () => {
         expect(attemptsFor(result.events, 'flaky')).toEqual([1, 2]);
     });
 
-    it('still spends node maxAttempts on rate-limited provider failures even when marked retryExhausted', async () => {
-        // Rate-limit / overload is no longer a single-shot terminal: the graph spends its
-        // node retry budget so transient ZAI/GLM overload can recover.
+    it('waits indefinitely on rate-limited provider failures past node maxAttempts', async () => {
+        let attempts = 0;
+        const delays: number[] = [];
         const registry = createAbgNodeRegistry();
         registry.register(
             'retry-exhausted-provider',
             async function* run(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
                 yield { type: 'started', graphId: context.graphId, nodeId: node.id };
-                yield {
-                    type: 'failure',
-                    graphId: context.graphId,
-                    nodeId: node.id,
-                    error: {
-                        code: 'provider_rate_limited',
-                        message: 'temporarily overloaded',
-                        retryable: true,
-                        retryExhausted: true,
-                        providerError: true,
-                    },
-                };
+                attempts += 1;
+                if (attempts < 5) {
+                    yield {
+                        type: 'failure',
+                        graphId: context.graphId,
+                        nodeId: node.id,
+                        error: {
+                            code: 'provider_rate_limited',
+                            message: 'temporarily overloaded',
+                            retryable: true,
+                            retryExhausted: true,
+                            providerError: true,
+                        },
+                    };
+                    return;
+                }
+                yield { type: 'success', graphId: context.graphId, nodeId: node.id, result: { ok: true } };
             },
         );
 
         const result = await runAbgGraph({
             ...baseInput,
             registry,
+            providerRetrySleep: async (delayMs) => {
+                delays.push(delayMs);
+            },
             graph: {
                 id: 'provider-retry-exhausted',
                 entryNodeId: 'limited',
-                defaults: { retryLimit: 2 },
+                defaults: { retryLimit: 2, maxNodeRuns: 32 },
                 nodes: [{ id: 'limited', kind: 'llm', implementation: 'retry-exhausted-provider' }],
                 edges: [],
                 rules: [],
@@ -701,13 +709,10 @@ describe('bounded ABG graph coordinator', () => {
             },
         });
 
-        expect(result.status).toBe('failed');
-        expect(attemptsFor(result.events, 'limited')).toEqual([1, 2, 3]);
-        expect(result.terminalError).toEqual({
-            code: 'provider_rate_limited',
-            message: 'temporarily overloaded',
-            retryable: true,
-        });
+        expect(result.status).toBe('completed');
+        expect(attempts).toBe(5);
+        expect(attemptsFor(result.events, 'limited')).toEqual([1, 2, 3, 4, 5]);
+        expect(delays).toEqual([1_000, 2_000, 4_000, 8_000]);
     });
 
     it('fails once when a non-retryable provider hard failure is terminal', async () => {

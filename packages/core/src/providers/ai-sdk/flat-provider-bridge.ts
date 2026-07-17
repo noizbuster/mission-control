@@ -45,13 +45,18 @@ import type {
     ProviderUsage,
     ToolDefinition,
 } from '@mission-control/protocol';
+import {
+    abortableRetrySleep,
+    computeProviderRetryDelayMs,
+    DEFAULT_PROVIDER_MAX_RETRY_DELAY_MS,
+    DEFAULT_PROVIDER_RETRY_BASE_DELAY_MS,
+    DEFAULT_PROVIDER_RETRY_LIMIT,
+    shouldContinueProviderRetry,
+} from '../provider-retry-policy';
 import { closeProviderChunkIterator, nextProviderChunk } from '../provider-turn-timeout';
 import { type ProviderAdapter, ProviderTurnError, type ProviderTurnRequest } from '../provider-turn-types';
 
 const DEFAULT_TIMEOUT_MS = 120_000;
-const DEFAULT_RETRY_LIMIT = 7;
-const DEFAULT_RETRY_BASE_DELAY_MS = 1_000;
-const DEFAULT_MAX_RETRY_DELAY_MS = 30_000;
 const MAX_RETRY_LIMIT = 100;
 const MAX_TIMER_DELAY_MS = 2_147_483_647;
 
@@ -98,7 +103,7 @@ export function wrapFlatProviderAsSdkModel(options: FlatProviderBridgeOptions): 
     const retryLimit = boundedIntegerOption({
         name: 'retryLimit',
         value: options.retryLimit,
-        fallback: DEFAULT_RETRY_LIMIT,
+        fallback: DEFAULT_PROVIDER_RETRY_LIMIT,
         min: 0,
         max: MAX_RETRY_LIMIT,
     });
@@ -112,14 +117,14 @@ export function wrapFlatProviderAsSdkModel(options: FlatProviderBridgeOptions): 
     const retryBaseDelayMs = boundedIntegerOption({
         name: 'retryBaseDelayMs',
         value: options.retryBaseDelayMs,
-        fallback: DEFAULT_RETRY_BASE_DELAY_MS,
+        fallback: DEFAULT_PROVIDER_RETRY_BASE_DELAY_MS,
         min: 0,
         max: MAX_TIMER_DELAY_MS,
     });
     const maxRetryDelayMs = boundedIntegerOption({
         name: 'maxRetryDelayMs',
         value: options.maxRetryDelayMs,
-        fallback: DEFAULT_MAX_RETRY_DELAY_MS,
+        fallback: DEFAULT_PROVIDER_MAX_RETRY_DELAY_MS,
         min: 0,
         max: MAX_TIMER_DELAY_MS,
     });
@@ -174,7 +179,7 @@ type RetryingProviderStreamInput = {
 
 async function* retryProviderStream(input: RetryingProviderStreamInput): AsyncIterable<ProviderStreamChunk> {
     const maxAttempts = Math.max(1, Math.trunc(input.retryLimit) + 1);
-    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    for (let attempt = 1; ; attempt += 1) {
         if (input.signal.aborted) {
             throw new FlatProviderBridgeError(abortedError());
         }
@@ -231,10 +236,15 @@ async function* retryProviderStream(input: RetryingProviderStreamInput): AsyncIt
         if (outputEscaped) {
             throw new FlatProviderBridgeError(error, true);
         }
-        if (attempt === maxAttempts) {
+        const mayContinue = shouldContinueProviderRetry({
+            error,
+            attempt,
+            maxAttempts,
+        });
+        if (!mayContinue) {
             throw new FlatProviderBridgeError(error, true);
         }
-        const delayMs = computeRetryDelayMs(attempt, input.retryBaseDelayMs, input.maxRetryDelayMs);
+        const delayMs = computeProviderRetryDelayMs(attempt, input.retryBaseDelayMs, input.maxRetryDelayMs);
         if (delayMs > 0) {
             await input.retrySleep(delayMs, input.signal);
         }
@@ -277,10 +287,6 @@ function unknownProviderError(message: string): ProtocolError {
     return { code: 'unknown', message, retryable: true };
 }
 
-function computeRetryDelayMs(attempt: number, baseMs: number, capMs: number): number {
-    return Math.min(baseMs * 2 ** (attempt - 1), capMs);
-}
-
 function boundedIntegerOption(input: {
     readonly name: string;
     readonly value: number | undefined;
@@ -298,18 +304,7 @@ function boundedIntegerOption(input: {
 }
 
 function abortableSleep(delayMs: number, signal: AbortSignal): Promise<void> {
-    if (signal.aborted) return Promise.resolve();
-    return new Promise<void>((resolve) => {
-        const onAbort = (): void => {
-            clearTimeout(timer);
-            resolve();
-        };
-        const timer = setTimeout(() => {
-            signal.removeEventListener('abort', onAbort);
-            resolve();
-        }, delayMs);
-        signal.addEventListener('abort', onAbort, { once: true });
-    });
+    return abortableRetrySleep(delayMs, signal);
 }
 
 function forwardAbort(source: AbortSignal, target: AbortController): () => void {

@@ -410,6 +410,30 @@ describe('ProviderTurnRunner', () => {
         }
     });
 
+    it('retries rate limits past the finite retryLimit until success', async () => {
+        const failures = Array.from({ length: 10 }, () => [
+            {
+                kind: 'response_failed' as const,
+                error: { code: 'provider_rate_limited' as const, message: 'overloaded', retryable: true },
+            },
+        ]);
+        const provider = createDeterministicProvider([
+            ...failures,
+            [{ kind: 'response_completed', content: 'recovered' }],
+        ]);
+        const runner = new ProviderTurnRunner({
+            provider,
+            retryLimit: 2,
+            retryBaseDelayMs: 0,
+            maxRetryDelayMs: 0,
+        });
+
+        const result = await runner.runTurn(turnInput('session_rate_limit_infinite', 'request_rate_limit_infinite'));
+
+        expect(result).toMatchObject({ status: 'completed', attempts: 11 });
+        expect(provider.attemptCount()).toBe(11);
+    });
+
     it('applies exponential backoff starting with the first retry', async () => {
         const provider = createDeterministicProvider([
             [

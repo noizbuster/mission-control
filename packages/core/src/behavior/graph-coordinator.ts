@@ -8,6 +8,13 @@ import {
     hardCeilingForNodeRunBudget,
     type NodeRunBudgetExtensionDecision,
 } from './budget/node-run-budget-extension';
+import {
+    abortableRetrySleep,
+    computeProviderRetryDelayMs,
+    DEFAULT_PROVIDER_MAX_RETRY_DELAY_MS,
+    DEFAULT_PROVIDER_RETRY_BASE_DELAY_MS,
+    isIndefiniteProviderWaitError,
+} from '../providers/provider-retry-policy';
 import { CANONICAL_FAILURE_CODES } from './failure-taxonomy';
 import {
     type CoordinatorState,
@@ -140,6 +147,7 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                     if (result.hadProductiveToolUse === true) {
                         // Productive tool use is progress unless the *same* tool turn repeats.
                         state.consecutiveToolFailuresByNodeId.set(result.node.id, 0);
+                        state.indefiniteProviderWaitByNodeId.set(result.node.id, 0);
                         const trip = applyLoopSafetyToolTurn(result.node.id, state, result.toolActions ?? []);
                         if (trip?.kind === 'soft_land') {
                             softLandToolLoop(result.node, state, graph.id, input, trip);
@@ -206,6 +214,38 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                             terminalError,
                         );
                     }
+                    // Rate-limit / usage-exhaustion: wait indefinitely with exponential backoff
+                    // (cap ~30m). Do not burn the finite node attempt budget.
+                    if (isIndefiniteProviderWaitError(result.lastSignal?.error ?? result.lastSignal)) {
+                        const waitAttempt =
+                            (state.indefiniteProviderWaitByNodeId.get(result.node.id) ?? 0) + 1;
+                        state.indefiniteProviderWaitByNodeId.set(result.node.id, waitAttempt);
+                        const delayMs = computeProviderRetryDelayMs(
+                            waitAttempt,
+                            DEFAULT_PROVIDER_RETRY_BASE_DELAY_MS,
+                            DEFAULT_PROVIDER_MAX_RETRY_DELAY_MS,
+                        );
+                        const sleep = input.providerRetrySleep ?? abortableRetrySleep;
+                        await sleep(delayMs, input.abortSignal);
+                        if (input.abortSignal?.aborted === true) {
+                            clearAllCorrections(state);
+                            return failGraph(
+                                graph.id,
+                                input,
+                                state.events,
+                                'provider_aborted',
+                                'ABG graph aborted while waiting on provider rate limit/usage',
+                                {
+                                    code: 'provider_aborted',
+                                    message: 'run-owner signal aborted during provider wait',
+                                    retryable: false,
+                                },
+                            );
+                        }
+                        state.queuedNodeIds.unshift(result.node.id);
+                        break;
+                    }
+
                     // Node-level retries stay on consecutiveFailures / maxAttempts.
                     // Identical failure-combination detection applies to completed tool-failure
                     // turns (above), not here — otherwise it races node_retry_exhausted.
