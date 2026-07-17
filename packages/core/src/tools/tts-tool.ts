@@ -11,20 +11,36 @@
  */
 import {
     type MediaTtsCodec,
+    type PermissionDecision,
+    type PermissionRequest,
     type TtsInput,
     type TtsOutput,
     ttsInputSchema,
     ttsOutputSchema,
 } from '@mission-control/protocol';
 import type { z } from 'zod';
-import { type ToolAdvertisement, ToolExecutionError, type ToolRegistration, ToolRegistry } from './tool-registry';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { executeFileMutation } from './file-mutation';
+import { filePatchFailure } from './file-patch-errors';
+import { createPatchWorkspaceGuard, type PatchTarget } from './file-patch-paths';
+import { permissionRequest, requestToolPermission } from './tool-permissions';
+import {
+    type ToolAdvertisement,
+    type ToolExecutionContext,
+    ToolExecutionError,
+    type ToolRegistration,
+    ToolRegistry,
+} from './tool-registry';
+import { noTtsCredentialMessage, ttsModelOutput, ttsParametersJsonSchema } from './tts-presentation';
+import {
+    defaultTtsTransport,
+    XAI_DEFAULT_BIT_RATE,
+    XAI_DEFAULT_LANGUAGE,
+    XAI_DEFAULT_SAMPLE_RATE,
+    XAI_DEFAULT_VOICE,
+} from './tts-transport';
+import { constants } from 'node:fs';
+import { mkdir, open } from 'node:fs/promises';
 import { dirname } from 'node:path';
-
-const XAI_DEFAULT_VOICE = 'eve';
-const XAI_DEFAULT_LANGUAGE = 'en';
-const XAI_DEFAULT_SAMPLE_RATE = 24_000;
-const XAI_DEFAULT_BIT_RATE = 128_000;
 
 export type GeneratedAudioBytes = {
     readonly bytes: Uint8Array;
@@ -46,6 +62,12 @@ export type ResolvedTtsCredential = {
 
 export type TtsCredentialResolver = () => Promise<ResolvedTtsCredential | undefined>;
 
+type TtsEnvironment = {
+    readonly XAI_API_KEY?: string;
+    readonly XAI_BASE_URL?: string;
+    readonly [key: string]: string | undefined;
+};
+
 export type ResolvedTtsInput = {
     readonly text: string;
     readonly voiceId: string;
@@ -57,6 +79,8 @@ export type ResolvedTtsInput = {
 
 export type TtsToolOptions = {
     readonly sessionId: string;
+    readonly workspaceRoot: string;
+    readonly requestPermission: (request: PermissionRequest) => PermissionDecision | Promise<PermissionDecision>;
     readonly credentialResolver?: TtsCredentialResolver;
     readonly transport?: TtsTransport;
 };
@@ -67,15 +91,13 @@ const ttsOutputSchemaType = ttsOutputSchema as z.ZodType<TtsOutput>;
 /**
  * Default env-var-gated xAI credential resolver. Tests inject a custom resolver.
  */
-export function createEnvTtsCredentialResolver(
-    env: Readonly<Record<string, string | undefined>> = process.env,
-): TtsCredentialResolver {
+export function createEnvTtsCredentialResolver(env: TtsEnvironment = process.env): TtsCredentialResolver {
     return async () => {
-        const apiKey = env['XAI_API_KEY'];
+        const apiKey = env.XAI_API_KEY;
         if (apiKey === undefined || apiKey.length === 0) {
             return undefined;
         }
-        const baseURL = env['XAI_BASE_URL'] ?? 'https://api.x.ai';
+        const baseURL = env.XAI_BASE_URL ?? 'https://api.x.ai';
         return { apiKey, baseURL };
     };
 }
@@ -99,6 +121,7 @@ export async function registerTtsTool(
 
 export function createTtsToolRegistration(options: TtsToolOptions): ToolRegistration<TtsInput, TtsOutput> {
     const credentialResolver = options.credentialResolver ?? createEnvTtsCredentialResolver();
+    const guard = createPatchWorkspaceGuard(options.workspaceRoot);
     return {
         name: 'tts',
         description:
@@ -109,7 +132,7 @@ export function createTtsToolRegistration(options: TtsToolOptions): ToolRegistra
         inputSchema: ttsInputSchemaType,
         outputSchema: ttsOutputSchemaType,
         outputLimit: { maxModelOutputChars: 2_000 },
-        execute: (input, context) => runTts(input, options, credentialResolver, context.signal),
+        execute: (input, context) => runTts(input, options, credentialResolver, guard, context),
         toModelOutput: ttsModelOutput,
         guideline: 'Use tts to synthesize speech. The output is a file path; audio bytes stay on disk.',
     };
@@ -119,7 +142,8 @@ async function runTts(
     input: TtsInput,
     options: TtsToolOptions,
     credentialResolver: TtsCredentialResolver,
-    signal: AbortSignal,
+    guardPromise: ReturnType<typeof createPatchWorkspaceGuard>,
+    context: ToolExecutionContext,
 ): Promise<TtsOutput> {
     const credential = await credentialResolver();
     if (credential === undefined) {
@@ -140,96 +164,92 @@ async function runTts(
         bitRate: input.bit_rate ?? XAI_DEFAULT_BIT_RATE,
     };
 
-    const transport = options.transport ?? defaultTtsTransport;
-    const audio = await transport.synthesize(resolved, credential, signal).catch((error: unknown) => {
-        throw new ToolExecutionError({
-            code: 'tool_failed',
-            message: `tts failed: ${error instanceof Error ? error.message : String(error)}`,
-            retryable: true,
-        });
+    const guard = await guardPromise;
+    return executeFileMutation({
+        queueKey: guard.root,
+        approval: {
+            workspaceRoot: guard.root,
+            toolCallId: `${context.toolCallId}.write`,
+            action: 'tts',
+            reason: `write synthesized audio to ${input.output_path}`,
+            permission: 'write',
+            patterns: [input.output_path],
+            requestPermission: options.requestPermission,
+        },
+        preflight: async () => [
+            await guard.resolveTarget(input.output_path, 'either', { createParentDirectories: true }),
+        ],
+        apply: async (targets) => {
+            const target = requireSingleTarget(targets);
+            await requireTtsNetworkPermission(options, context.toolCallId, credential.baseURL, guard.root);
+            const transport = options.transport ?? defaultTtsTransport;
+            const audio = await transport.synthesize(resolved, credential, context.signal).catch((error: unknown) => {
+                throw new ToolExecutionError({
+                    code: 'tool_failed',
+                    message: `tts failed: ${error instanceof Error ? error.message : String(error)}`,
+                    retryable: true,
+                });
+            });
+            await writeAudioTarget(target, audio.bytes);
+            return {
+                audio_path: target.absolutePath,
+                bytes: audio.bytes.byteLength,
+                voice_id: resolved.voiceId,
+                codec: audio.codec,
+                backend: 'xai',
+            };
+        },
     });
+}
 
-    await mkdir(dirname(input.output_path), { recursive: true });
-    await writeFile(input.output_path, audio.bytes);
+function requireSingleTarget(targets: readonly PatchTarget[]): PatchTarget {
+    const target = targets[0];
+    if (target === undefined) throw filePatchFailure('write_failed', 'missing tts output target');
+    return target;
+}
 
-    return {
-        audio_path: input.output_path,
-        bytes: audio.bytes.byteLength,
-        voice_id: resolved.voiceId,
-        codec: audio.codec,
-        backend: 'xai',
-    };
+async function requireTtsNetworkPermission(
+    options: TtsToolOptions,
+    toolCallId: string,
+    baseURL: string,
+    workspaceRoot: string,
+): Promise<void> {
+    const decision = await requestToolPermission(
+        options.requestPermission,
+        permissionRequest({
+            toolCallId: `${toolCallId}.network`,
+            action: 'tts',
+            reason: 'send text to the configured TTS provider',
+            permission: 'network',
+            patterns: [baseURL],
+            workspaceRoot,
+        }),
+    );
+    if (decision.status === 'allow') return;
+    throw filePatchFailure(
+        decision.status === 'deny' ? 'approval_denied' : 'approval_required',
+        decision.reason ?? `tts network access not approved: ${decision.status}`,
+    );
+}
+
+async function writeAudioTarget(target: PatchTarget, bytes: Uint8Array): Promise<void> {
+    await mkdir(dirname(target.absolutePath), { recursive: true });
+    const flags = target.exists
+        ? constants.O_WRONLY | constants.O_TRUNC | constants.O_NOFOLLOW
+        : constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW;
+    const handle = await open(target.absolutePath, flags, 0o666);
+    try {
+        await handle.writeFile(bytes);
+    } finally {
+        await handle.close();
+    }
 }
 
 function inferCodec(outputPath: string): MediaTtsCodec {
     return outputPath.toLowerCase().endsWith('.wav') ? 'wav' : 'mp3';
 }
 
-function ttsModelOutput(output: TtsOutput): string {
-    return `tts: saved ${output.bytes} bytes to ${output.audio_path} (voice=${output.voice_id}, codec=${output.codec}, backend=${output.backend}).`;
-}
-
-export function noTtsCredentialMessage(): string {
-    return 'No xAI TTS credential configured. Set XAI_API_KEY.';
-}
-
-export function ttsParametersJsonSchema(): Readonly<Record<string, unknown>> {
-    return {
-        type: 'object',
-        properties: {
-            text: { type: 'string', description: 'Text to synthesize (max 15000 characters).' },
-            voice_id: {
-                type: 'string',
-                description: "xAI Grok Voice id (e.g. ara, eve, leo, rex, sal). Defaults to 'eve'.",
-            },
-            language: { type: 'string', description: "BCP-47 language tag. Defaults to 'en'." },
-            output_path: {
-                type: 'string',
-                description: 'Path where the audio file is written (.wav or .mp3).',
-            },
-            sample_rate: { type: 'integer', description: 'Sample rate in Hz (default 24000).' },
-            bit_rate: { type: 'integer', description: 'MP3 bit rate (default 128000).' },
-        },
-        required: ['text', 'voice_id', 'language', 'output_path'],
-        additionalProperties: false,
-    };
-}
+export { noTtsCredentialMessage, ttsParametersJsonSchema } from './tts-presentation';
 
 export const TTS_DEFAULT_VOICE = XAI_DEFAULT_VOICE;
 export const TTS_DEFAULT_LANGUAGE = XAI_DEFAULT_LANGUAGE;
-
-/**
- * Default transport hits the live xAI Grok Voice endpoint. Tests inject a mock.
- */
-const defaultTtsTransport: TtsTransport = {
-    async synthesize(input, credential, signal) {
-        const payload: Record<string, unknown> = {
-            text: input.text,
-            voice_id: input.voiceId,
-            language: input.language,
-        };
-        const sampleRateOverridden = input.sampleRate !== XAI_DEFAULT_SAMPLE_RATE;
-        const bitRateOverridden = input.codec === 'mp3' && input.bitRate !== XAI_DEFAULT_BIT_RATE;
-        if (input.codec !== 'mp3' || sampleRateOverridden || bitRateOverridden) {
-            const format: Record<string, unknown> = { codec: input.codec };
-            if (input.sampleRate) format['sample_rate'] = input.sampleRate;
-            if (input.codec === 'mp3' && input.bitRate) format['bit_rate'] = input.bitRate;
-            payload['output_format'] = format;
-        }
-        const response = await fetch(`${credential.baseURL}/tts`, {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${credential.apiKey}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(payload),
-            signal,
-        });
-        if (!response.ok) {
-            const detail = await response.text().catch(() => '');
-            throw new Error(`xAI TTS failed (HTTP ${response.status}): ${detail.slice(0, 300)}`);
-        }
-        const bytes = new Uint8Array(await response.arrayBuffer());
-        return { bytes, codec: input.codec };
-    },
-};
