@@ -103,7 +103,12 @@ async function collectSummaries(
             if (read.kind !== 'found' || read.projection === undefined) {
                 return undefined;
             }
-            return summarizeProjection(id, read.projection);
+            return summarizeProjection(id, read.projection, {
+                ...(read.status !== undefined ? { status: read.status } : {}),
+                ...(read.awaiting !== undefined ? { awaiting: read.awaiting } : {}),
+                ...(read.updatedAt !== undefined ? { updatedAt: read.updatedAt } : {}),
+                ...(read.parentSessionId !== undefined ? { parentSessionId: read.parentSessionId } : {}),
+            });
         }),
     );
     return results.filter((summary): summary is SessionSummary => summary !== undefined);

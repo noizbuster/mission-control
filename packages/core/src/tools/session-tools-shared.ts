@@ -29,6 +29,7 @@ export type SessionSummary = {
     readonly updatedAt?: string;
     readonly cwd?: string;
     readonly sessionName?: string;
+    readonly parentSessionId?: string;
     readonly agentsUsed: string[];
     readonly corrupt: boolean;
 };
@@ -41,6 +42,10 @@ export type SessionProjectionRead = {
     readonly kind: 'missing' | 'found';
     readonly projection?: SessionReplayProjection;
     readonly diagnostics?: readonly ReplayDiagnostic[];
+    readonly status?: string;
+    readonly awaiting?: SessionAwaitingDetails;
+    readonly updatedAt?: string;
+    readonly parentSessionId?: string;
 };
 
 export type SessionToolsOptions = {
@@ -75,29 +80,80 @@ export async function readSessionProjection(
     if (id === undefined) {
         return { kind: 'missing' };
     }
-    const replay = await readLocalSessionReplay({ dataDir: resolveSessionDataDir(options), sessionId: id });
-    if (replay.kind === 'missing') {
-        return { kind: 'missing' };
+    const dataDir = resolveSessionDataDir(options);
+    const [replay, store] = await Promise.all([
+        readLocalSessionReplay({ dataDir, sessionId: id }),
+        openLocalSessionProjectionStore({ dataDir }),
+    ]);
+    try {
+        const sqlSession = await store.getSession(id);
+        if (replay.kind === 'missing') {
+            if (sqlSession === null) {
+                return { kind: 'missing' };
+            }
+            return {
+                kind: 'found',
+                status: sqlSession.status,
+                updatedAt: sqlSession.updatedAt,
+                ...(sqlSession.awaiting !== undefined ? { awaiting: sqlSession.awaiting } : {}),
+                ...(sqlSession.parentSessionId !== undefined ? { parentSessionId: sqlSession.parentSessionId } : {}),
+            };
+        }
+        return {
+            kind: 'found',
+            projection: replay.replay.projection,
+            diagnostics: replay.replay.diagnostics,
+            ...(sqlSession !== null
+                ? {
+                      status: sqlSession.status,
+                      updatedAt: sqlSession.updatedAt,
+                      ...(sqlSession.awaiting !== undefined ? { awaiting: sqlSession.awaiting } : {}),
+                      ...(sqlSession.parentSessionId !== undefined
+                          ? { parentSessionId: sqlSession.parentSessionId }
+                          : {}),
+                  }
+                : {}),
+        };
+    } finally {
+        store.close();
     }
-    return { kind: 'found', projection: replay.replay.projection, diagnostics: replay.replay.diagnostics };
 }
 
-export function summarizeProjection(sessionId: string, projection: SessionReplayProjection): SessionSummary {
+export function summarizeProjection(
+    sessionId: string,
+    projection: SessionReplayProjection,
+    overrides?: {
+        readonly status?: string;
+        readonly awaiting?: SessionAwaitingDetails;
+        readonly updatedAt?: string;
+        readonly parentSessionId?: string;
+    },
+): SessionSummary {
     const events = projection.events;
     const first = events.at(0)?.timestamp;
     const last = events.at(-1)?.timestamp;
+    const awaiting = overrides?.awaiting ?? projection.snapshot.awaiting;
     return {
         sessionId,
-        status: projection.snapshot.status,
-        ...(projection.snapshot.awaiting !== undefined ? { awaiting: projection.snapshot.awaiting } : {}),
+        status: overrides?.status ?? projection.snapshot.status,
+        ...(awaiting !== undefined ? { awaiting } : {}),
         eventCount: events.length,
         messageCount: projection.codingSteps.filter((step) => step.kind === 'provider.message').length,
         ...(first !== undefined ? { createdAt: first } : {}),
-        ...(last !== undefined ? { updatedAt: last } : {}),
+        ...(overrides?.updatedAt !== undefined
+            ? { updatedAt: overrides.updatedAt }
+            : last !== undefined
+              ? { updatedAt: last }
+              : {}),
         ...(projection.sessionTree.cwd !== undefined ? { cwd: projection.sessionTree.cwd } : {}),
         ...(projection.sessionTree.sessionName !== undefined
             ? { sessionName: projection.sessionTree.sessionName }
             : {}),
+        ...(overrides?.parentSessionId !== undefined
+            ? { parentSessionId: overrides.parentSessionId }
+            : projection.sessionTree.parentSessionId !== undefined
+              ? { parentSessionId: projection.sessionTree.parentSessionId }
+              : {}),
         agentsUsed: uniqueAgents(projection.envelopes),
         corrupt: false,
     };

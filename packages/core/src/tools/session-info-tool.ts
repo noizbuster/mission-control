@@ -76,10 +76,25 @@ export function createSessionInfoToolRegistration(
         outputLimit: { maxModelOutputChars: OUTPUT_LIMIT_CHARS },
         execute: async (input) => {
             const read = await readSessionProjection(input.session_id, options);
-            if (read.kind !== 'found' || read.projection === undefined) {
+            if (read.kind !== 'found') {
                 return { sessionId: input.session_id, found: false };
             }
-            const summary = summarizeProjection(read.projection.sessionId, read.projection);
+            if (read.projection === undefined) {
+                return {
+                    sessionId: input.session_id,
+                    found: true,
+                    ...(read.status !== undefined ? { status: read.status } : {}),
+                    ...(read.awaiting !== undefined ? { awaiting: read.awaiting } : {}),
+                    ...(read.updatedAt !== undefined ? { updatedAt: read.updatedAt } : {}),
+                    agentsUsed: [],
+                };
+            }
+            const summary = summarizeProjection(read.projection.sessionId, read.projection, {
+                ...(read.status !== undefined ? { status: read.status } : {}),
+                ...(read.awaiting !== undefined ? { awaiting: read.awaiting } : {}),
+                ...(read.updatedAt !== undefined ? { updatedAt: read.updatedAt } : {}),
+                ...(read.parentSessionId !== undefined ? { parentSessionId: read.parentSessionId } : {}),
+            });
             return {
                 sessionId: summary.sessionId,
                 found: true,

@@ -476,6 +476,7 @@ Session export, import, compaction, deletion, and stats:
 - `mc session export <id> <path>` writes a checksummed session archive file with manifest, events, and SHA-256 checksum.
 - `mc session import <path>` imports a session archive into a new durable session.
 - `mc session list` lists sessions with lifecycle status, event counts, message counts, and trust status.
+- `mc session status [session-id]` prints the current session status as plain text. With an id, it prints one stable line for that session. Without an id, it lists known sessions in the same sort order as `mc session list`. Awaiting reasons are `approval`, `user_input`, or `subagent`.
 - `mc session show <id>` shows the session snapshot, approvals, tool outcomes, coding steps, and diagnostics.
 - `mc session replay <id> --jsonl` replays durable events and coding steps as JSON Lines.
 - `mc session delete <id>` deletes a session and its canonical descendant subtree. Each session's SQLite rows, compatibility JSONL log if present, and projection rows are removed. A guarded delete accepts `--expected-tree-token <sha256>` and rejects a changed subtree or any live lease. Ground Control uses guarded, non-force deletion only after confirmation.

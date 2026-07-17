@@ -191,3 +191,74 @@ fn test_data_dir_override() -> Option<PathBuf> {
         .map(|override_dir| override_dir.clone())
         .unwrap_or(None)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{DesktopSessionSnapshot, DesktopSessionSummary};
+    use serde_json::{Value, json};
+    use std::error::Error;
+
+    #[test]
+    fn desktop_session_records_preserve_awaiting_metadata() -> Result<(), Box<dyn Error>> {
+        let awaiting = json!({
+            "reason": "approval",
+            "source": {
+                "approvalId": "approval_patch",
+                "runId": "run_approval",
+                "toolCallId": "patch_call"
+            }
+        });
+        let summary_payload = json!({
+            "sessionId": "session_awaiting",
+            "fileName": "session_awaiting.jsonl",
+            "state": "available",
+            "status": "awaiting",
+            "statusText": "awaiting approval",
+            "awaiting": awaiting,
+            "eventCount": 4,
+            "diagnostics": []
+        });
+        let snapshot_payload = json!({
+            "sessionId": "session_awaiting",
+            "state": "available",
+            "status": "awaiting",
+            "statusText": "awaiting approval",
+            "awaiting": awaiting,
+            "eventCount": 4,
+            "graphIds": ["coding-agent"],
+            "diagnostics": []
+        });
+
+        let summary: DesktopSessionSummary = serde_json::from_value(summary_payload)?;
+        let snapshot: DesktopSessionSnapshot = serde_json::from_value(snapshot_payload)?;
+
+        assert_eq!(summary.awaiting, Some(awaiting.clone()));
+        assert_eq!(snapshot.awaiting, Some(awaiting));
+        Ok(())
+    }
+
+    #[test]
+    fn legacy_desktop_session_records_parse_without_awaiting() -> Result<(), Box<dyn Error>> {
+        let summary_payload = json!({
+            "sessionId": "session_legacy",
+            "fileName": "session_legacy.jsonl",
+            "state": "available",
+            "eventCount": 1,
+            "diagnostics": []
+        });
+        let snapshot_payload = json!({
+            "sessionId": "session_legacy",
+            "state": "available",
+            "eventCount": 1,
+            "graphIds": [],
+            "diagnostics": []
+        });
+
+        let summary: DesktopSessionSummary = serde_json::from_value(summary_payload)?;
+        let snapshot: DesktopSessionSnapshot = serde_json::from_value(snapshot_payload)?;
+
+        assert_eq!(summary.awaiting, Option::<Value>::None);
+        assert_eq!(snapshot.awaiting, Option::<Value>::None);
+        Ok(())
+    }
+}
