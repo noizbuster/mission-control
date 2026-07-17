@@ -14,18 +14,39 @@ import {
     generateImageInputSchema,
     generateImageOutputSchema,
     MEDIA_IMAGE_PROVIDER_IDS,
-    MEDIA_IMAGE_PROVIDER_PREFERENCE,
     type MediaImageProviderId,
     type MediaImageProviderPreference,
+    type PermissionDecision,
+    type PermissionRequest,
 } from '@mission-control/protocol';
 import type { z } from 'zod';
-import { resolveMissionControlDataDir } from '../memory/data-dir';
-import { type ToolAdvertisement, ToolExecutionError, type ToolRegistration, ToolRegistry } from './tool-registry';
+import { executeFileMutation } from './file-mutation';
+import { createPatchWorkspaceGuard } from './file-patch-paths';
+import {
+    decodeInputImages,
+    requireImagePermission,
+    requireSingleTarget,
+    resolveArtifactsDir,
+    writeImagesToArtifacts,
+} from './generate-image-io';
+import {
+    generateImageModelOutput,
+    generateImageParametersJsonSchema,
+    noImageCredentialMessage,
+} from './generate-image-presentation';
+import { createEnvImageCredentialResolver, defaultImageTransport } from './generate-image-transport';
+import {
+    type ToolAdvertisement,
+    type ToolExecutionContext,
+    ToolExecutionError,
+    type ToolRegistration,
+    ToolRegistry,
+} from './tool-registry';
 import { randomUUID } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
-const MEDIA_ARTIFACTS_SUBDIR = 'artifacts/media';
+export { generateImageParametersJsonSchema, noImageCredentialMessage } from './generate-image-presentation';
+export { createEnvImageCredentialResolver } from './generate-image-transport';
 
 export type GeneratedImageBytes = {
     readonly bytes: Uint8Array;
@@ -62,43 +83,15 @@ export type GenerateImageTransport = {
 
 export type GenerateImageToolOptions = {
     readonly sessionId: string;
+    readonly workspaceRoot: string;
+    readonly requestPermission: (request: PermissionRequest) => PermissionDecision | Promise<PermissionDecision>;
     readonly artifactsDir?: string;
     readonly credentialResolver?: ImageCredentialResolver;
     readonly transport?: GenerateImageTransport;
 };
 
-const DEFAULT_MODELS: Record<MediaImageProviderId, string> = {
-    gemini: 'gemini-3-pro-image-preview',
-    openai: 'gpt-image-1',
-    xai: 'grok-imagine-image',
-};
-
 const generateImageInputSchemaType = generateImageInputSchema as z.ZodType<GenerateImageInput>;
 const generateImageOutputSchemaType = generateImageOutputSchema as z.ZodType<GenerateImageOutput>;
-
-/**
- * Default env-var-gated credential resolver. Probes Gemini, OpenAI, then xAI
- * (matching the oh-my-pi auto-detect order). Tests inject a custom resolver.
- */
-export function createEnvImageCredentialResolver(
-    env: Readonly<Record<string, string | undefined>> = process.env,
-): ImageCredentialResolver {
-    return async () => {
-        const geminiKey = env['GEMINI_API_KEY'] ?? env['GOOGLE_API_KEY'];
-        if (geminiKey !== undefined && geminiKey.length > 0) {
-            return { provider: 'gemini', apiKey: geminiKey, model: DEFAULT_MODELS['gemini']! };
-        }
-        const openaiKey = env['OPENAI_API_KEY'];
-        if (openaiKey !== undefined && openaiKey.length > 0) {
-            return { provider: 'openai', apiKey: openaiKey, model: DEFAULT_MODELS['openai']! };
-        }
-        const xaiKey = env['XAI_API_KEY'];
-        if (xaiKey !== undefined && xaiKey.length > 0) {
-            return { provider: 'xai', apiKey: xaiKey, model: DEFAULT_MODELS['xai']! };
-        }
-        return undefined;
-    };
-}
 
 /**
  * Credential-gated registration. Returns `undefined` when no credential is
@@ -121,6 +114,7 @@ export function createGenerateImageToolRegistration(
     options: GenerateImageToolOptions,
 ): ToolRegistration<GenerateImageInput, GenerateImageOutput> {
     const credentialResolver = options.credentialResolver ?? createEnvImageCredentialResolver();
+    const guard = createPatchWorkspaceGuard(options.workspaceRoot);
     return {
         name: 'generate_image',
         description:
@@ -131,7 +125,7 @@ export function createGenerateImageToolRegistration(
         inputSchema: generateImageInputSchemaType,
         outputSchema: generateImageOutputSchemaType,
         outputLimit: { maxModelOutputChars: 4_000 },
-        execute: (input, context) => runGenerateImage(input, options, credentialResolver, context.signal),
+        execute: (input, context) => runGenerateImage(input, options, credentialResolver, guard, context),
         toModelOutput: generateImageModelOutput,
         guideline:
             'Use generate_image to create or edit images. Output paths reference on-disk artifacts; ' +
@@ -143,7 +137,8 @@ async function runGenerateImage(
     input: GenerateImageInput,
     options: GenerateImageToolOptions,
     credentialResolver: ImageCredentialResolver,
-    signal: AbortSignal,
+    guardPromise: ReturnType<typeof createPatchWorkspaceGuard>,
+    context: ToolExecutionContext,
 ): Promise<GenerateImageOutput> {
     const credential = await resolveCredentialForProvider(input.provider, credentialResolver);
     if (credential === undefined) {
@@ -154,44 +149,66 @@ async function runGenerateImage(
         });
     }
 
-    const transport = options.transport ?? defaultImageTransport;
-    const inputImages = await decodeInputImages(input);
-    const generated = await transport
-        .generate(
-            {
-                prompt: input.prompt,
-                ...(input.aspect_ratio !== undefined ? { aspectRatio: input.aspect_ratio } : {}),
-                ...(input.image_size !== undefined ? { imageSize: input.image_size } : {}),
-                inputImages,
-            },
-            credential,
-            signal,
-        )
-        .catch((error: unknown) => {
-            throw new ToolExecutionError({
-                code: 'tool_failed',
-                message: `generate_image failed: ${error instanceof Error ? error.message : String(error)}`,
-                retryable: true,
-            });
-        });
-
-    if (generated.length === 0) {
-        throw new ToolExecutionError({
-            code: 'tool_failed',
-            message: 'generate_image returned no image data.',
-            retryable: true,
-        });
-    }
-
-    const artifactsDir = resolveArtifactsDir(options);
-    const imagePaths = await writeImagesToArtifacts(generated, artifactsDir);
-
-    return {
-        image_paths: imagePaths,
-        provider: credential.provider,
-        model: credential.model,
-        count: imagePaths.length,
-    };
+    const guard = await guardPromise;
+    const requestedArtifactsDir = resolveArtifactsDir(input, options);
+    const boundaryPath = join(requestedArtifactsDir, `.mctrl-media-boundary-${randomUUID()}`);
+    return executeFileMutation({
+        queueKey: guard.root,
+        approval: {
+            workspaceRoot: guard.root,
+            toolCallId: `${context.toolCallId}.write`,
+            action: 'generate_image',
+            reason: `write generated images to ${requestedArtifactsDir}`,
+            permission: 'write',
+            patterns: [requestedArtifactsDir],
+            requestPermission: options.requestPermission,
+        },
+        preflight: async () => [await guard.resolveTarget(boundaryPath, 'new', { createParentDirectories: true })],
+        apply: async (targets) => {
+            const boundary = requireSingleTarget(targets);
+            const inputImages = await decodeInputImages(input, options, guard, context.toolCallId);
+            await requireImagePermission(
+                options,
+                context.toolCallId,
+                'network',
+                [`provider:${credential.provider}`],
+                guard.root,
+            );
+            const transport = options.transport ?? defaultImageTransport;
+            const generated = await transport
+                .generate(
+                    {
+                        prompt: input.prompt,
+                        ...(input.aspect_ratio !== undefined ? { aspectRatio: input.aspect_ratio } : {}),
+                        ...(input.image_size !== undefined ? { imageSize: input.image_size } : {}),
+                        inputImages,
+                    },
+                    credential,
+                    context.signal,
+                )
+                .catch((error: unknown) => {
+                    throw new ToolExecutionError({
+                        code: 'tool_failed',
+                        message: `generate_image failed: ${error instanceof Error ? error.message : String(error)}`,
+                        retryable: true,
+                    });
+                });
+            if (generated.length === 0) {
+                throw new ToolExecutionError({
+                    code: 'tool_failed',
+                    message: 'generate_image returned no image data.',
+                    retryable: true,
+                });
+            }
+            const imagePaths = await writeImagesToArtifacts(generated, dirname(boundary.absolutePath));
+            return {
+                image_paths: imagePaths,
+                provider: credential.provider,
+                model: credential.model,
+                count: imagePaths.length,
+            };
+        },
+    });
 }
 
 async function resolveCredentialForProvider(
@@ -206,175 +223,6 @@ async function resolveCredentialForProvider(
         return resolved;
     }
     return resolved.provider === preference ? resolved : undefined;
-}
-
-async function decodeInputImages(input: GenerateImageInput): Promise<readonly GeneratedImageBytes[]> {
-    const entries = input.input ?? [];
-    if (entries.length === 0) {
-        return [];
-    }
-    const decoded: GeneratedImageBytes[] = [];
-    for (const entry of entries) {
-        if (entry.data !== undefined) {
-            decoded.push({ bytes: decodeBase64(entry.data), mimeType: entry.mime_type ?? 'image/png' });
-        }
-    }
-    return decoded;
-}
-
-function decodeBase64(value: string): Uint8Array {
-    const cleaned = value.startsWith('data:') ? (value.split(',', 2)[1] ?? value) : value;
-    const buffer = Buffer.from(cleaned, 'base64');
-    return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-}
-
-async function writeImagesToArtifacts(images: readonly GeneratedImageBytes[], artifactsDir: string): Promise<string[]> {
-    await mkdir(artifactsDir, { recursive: true });
-    const paths: string[] = [];
-    for (const image of images) {
-        const ext = extensionForMime(image.mimeType);
-        const filename = `mctrl-image-${randomUUID()}.${ext}`;
-        const filepath = join(artifactsDir, filename);
-        await writeFile(filepath, image.bytes);
-        paths.push(filepath);
-    }
-    return paths;
-}
-
-function extensionForMime(mimeType: string): string {
-    switch (mimeType.toLowerCase()) {
-        case 'image/png':
-            return 'png';
-        case 'image/jpeg':
-            return 'jpg';
-        case 'image/gif':
-            return 'gif';
-        case 'image/webp':
-            return 'webp';
-        default:
-            return 'png';
-    }
-}
-
-function resolveArtifactsDir(options: GenerateImageToolOptions): string {
-    if (options.artifactsDir !== undefined) {
-        return options.artifactsDir;
-    }
-    return join(resolveMissionControlDataDir(), MEDIA_ARTIFACTS_SUBDIR);
-}
-
-function generateImageModelOutput(output: GenerateImageOutput): string {
-    const lines = [
-        `generate_image: provider=${output.provider} model=${output.model} (${output.count} image${output.count === 1 ? '' : 's'})`,
-        ...output.image_paths.map((path) => `  ${path}`),
-    ];
-    return lines.join('\n');
-}
-
-export function noImageCredentialMessage(): string {
-    return 'No image generation credential configured. Set one of GEMINI_API_KEY (or GOOGLE_API_KEY), OPENAI_API_KEY, or XAI_API_KEY.';
-}
-
-export function generateImageParametersJsonSchema(): Readonly<Record<string, unknown>> {
-    return {
-        type: 'object',
-        properties: {
-            prompt: { type: 'string', description: 'Image generation or edit prompt.' },
-            provider: {
-                type: 'string',
-                enum: [...MEDIA_IMAGE_PROVIDER_PREFERENCE],
-                description: "'auto' (default) uses the first configured provider; pin to gemini, openai, or xai.",
-            },
-            aspect_ratio: {
-                type: 'string',
-                enum: ['1:1', '3:4', '4:3', '9:16', '16:9'],
-                description: 'Output aspect ratio.',
-            },
-            image_size: {
-                type: 'string',
-                enum: ['1024x1024', '1536x1024', '1024x1536'],
-                description: 'Output pixel dimensions.',
-            },
-            input: {
-                type: 'array',
-                description: 'Reference images for edits. Each entry has path or base64 data plus mime_type.',
-                items: {
-                    type: 'object',
-                    properties: {
-                        path: { type: 'string' },
-                        data: { type: 'string', description: 'base64-encoded image bytes' },
-                        mime_type: { type: 'string' },
-                    },
-                },
-            },
-            output_dir: { type: 'string', description: 'Override the artifacts directory.' },
-        },
-        required: ['prompt'],
-        additionalProperties: false,
-    };
-}
-
-/**
- * Default transport hits the live provider HTTP endpoints. Tests inject a mock.
- */
-const defaultImageTransport: GenerateImageTransport = {
-    async generate(input, credential, signal) {
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (credential.provider === 'gemini') {
-            headers['x-goog-api-key'] = credential.apiKey;
-        } else {
-            headers['Authorization'] = `Bearer ${credential.apiKey}`;
-        }
-        const body = JSON.stringify({
-            prompt: input.prompt,
-            ...(input.aspectRatio !== undefined ? { aspect_ratio: input.aspectRatio } : {}),
-            ...(input.imageSize !== undefined ? { image_size: input.imageSize } : {}),
-        });
-        const response = await fetch(defaultImageEndpoint(credential), {
-            method: 'POST',
-            headers,
-            body,
-            signal,
-        });
-        if (!response.ok) {
-            const text = await response.text().catch(() => '');
-            throw new Error(
-                `${credential.provider} image request failed (HTTP ${response.status}): ${text.slice(0, 200)}`,
-            );
-        }
-        const payload = (await response.json()) as { data?: Array<{ b64_json?: string; mime_type?: string }> };
-        const entries = payload.data ?? [];
-        const images: GeneratedImageBytes[] = [];
-        for (const entry of entries) {
-            if (entry.b64_json !== undefined) {
-                images.push({
-                    bytes: decodeBase64(entry.b64_json),
-                    mimeType: entry.mime_type ?? 'image/png',
-                });
-            }
-        }
-        if (images.length === 0) {
-            throw new Error(`${credential.provider} returned no image bytes`);
-        }
-        return images;
-    },
-};
-
-function defaultImageEndpoint(credential: ResolvedImageCredential): string {
-    switch (credential.provider) {
-        case 'gemini':
-            return `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(credential.model)}:generateContent`;
-        case 'openai':
-            return 'https://api.openai.com/v1/images/generations';
-        case 'xai':
-            return 'https://api.x.ai/v1/images/generations';
-        default:
-            return assertNeverProvider(credential.provider);
-    }
-}
-
-function assertNeverProvider(provider: never): never {
-    throw new Error(`Unexpected image provider: ${String(provider)}`);
 }
 
 export { MEDIA_IMAGE_PROVIDER_IDS };

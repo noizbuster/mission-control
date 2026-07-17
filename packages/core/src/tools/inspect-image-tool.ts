@@ -14,24 +14,18 @@
  * before send. Credential gate is identical to look_at: no vision credential
  * configured → non-retryable `ToolExecutionError` naming the env vars.
  */
-import type { ProtocolError } from '@mission-control/protocol';
+import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { z } from 'zod';
-import {
-    inferMimeTypeFromBase64,
-    inferMimeTypeFromFilePath,
-    lookAtFailure,
-    runVisionAnalysis,
-    stripDataUriPrefix,
-    type VisionFetchFn,
-    type VisionImage,
-} from './look-at-tool';
-import { type ToolAdvertisement, ToolExecutionError, type ToolRegistration, ToolRegistry } from './tool-registry';
+import { inspectFailure } from './inspect-image-errors';
+import { loadSingleImage } from './inspect-image-input';
+import { resolveLookAtVisionChain, runVisionAnalysis, type VisionFetchFn } from './look-at-tool';
+import { createWorkspaceGuard, type WorkspaceGuard } from './read-tools-paths';
+import { permissionRequest, requestToolPermission } from './tool-permissions';
+import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './tool-registry';
 import type { ToolExecutionContext } from './tool-registry-types';
 import { truncateOutput } from './truncate';
 import type { VisionProviderId } from './vision-schemas';
 import { visionCredentialHint } from './vision-schemas';
-import { readFileSync, statSync } from 'node:fs';
-import { basename } from 'node:path';
 
 const INSPECT_IMAGE_TOOL_NAME = 'inspect_image';
 const DEFAULT_MAX_IMAGE_BYTES = 20 * 1024 * 1024;
@@ -76,85 +70,12 @@ export const inspectImageOutputSchema = z
 export type InspectImageOutput = z.infer<typeof inspectImageOutputSchema>;
 
 // ---------------------------------------------------------------------------
-// Image loading
-// ---------------------------------------------------------------------------
-
-const ACCEPTED_IMAGE_MIMES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
-
-function loadSingleImage(
-    input: InspectImageInput,
-    maxImageBytes: number,
-): { readonly image: VisionImage; readonly source: string } {
-    if (input.file_path !== undefined) {
-        if (/^https?:\/\//i.test(input.file_path)) {
-            throw inspectFailure(
-                `Remote URLs are not supported. Download the file first or use a local path: ${input.file_path}`,
-            );
-        }
-        let stats: { size: number };
-        try {
-            stats = statSync(input.file_path);
-        } catch (error: unknown) {
-            const code = error instanceof Error ? Reflect.get(error, 'code') : undefined;
-            if (code === 'ENOENT') {
-                throw inspectFailure(`File not found: ${input.file_path}`);
-            }
-            throw inspectFailure(`Failed to stat ${input.file_path}: ${errorMessage(error)}`);
-        }
-        void stats;
-        let bytes: Buffer;
-        try {
-            bytes = readFileSync(input.file_path);
-        } catch (error: unknown) {
-            const code = error instanceof Error ? Reflect.get(error, 'code') : undefined;
-            if (code === 'ENOENT') {
-                throw inspectFailure(`File not found: ${input.file_path}`);
-            }
-            throw inspectFailure(`Failed to read ${input.file_path}: ${errorMessage(error)}`);
-        }
-        assertImageBytes(bytes, maxImageBytes, input.file_path);
-        const mimeType = inferMimeTypeFromFilePath(input.file_path);
-        if (!ACCEPTED_IMAGE_MIMES.has(mimeType)) {
-            throw inspectFailure(
-                `inspect_image only supports PNG, JPEG, GIF, and WEBP files detected by file content (got ${mimeType}).`,
-            );
-        }
-        return {
-            image: { mimeType, base64Data: bytes.toString('base64'), filename: basename(input.file_path) },
-            source: input.file_path,
-        };
-    }
-    if (input.image_data !== undefined) {
-        const cleanData = stripDataUriPrefix(input.image_data);
-        const decoded = Buffer.from(cleanData, 'base64');
-        assertImageBytes(decoded, maxImageBytes, 'image_data');
-        const mimeType = inferMimeTypeFromBase64(input.image_data);
-        if (!ACCEPTED_IMAGE_MIMES.has(mimeType)) {
-            throw inspectFailure(`inspect_image only supports PNG, JPEG, GIF, and WEBP images (detected ${mimeType}).`);
-        }
-        const ext = mimeType.split('/')[1] ?? 'png';
-        return {
-            image: { mimeType, base64Data: cleanData, filename: `clipboard-image.${ext}` },
-            source: 'clipboard/pasted image',
-        };
-    }
-    throw inspectFailure("Must provide either 'file_path' or 'image_data'.");
-}
-
-function assertImageBytes(bytes: Buffer, maxImageBytes: number, label: string): void {
-    if (bytes.byteLength > maxImageBytes) {
-        throw inspectFailure(
-            `${label} is ${bytes.byteLength} bytes which exceeds the ${maxImageBytes}-byte image-size cap. ` +
-                'Downscale the image before sending.',
-        );
-    }
-}
-
-// ---------------------------------------------------------------------------
 // Tool options + registration
 // ---------------------------------------------------------------------------
 
 export type InspectImageToolOptions = {
+    readonly workspaceRoot: string;
+    readonly requestPermission: (request: PermissionRequest) => PermissionDecision | Promise<PermissionDecision>;
     readonly providerPreference?: VisionProviderId | 'auto';
     readonly maxImageBytes?: number;
     readonly maxModelOutputChars?: number;
@@ -172,15 +93,16 @@ type ResolvedInspectImageToolOptions = {
 
 export async function registerInspectImageTool(
     registry: ToolRegistry,
-    options: InspectImageToolOptions = {},
+    options: InspectImageToolOptions,
 ): Promise<ToolAdvertisement> {
     return registry.register(createInspectImageToolRegistration(options));
 }
 
 export function createInspectImageToolRegistration(
-    options: InspectImageToolOptions = {},
+    options: InspectImageToolOptions,
 ): ToolRegistration<InspectImageInput, InspectImageOutput> {
     const resolved = resolveInspectImageOptions(options);
+    const guard = createWorkspaceGuard(options.workspaceRoot);
     return {
         name: INSPECT_IMAGE_TOOL_NAME,
         description: INSPECT_IMAGE_DESCRIPTION,
@@ -189,7 +111,7 @@ export function createInspectImageToolRegistration(
         inputSchema: inspectImageInputSchema as z.ZodType<InspectImageInput>,
         outputSchema: inspectImageOutputSchema as z.ZodType<InspectImageOutput>,
         outputLimit: { maxModelOutputChars: resolved.maxModelOutputChars },
-        execute: (input, context) => runInspectImage(resolved, input, context),
+        execute: (input, context) => runInspectImage(resolved, options, guard, input, context),
         toModelOutput: inspectImageModelOutput,
         guideline: INSPECT_IMAGE_GUIDELINE,
     };
@@ -231,10 +153,16 @@ function inspectImageParametersJsonSchema(): Readonly<Record<string, unknown>> {
 
 async function runInspectImage(
     options: ResolvedInspectImageToolOptions,
+    authority: InspectImageToolOptions,
+    guardPromise: ReturnType<typeof createWorkspaceGuard>,
     input: InspectImageInput,
     context: ToolExecutionContext,
 ): Promise<InspectImageOutput> {
-    const { image, source } = loadSingleImage(input, options.maxImageBytes);
+    assertInspectImageCredentialConfigured(options.providerPreference);
+    const guard = await guardPromise;
+    const containedInput = await resolveInspectImagePath(authority, guard, input, context.toolCallId);
+    const { image, source } = loadSingleImage(containedInput, options.maxImageBytes);
+    await requireInspectImagePermission(authority, context.toolCallId, 'network', ['vision-provider'], guard.root);
 
     const controller = wireAbort(context.signal);
     let timedOut = false;
@@ -275,6 +203,49 @@ async function runInspectImage(
     };
 }
 
+async function resolveInspectImagePath(
+    options: InspectImageToolOptions,
+    guard: WorkspaceGuard,
+    input: InspectImageInput,
+    toolCallId: string,
+): Promise<InspectImageInput> {
+    if (input.file_path === undefined) return input;
+    if (/^https?:\/\//i.test(input.file_path)) return input;
+    await requireInspectImagePermission(options, toolCallId, 'read', [input.file_path], guard.root);
+    const target = await guard.resolveExisting(input.file_path);
+    if (!target.stats.isFile()) throw inspectFailure(`target is not a file: ${input.file_path}`);
+    return { ...input, file_path: target.absolutePath };
+}
+
+async function requireInspectImagePermission(
+    options: InspectImageToolOptions,
+    toolCallId: string,
+    permission: 'read' | 'network',
+    patterns: readonly string[],
+    workspaceRoot: string,
+): Promise<void> {
+    const decision = await requestToolPermission(
+        options.requestPermission,
+        permissionRequest({
+            toolCallId: `${toolCallId}.${permission}`,
+            action: INSPECT_IMAGE_TOOL_NAME,
+            reason: permission === 'read' ? 'read an image from the workspace' : 'send an image to a vision provider',
+            permission,
+            patterns,
+            workspaceRoot,
+        }),
+    );
+    if (decision.status === 'allow') return;
+    const code = decision.status === 'deny' ? 'approval_denied' : 'approval_required';
+    throw inspectFailure(`${code}: ${decision.reason ?? `${INSPECT_IMAGE_TOOL_NAME} ${permission} denied`}`);
+}
+
+function assertInspectImageCredentialConfigured(preference: VisionProviderId | 'auto'): void {
+    if (resolveLookAtVisionChain(preference).length === 0) {
+        throw inspectFailure(`No vision provider credential is configured. Set one of: ${visionCredentialHint()}.`);
+    }
+}
+
 function inspectImageModelOutput(output: InspectImageOutput): string {
     const lines: string[] = [`## inspect_image (${output.imagePath}, ${output.mimeType})`];
     if (output.truncated) {
@@ -296,15 +267,6 @@ function wireAbort(signal: AbortSignal): AbortController {
         signal.addEventListener('abort', () => controller.abort(), { once: true });
     }
     return controller;
-}
-
-function inspectFailure(message: string): ToolExecutionError {
-    const error: ProtocolError = { code: 'tool_failed', message, retryable: false };
-    return new ToolExecutionError(error);
-}
-
-function errorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
 }
 
 export { visionCredentialHint as inspectImageCredentialHint };

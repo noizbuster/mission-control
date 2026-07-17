@@ -1,4 +1,9 @@
-import type { GenerateImageInput, GenerateImageOutput, TtsInput, TtsOutput } from '@mission-control/protocol';
+import type {
+    GenerateImageInput,
+    GenerateImageOutput,
+    PermissionDecision,
+    PermissionRequest,
+} from '@mission-control/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
     createEnvImageCredentialResolver,
@@ -9,13 +14,12 @@ import {
     registerGenerateImageTool,
 } from './generate-image-tool';
 import { ToolExecutionError, ToolRegistry } from './tool-registry';
-import { createTtsToolRegistration, registerTtsTool, type TtsToolOptions, type TtsTransport } from './tts-tool';
 import { randomUUID } from 'node:crypto';
-import { access, readFile, rm } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-describe('generate_image + tts media seams (checkbox #33)', () => {
+describe('generate_image media seam (checkbox #33)', () => {
     const previous = captureEnv(['GEMINI_API_KEY', 'GOOGLE_API_KEY', 'OPENAI_API_KEY', 'XAI_API_KEY']);
     let artifactsDir: string;
 
@@ -32,17 +36,11 @@ describe('generate_image + tts media seams (checkbox #33)', () => {
     function imageOptions(overrides: Partial<GenerateImageToolOptions> = {}): GenerateImageToolOptions {
         return {
             sessionId: 'session-test',
+            workspaceRoot: tmpdir(),
+            requestPermission: allowPermission,
             artifactsDir,
             credentialResolver: () =>
                 Promise.resolve({ provider: 'gemini', apiKey: 'gemini-key', model: 'gemini-3-pro-image-preview' }),
-            ...overrides,
-        };
-    }
-
-    function ttsOptions(overrides: Partial<TtsToolOptions> = {}): TtsToolOptions {
-        return {
-            sessionId: 'session-test',
-            credentialResolver: () => Promise.resolve({ apiKey: 'xai-key', baseURL: 'https://api.x.ai' }),
             ...overrides,
         };
     }
@@ -67,10 +65,12 @@ describe('generate_image + tts media seams (checkbox #33)', () => {
 
         it('skips registration (returns undefined) when no credential is configured', async () => {
             const registry = new ToolRegistry();
-            const ad = await registerGenerateImageTool(registry, {
-                sessionId: 'session-test',
-                credentialResolver: () => Promise.resolve(undefined),
-            });
+            const ad = await registerGenerateImageTool(
+                registry,
+                imageOptions({
+                    credentialResolver: () => Promise.resolve(undefined),
+                }),
+            );
 
             expect(ad).toBeUndefined();
             expect(registry.advertise().find((tool) => tool.name === 'generate_image')).toBeUndefined();
@@ -126,11 +126,11 @@ describe('generate_image + tts media seams (checkbox #33)', () => {
         });
 
         it('throws a non-retryable ToolExecutionError when the credential resolves to undefined', async () => {
-            const registration = createGenerateImageToolRegistration({
-                sessionId: 'session-test',
-                artifactsDir,
-                credentialResolver: () => Promise.resolve(undefined),
-            });
+            const registration = createGenerateImageToolRegistration(
+                imageOptions({
+                    credentialResolver: () => Promise.resolve(undefined),
+                }),
+            );
 
             const caught = await captureError(() =>
                 registration.execute({ prompt: 'x' }, executionContext('generate_image')),
@@ -181,111 +181,6 @@ describe('generate_image + tts media seams (checkbox #33)', () => {
         });
     });
 
-    describe('tts registration gate', () => {
-        it('registers when XAI_API_KEY is set', async () => {
-            const registry = new ToolRegistry();
-            const ad = await registerTtsTool(registry, ttsOptions());
-
-            expect(ad?.name).toBe('tts');
-            expect(registry.advertise().find((tool) => tool.name === 'tts')).toBeDefined();
-        });
-
-        it('skips registration when no xAI credential is configured', async () => {
-            const registry = new ToolRegistry();
-            const ad = await registerTtsTool(registry, {
-                sessionId: 'session-test',
-                credentialResolver: () => Promise.resolve(undefined),
-            });
-
-            expect(ad).toBeUndefined();
-            expect(registry.advertise().find((tool) => tool.name === 'tts')).toBeUndefined();
-        });
-    });
-
-    describe('tts execute', () => {
-        function mockTtsTransport(bytes: Uint8Array): TtsTransport {
-            return {
-                async synthesize(input) {
-                    expect(input.text.length).toBeGreaterThan(0);
-                    return { bytes, codec: input.codec };
-                },
-            };
-        }
-
-        it('writes audio bytes to output_path and returns the path only (media NOT inlined)', async () => {
-            const audioBytes = new Uint8Array([0x52, 0x49, 0x46, 0x46]); // RIFF header
-            const registration = createTtsToolRegistration(ttsOptions({ transport: mockTtsTransport(audioBytes) }));
-            const outputPath = join(artifactsDir, 'clip.wav');
-            const input: TtsInput = {
-                text: 'hello world',
-                voice_id: 'eve',
-                language: 'en',
-                output_path: outputPath,
-            };
-
-            const output = await registration.execute(input, executionContext('tts'));
-
-            expect(output.audio_path).toBe(outputPath);
-            expect(output.bytes).toBe(audioBytes.byteLength);
-            expect(output.codec).toBe('wav');
-            expect(output.backend).toBe('xai');
-            // The file exists with the right bytes.
-            const onDisk = await readFile(outputPath);
-            expect(Array.from(onDisk)).toEqual(Array.from(audioBytes));
-        });
-
-        it('serialized output contains no base64 audio data (media NOT in events)', async () => {
-            const audioBytes = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0xaa, 0xbb]);
-            const registration = createTtsToolRegistration(ttsOptions({ transport: mockTtsTransport(audioBytes) }));
-            const input: TtsInput = {
-                text: 'no inline media',
-                voice_id: 'rex',
-                language: 'en',
-                output_path: join(artifactsDir, 'clip2.wav'),
-            };
-
-            const output = await registration.execute(input, executionContext('tts'));
-
-            const serialized = JSON.stringify(output);
-            const base64 = Buffer.from(audioBytes).toString('base64');
-            expect(serialized).not.toContain(base64);
-            expect(serialized).not.toMatch(/data:audio/);
-        });
-
-        it('throws a non-retryable ToolExecutionError when the credential resolves to undefined', async () => {
-            const registration = createTtsToolRegistration({
-                sessionId: 'session-test',
-                credentialResolver: () => Promise.resolve(undefined),
-            });
-
-            const caught = await captureError(() =>
-                registration.execute(
-                    { text: 'hi', voice_id: 'eve', language: 'en', output_path: join(artifactsDir, 'x.wav') },
-                    executionContext('tts'),
-                ),
-            );
-
-            expect(caught).toBeInstanceOf(ToolExecutionError);
-            const error = caught as ToolExecutionError;
-            expect(error.error.retryable).toBe(false);
-            expect(error.error.message).toContain('XAI_API_KEY');
-        });
-
-        it('artifacts dir is created when missing', async () => {
-            const registration = createTtsToolRegistration(
-                ttsOptions({ transport: mockTtsTransport(new Uint8Array([1, 2, 3])) }),
-            );
-            const nestedOutput = join(artifactsDir, 'nested', 'deep', 'clip.mp3');
-
-            await registration.execute(
-                { text: 'nested', voice_id: 'leo', language: 'en', output_path: nestedOutput },
-                executionContext('tts'),
-            );
-
-            await expect(access(nestedOutput)).resolves.toBeUndefined();
-        });
-    });
-
     function executionContext(toolName: string) {
         return {
             toolCallId: `${toolName}-call`,
@@ -320,3 +215,7 @@ describe('generate_image + tts media seams (checkbox #33)', () => {
         };
     }
 });
+
+function allowPermission(request: PermissionRequest): PermissionDecision {
+    return { requestId: request.id, status: 'allow', reason: 'media test allow' };
+}
