@@ -195,10 +195,14 @@ describe('coding-agent graph — Observe → Decide → Act loop', () => {
             },
         });
 
-        // The tap observes pre-projection streaming signals. `llm.text.delta` is NOT persisted (it is
-        // excluded from the boundary allowlist), so observing it here proves the seam surfaces what the
-        // durable event stream drops — the live-streaming input an interactive renderer needs.
+        // The tap observes pre-projection streaming signals. `llm.text.delta` is live-only and must
+        // not appear in the durable projected event list (neither as structured emit nor as log).
         expect(signals.some((signal) => signal.type === 'emit' && signal.event.type === 'llm.text.delta')).toBe(true);
+        expect(
+            tapped.events.some(
+                (event) => event.type === 'log' && event.message === 'node emitted event: llm.text.delta',
+            ),
+        ).toBe(false);
         // Pure observation: the projected event stream + terminal status are byte-identical with and
         // without the tap (it must not influence projection, persistence, or the run result).
         expect(tapped.events).toEqual(baseline.events);

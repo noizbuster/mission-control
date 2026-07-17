@@ -118,6 +118,10 @@ export class SqliteSessionEventStore implements MemoryStore {
         await this.eventAppender.append(event);
     }
 
+    async appendMany(events: readonly AgentEvent[], signal?: AbortSignal): Promise<void> {
+        await this.eventAppender.appendMany(events, signal);
+    }
+
     async appendEnvelope(envelope: AgentEventEnvelope): Promise<void> {
         await this.eventAppender.appendEnvelope(envelope);
     }

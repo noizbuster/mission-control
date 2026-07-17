@@ -2,15 +2,32 @@ import type { ModelProviderSelection } from '@mission-control/protocol';
 import { closeTreeSitterClient } from '@mission-control/tui/highlight';
 import type { ModelSelector } from './interactive-chat';
 import type { ChatInput, ChatInputEvent } from './interactive-chat-io';
-import type { ActiveCodingAgentTurn, ActiveCodingAgentTurnOutcome } from './interactive-coding-agent';
+import type { ActiveCodingAgentTurn, ActiveCodingAgentTurnOutcome } from './interactive-coding-agent-types';
+import {
+    FORCE_INTERRUPT_SETTLE_TIMEOUT_MS,
+    interruptActiveTurnBounded as interruptActiveTurnBoundedImpl,
+    INTERRUPT_SETTLE_TIMEOUT_MS,
+    PROCESS_SIGNAL_FORCE_EXIT_MS,
+    registerProcessTerminalCleanup as registerProcessTerminalCleanupImpl,
+    stopActiveTurn as stopActiveTurnImpl,
+} from './interactive-interrupt-settlement';
+
+export {
+    FORCE_INTERRUPT_SETTLE_TIMEOUT_MS,
+    INTERRUPT_SETTLE_TIMEOUT_MS,
+    PROCESS_SIGNAL_FORCE_EXIT_MS,
+};
 
 export async function stopActiveTurn(activeTurn: ActiveCodingAgentTurn | undefined): Promise<undefined> {
-    if (activeTurn === undefined) {
-        return undefined;
-    }
-    activeTurn.interrupt('force');
-    await activeTurn.done;
-    return undefined;
+    return stopActiveTurnImpl(activeTurn);
+}
+
+export async function interruptActiveTurnBounded(
+    activeTurn: ActiveCodingAgentTurn,
+    softTimeoutMs: number = INTERRUPT_SETTLE_TIMEOUT_MS,
+    forceTimeoutMs: number = FORCE_INTERRUPT_SETTLE_TIMEOUT_MS,
+): Promise<void> {
+    return interruptActiveTurnBoundedImpl(activeTurn, softTimeoutMs, forceTimeoutMs);
 }
 
 export function areModelProviderSelectionsEqual(left: ModelProviderSelection, right: ModelProviderSelection): boolean {
@@ -29,32 +46,9 @@ export function suspendChatInputWhileSelectingModel(selectModel: ModelSelector, 
 }
 
 export function registerProcessTerminalCleanup(input: ChatInput): () => void {
-    let cleaned = false;
-    const cleanup = () => {
-        if (cleaned) {
-            return;
-        }
-        cleaned = true;
-        input.close();
-        // Signal/exit handlers are sync, so we cannot await; the call is idempotent.
+    return registerProcessTerminalCleanupImpl(input, () => {
         void closeTreeSitterClient();
-    };
-    const onSignal = () => {
-        cleanup();
-    };
-    const onExit = () => {
-        cleanup();
-    };
-
-    process.once('SIGINT', onSignal);
-    process.once('SIGTERM', onSignal);
-    process.once('exit', onExit);
-
-    return () => {
-        process.off('SIGINT', onSignal);
-        process.off('SIGTERM', onSignal);
-        process.off('exit', onExit);
-    };
+    });
 }
 
 type ChatLoopEvent =

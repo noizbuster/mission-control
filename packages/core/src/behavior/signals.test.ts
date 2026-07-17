@@ -4,7 +4,7 @@ import { createObservabilityRedactor } from '../providers/observability-redactor
 import { REDACTED_CREDENTIAL } from '../providers/redaction-handler';
 import { createAbgEmitSignal } from './abg-emit';
 import { CANONICAL_FAILURE_CODES } from './failure-taxonomy';
-import { projectAbgSignalToEvent } from './signals';
+import { isEphemeralStreamingAbgSignal, projectAbgSignalToEvent } from './signals';
 
 const NOW = '2026-06-16T00:00:00.000Z';
 
@@ -107,15 +107,24 @@ describe('projectAbgSignalToEvent — emit payload preservation', () => {
         expect(observable).toContain(REDACTED_CREDENTIAL);
     });
 
-    it('drops the payload for high-frequency streaming emits (per-token deltas) to keep the ledger lean', () => {
+    it('marks high-frequency streaming emits as ephemeral (not durable ledger rows)', () => {
+        // Given: per-token streaming emit
+        const textDelta = emitSignal('llm.text.delta', { delta: 'tok' });
+        const reasoningDelta = emitSignal('llm.reasoning.delta', { delta: 'think' });
+        const boundary = emitSignal('llm.turn.completed', { text: 'Done.' });
+
+        // When / Then: streaming is ephemeral; boundary is not
+        expect(isEphemeralStreamingAbgSignal(textDelta)).toBe(true);
+        expect(isEphemeralStreamingAbgSignal(reasoningDelta)).toBe(true);
+        expect(isEphemeralStreamingAbgSignal(boundary)).toBe(false);
+
+        // Projection still omits structured payload if ever projected
         const event = projectAbgSignalToEvent({
             graphId: 'graph_test',
             sessionId: 'session_test',
             timestamp: NOW,
-            signal: emitSignal('llm.text.delta', { delta: 'tok' }),
+            signal: textDelta,
         });
-
-        // No `abg.emit` at all for non-boundary emits — the ledger stays byte-identical to today.
         expect(event.abg?.emit).toBeUndefined();
     });
 

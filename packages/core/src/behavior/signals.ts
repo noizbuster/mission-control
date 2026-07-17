@@ -34,8 +34,7 @@ export type AbgSignalProjectionInput = {
  * proposed tool calls, tool outcomes, node errors). High-frequency streaming emits
  * (`llm.text.delta`, `llm.reasoning.delta`, ...) are NOT listed — their per-token payloads would
  * bloat the JSONL ledger, and the projection does not need them (the boundary events summarize the
- * turn). The structured `emit.type` is persisted ONLY for these boundary types; other emits stay
- * as `log` events with their type encoded in the message string (unchanged).
+ * turn). The structured `emit.type` is persisted ONLY for these boundary types.
  */
 const EMIT_TYPES_WITH_PERSISTED_PAYLOAD: ReadonlySet<string> = new Set([
     'llm.turn.completed',
@@ -55,6 +54,24 @@ const EMIT_TYPES_WITH_PERSISTED_PAYLOAD: ReadonlySet<string> = new Set([
     'blackboard.delete',
     'routing.dead_end',
 ]);
+
+/**
+ * High-frequency streaming emits. Live UI observes them via `onSignal` only; they must NOT enter
+ * the durable event ledger (neither as structured `abg.emit` nor as `log` rows). Persisting every
+ * token as a durable event caused multi-minute write-lane backlogs that blocked interrupt/exit.
+ */
+const HIGH_FREQUENCY_STREAMING_EMIT_TYPES: ReadonlySet<string> = new Set([
+    'llm.text.delta',
+    'llm.reasoning.delta',
+]);
+
+/**
+ * Returns true when the signal must not be projected into the durable `AgentEvent` list.
+ * Streaming token deltas stay observation-only.
+ */
+export function isEphemeralStreamingAbgSignal(signal: AbgSignal): boolean {
+    return signal.type === 'emit' && HIGH_FREQUENCY_STREAMING_EMIT_TYPES.has(signal.event.type);
+}
 
 export function projectAbgSignalToEvent(input: AbgSignalProjectionInput): AgentEvent {
     const observabilityRedactor = input.observabilityRedactor ?? createObservabilityRedactor();

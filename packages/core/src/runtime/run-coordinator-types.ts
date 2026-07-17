@@ -15,6 +15,11 @@ import type { SessionControlHost } from './session-control-host';
 
 export type RunCoordinatorStore = SessionAdmissionEventStore & {
     readonly appendEnvelopeWithStoreSequence?: (envelope: AgentEventEnvelope) => Promise<void>;
+    /**
+     * Optional batch append used by graph turn flush. Implementations should serialize the batch
+     * through one write-lane transaction and stop early when `signal` is aborted.
+     */
+    readonly appendMany?: (events: readonly AgentEvent[], signal?: AbortSignal) => Promise<void>;
 };
 
 export type RunCoordinatorPromptInput = Omit<AdmitPromptInput, 'delivery' | 'inputId' | 'messageId'> & {
@@ -42,6 +47,14 @@ export type RunCoordinatorTurnContext = {
     readonly readMessages: () => Promise<readonly AgentMessage[]>;
     readonly nextId: (prefix: string) => Promise<string>;
     readonly appendDurableEvent: (event: AgentEvent) => Promise<void>;
+    /**
+     * Optional batch durable append. Implementations should use a single write-lane transaction for
+     * the whole batch and honor `signal` between items so interrupt can stop a multi-minute drain.
+     */
+    readonly appendDurableEvents?: (
+        events: readonly AgentEvent[],
+        signal?: AbortSignal,
+    ) => Promise<void>;
     readonly appendDurableEnvelope: (envelope: AgentEventEnvelope) => Promise<void>;
     readonly onProviderEnvelope?: RunCoordinatorEnvelopeObserver;
     readonly onToolCall?: RunCoordinatorToolCallObserver;

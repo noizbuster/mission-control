@@ -32,7 +32,7 @@ import { createObservabilityRedactor, type ObservabilityRedactor } from '../prov
 import type { ToolRegistry } from '../tools/tool-registry';
 import { agentMessagesToSeedModelMessages } from './graph-coordinator-turn-messages';
 import type { RunCoordinatorProviderTurnResult } from './run-coordinator-lifecycle';
-import type { RunCoordinatorTurnRunner } from './run-coordinator-types';
+import type { RunCoordinatorTurnContext, RunCoordinatorTurnRunner } from './run-coordinator-types';
 
 export { agentMessagesToSeedModelMessages } from './graph-coordinator-turn-messages';
 
@@ -124,9 +124,9 @@ export function createGraphTurnRunner(wiring: GraphTurnRunnerWiring): RunCoordin
             observabilityRedactor,
             ...(approvalEvents.length > 0 ? { graphInput: { events: [...approvalEvents] } } : {}),
         });
-        for (const event of result.events) {
-            await context.appendDurableEvent(event);
-        }
+        // Persist graph events with abort awareness. A long post-run flush of thousands of rows
+        // previously kept the turn (and chat loop) uninterruptible for minutes after ESC/Ctrl+C.
+        await flushGraphTurnEvents(context, result.events);
         // An aborted run is an interrupt regardless of how the graph settled (it may surface the
         // abort as `failed`). Mirror the flat path's abort-awareness so the drain maps this to
         // `run.interrupted` rather than `run.failed`.
@@ -135,6 +135,40 @@ export function createGraphTurnRunner(wiring: GraphTurnRunnerWiring): RunCoordin
         }
         return mapGraphTurnResult(result);
     };
+}
+
+/**
+ * Flush graph-produced durable events. When the turn was aborted, only boundary/lifecycle events
+ * that are needed for a coherent interrupted receipt are kept (skip pure log spam). Always check
+ * abort between chunks so a backed-up write lane cannot trap the process after soft interrupt.
+ */
+export async function flushGraphTurnEvents(
+    context: Pick<RunCoordinatorTurnContext, 'signal' | 'appendDurableEvent' | 'appendDurableEvents'>,
+    events: readonly AgentEvent[],
+): Promise<void> {
+    const toFlush = context.signal.aborted ? events.filter(isInterruptFlushEvent) : events;
+    if (toFlush.length === 0) {
+        return;
+    }
+    if (context.appendDurableEvents !== undefined) {
+        // Single-lane batch path: one queue entry, abort-checked inside the store when possible.
+        await context.appendDurableEvents(toFlush, context.signal);
+        return;
+    }
+    for (const event of toFlush) {
+        if (context.signal.aborted && !isInterruptFlushEvent(event)) {
+            break;
+        }
+        await context.appendDurableEvent(event);
+    }
+}
+
+/**
+ * Events retained when flushing after abort. Lifecycle/run/approval/tool boundaries stay; pure
+ * `log` rows (including residual streaming noise) are dropped so interrupt can complete promptly.
+ */
+export function isInterruptFlushEvent(event: AgentEvent): boolean {
+    return event.type !== 'log';
 }
 
 /**

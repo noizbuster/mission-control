@@ -70,6 +70,7 @@ import {
 import {
     areModelProviderSelectionsEqual,
     ChatInputPump,
+    interruptActiveTurnBounded,
     nextChatLoopEvent,
     registerProcessTerminalCleanup,
     stopActiveTurn,
@@ -632,8 +633,7 @@ export async function runInteractiveChatSession(
             if (event.type === 'interrupt') {
                 if (activeTurn !== undefined) {
                     const interruptedTurn = activeTurn;
-                    interruptedTurn.interrupt('soft');
-                    await interruptedTurn.done;
+                    await interruptActiveTurnBounded(interruptedTurn);
                     activeTurn = undefined;
                     workflowChainDepth = 0;
                     pendingWorkflowTurns.length = 0;

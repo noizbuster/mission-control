@@ -31,6 +31,8 @@ import { ToolRegistry } from '../tools/tool-registry';
 import {
     agentMessagesToSeedModelMessages,
     createGraphTurnRunner,
+    flushGraphTurnEvents,
+    isInterruptFlushEvent,
     mapGraphTurnResult,
 } from './graph-coordinator-turn';
 import { type RunCoordinatorTurnContext, SessionRunCoordinator } from './run-coordinator';
@@ -104,6 +106,89 @@ function buildStubContext(messages: readonly AgentMessage[]): {
     };
     return { context, persisted };
 }
+
+describe('flushGraphTurnEvents', () => {
+    it('skips pure log events after abort and stops flushing when signal is aborted', async () => {
+        // Given: mixed lifecycle + log events, abort already set
+        const controller = new AbortController();
+        controller.abort();
+        const persisted: AgentEvent[] = [];
+        const events: AgentEvent[] = [
+            {
+                type: 'node.started',
+                timestamp: NOW,
+                sessionId: 'session_graph_turn',
+                message: 'node started',
+            },
+            {
+                type: 'log',
+                timestamp: NOW,
+                sessionId: 'session_graph_turn',
+                message: 'node emitted event: llm.text.delta',
+            },
+            {
+                type: 'node.completed',
+                timestamp: NOW,
+                sessionId: 'session_graph_turn',
+                message: 'node completed',
+            },
+        ];
+        const context: RunCoordinatorTurnContext = {
+            signal: controller.signal,
+            readMessages: async () => [],
+            nextId: async (prefix) => prefix,
+            appendDurableEvent: async (event) => {
+                persisted.push(event);
+            },
+            appendDurableEnvelope: async () => {},
+        };
+
+        // When
+        await flushGraphTurnEvents(context, events);
+
+        // Then: only non-log boundary events survive an aborted flush
+        expect(persisted.map((event) => event.type)).toEqual(['node.started', 'node.completed']);
+        expect(isInterruptFlushEvent(events[1] as AgentEvent)).toBe(false);
+    });
+
+    it('uses appendDurableEvents batch path when provided', async () => {
+        // Given
+        const batches: AgentEvent[][] = [];
+        const events: AgentEvent[] = [
+            {
+                type: 'node.started',
+                timestamp: NOW,
+                sessionId: 'session_graph_turn',
+                message: 'node started',
+            },
+            {
+                type: 'log',
+                timestamp: NOW,
+                sessionId: 'session_graph_turn',
+                message: 'noise',
+            },
+        ];
+        const context: RunCoordinatorTurnContext = {
+            signal: new AbortController().signal,
+            readMessages: async () => [],
+            nextId: async (prefix) => prefix,
+            appendDurableEvent: async () => {
+                throw new Error('should use batch path');
+            },
+            appendDurableEvents: async (batch) => {
+                batches.push([...batch]);
+            },
+            appendDurableEnvelope: async () => {},
+        };
+
+        // When
+        await flushGraphTurnEvents(context, events);
+
+        // Then
+        expect(batches).toHaveLength(1);
+        expect(batches[0]?.map((event) => event.type)).toEqual(['node.started', 'log']);
+    });
+});
 
 describe('mapGraphTurnResult', () => {
     it('maps completed/cancelled directly and falls back to a generic reason for failed/blocked with no events', () => {

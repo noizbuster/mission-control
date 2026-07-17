@@ -56,6 +56,57 @@ export class SqliteSessionEventAppender {
         });
     }
 
+    /**
+     * Append many durable events inside ONE write-lane transaction. Honors abort between items so
+     * interrupt can stop a multi-minute drain without waiting for the full backlog.
+     */
+    async appendMany(events: readonly AgentEvent[], signal?: AbortSignal): Promise<void> {
+        if (events.length === 0) {
+            return;
+        }
+        const prepared: Array<{ readonly event: AgentEvent; readonly toolCalls: ReturnType<typeof toolCallsFromEvent> }> =
+            [];
+        for (const event of events) {
+            if (signal?.aborted === true) {
+                break;
+            }
+            const parsedEvent = AgentEventSchema.parse(
+                redactAgentEventForObservability(event, this.options.observabilityRedactor),
+            );
+            ensureWritableEvent({ sessionId: this.options.sessionId, event: parsedEvent });
+            prepared.push({ event: parsedEvent, toolCalls: toolCallsFromEvent(parsedEvent) });
+        }
+        if (prepared.length === 0) {
+            return;
+        }
+        await this.options.enqueueWrite(async () => {
+            const createdAt = this.options.now();
+            await this.ensureSessionRows(createdAt);
+            let sequence = await this.readNextSequence();
+            for (const item of prepared) {
+                if (signal?.aborted === true) {
+                    break;
+                }
+                await recordSqliteDesktopToolProposals(
+                    this.options.runtime.client,
+                    this.options.sessionId,
+                    item.toolCalls,
+                    createdAt,
+                );
+                const envelope = AgentEventEnvelopeSchema.parse({
+                    eventId: this.options.createEventId(item.event, sequence),
+                    sequence,
+                    createdAt: this.options.now(),
+                    sessionId: this.options.sessionId,
+                    durability: 'durable',
+                    event: item.event,
+                });
+                await this.appendParsedEnvelope(envelope, sequence);
+                sequence += 1;
+            }
+        });
+    }
+
     async appendEnvelope(envelope: AgentEventEnvelope): Promise<void> {
         const toolCalls = toolCallsFromEvent(envelope.event);
         const parsedEnvelope = AgentEventEnvelopeSchema.parse(

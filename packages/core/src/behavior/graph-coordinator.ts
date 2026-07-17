@@ -144,14 +144,10 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                         if (trip?.kind === 'soft_land') {
                             softLandToolLoop(result.node, state, graph.id, input, trip);
                             softLanded = true;
-                        } else {
-                            softLanded = softLandToolLoopIfNearMaxNodeRuns(
-                                result.node,
-                                state,
-                                graph.id,
-                                input,
-                            );
                         }
+                    }
+                    if (!softLanded) {
+                        softLanded = softLandToolLoopIfNearMaxNodeRuns(result.node, state, graph.id, input);
                     }
                     enqueueSelectedTargets(
                         graph,
@@ -455,6 +451,13 @@ function nodeFailureSignature(signal: AbgSignal | undefined): string | undefined
     return 'node:failure';
 }
 
+/**
+ * Cap successful `llm.loop_active` re-entries on one node. Distinct from maxAttempts (failure
+ * retries only). Without this, a chatty maturity-check-style node can re-enter dozens of times
+ * and flood the event ledger before maxNodeRuns is hit.
+ */
+const LOOP_ACTIVE_SOFT_LAND_ATTEMPTS = 24;
+
 function softLandToolLoopIfNearMaxNodeRuns(
     node: AbgNodeSpec,
     state: CoordinatorState,
@@ -464,12 +467,17 @@ function softLandToolLoopIfNearMaxNodeRuns(
     if (state.blackboard.get('llm.loop_active') !== true) {
         return false;
     }
-    if (state.totalNodeRuns < state.maxNodeRuns - 1) {
+    const nodeAttempts = state.attemptsByNodeId.get(node.id) ?? 0;
+    const nearGraphCap = state.totalNodeRuns >= state.maxNodeRuns - 1;
+    const nearLoopCap = nodeAttempts >= LOOP_ACTIVE_SOFT_LAND_ATTEMPTS;
+    if (!nearGraphCap && !nearLoopCap) {
         return false;
     }
     softLandToolLoop(node, state, graphId, input, {
         eventCode: 'node_loop_soft_landed',
-        message: `soft-landed at maxNodeRuns ${state.maxNodeRuns}`,
+        message: nearLoopCap
+            ? `soft-landed after ${nodeAttempts} loop_active re-entries (cap ${LOOP_ACTIVE_SOFT_LAND_ATTEMPTS})`
+            : `soft-landed at maxNodeRuns ${state.maxNodeRuns}`,
     });
     return true;
 }

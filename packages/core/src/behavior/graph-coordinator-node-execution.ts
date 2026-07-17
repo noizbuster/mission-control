@@ -17,7 +17,7 @@ import type { AbgGraphRunnerInput } from './graph-runner';
 import { modelCallEvent, toolLifecycleEvent } from './graph-runner-events';
 import type { ToolActionFingerprint } from './loop-safety';
 import { type AbgNodeRegistry, runAbgNode } from './node-registry';
-import { projectAbgSignalToEvent } from './signals';
+import { isEphemeralStreamingAbgSignal, projectAbgSignalToEvent } from './signals';
 import { randomUUID } from 'node:crypto';
 
 export type NodeRunResult = {
@@ -145,6 +145,10 @@ async function runNode(
                 );
                 if (action !== undefined) toolActions.push(action);
             }
+        }
+        // Token deltas stay live-only via onSignal above; never bloat the durable ledger.
+        if (isEphemeralStreamingAbgSignal(signal)) {
+            continue;
         }
         state.events.push(
             projectAbgSignalToEvent({

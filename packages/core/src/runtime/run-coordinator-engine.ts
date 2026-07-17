@@ -318,6 +318,7 @@ export class SessionRunCoordinator {
             readMessages: () => this.modelVisibleMessages(),
             nextId: (prefix) => this.ids.next(prefix),
             appendDurableEvent: (event) => this.appendDurableEvent(event),
+            appendDurableEvents: (events, signal) => this.appendDurableEvents(events, signal),
             appendDurableEnvelope: (envelope) => this.appendDurableEnvelope(envelope),
             ...(this.options.onProviderEnvelope !== undefined
                 ? { onProviderEnvelope: this.options.onProviderEnvelope }
@@ -364,6 +365,40 @@ export class SessionRunCoordinator {
         const write = this.appendQueue.then(async () => {
             await this.options.store.append(event);
             await this.options.onDurableEvent?.(event);
+        });
+        this.appendQueue = write.catch(() => undefined);
+        return write;
+    }
+
+    /**
+     * Batch-append durable events under one appendQueue slot. Prefer store.appendMany when present
+     * (single write-lane transaction). Honor abort between items when falling back to one-by-one.
+     */
+    private appendDurableEvents(events: readonly AgentEvent[], signal?: AbortSignal): Promise<void> {
+        if (events.length === 0) {
+            return Promise.resolve();
+        }
+        const write = this.appendQueue.then(async () => {
+            const store = this.options.store;
+            if (store.appendMany !== undefined) {
+                await store.appendMany(events, signal);
+                if (this.options.onDurableEvent !== undefined) {
+                    for (const event of events) {
+                        if (signal?.aborted === true) {
+                            break;
+                        }
+                        await this.options.onDurableEvent(event);
+                    }
+                }
+                return;
+            }
+            for (const event of events) {
+                if (signal?.aborted === true) {
+                    break;
+                }
+                await store.append(event);
+                await this.options.onDurableEvent?.(event);
+            }
         });
         this.appendQueue = write.catch(() => undefined);
         return write;
