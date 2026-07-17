@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { MemoryBackendConfigSchema } from './memory';
+import { SshHostsConfigSchema } from './ssh-config';
 
 /**
  * MCP server configuration entries (opencode shape). Each named server is either a local stdio
@@ -24,7 +26,7 @@ const LocalMcpConfigEntrySchema = z.object({
 
 const RemoteMcpConfigEntrySchema = z.object({
     type: z.literal('remote'),
-    url: z.string().url(),
+    url: z.url(),
     headers: z.record(z.string(), z.string()).optional(),
     enabled: z.boolean().optional(),
     timeoutMs: z.number().int().positive().optional(),
@@ -78,6 +80,41 @@ const BrowserWebSocketConfigSchema = z
 export const BrowserConfigSchema = z.union([BrowserHttpConfigSchema, BrowserWebSocketConfigSchema]);
 export type BrowserConfig = z.infer<typeof BrowserConfigSchema>;
 
+export const TeamModeConfigSchema = z
+    .object({
+        enabled: z.boolean().default(false),
+        maxParallelMembers: z.number().int().min(1).max(8).default(4),
+        maxMembers: z.number().int().min(1).max(8).default(8),
+        messagePayloadMaxBytes: z.number().int().min(1_024).default(32_768),
+        recipientUnreadMaxBytes: z.number().int().min(1_024).default(262_144),
+    })
+    .strict();
+export type TeamModeConfig = z.infer<typeof TeamModeConfigSchema>;
+
+export const MonitorToolsConfigSchema = z
+    .object({
+        enabled: z.boolean().default(false),
+        liveModeEnabled: z.boolean().default(false),
+        maxMonitorsPerSession: z.number().int().positive().default(3),
+        maxRuntimeMs: z.number().int().positive().default(1_800_000),
+    })
+    .strict();
+export type MonitorToolsConfig = z.infer<typeof MonitorToolsConfigSchema>;
+
+export const SshConfigSchema = z
+    .object({
+        hosts: SshHostsConfigSchema,
+    })
+    .strict();
+export type SshConfig = z.infer<typeof SshConfigSchema>;
+
+export const DebugConfigSchema = z
+    .object({
+        enabled: z.boolean().default(false),
+    })
+    .strict();
+export type DebugConfig = z.infer<typeof DebugConfigSchema>;
+
 /**
  * The mission-control global `config.json` top-level shape. Only the global/user config defines
  * `mcp_env_allowlist` (omo security rule: walked project `.mcp.json` files cannot extend the
@@ -89,6 +126,11 @@ export const MissionControlConfigSchema = z
         mcp_env_allowlist: z.array(z.string()).optional(),
         lsp: LspConfigSchema.optional(),
         browser: BrowserConfigSchema.optional(),
+        memory: MemoryBackendConfigSchema.optional(),
+        team_mode: TeamModeConfigSchema.optional(),
+        monitor: MonitorToolsConfigSchema.optional(),
+        ssh: SshConfigSchema.optional(),
+        debug: DebugConfigSchema.optional(),
     })
     .strict();
 export type MissionControlConfig = z.infer<typeof MissionControlConfigSchema>;

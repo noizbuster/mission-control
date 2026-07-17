@@ -103,6 +103,63 @@ describe('McpConfigSchema', () => {
 });
 
 describe('MissionControlConfigSchema', () => {
+    it('keeps every optional section absent when parsing an empty config', () => {
+        const parsed = MissionControlConfigSchema.parse({});
+
+        expect(parsed).toEqual({});
+    });
+
+    it('parses configured gated tool families with an ssh host array', () => {
+        const parsed = MissionControlConfigSchema.parse({
+            memory: { backend: 'local' },
+            team_mode: { enabled: true, maxMembers: 6 },
+            monitor: { enabled: true, maxRuntimeMs: 60_000 },
+            ssh: { hosts: [{ name: 'staging', host: 'staging.example.test', port: 2222 }] },
+            debug: { enabled: true },
+        });
+
+        expect(parsed.memory?.backend).toBe('local');
+        expect(parsed.team_mode).toEqual({
+            enabled: true,
+            maxParallelMembers: 4,
+            maxMembers: 6,
+            messagePayloadMaxBytes: 32_768,
+            recipientUnreadMaxBytes: 262_144,
+        });
+        expect(parsed.monitor).toEqual({
+            enabled: true,
+            liveModeEnabled: false,
+            maxMonitorsPerSession: 3,
+            maxRuntimeMs: 60_000,
+        });
+        expect(parsed.ssh?.hosts).toEqual([{ name: 'staging', host: 'staging.example.test', port: 2222 }]);
+        expect(parsed.debug?.enabled).toBe(true);
+    });
+
+    it('defaults present gated tool sections to safe-off values', () => {
+        const parsed = MissionControlConfigSchema.parse({
+            memory: {},
+            team_mode: {},
+            monitor: {},
+            ssh: {},
+            debug: {},
+        });
+
+        expect(parsed.memory?.backend).toBe('off');
+        expect(parsed.team_mode?.enabled).toBe(false);
+        expect(parsed.monitor?.enabled).toBe(false);
+        expect(parsed.ssh?.hosts).toEqual([]);
+        expect(parsed.debug?.enabled).toBe(false);
+    });
+
+    it('rejects a record-shaped ssh hosts value', () => {
+        const result = MissionControlConfigSchema.safeParse({
+            ssh: { hosts: { staging: { name: 'staging', host: 'staging.example.test' } } },
+        });
+
+        expect(result.success).toBe(false);
+    });
+
     it('parses a global config with mcp servers and an env allowlist', () => {
         const parsed = MissionControlConfigSchema.parse({
             mcp: { fs: { type: 'local', command: ['npx', 'fs-mcp'] } },

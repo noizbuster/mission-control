@@ -8,10 +8,8 @@ import { z } from 'zod';
  * default no-op state, tools not registered) and `local` (an in-memory-only stub that
  * round-trips retain -> recall within a single process). The remaining two — `mnemopi`
  * (SQLite) and `hindsight` (a remote server) — are declared as catalog entries only;
- * their execution is deferred. They mirror the mission-control providers-without-adapters
- * convention: the catalog entry exists before the engine lands, so a configured-but-
- * unported backend registers and advertises its tools but returns
- * `memory_backend_not_configured` when invoked.
+ * their execution is deferred. They remain recognized config values but do not register or
+ * advertise memory tools until their engines are implemented.
  *
  * Values that cross the protocol boundary (config files, catalog listings) are validated
  * against {@linkcode MemoryBackendIdSchema} / {@linkcode MemoryBackendSchema}.
@@ -72,14 +70,12 @@ export const BUILTIN_MEMORY_BACKENDS: readonly MemoryBackend[] = [
         id: 'mnemopi',
         supported: false,
         description:
-            'SQLite-backed memory engine. Catalog seam only — execution deferred. Tools register and ' +
-            'advertise but return memory_backend_not_configured until the engine is ported.',
+            'SQLite-backed memory engine. Catalog seam only — execution deferred and tools are not advertised.',
     },
     {
         id: 'hindsight',
         supported: false,
         description:
-            'Remote Hindsight server backend. Catalog seam only — execution deferred. Tools register and ' +
-            'advertise but return memory_backend_not_configured until the engine is ported.',
+            'Remote Hindsight server backend. Catalog seam only — execution deferred and tools are not advertised.',
     },
 ];

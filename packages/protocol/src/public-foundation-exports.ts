@@ -119,6 +119,8 @@ export {
 export {
     type BrowserConfig,
     BrowserConfigSchema,
+    type DebugConfig,
+    DebugConfigSchema,
     type LocalMcpConfigEntry,
     type LspConfig,
     LspConfigSchema,
@@ -130,7 +132,13 @@ export {
     McpProjectConfigSchema,
     type MissionControlConfig,
     MissionControlConfigSchema,
+    type MonitorToolsConfig,
+    MonitorToolsConfigSchema,
     type RemoteMcpConfigEntry,
+    type SshConfig,
+    SshConfigSchema,
+    type TeamModeConfig,
+    TeamModeConfigSchema,
 } from './mcp-config';
 export {
     type GenerateImageInput,

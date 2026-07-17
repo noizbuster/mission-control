@@ -1,5 +1,4 @@
-// allow: SIZE_OK -- HEAD 357 -> current 357 pure LOC; one protocol public-export contract matrix for every boundary schema.
-import { describe, expect, it } from 'vitest';
+// allow: SIZE_OK -- HEAD 357 -> current 374 pure LOC; one protocol public-export contract matrix for every boundary schema.
 import {
     AbgGraphSnapshotSchema,
     AbgGraphSpecSchema,
@@ -21,6 +20,7 @@ import {
     CategoryCatalogSchema,
     CategorySchema,
     DELIVERY_MODES,
+    DebugConfigSchema,
     DeliverySchema,
     DiffFileSchema,
     DiffHunkSchema,
@@ -28,11 +28,13 @@ import {
     McpConfigEntrySchema,
     McpConfigSchema,
     McpProjectConfigSchema,
+    MemoryBackendConfigSchema,
     MissionControlConfigSchema,
     ModeDeclarationSchema,
     ModelProviderSelectionSchema,
     ModelVariantEntrySchema,
     ModeSchema,
+    MonitorToolsConfigSchema,
     PERMISSION_KINDS,
     PermissionDecisionSchema,
     PermissionKindSchema,
@@ -85,6 +87,9 @@ import {
     SidecarTaskFailedResponseSchema,
     SidecarTaskInputSchema,
     SidecarTaskOutputSchema,
+    SshConfigSchema,
+    SshHostsConfigSchema,
+    TeamModeConfigSchema,
     ToolCallSchema,
     ToolResultSchema,
     TranscriptDeliveryModeSchema,
@@ -107,6 +112,7 @@ import {
     WorkflowDiscoveryDiagnosticSchema,
     WorkflowSpecSchema,
 } from '@mission-control/protocol';
+import { describe, expect, it } from 'vitest';
 
 describe('protocol public exports', () => {
     it('exports schemas for public event session permission and sidecar boundaries', () => {
@@ -156,6 +162,17 @@ describe('protocol public exports', () => {
         expect(() => McpConfigEntrySchema.parse({ type: 'remote', url: 'nope' })).toThrow();
         expect(McpConfigSchema.parse({})).toEqual({});
         expect(MissionControlConfigSchema.shape.mcp).toBeDefined();
+        expect(MissionControlConfigSchema.shape.memory).toBeDefined();
+        expect(MissionControlConfigSchema.shape.team_mode).toBeDefined();
+        expect(MissionControlConfigSchema.shape.monitor).toBeDefined();
+        expect(MissionControlConfigSchema.shape.ssh).toBeDefined();
+        expect(MissionControlConfigSchema.shape.debug).toBeDefined();
+        expect(MemoryBackendConfigSchema.parse({}).backend).toBe('off');
+        expect(TeamModeConfigSchema.parse({}).enabled).toBe(false);
+        expect(MonitorToolsConfigSchema.parse({}).enabled).toBe(false);
+        expect(SshHostsConfigSchema.parse(undefined)).toEqual([]);
+        expect(SshConfigSchema.parse({}).hosts).toEqual([]);
+        expect(DebugConfigSchema.parse({}).enabled).toBe(false);
         expect(McpProjectConfigSchema.shape.mcpServers).toBeDefined();
         expect(ApprovalPolicyDecisionSchema.parse('requires_approval')).toBe('requires_approval');
         expect(ApprovalLifecycleStateSchema.parse('pending')).toBe('pending');

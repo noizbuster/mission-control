@@ -1,7 +1,7 @@
 /**
  * SSH host configuration schema (config-gated credential surface for the `ssh` tool).
  *
- * Hosts are declared in user/project config and passed into the ssh tool at
+ * Hosts are declared in user config and passed into the ssh tool at
  * registration time. The tool is config-gated: when no hosts are configured the
  * tool is not registered, so the model can never discover a half-wired ssh
  * surface. This mirrors oh-my-pi's `capability/ssh` shape (MIT), ported to Zod
@@ -32,6 +32,5 @@ export const SshHostConfigSchema = z
 
 export type SshHostConfig = z.infer<typeof SshHostConfigSchema>;
 
-/** Map of host name to its config (the on-disk `ssh.hosts` shape). */
-export const SshHostsConfigSchema = z.record(z.string(), SshHostConfigSchema);
+export const SshHostsConfigSchema = z.array(SshHostConfigSchema).default([]);
 export type SshHostsConfig = z.infer<typeof SshHostsConfigSchema>;
