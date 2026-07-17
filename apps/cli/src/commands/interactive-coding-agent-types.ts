@@ -13,7 +13,13 @@ import type {
     TaskToolRuntimeServices,
     WorkflowRegistry,
 } from '@mission-control/core';
-import type { AbgGraphSpec, AgentEvent, ModelProviderSelection, WorkflowSpec } from '@mission-control/protocol';
+import type {
+    AbgGraphSpec,
+    AgentEvent,
+    MissionControlConfig,
+    ModelProviderSelection,
+    WorkflowSpec,
+} from '@mission-control/protocol';
 import type { AbgOverlayController, ApprovalLevel } from '@mission-control/tui/state';
 import type { ChatOutput } from './interactive-chat-io';
 
@@ -56,5 +62,6 @@ export type CodingAgentTurnOptions = {
     readonly workflowRegistry?: WorkflowRegistry;
     readonly onWorkflowStarted?: (spec: WorkflowSpec, prompt: string) => void;
     readonly profileName?: string;
+    readonly config?: MissionControlConfig;
     readonly taskRuntimeServices?: TaskToolRuntimeServices;
 };

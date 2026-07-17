@@ -135,7 +135,7 @@ describe('interactive coding tool registry surface', () => {
         tempRoots.length = 0;
     });
 
-    it('advertises glob, todowrite, webfetch, and task in the built registry', async () => {
+    it('advertises staged preview, glob, todowrite, webfetch, and task tools in the built registry', async () => {
         const workspaceRoot = mkdtempSync(join(tmpdir(), 'mctrl-interactive-registry-'));
         tempRoots.push(workspaceRoot);
         const output = createBufferedChatOutput();
@@ -147,6 +147,9 @@ describe('interactive coding tool registry surface', () => {
 
         const advertised = registry.registry.advertise().map((advertisement: { name: string }) => advertisement.name);
         expect(advertised).toContain('glob');
+        expect(advertised).toContain('ast_grep');
+        expect(advertised).toContain('ast_edit');
+        expect(advertised).toContain('resolve');
         expect(advertised).toContain('todowrite');
         expect(advertised).toContain('webfetch');
         expect(advertised).toContain('task');

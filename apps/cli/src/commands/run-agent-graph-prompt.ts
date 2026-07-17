@@ -31,7 +31,12 @@ import {
     type ToolRegistry,
     wrapFlatProviderAsSdkModel,
 } from '@mission-control/core';
-import type { AbgGraphSpec, AbgNodeModelOptions, ModelProviderSelection } from '@mission-control/protocol';
+import type {
+    AbgGraphSpec,
+    AbgNodeModelOptions,
+    MissionControlConfig,
+    ModelProviderSelection,
+} from '@mission-control/protocol';
 import type { ProviderAuthStore } from '../auth-store';
 import { createCliProviderCredentialResolver } from '../provider-credential-resolver';
 import { buildCodingAgentSystemPromptEnv, loadTrustedProjectInstructionResources } from './coding-agent-context';
@@ -48,6 +53,7 @@ export type RunCodingPromptOnGraphInput = {
     readonly selection: ModelProviderSelection;
     readonly prompt: string;
     readonly workspaceRoot: string;
+    readonly config?: MissionControlConfig;
     /**
      * Override the default coding-agent graph with a workflow's graph spec. When omitted,
      * `buildCodingAgentGraphForSelection` builds the standard coding-agent graph.
@@ -96,10 +102,12 @@ export async function runCodingPromptOnGraph(input: RunCodingPromptOnGraphInput)
                   registry: input.toolRegistry,
                   mcpConnectionManager: new McpConnectionManager(),
                   browserTool: null,
+                  monitorCleanup: null,
                   ownsMcpConnectionManager: true,
               }
             : await createNonInteractiveToolRegistry({
                   workspaceRoot: input.workspaceRoot,
+                  config: input.config ?? {},
                   enableTrustedBash: await workspaceHasTrustedBash(input.workspaceRoot),
                   requestPermission: (request) => input.runtime.requestPermission(request),
                   resolveSdkModel,

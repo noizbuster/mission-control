@@ -85,6 +85,25 @@ describe('cli permission policy', () => {
         expect(decision.reason).toContain('task');
     });
 
+    it('scopes the exact ast_edit apply action through edit approval', async () => {
+        const request: PermissionRequest = {
+            id: 'permission_ast_edit_apply',
+            action: 'ast_edit apply',
+            reason: 'apply staged structural rewrite',
+            permission: {
+                kind: 'edit',
+                patterns: ['src/example.ts'],
+                workspaceRoot: '/tmp/workspace',
+            },
+        };
+
+        expect(cliAllowsAction(request.action)).toBe(true);
+        await expect(createCliPermissionDecision(request)).resolves.toMatchObject({
+            requestId: request.id,
+            status: 'requires_approval',
+        });
+    });
+
     it('denies unknown CLI actions', async () => {
         const request: PermissionRequest = {
             id: 'permission_unknown',

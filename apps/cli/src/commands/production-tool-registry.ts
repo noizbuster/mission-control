@@ -1,6 +1,12 @@
 import type { BrowserToolAdvertisement, ToolRegistryWithMcp } from '@mission-control/core';
 
-export type ProductionToolRegistry = ToolRegistryWithMcp & {
+export type ProductionToolCleanup = () => Promise<void>;
+
+export type ProductionToolRegistryResources = ToolRegistryWithMcp & {
+    readonly monitorCleanup: ProductionToolCleanup | null;
+};
+
+export type ProductionToolRegistry = ProductionToolRegistryResources & {
     readonly browserTool: BrowserToolAdvertisement | null;
     readonly ownsMcpConnectionManager: boolean;
 };
@@ -10,7 +16,7 @@ export type CloseProductionToolRegistryOptions = {
 };
 
 export function createProductionToolRegistry(
-    tools: ToolRegistryWithMcp,
+    tools: ProductionToolRegistryResources,
     browserTool: BrowserToolAdvertisement | null,
     ownsMcpConnectionManager: boolean,
 ): ProductionToolRegistry {
@@ -25,6 +31,7 @@ export async function closeProductionToolRegistry(
     const settlements = await Promise.allSettled([
         ...(disconnectMcp ? [tools.mcpConnectionManager.disconnectAll()] : []),
         tools.browserTool?.close(),
+        tools.monitorCleanup?.(),
     ]);
     const cleanupErrors = tools.browserTool?.getCleanupErrors() ?? [];
     const errors: unknown[] = settlements
@@ -46,7 +53,7 @@ export async function withProductionToolSetup<T>(
 }
 
 export async function completeProductionToolSetup(
-    tools: ToolRegistryWithMcp,
+    tools: ProductionToolRegistryResources,
     ownsMcpConnectionManager: boolean,
     setup: () => Promise<BrowserToolAdvertisement | null>,
     label: string,

@@ -8,7 +8,12 @@ import type {
     SdkModelResolver,
 } from '@mission-control/core';
 import { redactAgentEventForObservability } from '@mission-control/core';
-import type { AgentEvent, AgentSnapshot, ModelProviderSelection } from '@mission-control/protocol';
+import type {
+    AgentEvent,
+    AgentSnapshot,
+    MissionControlConfig,
+    ModelProviderSelection,
+} from '@mission-control/protocol';
 import { closeTreeSitterClient } from '@mission-control/tui/highlight';
 import type { CliArgs } from '../args';
 import type { ProviderAuthStore } from '../auth-store';
@@ -40,6 +45,7 @@ type RunInteractiveAgentInput = {
     readonly selectedModelProvider: ModelProviderSelection;
     readonly createProvider: (selection: ModelProviderSelection) => ProviderAdapter;
     readonly workspaceRoot: string;
+    readonly config: MissionControlConfig;
     readonly persistentStore: PersistentMemoryStore | undefined;
     readonly options: InteractiveRunOptions;
     readonly observabilityRedactor: ObservabilityRedactor;
@@ -89,6 +95,7 @@ export async function runInteractiveAgent(input: RunInteractiveAgentInput): Prom
             observabilityRedactor: input.observabilityRedactor,
             ...(interactiveSessionId !== undefined ? { sessionId: interactiveSessionId } : {}),
             workspaceRoot: input.workspaceRoot,
+            config: input.config,
             modelChoices: await listAuthenticatedModelChoices(
                 input.authStore,
                 input.options.modelDiscovery ?? createDefaultModelDiscovery(),

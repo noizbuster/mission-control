@@ -16,7 +16,13 @@ import {
     type SdkModelResolver,
     type TaskToolRuntimeServices,
 } from '@mission-control/core';
-import type { AbgGraphSpec, AgentEvent, ModelProviderSelection, WorkflowSpec } from '@mission-control/protocol';
+import type {
+    AbgGraphSpec,
+    AgentEvent,
+    MissionControlConfig,
+    ModelProviderSelection,
+    WorkflowSpec,
+} from '@mission-control/protocol';
 import type { AbgOverlayController, ApprovalLevel } from '@mission-control/tui/state';
 import type { ChatOutput } from './interactive-chat-io';
 import { type ActiveCodingAgentTurn, startCodingAgentTurn } from './interactive-coding-agent';
@@ -46,6 +52,7 @@ export type PromptTurnContext = {
     readonly workflowRegistry?: WorkflowRegistry;
     readonly onWorkflowStarted?: WorkflowStartedCallback;
     readonly profileName?: string;
+    readonly config?: MissionControlConfig;
     readonly taskRuntimeServices?: TaskToolRuntimeServices;
     readonly observabilityRedactor?: ObservabilityRedactor;
 };
@@ -158,6 +165,7 @@ export async function startPromptTurn(
         ...(coding.workflowRegistry !== undefined ? { workflowRegistry: coding.workflowRegistry } : {}),
         ...(coding.onWorkflowStarted !== undefined ? { onWorkflowStarted: coding.onWorkflowStarted } : {}),
         ...(coding.profileName !== undefined ? { profileName: coding.profileName } : {}),
+        ...(coding.config !== undefined ? { config: coding.config } : {}),
         ...(coding.taskRuntimeServices !== undefined ? { taskRuntimeServices: coding.taskRuntimeServices } : {}),
     });
 }

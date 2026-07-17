@@ -106,6 +106,7 @@ export async function runApprovalResumeAction(
             ...(coding.authStore !== undefined ? { authStore: coding.authStore } : {}),
             ...(coding.workflowRegistry !== undefined ? { workflowRegistry: coding.workflowRegistry } : {}),
             ...(coding.profileName !== undefined ? { profileName: coding.profileName } : {}),
+            ...(coding.config !== undefined ? { config: coding.config } : {}),
             ...(coding.taskRuntimeServices !== undefined ? { taskRuntimeServices: coding.taskRuntimeServices } : {}),
             ...(resumableWorkflow !== undefined ? { graph: resumableWorkflow.graph } : {}),
         });

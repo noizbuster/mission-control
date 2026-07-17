@@ -3,6 +3,7 @@ import {
     AgentRuntime,
     createPersistentStore,
     createProviderAuthStoreObservabilityRedactor,
+    loadResolvedMcpConfig,
     resolveMissionControlDataDir,
 } from '@mission-control/core';
 import type { CliArgs } from '../args';
@@ -17,13 +18,13 @@ import type { RunAgentOptions } from './run-agent-options';
 import { resolveWorkspaceRoot } from './run-agent-workspace';
 
 export { createCliProviderForSelection } from './provider-factory';
+export type { RunAgentOptions } from './run-agent-options';
 export {
     resolveWorkflowInvocation,
     type WorkflowInvocation,
     type WorkflowInvocationInput,
 } from './run-agent-workflow';
 export { detectWorkspaceRoot, resolveWorkspaceRoot } from './run-agent-workspace';
-export type { RunAgentOptions } from './run-agent-options';
 
 export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Promise<string> {
     const authStore = options.authStore ?? createProviderAuthStore();
@@ -38,6 +39,12 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
         options.createProvider ?? ((selection) => createCliProviderForSelection(selection, authStore));
     const provider = options.provider ?? createProvider(selectedModelProvider);
     const workspaceRoot = options.workspaceRoot ?? resolveWorkspaceRoot(args.workspacePath);
+    const config = (
+        await loadResolvedMcpConfig({
+            workspaceRoot,
+            ...(args.profileName !== undefined ? { profileName: args.profileName } : {}),
+        })
+    ).config;
     const agentModelLookup = await buildAgentModelLookup(workspaceRoot);
     const persistentStore = await createPersistentStore(resolveMissionControlDataDir());
     const observabilityRedactor = await createProviderAuthStoreObservabilityRedactor(authStore);
@@ -66,6 +73,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
             selectedModelProvider,
             createProvider,
             workspaceRoot,
+            config,
             observabilityRedactor,
             ...(persistentStore !== undefined ? { persistentStore } : { persistentStore: undefined }),
             options,
@@ -80,6 +88,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
         provider,
         selectedModelProvider,
         workspaceRoot,
+        config,
         observabilityRedactor,
         ...(graph !== undefined ? { graph } : {}),
         ...(agentModelLookup !== undefined ? { agentModelLookup } : {}),

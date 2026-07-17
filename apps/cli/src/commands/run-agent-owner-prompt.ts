@@ -18,7 +18,7 @@ import {
     type TaskToolRuntimeServices,
     type ToolRegistry,
 } from '@mission-control/core';
-import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
+import type { AgentEvent, MissionControlConfig, ModelProviderSelection } from '@mission-control/protocol';
 import { createCliPermissionDecision, type NonInteractiveAutomationPolicy } from './cli-permission-policy';
 import { createGraphObservabilityRedactor } from './graph-observability-redactor';
 import { resolveMissionControlServices } from './mission-control-services-resolver';
@@ -32,6 +32,7 @@ export type RunOwnerPromptInput = {
     readonly provider: ProviderAdapter;
     readonly modelProviderSelection: ModelProviderSelection;
     readonly workspaceRoot: string;
+    readonly config?: MissionControlConfig;
     readonly prompt: string;
     readonly emitEvent: (event: AgentEvent) => void;
     readonly observeStoredEvent: (event: AgentEvent) => void;
@@ -100,6 +101,7 @@ export async function runOwnerPrompt(input: RunOwnerPromptInput): Promise<RunOwn
     try {
         tools = await createNonInteractiveToolRegistry({
             workspaceRoot: input.workspaceRoot,
+            config: input.config ?? {},
             enableTrustedBash: await workspaceHasTrustedBash(input.workspaceRoot),
             requestPermission: (request) =>
                 gate.requestPermission(request, {

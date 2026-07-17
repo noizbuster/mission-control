@@ -1,4 +1,4 @@
-// allow: SIZE_OK -- HEAD 888 -> current 914 pure LOC; one interactive chat event-loop state machine after action extraction.
+// allow: SIZE_OK -- HEAD 888 -> current 930 pure LOC; one interactive chat event-loop state machine after action extraction.
 import {
     type AgentRuntime,
     type AskUserQuestionRequest,
@@ -17,7 +17,13 @@ import {
     type Skill,
     WorkflowRegistry,
 } from '@mission-control/core';
-import type { AgentEvent, AgentSnapshot, ModelProviderSelection, WorkflowSpec } from '@mission-control/protocol';
+import type {
+    AgentEvent,
+    AgentSnapshot,
+    MissionControlConfig,
+    ModelProviderSelection,
+    WorkflowSpec,
+} from '@mission-control/protocol';
 import type { QuestionBatchEntry, QuestionOption } from '@mission-control/tui/chat';
 import { closeTreeSitterClient } from '@mission-control/tui/highlight';
 import type {
@@ -61,7 +67,6 @@ import {
     createTerminalChatOutput,
     maxChatPromptLength,
 } from './interactive-chat-io';
-import { interactiveSessionCliStdout } from './interactive-session-cli-stdout';
 import {
     areModelProviderSelectionsEqual,
     ChatInputPump,
@@ -80,6 +85,7 @@ import {
 import { formatModelProviderStatus } from './interactive-chat-status';
 import { createUndoRedoStack, type UndoRedoStack } from './interactive-chat-undo-redo-stack';
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent';
+import { interactiveSessionCliStdout } from './interactive-session-cli-stdout';
 import {
     getOrCreateMissionControlServices,
     isOmoRootNotFoundError,
@@ -139,6 +145,7 @@ export type InteractiveChatOptions = {
     readonly provider?: ProviderAdapter;
     readonly resolveProviderForSelection?: (selection: ModelProviderSelection) => ProviderAdapter;
     readonly workspaceRoot?: string;
+    readonly config?: MissionControlConfig;
     readonly emitEvent?: (event: AgentEvent) => void;
     readonly observeStoredEvent?: (event: AgentEvent) => void;
     readonly subscribeEvents?: (listener: (event: AgentEvent) => void) => () => void;
@@ -428,7 +435,8 @@ export async function runInteractiveChatSession(
                 const entry = entries.find((it) => it.sessionId === sid);
                 name = entry?.name;
             }
-        } catch {
+        } catch (error) {
+            if (!(error instanceof Error)) throw error;
             // best-effort: leave name undefined on catalog read failure
         }
         sessionDisplayNameController.update(name ?? '');
@@ -746,6 +754,7 @@ export async function runInteractiveChatSession(
                     sessionId: currentSessionId,
                     sessionStore: currentSessionStore,
                     workspaceRoot: options.workspaceRoot,
+                    ...(options.config !== undefined ? { config: options.config } : {}),
                     skills: sessionSkills,
                     onSkillsReloaded: (skills) => {
                         sessionSkills = skills;

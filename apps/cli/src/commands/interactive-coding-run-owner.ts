@@ -85,6 +85,7 @@ export async function createInteractiveRunOwner(
         ...(options.workflowRegistry !== undefined ? { workflowRegistry: options.workflowRegistry } : {}),
         ...(options.onWorkflowStarted !== undefined ? { onWorkflowStarted: options.onWorkflowStarted } : {}),
         ...(options.profileName !== undefined ? { profileName: options.profileName } : {}),
+        ...(options.config !== undefined ? { config: options.config } : {}),
         ...(options.taskRuntimeServices !== undefined ? { services: options.taskRuntimeServices } : {}),
     };
     const tools = await createInteractiveToolRegistry(toolOptions, approvals);

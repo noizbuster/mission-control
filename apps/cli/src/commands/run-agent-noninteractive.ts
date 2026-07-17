@@ -1,18 +1,11 @@
 import {
-    type AgentModelLookup,
-    type AgentRuntime,
     createAgentNodeRunBudgetGrantor,
     createCodingAgentNodeRegistry,
     createGraphTurnRunner,
-    type ObservabilityRedactor,
     PermissionGateError,
-    type PersistentMemoryStore,
-    type ProviderAdapter,
     redactAgentEventForObservability,
 } from '@mission-control/core';
-import type { AbgGraphSpec, AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
-import type { CliArgs } from '../args';
-import type { ProviderAuthStore } from '../auth-store';
+import type { AgentEvent } from '@mission-control/protocol';
 import { buildCodingAgentSystemPromptEnv, loadTrustedProjectInstructionResources } from './coding-agent-context';
 import { redactWorkflowError } from './interactive-workflow-run-outcome';
 import type { MissionControlServices } from './mission-control-services';
@@ -23,7 +16,7 @@ import {
     resolveGraphSdkModel,
     runCodingPromptOnGraph,
 } from './run-agent-graph-prompt';
-import type { RunAgentOptions } from './run-agent-options';
+import type { RunNoninteractiveAgentInput } from './run-agent-noninteractive-types';
 import { runOwnerPrompt } from './run-agent-owner-prompt';
 import { closePersistentStore, createRenderer } from './run-agent-rendering';
 import { createRunEventRecorder } from './run-agent-session';
@@ -36,20 +29,6 @@ import {
     workflowOutcomeFromGraphStatus,
     workflowOutcomeFromOwnerStatus,
 } from './run-agent-workflow-run';
-
-type RunNoninteractiveAgentInput = {
-    readonly args: CliArgs;
-    readonly options: RunAgentOptions;
-    readonly runtime: AgentRuntime;
-    readonly authStore: ProviderAuthStore;
-    readonly provider: ProviderAdapter;
-    readonly selectedModelProvider: ModelProviderSelection;
-    readonly workspaceRoot: string;
-    readonly graph?: AbgGraphSpec;
-    readonly agentModelLookup?: AgentModelLookup;
-    readonly persistentStore?: PersistentMemoryStore;
-    readonly observabilityRedactor: ObservabilityRedactor;
-};
 
 export async function runNoninteractiveAgent(input: RunNoninteractiveAgentInput): Promise<string> {
     const { args, options, runtime, authStore, provider, selectedModelProvider, workspaceRoot, graph } = input;
@@ -143,6 +122,7 @@ export async function runNoninteractiveAgent(input: RunNoninteractiveAgentInput)
                     provider,
                     modelProviderSelection: selectedModelProvider,
                     workspaceRoot,
+                    config: input.config,
                     prompt: effectivePrompt,
                     emitEvent: emitRuntimeEvent,
                     observeStoredEvent,
@@ -199,6 +179,7 @@ export async function runNoninteractiveAgent(input: RunNoninteractiveAgentInput)
                     selection: selectedModelProvider,
                     prompt: effectivePrompt,
                     workspaceRoot,
+                    config: input.config,
                     ...(promptGraph !== undefined ? { graph: promptGraph } : {}),
                     ...(options.resolveSdkModel !== undefined ? { resolveSdkModel: options.resolveSdkModel } : {}),
                     authStore,

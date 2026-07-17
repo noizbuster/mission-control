@@ -20,7 +20,7 @@ describe('non-interactive coding tool registry surface', () => {
         tempRoots.length = 0;
     });
 
-    it('advertises glob, todowrite, webfetch, task, and skill through createNonInteractiveToolRegistry', async () => {
+    it('advertises staged preview, glob, todowrite, webfetch, task, and skill tools', async () => {
         const workspaceRoot = mkdtempSync(join(tmpdir(), 'mctrl-noninteractive-registry-'));
         tempRoots.push(workspaceRoot);
 
@@ -34,6 +34,9 @@ describe('non-interactive coding tool registry surface', () => {
 
         const advertised = result.registry.advertise().map((advertisement: { name: string }) => advertisement.name);
         expect(advertised).toContain('glob');
+        expect(advertised).toContain('ast_grep');
+        expect(advertised).toContain('ast_edit');
+        expect(advertised).toContain('resolve');
         expect(advertised).toContain('todowrite');
         expect(advertised).toContain('webfetch');
         expect(advertised).toContain('task');

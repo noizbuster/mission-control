@@ -3,11 +3,7 @@ import type { AgentEvent } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args';
 import { runAgent } from './run-agent';
-import {
-    createBufferedChatOutput,
-    createEmptyAuthStore,
-    createScriptedChatInput,
-} from './run-agent-chat-test-support';
+import { createBufferedChatOutput, createEmptyAuthStore, createScriptedChatInput } from './run-agent-chat-test-support';
 import {
     addFilePatch,
     fakeCommandExecutor,
@@ -34,6 +30,10 @@ describe('runAgent interactive coding tool registry', () => {
         await mkdir(join(workspaceRoot, 'src'));
         await writeFile(join(workspaceRoot, 'src', 'index.ts'), 'export const value = 1;\n', 'utf8');
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
+        vi.stubEnv('GEMINI_API_KEY', '');
+        vi.stubEnv('GOOGLE_API_KEY', '');
+        vi.stubEnv('OPENAI_API_KEY', '');
+        vi.stubEnv('XAI_API_KEY', '');
         const chatOutput = createBufferedChatOutput();
         const requests: ProviderTurnRequest[] = [];
         const events: AgentEvent[] = [];
@@ -82,13 +82,22 @@ describe('runAgent interactive coding tool registry', () => {
         });
 
         expect(firstAdvertisedToolNames(requests)).toEqual([
+            'repo.read',
+            'repo.list',
+            'repo.search',
             'read',
             'ls',
             'grep',
             'find',
             'repo.read.tagged',
+            'session_list',
+            'session_read',
+            'session_info',
+            'session_search',
             'glob',
             'ast_grep',
+            'ast_edit',
+            'resolve',
             'todowrite',
             'skill',
             'workflow',
@@ -98,8 +107,13 @@ describe('runAgent interactive coding tool registry', () => {
             'file.patch',
             'hashline_edit',
             'command.run',
+            'look_at',
+            'inspect_image',
+            'checkpoint',
+            'rewind',
             'task',
             'lsp',
+            'lsp_rename',
         ]);
         expect(output).not.toContain('Approve ls?');
         expect(output).not.toContain('Approve read?');
@@ -147,6 +161,12 @@ describe('runAgent interactive coding tool registry', () => {
                             toolName: 'read',
                             argumentsJson: JSON.stringify({ path: 'temp/ref-repos/opencode/README.md' }),
                         },
+                        {
+                            kind: 'tool_call_completed',
+                            toolCallId: 'repo_read_denied',
+                            toolName: 'repo.read',
+                            argumentsJson: JSON.stringify({ path: 'temp/ref-repos/opencode/README.md' }),
+                        },
                         { kind: 'response_completed', content: 'read denied by registry' },
                     ],
                     [{ kind: 'response_completed', content: 'read denied' }],
@@ -156,6 +176,8 @@ describe('runAgent interactive coding tool registry', () => {
         });
 
         expect(output).not.toContain('Approve read?');
+        expect(output).not.toContain('Approve repo.read?');
         expect(output).toContain('read failed: workspace_denied');
+        expect(output).toContain('repo.read failed: workspace_denied');
     });
 });
