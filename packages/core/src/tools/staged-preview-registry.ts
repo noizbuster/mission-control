@@ -40,12 +40,13 @@ export type StagedPreviewSummary = {
  *   and throw on staleness or write failure; it is the only path that writes.
  * - `discard` is optional cleanup (e.g. releasing resources). It never writes.
  *
- * Both closures receive the `reason` the model supplied to `resolve`.
+ * Both closures receive the `reason` the model supplied to `resolve`; `apply`
+ * also receives that resolve invocation's tool-call id for approval correlation.
  */
 export type StagedPreviewAction = {
     readonly id: string;
     readonly summary: StagedPreviewSummary;
-    readonly apply: (reason: string) => Promise<readonly StagedPreviewChange[]>;
+    readonly apply: (reason: string, resolveToolCallId: string) => Promise<readonly StagedPreviewChange[]>;
     readonly discard?: (reason: string) => Promise<void>;
 };
 

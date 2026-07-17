@@ -100,7 +100,7 @@ export function createResolveToolRegistration(
         inputSchema: resolveInputSchema as z.ZodType<ResolveInput>,
         outputSchema: resolveOutputSchema as z.ZodType<ResolveOutput>,
         outputLimit: { maxModelOutputChars: 4000 },
-        execute: (input) => executeResolve(options.registry, input),
+        execute: (input, context) => executeResolve(options.registry, input, context.toolCallId),
         toModelOutput: resolveModelOutput,
         guideline:
             'Call resolve after a tool returns a (proposed) preview to commit (apply) or drop (discard) the ' +
@@ -108,7 +108,11 @@ export function createResolveToolRegistration(
     };
 }
 
-async function executeResolve(registry: StagedPreviewRegistry, input: ResolveInput): Promise<ResolveOutput> {
+async function executeResolve(
+    registry: StagedPreviewRegistry,
+    input: ResolveInput,
+    resolveToolCallId: string,
+): Promise<ResolveOutput> {
     // Consume first: a failed apply clears the slot so the model re-proposes
     // rather than getting stuck on a preview that no longer matches disk.
     const action = registry.consume();
@@ -147,7 +151,7 @@ async function executeResolve(registry: StagedPreviewRegistry, input: ResolveInp
     // action === 'apply'. The apply closure re-validates against current disk
     // and throws on staleness or write failure; that error propagates as a
     // failed tool settlement (the slot is already consumed).
-    const applied = await action.apply(input.reason);
+    const applied = await action.apply(input.reason, resolveToolCallId);
     return {
         status: 'applied',
         action: input.action,
