@@ -1,3 +1,4 @@
+import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { NativeAstReplaceChange } from '../native/natives-client';
 import { type AstRewriteFn, createAstEditToolRegistration } from './ast-edit';
@@ -126,7 +127,14 @@ async function setupAstEdit(
 ): Promise<{ readonly registry: ToolRegistry; readonly staged: StagedPreviewRegistry }> {
     const staged = new StagedPreviewRegistry();
     const registry = new ToolRegistry();
-    registry.register(await createAstEditToolRegistration({ workspaceRoot, registry: staged, rewriter }));
+    registry.register(
+        await createAstEditToolRegistration({
+            workspaceRoot,
+            registry: staged,
+            rewriter,
+            requestPermission: allowPermission,
+        }),
+    );
     return { registry, staged };
 }
 
@@ -149,6 +157,10 @@ async function invokeAstEdit(
 /** Build a deterministic rewriter over a fixed change set. */
 function makeRewriter(changes: readonly NativeAstReplaceChange[]): AstRewriteFn {
     return () => [...changes];
+}
+
+async function allowPermission(request: PermissionRequest): Promise<PermissionDecision> {
+    return { requestId: request.id, status: 'allow', reason: 'ast_edit test approval' };
 }
 
 /**
