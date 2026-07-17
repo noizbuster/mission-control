@@ -4,20 +4,32 @@ import type { ConversationSummary } from '../../../context/compaction';
 import type { Blackboard } from '../../../memory/blackboard';
 import type { ToolAdvertisement } from '../../../tools/tool-registry-types';
 import { type ParseStructuredOutputResult, type StructuredOutputShape } from '../../structured-blackboard';
+import { expandCapabilityLabels } from './capability-expand';
 import type { LlmActorTurnResult } from './llm-actor-node';
+
+export { CAPABILITY_EXPAND, expandCapabilityLabels } from './capability-expand';
 
 export function readStringConfig(node: AbgNodeSpec, key: string): string | undefined {
     const value = node.config?.[key];
     return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
+/**
+ * Advertise only tools whose `capabilityClasses` intersect the node's allowed set.
+ *
+ * Semantics (OpenCode-aligned):
+ * - `undefined` capabilities → advertise everything (coding-agent graph default).
+ * - empty `[]` → advertise nothing (pure structured gates).
+ * - non-empty → expand coarse labels via {@link expandCapabilityLabels}, then exact-match
+ *   against each tool's registered classes. Execution is still gated by approval/permission.
+ */
 export function filterByCapabilities(
     advertisements: readonly ToolAdvertisement[],
     capabilities: readonly string[] | undefined,
 ): readonly ToolAdvertisement[] {
     if (capabilities === undefined) return advertisements;
     if (capabilities.length === 0) return [];
-    const capabilitySet = new Set(capabilities);
+    const capabilitySet = expandCapabilityLabels(capabilities);
     return advertisements.filter((advertisement) =>
         advertisement.capabilityClasses.some((capability) => capabilitySet.has(capability)),
     );
