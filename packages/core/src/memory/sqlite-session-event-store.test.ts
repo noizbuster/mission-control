@@ -356,6 +356,93 @@ describe('SqliteSessionEventStore', () => {
                 sessionId,
             ]);
             expect(afterTaskFailed.rows).toEqual([{ status: 'idle' }]);
+
+            // When: a zero-turn drain settles with run.idle.
+            await store.append(
+                runEvent(sessionId, 'run.started', 'run started fifth', {
+                    command: 'run',
+                    state: 'running',
+                    runId: 'run_5',
+                }),
+            );
+            await store.append(
+                runEvent(sessionId, 'run.idle', 'run idle', {
+                    command: 'run',
+                    state: 'idle',
+                    runId: 'run_5',
+                }),
+            );
+            const afterIdle = await client.execute('SELECT status FROM sessions WHERE session_id = ?', [sessionId]);
+            expect(afterIdle.rows).toEqual([{ status: 'idle' }]);
+            client.close();
+        } finally {
+            await store.close();
+        }
+    });
+
+    it('touches sessions.updated_at for throttled ephemeral stream envelopes', async () => {
+        const sessionId = 'session_status_ephemeral_activity';
+        const sqliteUrl = await createSqliteSessionEventStoreTestDbUrl('status-ephemeral');
+        const store = await openSqliteSessionEventStoreForTests({
+            url: sqliteUrl,
+            sessionId,
+            createEventId: (_event, sequence) => `event_${sequence}`,
+        });
+
+        try {
+            await store.append(sessionStartedEvent(sessionId));
+            await store.append(
+                runEvent(sessionId, 'run.started', 'run started', {
+                    command: 'run',
+                    state: 'running',
+                    runId: 'run_stream',
+                }),
+            );
+            const client = createClient({ url: sqliteUrl });
+            const before = await client.execute(
+                'SELECT updated_at, last_activity_at, status FROM sessions WHERE session_id = ?',
+                [sessionId],
+            );
+            expect(before.rows[0]).toMatchObject({ status: 'running' });
+            const beforeUpdatedAt = String(before.rows[0]?.updated_at ?? '');
+
+            await store.appendEnvelope({
+                eventId: 'ephemeral_1',
+                sequence: 0,
+                createdAt: '2026-07-18T12:00:05.000Z',
+                sessionId,
+                durability: 'ephemeral',
+                event: {
+                    type: 'task.progress',
+                    timestamp: '2026-07-18T12:00:05.000Z',
+                    sessionId,
+                    message: 'partial',
+                    providerStreamChunk: {
+                        kind: 'text_delta',
+                        requestId: 'req_1',
+                        sequence: 1,
+                        sourceEventType: 'response.output_text.delta',
+                        delta: 'hel',
+                    },
+                },
+            });
+            const after = await client.execute(
+                'SELECT updated_at, last_activity_at, status FROM sessions WHERE session_id = ?',
+                [sessionId],
+            );
+            expect(after.rows).toEqual([
+                {
+                    updated_at: '2026-07-18T12:00:05.000Z',
+                    last_activity_at: '2026-07-18T12:00:05.000Z',
+                    status: 'running',
+                },
+            ]);
+            expect(after.rows[0]?.updated_at).not.toBe(beforeUpdatedAt);
+            const eventCount = await client.execute(
+                'SELECT COUNT(*) AS count FROM session_events WHERE session_id = ?',
+                [sessionId],
+            );
+            expect(Number(eventCount.rows[0]?.count)).toBe(2);
             client.close();
         } finally {
             await store.close();

@@ -14,7 +14,11 @@ import {
 import type { JsonlSessionEventIdFactory } from './jsonl-session-event-store';
 import { recordSqliteDesktopToolProposals } from './sqlite-session-desktop-tool-proposals';
 import { appendParsedSqliteEnvelope, ensureWritableEvent } from './sqlite-session-event-store-append';
-import { ensureSqliteSessionRows, readSqliteNextSequence } from './sqlite-session-event-store-sql';
+import {
+    ensureSqliteSessionRows,
+    readSqliteNextSequence,
+    touchSqliteSessionActivity,
+} from './sqlite-session-event-store-sql';
 
 type SqliteSessionEventAppenderOptions = {
     readonly runtime: LocalLibsqlDb;
@@ -25,7 +29,11 @@ type SqliteSessionEventAppenderOptions = {
     readonly enqueueWrite: <Result>(write: () => Promise<Result>) => Promise<Result>;
 };
 
+const EPHEMERAL_ACTIVITY_TOUCH_MIN_MS = 1000;
+
 export class SqliteSessionEventAppender {
+    private lastEphemeralActivityTouchMs = 0;
+
     constructor(private readonly options: SqliteSessionEventAppenderOptions) {}
 
     async append(event: AgentEvent): Promise<void> {
@@ -113,6 +121,7 @@ export class SqliteSessionEventAppender {
             redactAgentEventEnvelopeForObservability(envelope, this.options.observabilityRedactor),
         );
         if (parsedEnvelope.durability === 'ephemeral') {
+            await this.touchEphemeralActivity(parsedEnvelope.createdAt);
             return;
         }
         await this.options.enqueueWrite(async () => {
@@ -133,12 +142,36 @@ export class SqliteSessionEventAppender {
             redactAgentEventEnvelopeForObservability(envelope, this.options.observabilityRedactor),
         );
         if (parsedEnvelope.durability === 'ephemeral') {
+            await this.touchEphemeralActivity(parsedEnvelope.createdAt);
             return;
         }
         await this.options.enqueueWrite(async () => {
             await this.ensureSessionRows(parsedEnvelope.createdAt);
             const sequence = await this.readNextSequence();
             await this.appendParsedEnvelope({ ...parsedEnvelope, sequence }, sequence);
+        });
+    }
+
+    private async touchEphemeralActivity(activityAt: string): Promise<void> {
+        const activityMs = Date.parse(activityAt);
+        if (!Number.isFinite(activityMs)) {
+            return;
+        }
+        if (
+            this.lastEphemeralActivityTouchMs > 0 &&
+            activityMs - this.lastEphemeralActivityTouchMs < EPHEMERAL_ACTIVITY_TOUCH_MIN_MS
+        ) {
+            return;
+        }
+        this.lastEphemeralActivityTouchMs = activityMs;
+        await this.options.enqueueWrite(async () => {
+            await this.ensureSessionRows(activityAt);
+            await touchSqliteSessionActivity({
+                client: this.options.runtime.client,
+                sessionId: this.options.sessionId,
+                activityAt,
+                status: 'running',
+            });
         });
     }
 

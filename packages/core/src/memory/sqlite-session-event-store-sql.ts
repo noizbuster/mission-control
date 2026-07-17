@@ -67,6 +67,36 @@ export async function insertSqliteSessionEnvelope(
     });
 }
 
+export async function touchSqliteSessionActivity(
+    input: SessionSqlInput & {
+        readonly activityAt: string;
+        readonly status?: 'running';
+    },
+): Promise<void> {
+    await input.client.execute({
+        sql: `
+            UPDATE sessions
+            SET updated_at = ?,
+                last_activity_at = ?,
+                status = CASE
+                    WHEN status IN (?, ?) THEN status
+                    WHEN ? IS NOT NULL THEN ?
+                    ELSE status
+                END
+            WHERE session_id = ?
+        `,
+        args: [
+            input.activityAt,
+            input.activityAt,
+            'stopped',
+            'failed',
+            input.status ?? null,
+            input.status ?? null,
+            input.sessionId,
+        ],
+    });
+}
+
 export async function updateSqliteSessionAfterAppend(
     input: SessionSqlInput & {
         readonly event: AgentEvent;
@@ -161,6 +191,7 @@ function sessionStatusAfterEvent(event: AgentEvent): 'stopped' | 'awaiting' | 'r
         case 'run.completed':
         case 'run.failed':
         case 'run.interrupted':
+        case 'run.idle':
         case 'task.failed':
         case 'task.completed':
             return 'idle';
@@ -187,6 +218,7 @@ function clearsPendingApprovalWait(event: AgentEvent): boolean {
         case 'run.completed':
         case 'run.failed':
         case 'run.interrupted':
+        case 'run.idle':
             return true;
         default:
             return false;
