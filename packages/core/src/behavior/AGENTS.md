@@ -16,6 +16,7 @@
 | Approval gates | `graph-approval-gates.ts` | Permission and approval lifecycle events. |
 | Signals and events | `signals.ts`, `graph-runner-events.ts`, `timeline.ts` | Projection into protocol events and timeline rows. |
 | Node implementations | `nodes/`, `composite-nodes.ts`, `leaf-nodes.test.ts` | Deterministic scaffold node behavior. `parallel-static.ts` owns bounded static children; `parallel-fan-out.ts` owns blackboard-driven fan-out; `race-node.ts` owns process-local Race cleanup. |
+| Tool advertising filter | `nodes/llm-actor/capability-expand.ts`, `llm-actor-node-helpers.ts` | OpenCode-style coarse→fine expand for node `capabilities` vs tool `capabilityClasses`. Advertising only — not approval. See `docs/tool-permission-model.md`. |
 
 ## Conventions
 
@@ -37,6 +38,7 @@
 - Validation and graph shape: `action-graph.test.ts`, `coding-agent-graph-fixtures.test.ts`, `routing-key-bi-coverage.test.ts` (LEVER B).
 - Coordinator behavior: `graph-coordinator*.test.ts`, `watch-statechart-nodes.test.ts` (includes P1–P5 progress-contract pattern pack).
 - Node registry and node behavior: `node-registry.ts`, `parallel-fan-out.test.ts`, `static-parallel.test.ts`, `selector.test.ts`, `join.test.ts`, `parallel-verdict.test.ts`, `nodes/race-node*.test.ts`, `leaf-nodes.test.ts`.
+- Capability expand / tool advertising: `nodes/llm-actor/capability-expand.test.ts`.
 - When example graph behavior changes, update `examples/abg/*.graph.json` and root ABG/readme contract tests as needed.
 
 ## Anti-Patterns

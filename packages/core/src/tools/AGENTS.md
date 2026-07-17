@@ -21,6 +21,9 @@
 
 - Inputs and outputs must be Zod/schema-bound. Reject malformed arguments before execution.
 - Tool advertisements are versioned; stale advertised versions must fail.
+- `capabilityClasses` on each registration are **fine** labels (`file.edit`, `repo.read`, `bash.run`, …). Workflow nodes declare **coarse** labels (`read`, `write`, …). The LLM-actor expand map bridges them at advertise time — see `docs/tool-permission-model.md` and `behavior/nodes/llm-actor/capability-expand.ts`. When adding a tool class, update the expand map + its tests if a coarse node label should unlock it.
+- Advertising ≠ authorization: effectful tools still call `requestPermission` and respect workspace trust.
+- Skills (`skill` tool / `SKILL.md`) are instruction DATA, not file-edit capability.
 - `command.run` accepts structured `command` plus `args`; never accept one shell string.
 - `command.run` uses an allowlist, non-interactive execution, timeouts, output byte caps, and redaction.
 - `file.patch` requires approval before writes and must preserve workspace containment, symlink escape rejection, patch size limits, dirty tracked-file refusal, and before/after diff events.
