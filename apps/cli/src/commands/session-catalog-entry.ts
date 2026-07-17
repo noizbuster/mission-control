@@ -84,7 +84,7 @@ async function readSessionCatalogEntryFromProjectionState(
                 trustedRoot: undefined,
                 name: undefined,
                 activeLeafId: undefined,
-                parentSessionId: undefined,
+                parentSessionId: projectionRecord.parentSessionId,
                 trustStatus: 'unknown',
                 diagnostics: [...projectionState.diagnostics, ...projectionDiagnostics],
             };
@@ -123,7 +123,7 @@ async function readSessionCatalogEntryFromProjectionState(
         trustedRoot: projection.trustedRoot,
         name: projection.name,
         activeLeafId: projection.activeLeafId,
-        parentSessionId: projection.parentSessionId,
+        parentSessionId: projectionRecord?.parentSessionId ?? projection.parentSessionId,
         trustStatus: await readTrustStatus(projection.workspaceTrust, projection.trustedRoot ?? projection.cwd),
         diagnostics: [...projection.diagnostics, ...projectionState.diagnostics, ...projectionDiagnostics],
     };
