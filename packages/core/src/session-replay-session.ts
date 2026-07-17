@@ -32,6 +32,7 @@ export function deriveReplaySession(sessionId: string, events: readonly AgentEve
             event.type === 'run.completed' ||
             event.type === 'run.failed' ||
             event.type === 'run.interrupted' ||
+            event.type === 'run.idle' ||
             event.type === 'task.failed' ||
             event.type === 'task.completed'
         ) {
@@ -138,6 +139,7 @@ function clearsAwaiting(event: AgentEvent, awaiting: SessionAwaitingDetails | un
         case 'run.completed':
         case 'run.failed':
         case 'run.interrupted':
+        case 'run.idle':
         case 'session.stopped':
             return true;
         case 'prompt.cancelled':

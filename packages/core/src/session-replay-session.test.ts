@@ -52,6 +52,23 @@ describe('session replay lifecycle', () => {
         // Then: the session is idle, not stuck running.
         expect(session.status).toBe('idle');
     });
+
+    it('returns idle after run.idle so empty-turn drains do not stick at running', () => {
+        // Given: a run started and then settled with run.idle (turns === 0 path).
+        // When: the replay projection is derived.
+        const session = deriveReplaySession(SESSION_ID, [
+            runStarted(),
+            {
+                type: 'run.idle',
+                timestamp: '2026-07-11T10:00:02.000Z',
+                sessionId: SESSION_ID,
+                run: { command: 'run', state: 'idle', runId: 'run_active' },
+            },
+        ]);
+
+        // Then: the session is idle, matching run.completed settlement.
+        expect(session.status).toBe('idle');
+    });
 });
 
 function runStarted(runId = 'run_active', timestamp = '2026-07-11T10:00:00.000Z'): AgentEvent {

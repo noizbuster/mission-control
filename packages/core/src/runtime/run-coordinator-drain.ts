@@ -112,7 +112,12 @@ export function findResumableBlockedRun(events: readonly AgentEvent[]): BlockedR
         if (event === undefined || event.run?.runId === undefined) {
             continue;
         }
-        if (event.type === 'run.completed' || event.type === 'run.failed' || event.type === 'run.interrupted') {
+        if (
+            event.type === 'run.completed' ||
+            event.type === 'run.failed' ||
+            event.type === 'run.interrupted' ||
+            event.type === 'run.idle'
+        ) {
             return undefined;
         }
         if (event.type !== 'run.blocked' || event.run.state !== 'blocked_on_approval') {
