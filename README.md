@@ -295,6 +295,18 @@ The same user config can enable the approval-gated `browser` tool for an externa
 Use `browserWSEndpoint` instead to provide Chrome's direct `ws://` or `wss://` DevTools browser endpoint. The two keys are mutually exclusive. Mission Control never reads browser endpoints from project `.mcp.json`, never downloads or launches Chrome, and disconnects without terminating the external Chrome process. The tool is advertised only when the selected global config or profile contains a valid browser endpoint; invocation still requires canonical workspace trust and network approval before it connects.
 Browser navigation accepts only `http://` and `https://` targets. Configured endpoint credentials, paths, and query values are hidden in approval records and connection errors; navigation credentials and query values are also hidden in approvals and returned URLs.
 
+### Local memory tools
+
+Memory tools are off by default. Set the selected global config or profile to the local backend to advertise `retain`, `recall`, `reflect`, `memory_edit`, `learn`, and `manage_skill`:
+
+```json
+{
+  "memory": { "backend": "local" }
+}
+```
+
+All six tools in one production registry share one in-process memory backend. This backend is process-local and non-durable: a rebuilt registry starts empty, process exit loses its contents, and no SQLite store, vector index, remote service, or cross-session persistence is provided. The recognized `mnemopi` and `hindsight` values are deferred and advertise no memory tools; `off` and an absent `memory` block are also silent.
+
 ### Project-local config: `.mcp.json`
 
 The project-local config file is `.mcp.json` at the resolved workspace root. It declares project-scope MCP servers and is intended to be committed to the project. Production tool registries read and merge this file only when the canonical project trust store already marks the workspace as trusted; missing, denied, corrupt, or failed trust lookups leave project servers inert. Trusted project servers merge after the selected global config and override by server name. User-scope MCP remains active independently of workspace trust. A profile does not affect `.mcp.json`; a sibling `.mcp.<profile>.json` or `.mcp.<profile>.jsonc` is ignored.
@@ -420,15 +432,20 @@ Permission profiles:
 Coding-agent tool set:
 
 - Read-only: `repo.read`, `repo.list`, `repo.search`, plus aliases `read`, `ls`, `grep`, and `find`.
+- Tagged and path discovery reads: `repo.read.tagged` supplies anchors for `hashline_edit`, while `glob` discovers workspace files under the same containment and denylist boundary.
 - Exact replacement: `file.edit` replaces exact text in an existing file, with occurrence counting and diff events.
 - Full create/replace: `file.write` creates or replaces a file with full text content, with optional parent-directory creation and binary-content refusal.
 - Unified diff: `file.patch` applies unified diffs with workspace containment and dirty-file checks.
 - Verification harness: `command.run` uses a fixed allowlist, non-interactive execution, timeouts, and output caps.
 - Trusted bash: `bash.run` runs non-interactive bash with strict command-line parsing, an environment variable allowlist, cwd containment within the workspace, a 30-second timeout, 64KB output cap, single-invocation concurrency, and secret redaction.
 - Trusted eval: `eval` executes JavaScript or Python cells in a local host-user runtime with a read-only workspace bridge. It requires one explicit bash-class approval before creating the per-invocation runtime; Python `-I` is isolated startup mode, not a security sandbox.
+- External GitHub reads: `github` is advertised only when the canonical workspace trust check passes and the local `gh --version` probe succeeds. Missing `gh` or missing trust leaves the tool unadvertised.
+- Generated media: `generate_image` is advertised only when its Gemini, OpenAI, or xAI environment credential resolver succeeds; `tts` is advertised only for an xAI environment credential. Their outputs contain local file paths rather than inline media and do not imply managed or persistent media storage.
+- Vision inspection: `look_at` and `inspect_image` use an execute-time credential boundary. They remain advertised without a vision credential, but invocation fails non-retryably before provider I/O when the OpenAI, Anthropic, Gemini, OpenRouter, or ZAI credential chain is empty. `ssh` remains unadvertised even with configured hosts because the CLI has no production PTY transport.
 - `file.edit`, `file.write`, `file.patch`, `command.run`, and `bash.run` require approval before executing. `eval` also requires approval before executing.
 - `bash.run` additionally requires a trusted workspace. `eval` has the same trust requirement.
 - File mutations serialize through a shared workspace mutation queue with pre-approval and post-approval target revalidation to prevent TOCTOU workspace escape.
+- The CLI is the primary host for the broad coding-agent registry. Config-, credential-, transport-, callback-, and manager-gated families appear only when their production dependencies are available; the desktop intentionally uses the smaller subset documented below.
 
 Skills + MCP:
 
@@ -470,6 +487,10 @@ Desktop scope:
 - `packages/core` contains desktop command services for prompt, queue follow-up, steer, interrupt, resume, and approval decisions.
 - desktop Tauri write commands call the core desktop session command service through the Rust shell bridge and return real `eventsWritten` counts.
 - desktop Tauri credential commands save and list API-key credentials through the shared auth file, and restarted prompt/resume/approval commands reuse the session's persisted provider selection.
+- The desktop registry is deliberately limited to operations reconstructible from the workspace plus tool-call arguments: `repo.read`, `repo.list`, `repo.search`, `read`, `ls`, `grep`, `find`, `repo.read.tagged`, `glob`, `file.edit`, `file.write`, `file.patch`, `hashline_edit`, and `command.run`. Workspace reads remain read-only and do not invent an approval prompt.
+- Desktop file mutations and `command.run` still block before execution. Approval settlement rebuilds the same subset in a fresh registry and re-executes only the persisted tool call whose request id and action match the approved record; workspace containment, dirty-file checks, and post-approval target revalidation remain active.
+- Session-bound facilities remain CLI-primary and are not desktop approval re-execution capabilities: staged preview (`ast_grep` rewrite plus `ast_edit` / `resolve`), `job`, `monitor_*`, `interactive_bash`, `shell.session`, `ssh`, `checkpoint` / `rewind`, and `plan_exit`. `lsp` and `lsp_rename` also remain absent because a fresh desktop registry has no live LSP client and cannot reconstruct the server-produced workspace edit from tool-call arguments alone.
+- This bounded subset does not claim full desktop effectful-tool parity. Adding manager-, callback-, or transport-backed tools requires a shared-lifecycle redesign rather than another fresh approval registry.
 - The desktop shell never mutates files directly; permission enforcement and file/command effects stay in `packages/core`.
 
 Sidecar status:
