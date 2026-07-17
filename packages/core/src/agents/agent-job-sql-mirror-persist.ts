@@ -54,6 +54,10 @@ export async function upsertJobRow(input: {
             sessionId: input.handle.parentSessionId,
             now: input.handle.startedAt,
         });
+        await input.client.execute({
+            sql: 'UPDATE sessions SET parent_session_id = COALESCE(parent_session_id, ?), updated_at = ?, last_activity_at = ? WHERE session_id = ?',
+            args: [input.handle.parentSessionId, input.handle.startedAt, input.handle.startedAt, input.handle.sessionId],
+        });
     }
     await input.client.execute({
         sql:

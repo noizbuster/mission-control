@@ -28,6 +28,10 @@ export async function startSubagentWaitWithJob(
     await ensurePublicSessionRow({ client, sessionId: input.parentSessionId, now });
     await ensurePublicSessionRow({ client, sessionId: input.childSessionId, now });
     await client.execute({
+        sql: 'UPDATE sessions SET parent_session_id = ?, updated_at = ?, last_activity_at = ? WHERE session_id = ?',
+        args: [input.parentSessionId, now, now, input.childSessionId],
+    });
+    await client.execute({
         sql:
             'INSERT OR REPLACE INTO session_awaits ' +
             '(wait_id, session_id, reason, source_kind, source_id, job_id, child_session_id, status, created_at, metadata_json) ' +
