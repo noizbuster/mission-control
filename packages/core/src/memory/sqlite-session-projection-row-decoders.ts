@@ -40,6 +40,7 @@ export function sessionRecordFromRow(row: z.infer<typeof sessionRowSchema>): Ses
         ...(metadata.lastEventType !== undefined ? { lastEventType: metadata.lastEventType } : {}),
         updatedAt: row.updated_at,
         sourcePath: row.legacy_jsonl_path ?? '',
+        ...(row.parent_session_id !== null ? { parentSessionId: row.parent_session_id } : {}),
     };
 }
 

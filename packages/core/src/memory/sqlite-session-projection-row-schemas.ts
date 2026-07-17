@@ -16,6 +16,7 @@ export const sessionRowSchema = z.object({
     created_at: z.string(),
     stopped_at: z.string().nullable(),
     last_event_seq: z.number().nullable(),
+    parent_session_id: z.string().nullable(),
     awaiting_reason: SessionAwaitingReasonSchema.nullable(),
     primary_wait_id: z.string().nullable(),
     wait_source_kind: z.enum(['approval', 'run', 'tool_call', 'job', 'child_session', 'operator']).nullable(),

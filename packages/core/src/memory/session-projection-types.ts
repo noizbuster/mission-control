@@ -25,6 +25,7 @@ export type SessionProjectionSessionRecord = {
     readonly lastEventType?: AgentEvent['type'] | undefined;
     readonly updatedAt: string;
     readonly sourcePath: string;
+    readonly parentSessionId?: string | undefined;
     readonly abortMarker?: {
         readonly completedAt: string;
         readonly operationId: string;
