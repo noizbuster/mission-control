@@ -3,6 +3,7 @@ import { computeLineHash } from './hashline/hash-computation';
 import { repoToolFailure } from './read-tools-errors';
 import { createWorkspaceGuard, isBinarySample, type WorkspaceGuard } from './read-tools-paths';
 import {
+    DEFAULT_READ_LINE_LIMIT,
     type ListInput,
     type ListOutput,
     listInputSchema,
@@ -74,8 +75,8 @@ export async function createReadOnlyRepoToolRegistrations(
         createSearchTool(guard, resolved),
         createReadAliasTool(guard, resolved),
         createListAliasTool(guard, resolved),
-        createSearchAliasTool(guard, resolved, 'grep', 'Search text files inside the workspace.'),
-        createSearchAliasTool(guard, resolved, 'find', 'Find matching text inside workspace files.'),
+        createSearchAliasTool(guard, resolved, 'grep'),
+        createSearchAliasTool(guard, resolved, 'find'),
         createReadTaggedTool(guard, resolved),
     ];
     return registrations;
@@ -87,7 +88,7 @@ function createReadTool(
 ): ToolRegistration<ReadInput, ReadOutput> {
     return {
         name: 'repo.read',
-        description: 'Read a text file inside the workspace.',
+        description: readToolDescription(),
         capabilityClasses: ['repo.read'],
         parametersJsonSchema: readParametersJsonSchema(),
         inputSchema: readInputSchema,
@@ -96,6 +97,15 @@ function createReadTool(
         execute: (input, context) => readWorkspaceFile(guard, options, input, context.toolName, context.toolCallId),
         toModelOutput: readModelOutput,
     };
+}
+
+function readToolDescription(): string {
+    return [
+        'Read a text file inside the workspace as a raw line window.',
+        `Defaults: offset=1, limit=${DEFAULT_READ_LINE_LIMIT}.`,
+        'Pass offset/limit to page large files; use grep/repo.search to locate content first.',
+        'Set summary=true only when you want a structural outline (imports + signatures) instead of bodies.',
+    ].join(' ');
 }
 
 function createListTool(
@@ -123,7 +133,7 @@ function createSearchTool(
 ): ToolRegistration<SearchInput, SearchOutput> {
     return {
         name: 'repo.search',
-        description: 'Search text files inside the workspace.',
+        description: searchToolDescription(),
         capabilityClasses: ['repo.read'],
         parametersJsonSchema: searchParametersJsonSchema(),
         inputSchema: searchInputSchema,
@@ -156,13 +166,22 @@ function createSearchTool(
     };
 }
 
+function searchToolDescription(): string {
+    return [
+        'Search text files inside the workspace with a regex pattern.',
+        'Parameters: pattern (required), path (file or directory, default "."), include (suffix filter e.g. "*.ts").',
+        'Scope path to a single file when you already know the target; use include to restrict by extension.',
+        'Results are capped; narrow path/include when truncated.',
+    ].join(' ');
+}
+
 function createReadAliasTool(
     guard: WorkspaceGuard,
     options: ResolvedReadOnlyRepoToolOptions,
 ): ToolRegistration<ReadInput, ReadOutput> {
     return {
         name: 'read',
-        description: 'Read a text file inside the workspace.',
+        description: readToolDescription(),
         capabilityClasses: ['repo.read'],
         parametersJsonSchema: readParametersJsonSchema(),
         inputSchema: readInputSchema,
@@ -215,11 +234,10 @@ function createSearchAliasTool(
     guard: WorkspaceGuard,
     options: ResolvedReadOnlyRepoToolOptions,
     name: 'grep' | 'find',
-    description: string,
 ): ToolRegistration<SearchInput, SearchOutput> {
     return {
         name,
-        description,
+        description: searchToolDescription(),
         capabilityClasses: ['repo.read'],
         parametersJsonSchema: searchParametersJsonSchema(),
         inputSchema: searchInputSchema,
@@ -278,18 +296,20 @@ async function readWorkspaceFile(
     if (!target.stats.isFile()) {
         throw repoToolFailure('not_file', `path is not a file: ${input.path}`);
     }
-    const sample = await readFilePrefix(target.absolutePath, Math.min(options.maxReadBytes, 4096));
+    // Binary sniff only: read a small prefix. Never treat that sample as the
+    // full file body — otherwise offset/limit windows past ~4KB return empty.
+    const sampleCap = Math.min(options.maxReadBytes, 4096);
+    const sample = await readFilePrefix(target.absolutePath, sampleCap);
     if (isBinarySample(sample)) {
         throw repoToolFailure('binary_file', `binary file cannot be read as text: ${input.path}`);
     }
-    const contentBytes =
-        sample.length < options.maxReadBytes ? sample : await readFilePrefix(target.absolutePath, options.maxReadBytes);
-    const content = selectLines(contentBytes.toString('utf8'), input);
+    const contentBytes = await readFileTextBytes(target.absolutePath, target.stats.size, options.maxReadBytes, sample);
+    const lineWindow = selectLines(contentBytes.toString('utf8'), input);
     const baseOutput = {
         kind: 'file' as const,
         path: target.relativePath,
-        content,
-        truncated: target.stats.size > contentBytes.length,
+        content: lineWindow.content,
+        truncated: target.stats.size > contentBytes.length || lineWindow.truncatedByLines,
         originalBytes: target.stats.size,
         returnedBytes: contentBytes.length,
     };
@@ -300,26 +320,25 @@ async function readWorkspaceFile(
     // with the structural summary (elided bodies would carry meaningless tags).
     if (input.tagged === true) {
         const startLine = input.offset ?? 1;
-        const tagged = tagLinesWithAnchors(content, startLine);
+        const tagged = tagLinesWithAnchors(lineWindow.content, startLine);
         return {
             ...baseOutput,
             content: tagged,
             returnedBytes: Buffer.byteLength(tagged, 'utf8'),
         };
     }
-    // Structural summary is the DEFAULT read output for supported languages.
+    // Structural summary is opt-in (`summary: true`) for supported languages.
     // It is applied only to the already-vetted file CONTENT, never changing
-    // the path guard or denylist. Line-windowed reads (`offset` / `limit`),
-    // an explicit `summary: false` opt-out, an unavailable addon, an
-    // unsupported language, a parse failure, or a file too small to elide
-    // all fall back to the raw text above.
+    // the path guard or denylist. Line-windowed reads always stay raw so the
+    // model can page bodies with offset/limit. Unavailable addon, unsupported
+    // language, parse failure, or a file too small to elide fall back to raw.
     if (
-        input.summary !== false &&
+        input.summary === true &&
         input.offset === undefined &&
         input.limit === undefined &&
         options.natives !== undefined
     ) {
-        const result = options.natives.summarizeCode({ code: content, path: target.relativePath });
+        const result = options.natives.summarizeCode({ code: lineWindow.content, path: target.relativePath });
         if (result !== null && result.parsed && result.elided) {
             const { text, elidedLines } = renderSummaryContent(result);
             return {
@@ -331,7 +350,10 @@ async function readWorkspaceFile(
             };
         }
     }
-    return baseOutput;
+    return {
+        ...baseOutput,
+        returnedBytes: Buffer.byteLength(lineWindow.content, 'utf8'),
+    };
 }
 
 function readOutputFromScheme(
@@ -419,13 +441,37 @@ async function readFilePrefix(path: string, bytes: number): Promise<Buffer> {
     }
 }
 
-function selectLines(content: string, input: ReadInput): string {
-    if (input.offset === undefined && input.limit === undefined) {
-        return content;
+async function readFileTextBytes(
+    absolutePath: string,
+    fileSize: number,
+    maxReadBytes: number,
+    sample: Buffer,
+): Promise<Buffer> {
+    const sampleCap = Math.min(maxReadBytes, 4096);
+    // EOF inside the binary-sniff sample → sample is the whole readable body.
+    if (sample.length < sampleCap || fileSize <= sample.length) {
+        return sample;
     }
+    const budget = Math.min(maxReadBytes, fileSize);
+    if (budget <= sample.length) {
+        return sample;
+    }
+    return readFilePrefix(absolutePath, budget);
+}
+
+function selectLines(
+    content: string,
+    input: ReadInput,
+): { readonly content: string; readonly truncatedByLines: boolean } {
     const lines = content.split(/\r?\n/);
     const start = (input.offset ?? 1) - 1;
-    return lines.slice(start, input.limit === undefined ? undefined : start + input.limit).join('\n');
+    const limit = input.limit ?? DEFAULT_READ_LINE_LIMIT;
+    if (start >= lines.length) {
+        return { content: '', truncatedByLines: true };
+    }
+    const window = lines.slice(start, start + limit);
+    const truncatedByLines = start > 0 || start + limit < lines.length;
+    return { content: window.join('\n'), truncatedByLines };
 }
 
 function entryKind(entry: { isFile: () => boolean; isDirectory: () => boolean; isSymbolicLink: () => boolean }) {

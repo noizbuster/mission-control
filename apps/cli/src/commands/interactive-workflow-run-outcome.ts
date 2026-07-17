@@ -153,3 +153,37 @@ function outcomeFromEvent(event: AgentEvent): ObservedOutcome | undefined {
 function safeReason(reason: string): string {
     return redactCredentialText(reason).slice(0, 4096);
 }
+
+export function formatWorkflowTurnFooter(
+    elapsedMs: number,
+    outcome: TrackedWorkflowRunOutcome,
+): string {
+    const seconds = Math.max(0, elapsedMs) / 1000;
+    const elapsedLabel = seconds >= 10 ? seconds.toFixed(1) : seconds.toFixed(2);
+    return `\n---\nTurn elapsed: ${elapsedLabel}s · Stop reason: ${describeWorkflowStopReason(outcome)}\n`;
+}
+
+function describeWorkflowStopReason(outcome: TrackedWorkflowRunOutcome): string {
+    switch (outcome.status) {
+        case 'pending':
+            return 'unknown (no terminal event)';
+        case 'completed':
+            return 'completed';
+        case 'failed':
+            return outcome.reason === undefined || outcome.reason.length === 0
+                ? 'failed'
+                : `failed (${outcome.reason})`;
+        case 'blocked':
+            return outcome.reason === undefined || outcome.reason.length === 0
+                ? 'blocked'
+                : `blocked (${outcome.reason})`;
+        case 'cancelled':
+            return `cancelled (${outcome.reason})`;
+        default:
+            return assertNeverOutcome(outcome);
+    }
+}
+
+function assertNeverOutcome(value: never): never {
+    throw new Error(`Unexpected workflow outcome: ${JSON.stringify(value)}`);
+}

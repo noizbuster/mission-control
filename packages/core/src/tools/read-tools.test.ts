@@ -360,7 +360,7 @@ describe('read-only repo tools', () => {
         ].join('\n');
     }
 
-    it.skipIf(!addonBuilt)('summarizes a TypeScript file into imports + signatures by default', async () => {
+    it('returns the raw source by default so function bodies stay readable', async () => {
         // Given
         const workspaceRoot = await createWorkspace();
         await writeFile(join(workspaceRoot, 'mod.ts'), summaryFixture(), 'utf8');
@@ -369,9 +369,25 @@ describe('read-only repo tools', () => {
         // When
         const settlement = await invokeTool(registry, 'repo.read', { path: 'mod.ts' });
 
-        // Then: summary is the default output. Boundary imports and every
-        // signature stay visible; the import run's middle lines and every
-        // function/class body collapse to elision markers.
+        // Then: default is the verbatim line window, not a structural summary.
+        expect(settlement.result.status).toBe('completed');
+        const output = settlement.structuredOutput as ReadOutput;
+        expect(output.summarized).toBeUndefined();
+        expect(output.content).toContain('import { bar }');
+        expect(output.content).toContain('return `hello ${upper}`');
+        expect(output.content).not.toContain('lines elided');
+    });
+
+    it.skipIf(!addonBuilt)('summarizes a TypeScript file only when summary is true', async () => {
+        // Given
+        const workspaceRoot = await createWorkspace();
+        await writeFile(join(workspaceRoot, 'mod.ts'), summaryFixture(), 'utf8');
+        const registry = await createRegistry(workspaceRoot);
+
+        // When
+        const settlement = await invokeTool(registry, 'repo.read', { path: 'mod.ts', summary: true });
+
+        // Then: opt-in summary keeps imports + signatures and elides bodies.
         expect(settlement.result.status).toBe('completed');
         const output = settlement.structuredOutput as ReadOutput;
         expect(output.summarized).toBe(true);
@@ -385,22 +401,46 @@ describe('read-only repo tools', () => {
         expect(settlement.result.output).toContain('structural summary');
     });
 
-    it.skipIf(!addonBuilt)('returns the raw source when summary is false', async () => {
+    it('pages large files with offset and limit parameters', async () => {
         // Given
         const workspaceRoot = await createWorkspace();
-        await writeFile(join(workspaceRoot, 'mod.ts'), summaryFixture(), 'utf8');
+        const lines = Array.from({ length: 30 }, (_, index) => `line-${index + 1}`);
+        await writeFile(join(workspaceRoot, 'big.txt'), `${lines.join('\n')}\n`, 'utf8');
         const registry = await createRegistry(workspaceRoot);
 
         // When
-        const settlement = await invokeTool(registry, 'repo.read', { path: 'mod.ts', summary: false });
+        const settlement = await invokeTool(registry, 'repo.read', { path: 'big.txt', offset: 10, limit: 3 });
 
-        // Then: explicit opt-out yields the verbatim source with no elision.
+        // Then
         expect(settlement.result.status).toBe('completed');
         const output = settlement.structuredOutput as ReadOutput;
-        expect(output.summarized).toBeUndefined();
-        expect(output.content).toContain('import { bar }');
-        expect(output.content).toContain('return `hello ${upper}`');
-        expect(output.content).not.toContain('lines elided');
+        expect(output.content).toBe('line-10\nline-11\nline-12');
+        expect(output.truncated).toBe(true);
+    });
+
+    it('returns mid-file offset windows even when the target is larger than the binary-sniff sample', async () => {
+        // Given: >4KB of content so a naive sample-only reader would drop
+        // lines past the sniff prefix and return an empty offset window.
+        const workspaceRoot = await createWorkspace();
+        const lines = Array.from({ length: 400 }, (_, index) => `payload-line-${index + 1}-${'x'.repeat(20)}`);
+        await writeFile(join(workspaceRoot, 'wide.ts'), `${lines.join('\n')}\n`, 'utf8');
+        const registry = await createRegistry(workspaceRoot);
+
+        // When
+        const settlement = await invokeTool(registry, 'read', {
+            path: 'wide.ts',
+            offset: 200,
+            limit: 5,
+            summary: false,
+        });
+
+        // Then
+        expect(settlement.result.status).toBe('completed');
+        const output = settlement.structuredOutput as ReadOutput;
+        expect(output.content).toContain('payload-line-200-');
+        expect(output.content).toContain('payload-line-204-');
+        expect(output.content).not.toBe('');
+        expect(settlement.result.output).not.toMatch(/truncated: 4096 of/);
     });
 
     it('falls back to raw text for unsupported languages without crashing', async () => {

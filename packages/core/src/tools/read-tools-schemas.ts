@@ -3,16 +3,19 @@ import { z } from 'zod';
 import type { NativesClient } from '../native/natives-client';
 import type { SchemeResolver } from './scheme-resolver';
 
+/** Default line window when the model omits `limit` (OpenCode parity). */
+export const DEFAULT_READ_LINE_LIMIT = 2000;
+
 export const readInputSchema = z
     .object({
         path: z.string().min(1),
         offset: z.number().int().positive().optional(),
         limit: z.number().int().positive().optional(),
-        // Default `true`: supported source files are returned as a structural
-        // summary (imports + signatures, bodies elided) when the native addon
-        // is available. Set `false` to force the raw text. Unsupported
-        // languages, parse failures, and line-windowed reads (`offset` /
-        // `limit`) always fall back to raw text regardless of this flag.
+        // Opt-in structural summary: only when the model sets `summary: true`
+        // and the native addon can parse the language. Default reads return
+        // raw line windows (offset/limit) so the model can search and inspect
+        // bodies. Unsupported languages, parse failures, and line-windowed
+        // reads always stay raw regardless of this flag.
         summary: z.boolean().optional(),
         // Opt-in: tag every line with a `NN#XX|` content-hash anchor so a
         // follow-up `hashline_edit` can reference lines by `NN#XX` and reject
@@ -119,14 +122,18 @@ export type ResolvedReadOnlyRepoToolOptions = {
 };
 
 export function readModelOutput(output: ReadOutput): string {
+    const emptyWindow =
+        output.content.length === 0 && output.truncated
+            ? '\n\n[empty window: offset is past the loaded content; lower offset or raise limit, or re-read without offset from the start]'
+            : '';
     const suffix = output.truncated
-        ? `\n\n[truncated: ${output.returnedBytes} of ${output.originalBytes} bytes returned]`
+        ? `\n\n[truncated: ${output.returnedBytes} of ${output.originalBytes} bytes returned; re-read with offset/limit for another window]`
         : '';
     const summaryNote =
         output.summarized === true && output.elidedLines !== undefined
-            ? `\n\n[structural summary: ${output.elidedLines} line${output.elidedLines === 1 ? '' : 's'} elided; re-read with summary:false for the raw source]`
+            ? `\n\n[structural summary: ${output.elidedLines} line${output.elidedLines === 1 ? '' : 's'} elided; re-read without summary (or with offset/limit) for the raw source]`
             : '';
-    return `${output.path}\n${output.content}${suffix}${summaryNote}`;
+    return `${output.path}\n${output.content}${emptyWindow}${suffix}${summaryNote}`;
 }
 
 export function searchModelOutput(output: SearchOutput): string {
@@ -159,13 +166,24 @@ export function readParametersJsonSchema(): Readonly<Record<string, unknown>> {
     return {
         type: 'object',
         properties: {
-            path: { type: 'string' },
-            offset: { type: 'number', minimum: 1 },
-            limit: { type: 'number', minimum: 1 },
+            path: {
+                type: 'string',
+                description: 'Workspace-relative or absolute path to a text file to read.',
+            },
+            offset: {
+                type: 'number',
+                minimum: 1,
+                description: '1-indexed line number to start reading from. Omit to start at line 1.',
+            },
+            limit: {
+                type: 'number',
+                minimum: 1,
+                description: `Maximum number of lines to return (default ${DEFAULT_READ_LINE_LIMIT}). Use with offset to page through large files.`,
+            },
             summary: {
                 type: 'boolean',
                 description:
-                    'Default true: return a structural summary (imports + signatures, bodies elided) for supported languages. Set false for the raw source.',
+                    'Opt-in structural summary (imports + signatures, bodies elided) for supported languages when the native addon is available. Default false returns the raw line window. Prefer offset/limit over summary when you need function bodies.',
             },
             tagged: {
                 type: 'boolean',
@@ -182,7 +200,10 @@ export function listParametersJsonSchema(): Readonly<Record<string, unknown>> {
     return {
         type: 'object',
         properties: {
-            path: { type: 'string' },
+            path: {
+                type: 'string',
+                description: 'Workspace-relative directory to list. Defaults to the workspace root.',
+            },
         },
         additionalProperties: false,
     };
@@ -192,9 +213,19 @@ export function searchParametersJsonSchema(): Readonly<Record<string, unknown>> 
     return {
         type: 'object',
         properties: {
-            pattern: { type: 'string' },
-            path: { type: 'string' },
-            include: { type: 'string' },
+            pattern: {
+                type: 'string',
+                description: 'Regex pattern to search for in file contents (RE2-style; no lookaround).',
+            },
+            path: {
+                type: 'string',
+                description:
+                    'File or directory to search under. Defaults to the workspace root. Pass a single file path to search only that file.',
+            },
+            include: {
+                type: 'string',
+                description: 'File suffix/glob filter for matches (e.g. "*.ts", "*.tsx", "*.md").',
+            },
         },
         required: ['pattern'],
         additionalProperties: false,

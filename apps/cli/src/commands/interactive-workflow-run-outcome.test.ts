@@ -1,6 +1,9 @@
 import type { AgentEvent } from '@mission-control/protocol';
 import { describe, expect, it, vi } from 'vitest';
-import { createWorkflowRunOutcomeObserver } from './interactive-workflow-run-outcome';
+import {
+    createWorkflowRunOutcomeObserver,
+    formatWorkflowTurnFooter,
+} from './interactive-workflow-run-outcome';
 
 const timestamp = '2026-07-13T00:00:00.000Z';
 
@@ -152,6 +155,22 @@ describe('interactive workflow Run outcome observer', () => {
         await observer.settle();
 
         expect(settle).toHaveBeenCalledWith({ status: 'failed', reason: expect.not.stringContaining('sk-test-') });
+    });
+
+    it('formats a turn footer with elapsed time and stop reason', () => {
+        // Given / When / Then
+        expect(formatWorkflowTurnFooter(1234, { status: 'completed' })).toBe(
+            '\n---\nTurn elapsed: 1.23s · Stop reason: completed\n',
+        );
+        expect(formatWorkflowTurnFooter(15_000, { status: 'failed', reason: 'provider timeout' })).toBe(
+            '\n---\nTurn elapsed: 15.0s · Stop reason: failed (provider timeout)\n',
+        );
+        expect(formatWorkflowTurnFooter(500, { status: 'blocked', reason: 'approval required' })).toContain(
+            'Stop reason: blocked (approval required)',
+        );
+        expect(formatWorkflowTurnFooter(2500, { status: 'cancelled', reason: 'interrupted by user' })).toContain(
+            'Stop reason: cancelled (interrupted by user)',
+        );
     });
 });
 
