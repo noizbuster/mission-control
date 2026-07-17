@@ -78,7 +78,12 @@ function resolveScopeResults(input: ScopeResolutionInput): ResolvedMcpConfig {
         input.env,
         expandedSecrets,
     );
-    return { servers, expandedSecrets: [...expandedSecrets], errors };
+    return {
+        config: input.userResult.config ?? {},
+        servers,
+        expandedSecrets: [...expandedSecrets],
+        errors,
+    };
 }
 
 export async function readUserScopeServers(options: LoadMcpConfigOptions = {}): Promise<ReadScopeServersResult> {

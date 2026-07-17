@@ -7,17 +7,22 @@ import type {
     ToolCall,
 } from '@mission-control/protocol';
 import type { DesktopApprovalEffectOutcome } from './desktop-approval-effect';
+import { createDesktopReExecutableToolRegistry } from './desktop-reexecutable-tool-registry';
 import { sessionEvent, toolFailed } from './desktop-tool-approval-events';
-import {
-    type CommandExecutionRequest,
-    type CommandExecutionResult,
-    registerCommandRunTool,
-} from './tools/command-run';
-import { registerFileEditTool } from './tools/file-edit';
-import { registerFilePatchTool } from './tools/file-patch';
-import { registerFileWriteTool } from './tools/file-write';
-import { registerHashlineEditTool } from './tools/hashline-edit';
+import { type CommandExecutionRequest, type CommandExecutionResult } from './tools/command-run';
 import { ToolRegistry } from './tools/tool-registry';
+
+export async function createApprovedDesktopToolRegistry(input: {
+    readonly workspaceRoot: string;
+    readonly record: ApprovalRecord;
+    readonly commandExecutor?: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
+}): Promise<ToolRegistry> {
+    return createDesktopReExecutableToolRegistry({
+        workspaceRoot: input.workspaceRoot,
+        requestPermission: permissionResolver(input.record),
+        ...(input.commandExecutor !== undefined ? { commandExecutor: input.commandExecutor } : {}),
+    });
+}
 
 export async function executeApprovedDesktopTool(input: {
     readonly append: (event: AgentEvent) => Promise<void>;
@@ -28,28 +33,10 @@ export async function executeApprovedDesktopTool(input: {
     readonly modelProviderSelection: ModelProviderSelection;
     readonly commandExecutor?: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
 }): Promise<DesktopApprovalEffectOutcome> {
-    const registry = new ToolRegistry();
-    await registerFileEditTool(registry, {
+    const registry = await createApprovedDesktopToolRegistry({
         workspaceRoot: input.workspaceRoot,
-        requestPermission: permissionResolver(input.record),
-    });
-    await registerFileWriteTool(registry, {
-        workspaceRoot: input.workspaceRoot,
-        requestPermission: permissionResolver(input.record),
-    });
-    await registerFilePatchTool(registry, {
-        workspaceRoot: input.workspaceRoot,
-        requestPermission: permissionResolver(input.record),
-    });
-    await registerHashlineEditTool(registry, {
-        workspaceRoot: input.workspaceRoot,
-        requestPermission: permissionResolver(input.record),
-    });
-    await registerCommandRunTool(registry, {
-        workspaceRoot: input.workspaceRoot,
-        requestPermission: permissionResolver(input.record),
-        requirePermissionForAllowlisted: true,
-        ...(input.commandExecutor !== undefined ? { executor: input.commandExecutor } : {}),
+        record: input.record,
+        ...(input.commandExecutor !== undefined ? { commandExecutor: input.commandExecutor } : {}),
     });
     const advertisement = registry.advertise().find((tool) => tool.name === input.toolCall.toolName);
     if (advertisement === undefined) {

@@ -1,4 +1,4 @@
-import type { McpConfigEntry } from '@mission-control/protocol';
+import type { McpConfigEntry, MissionControlConfig } from '@mission-control/protocol';
 
 export type McpConfigScope = 'user' | 'project';
 
@@ -28,6 +28,7 @@ export type McpConfigParseError = {
 };
 
 export type ResolvedMcpConfig = {
+    readonly config: MissionControlConfig;
     readonly servers: readonly ResolvedMcpServer[];
     readonly expandedSecrets: readonly string[];
     readonly errors: readonly McpConfigParseError[];

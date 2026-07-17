@@ -46,7 +46,7 @@ const learnParametersJsonSchema = {
     properties: {
         memory: {
             type: 'string',
-            description: 'The durable, self-contained lesson to remember (what, when, why).',
+            description: 'The self-contained process-local lesson to remember (what, when, why).',
         },
         context: { type: 'string', description: 'Optional source context for the lesson.' },
         skill: {
@@ -70,9 +70,8 @@ export function createLearnToolRegistration(backend: MemoryBackend): ToolRegistr
     return {
         name: LEARN_TOOL_NAME,
         description:
-            'Capture a reusable lesson to long-term memory and optionally mint a managed skill. The lesson ' +
-            'persist path uses the configured memory backend; the managed-skill path is a deferred seam. ' +
-            'Config-gated: registers only when memory.backend is not off.',
+            'Capture a reusable lesson in process-local memory and optionally request a managed skill. ' +
+            'The local memory is non-durable, and the managed-skill path remains a deferred seam.',
         capabilityClasses: ['write'],
         parametersJsonSchema: learnParametersJsonSchema,
         inputSchema: learnInputSchema,

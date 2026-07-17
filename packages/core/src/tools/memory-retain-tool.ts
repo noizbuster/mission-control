@@ -1,5 +1,5 @@
 /**
- * `retain` tool — store durable facts in the configured memory backend.
+ * `retain` tool — store facts in the configured memory backend.
  *
  * Config-gated seam: registers and advertises ONLY when `memory.backend !== 'off'`
  * (see {@linkcode registerMemoryRetainTool}). With the in-memory `local` stub the items
@@ -65,8 +65,8 @@ export function createMemoryRetainToolRegistration(
     return {
         name: RETAIN_TOOL_NAME,
         description:
-            'Store important facts in long-term memory. Each item is retained in the configured memory ' +
-            'backend (off by default; the local stub is in-memory-only). Use for durable cross-session facts.',
+            'Store important facts in process-local memory. The local backend is in-memory-only and ' +
+            'does not persist across registry or process lifetimes.',
         capabilityClasses: ['read'],
         parametersJsonSchema: retainParametersJsonSchema,
         inputSchema: retainInputSchema,

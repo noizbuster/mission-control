@@ -80,6 +80,7 @@ export function buildPermissionRuntime(
         ['job', ['subagent']],
         ['workflow', ['workflow']],
         ['team_create', ['team']],
+        ['irc', ['subagent']],
         ['coordinate', ['coordination']],
     ] satisfies readonly (readonly [string, readonly string[]])[]) {
         parentToolRegistry.register(makePermissionTool(name, capabilityClasses, executed));

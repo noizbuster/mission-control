@@ -49,8 +49,8 @@ export function createMemoryRecallToolRegistration(
     return {
         name: RECALL_TOOL_NAME,
         description:
-            'Search long-term memory for relevant prior context. Returns matching memories from the ' +
-            'configured backend (off by default; the local stub is in-memory-only).',
+            'Search process-local memory for relevant prior context. The local backend is in-memory-only ' +
+            'and does not persist across registry or process lifetimes.',
         capabilityClasses: ['read'],
         parametersJsonSchema: recallParametersJsonSchema,
         inputSchema: recallInputSchema,

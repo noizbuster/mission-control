@@ -93,8 +93,9 @@ async function executeRename(
 ): Promise<LspRenameOutput> {
     const client = options.client;
 
-    if (client.prepareRename !== undefined) {
-        const preparable = await safeCall(() => client.prepareRename!(input.uri, input.line, input.character));
+    const prepareRename = client.prepareRename;
+    if (prepareRename !== undefined) {
+        const preparable = await safeCall(() => prepareRename.call(client, input.uri, input.line, input.character));
         if (preparable === undefined) {
             return noEditResult(input, 'not_renameable');
         }
@@ -103,7 +104,7 @@ async function executeRename(
     if (client.rename === undefined) {
         throw renameFailure('language client does not support rename');
     }
-    const renameMethod = client.rename;
+    const renameMethod = client.rename.bind(client);
     const edit = await safeCall(() => renameMethod(input.uri, input.line, input.character, input.newName));
     if (edit === undefined || !hasEdits(edit)) {
         return noEditResult(input, 'no_edit');

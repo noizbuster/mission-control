@@ -44,8 +44,8 @@ export function createMemoryReflectToolRegistration(
     return {
         name: REFLECT_TOOL_NAME,
         description:
-            'Synthesize an answer from long-term memory. Asks the configured backend to reason over its ' +
-            'bank (off by default; the local stub returns formatted recall matches rather than LLM synthesis).',
+            'Format relevant process-local memory matches for reflection. The local backend performs no ' +
+            'LLM synthesis and does not persist across registry or process lifetimes.',
         capabilityClasses: ['read'],
         parametersJsonSchema: reflectParametersJsonSchema,
         inputSchema: reflectInputSchema,

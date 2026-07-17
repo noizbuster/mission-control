@@ -1,4 +1,11 @@
 export {
+    CHECKPOINT_TOOL_NAME,
+    CheckpointCoordinator,
+    createCheckpointToolRegistration,
+    createRewindToolRegistration,
+    REWIND_TOOL_NAME,
+} from './checkpoint-tool';
+export {
     createPlanExitToolRegistration,
     PLAN_EXIT_TOOL_NAME,
     type PlanExitInput,

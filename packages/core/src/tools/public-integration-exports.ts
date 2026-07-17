@@ -13,6 +13,7 @@ export {
     type JobToolResult,
     jobInputSchema,
 } from './job-tool';
+export { registerLearnTool } from './learn-tool';
 export {
     createLookAtToolRegistration,
     defaultVisionFetch,
@@ -28,6 +29,12 @@ export {
     type VisionFetchFn,
 } from './look-at-tool';
 export { createDelegatingLspClient } from './lsp-delegating-client';
+export {
+    createLspRenameToolRegistration,
+    type LspRenameInput,
+    type LspRenameOutput,
+    type LspRenameToolOptions,
+} from './lsp-rename-tool';
 export {
     type CommandExists,
     DEFAULT_LSP_SERVERS,
@@ -62,6 +69,7 @@ export {
     type LspRange,
     type LspSymbol,
 } from './lsp-tool';
+export { registerManageSkillTool } from './manage-skill-tool';
 export {
     type LoadMcpConfigOptions,
     type LoadRuntimeMcpConfigOptions,
@@ -110,6 +118,11 @@ export {
     type McpOutput,
     type McpToolInfo,
 } from './mcp-tool';
+export { resolveMemoryBackend } from './memory-backend';
+export { registerMemoryEditTool } from './memory-edit-tool';
+export { registerMemoryRecallTool } from './memory-recall-tool';
+export { registerMemoryReflectTool } from './memory-reflect-tool';
+export { registerMemoryRetainTool } from './memory-retain-tool';
 export {
     createMonitorListToolRegistration,
     MONITOR_LIST_TOOL_NAME,
@@ -182,3 +195,8 @@ export {
     type NotepadWriteOperationAppend,
     type NotepadWriteOperationForbidden,
 } from './notepad-guard/notepad-guard';
+export { createSessionInfoToolRegistration } from './session-info-tool';
+export { createSessionListToolRegistration } from './session-list-tool';
+export { createSessionReadToolRegistration } from './session-read-tool';
+export { createSessionSearchToolRegistration } from './session-search-tool';
+export type { SessionToolsOptions } from './session-tools-shared';

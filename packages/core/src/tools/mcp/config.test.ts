@@ -1,4 +1,4 @@
-// allow: SIZE_OK -- HEAD 747 -> current 987 pure LOC; one MCP configuration resolution and atomic write boundary integration matrix.
+// allow: SIZE_OK -- HEAD 747 -> current 1042 pure LOC; one MCP configuration resolution and atomic write boundary integration matrix.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
     loadResolvedMcpConfig,
@@ -90,6 +90,32 @@ describe('loadResolvedMcpConfig merge rule', () => {
             env: {},
         });
         expect(resolved.servers.map((server) => server.name)).toEqual(['solo']);
+        expect(resolved.errors).toEqual([]);
+    });
+
+    it('returns the typed gated-tool snapshot from the base config', async () => {
+        await writeRaw(
+            dirs.userConfigPath,
+            JSON.stringify({
+                memory: { backend: 'local' },
+                team_mode: {},
+                monitor: {},
+                ssh: { hosts: [{ name: 'staging', host: 'staging.example.test' }] },
+                debug: {},
+            }),
+        );
+
+        const resolved = await loadResolvedMcpConfig({
+            userConfigPath: dirs.userConfigPath,
+            projectConfigPath: dirs.projectConfigPath,
+            env: {},
+        });
+
+        expect(resolved.config.memory?.backend).toBe('local');
+        expect(resolved.config.team_mode?.enabled).toBe(false);
+        expect(resolved.config.monitor?.enabled).toBe(false);
+        expect(resolved.config.ssh?.hosts).toEqual([{ name: 'staging', host: 'staging.example.test' }]);
+        expect(resolved.config.debug?.enabled).toBe(false);
         expect(resolved.errors).toEqual([]);
     });
 });
@@ -658,7 +684,7 @@ describe('profile path resolution', () => {
             throw new Error('expected resolveUserConfigPath to throw');
         } catch (error) {
             expect(error).toBeInstanceOf(Error);
-            const message = (error as Error).message;
+            const message = error instanceof Error ? error.message : String(error);
             expect(message).toContain('"dev"');
             expect(message).toContain(join(dir, 'mission-control.dev.jsonc'));
             expect(message).toContain(join(dir, 'mission-control.dev.json'));
@@ -765,7 +791,7 @@ describe('loadResolvedMcpConfig profile read', () => {
             });
             throw new Error('expected loadResolvedMcpConfig to throw profile-not-found');
         } catch (error) {
-            const message = (error as Error).message;
+            const message = error instanceof Error ? error.message : String(error);
             expect(message).toContain('No config file found for profile "missing"');
             expect(message).toContain(join(dir, 'mission-control.missing.jsonc'));
             expect(message).toContain(join(dir, 'mission-control.missing.json'));
@@ -793,6 +819,41 @@ describe('loadResolvedMcpConfig profile read', () => {
             env: {},
         });
         expect(resolved.servers.map((server) => server.name)).toEqual(['srv']);
+        expect(resolved.errors).toEqual([]);
+    });
+
+    it('returns the typed gated-tool snapshot from the selected JSONC profile', async () => {
+        await writeRaw(
+            join(dirs.userConfigDir, 'mission-control.dev.jsonc'),
+            [
+                '{',
+                '  // gated tool families',
+                '  "memory": { "backend": "local" },',
+                '  "team_mode": { "enabled": true },',
+                '  "monitor": { "enabled": true, "maxRuntimeMs": 60000 },',
+                '  "ssh": { "hosts": [{ "name": "staging", "host": "staging.example.test" }] },',
+                '  "debug": { "enabled": true }',
+                '}',
+            ].join('\n'),
+        );
+
+        const resolved = await loadResolvedMcpConfig({
+            profileName: 'dev',
+            userConfigDir: dirs.userConfigDir,
+            projectConfigPath: dirs.projectConfigPath,
+            env: {},
+        });
+
+        expect(resolved.config.memory?.backend).toBe('local');
+        expect(resolved.config.team_mode?.enabled).toBe(true);
+        expect(resolved.config.monitor).toEqual({
+            enabled: true,
+            liveModeEnabled: false,
+            maxMonitorsPerSession: 3,
+            maxRuntimeMs: 60_000,
+        });
+        expect(resolved.config.ssh?.hosts).toEqual([{ name: 'staging', host: 'staging.example.test' }]);
+        expect(resolved.config.debug?.enabled).toBe(true);
         expect(resolved.errors).toEqual([]);
     });
 

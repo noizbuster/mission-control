@@ -1,4 +1,4 @@
-// allow: SIZE_OK -- HEAD 405 -> current 494 pure LOC; one desktop session command state machine preserving transaction ordering.
+// allow: SIZE_OK -- HEAD 405 -> current 484 pure LOC; one desktop session command state machine preserving transaction ordering.
 import { defaultModelProviderSelection } from '@mission-control/config';
 import type {
     AbgNodeModelOptions,
@@ -11,10 +11,8 @@ import type {
 import { createCodingAgentGraph } from './behavior/coding-agent-graph';
 import { createCodingAgentNodeRegistry } from './behavior/coding-agent-registry';
 import { type DesktopApprovalEffectOutcome, type DesktopApprovalEffectRecord } from './desktop-approval-effect';
-import {
-    hasPendingDesktopApprovals,
-    projectDesktopApprovalContinuationMessages,
-} from './desktop-approval-transcript';
+import { hasPendingDesktopApprovals, projectDesktopApprovalContinuationMessages } from './desktop-approval-transcript';
+import { createDesktopReExecutableToolRegistry } from './desktop-reexecutable-tool-registry';
 import {
     type DesktopApprovalDecisionInput,
     type DesktopApprovalStore,
@@ -40,11 +38,6 @@ import type { RunCoordinatorTurnRunner } from './runtime/run-coordinator-types';
 import { type SessionRunOwner, type SessionRunOwnerReceipt, SessionRunOwnerRegistry } from './runtime/run-owner';
 import type { SessionControlHost } from './runtime/session-control-host';
 import type { CommandExecutionRequest, CommandExecutionResult } from './tools/command-run';
-import { registerCommandRunTool } from './tools/command-run';
-import { registerFileEditTool } from './tools/file-edit';
-import { registerFilePatchTool } from './tools/file-patch';
-import { registerFileWriteTool } from './tools/file-write';
-import { registerHashlineEditTool } from './tools/hashline-edit';
 import { ToolRegistry } from './tools/tool-registry';
 
 export type DesktopPromptCommandInput = {
@@ -112,6 +105,21 @@ export function createDesktopSessionCommandService(
     options: DesktopSessionCommandServiceOptions,
 ): DesktopSessionCommandService {
     return new DefaultDesktopSessionCommandService(options);
+}
+
+export async function createDesktopGraphToolRegistry(
+    options: Pick<DesktopSessionCommandServiceOptions, 'workspaceRoot' | 'commandExecutor'>,
+): Promise<ToolRegistry> {
+    const requestPermission = async (request: PermissionRequest): Promise<PermissionDecision> => ({
+        requestId: request.id,
+        status: 'requires_approval',
+        reason: 'desktop approval required',
+    });
+    return createDesktopReExecutableToolRegistry({
+        workspaceRoot: options.workspaceRoot,
+        requestPermission,
+        ...(options.commandExecutor !== undefined ? { commandExecutor: options.commandExecutor } : {}),
+    });
 }
 
 class DefaultDesktopSessionCommandService implements DesktopSessionCommandService {
@@ -382,33 +390,9 @@ class DefaultDesktopSessionCommandService implements DesktopSessionCommandServic
 
     private ensureGraphToolRegistry(): Promise<ToolRegistry> {
         if (this.graphToolRegistryPromise === undefined) {
-            this.graphToolRegistryPromise = this.buildGraphToolRegistry();
+            this.graphToolRegistryPromise = createDesktopGraphToolRegistry(this.options);
         }
         return this.graphToolRegistryPromise;
-    }
-
-    private async buildGraphToolRegistry(): Promise<ToolRegistry> {
-        const registry = new ToolRegistry();
-        // `requires_approval` makes each tool settle `approval_required` (file-mutation maps a
-        // non-allow/non-deny decision to that code) so the graph blocks on every tool call. No
-        // PermissionGate is used → no gate-emitted approval events; the desktop owns those via
-        // backfillCurrentBlockedDesktopApproval, exactly as the flat path did.
-        const requestPermission = (request: PermissionRequest): PermissionDecision => ({
-            requestId: request.id,
-            status: 'requires_approval',
-            reason: 'desktop approval required',
-        });
-        await registerFileEditTool(registry, { workspaceRoot: this.options.workspaceRoot, requestPermission });
-        await registerFileWriteTool(registry, { workspaceRoot: this.options.workspaceRoot, requestPermission });
-        await registerFilePatchTool(registry, { workspaceRoot: this.options.workspaceRoot, requestPermission });
-        await registerHashlineEditTool(registry, { workspaceRoot: this.options.workspaceRoot, requestPermission });
-        await registerCommandRunTool(registry, {
-            workspaceRoot: this.options.workspaceRoot,
-            requestPermission,
-            requirePermissionForAllowlisted: true,
-            ...(this.options.commandExecutor !== undefined ? { executor: this.options.commandExecutor } : {}),
-        });
-        return registry;
     }
 }
 

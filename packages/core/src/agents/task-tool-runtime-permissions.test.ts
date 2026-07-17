@@ -63,6 +63,21 @@ describe('ConcreteTaskToolRuntime child permission enforcement', () => {
         expect(names).not.toContain('team_create');
     });
 
+    it('hard drops team and IRC subagent tools from child task surfaces', async () => {
+        // Given
+        const childAgent = makePermissionAgent({ tools: ['repo.read', 'team_create', 'irc'] });
+        const { runtime, contexts } = buildPermissionRuntime(childAgent);
+
+        // When
+        await runtime.runChildSession(makePermissionRequest(allowAllChildPermissions));
+
+        // Then
+        const names = advertisedChildToolNames(contexts[0]);
+        expect(names).toContain('repo.read');
+        expect(names).not.toContain('team_create');
+        expect(names).not.toContain('irc');
+    });
+
     it('intersects category tool aliases with canonical production read tools', async () => {
         const { runtime, contexts } = buildPermissionRuntime(
             makePermissionAgent({ name: 'quick', tools: ['read', 'ls', 'grep', 'find'] }),
