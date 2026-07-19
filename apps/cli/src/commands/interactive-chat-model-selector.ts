@@ -66,7 +66,7 @@ function questionModelLine(
 
         function clearPreviousRender(): void {
             if (renderedLines > 0) {
-                chatOutput.write(`\u001b[${renderedLines}F\u001b[0J`);
+                streams.output.write(`\u001b[${renderedLines}F\u001b[0J`);
             }
         }
 

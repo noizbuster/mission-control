@@ -1,4 +1,8 @@
-import type { ExternalEditorActionResult, TerminalSuspendActionResult } from '@mission-control/tui/state';
+import {
+    type ExternalEditorActionResult,
+    sanitizeTerminalDisplayText,
+    type TerminalSuspendActionResult,
+} from '@mission-control/tui/state';
 import { spawnSync } from 'node:child_process';
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -25,7 +29,8 @@ export function setTerminalTitle(title: string): boolean {
     if (!shouldManageTerminalTitle()) {
         return false;
     }
-    process.stderr.write(`${TERMINAL_TITLE_SET_PREFIX}${title}${TERMINAL_TITLE_SET_SUFFIX}`);
+    const payload = sanitizeTerminalDisplayText(title).replaceAll('\n', '\\u{000A}');
+    process.stderr.write(`${TERMINAL_TITLE_SET_PREFIX}${payload}${TERMINAL_TITLE_SET_SUFFIX}`);
     return true;
 }
 
@@ -95,7 +100,10 @@ export function openExternalEditor(initialText: string): Promise<ExternalEditorA
         editorControls.runEditor(editor, tempPath);
         return Promise.resolve({ kind: 'updated', text: readFileSync(tempPath, 'utf-8') });
     } catch (error: unknown) {
-        return Promise.resolve({ kind: 'failed', message: formatExternalEditorFailure(error) });
+        if (error instanceof Error) {
+            return Promise.resolve({ kind: 'failed', message: formatExternalEditorFailure(error) });
+        }
+        throw error;
     } finally {
         rmSync(tempPath, { force: true });
     }
@@ -120,8 +128,9 @@ export function detectGitBranch(workspaceRoot: string | undefined): string | und
             return undefined;
         }
         return branch;
-    } catch {
-        return undefined;
+    } catch (error: unknown) {
+        if (error instanceof Error) return undefined;
+        throw error;
     }
 }
 
@@ -138,8 +147,9 @@ function runGitRevParse(workspaceRoot: string, args: readonly string[]): string 
         }
         const output = (result.stdout ?? '').trim();
         return output.length > 0 ? output : undefined;
-    } catch {
-        return undefined;
+    } catch (error: unknown) {
+        if (error instanceof Error) return undefined;
+        throw error;
     }
 }
 

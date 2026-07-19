@@ -1,6 +1,5 @@
 import { AgentRuntime, createDeterministicProvider } from '@mission-control/core';
 import { createChatTuiHandle } from '@mission-control/tui/create-chat-tui';
-import type { ChatTuiHandle } from '@mission-control/tui/state';
 import { createChatStore } from '@mission-control/tui/state';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runInteractiveChatSession } from './interactive-chat';
@@ -36,9 +35,11 @@ afterEach(async () => {
 });
 
 describe('runInteractiveChatSession terminal title management', () => {
-    it('writes OSC title escapes for TUI-capable TTY sessions without mounting OpenTUI', async () => {
+    it('writes OSC title escapes without duplicating the TUI transcript to stdout', async () => {
         const restoreTtyState = setTtyState({ input: true, output: true });
-        createChatTuiMock.mockImplementation(async () => createExitOnlyTuiHandle());
+        const store = createChatStore();
+        store.enqueueEvent({ type: 'line', value: '/exit' });
+        createChatTuiMock.mockImplementation(async () => createChatTuiHandle(store, () => {}));
         try {
             const { result, stderr } = await captureStderr(async () =>
                 runInteractiveChatSession(new AgentRuntime(), {
@@ -48,7 +49,8 @@ describe('runInteractiveChatSession terminal title management', () => {
             );
 
             expect(createChatTuiMock).toHaveBeenCalledOnce();
-            expect(result).toContain('Exiting mission-control chat');
+            expect(result).toBe('');
+            expect(store.getOutput()).toContain('Exiting mission-control chat');
             expect(stderr).toContain(`${TERMINAL_TITLE_SET_PREFIX}Mission Control`);
             expect(stderr).toContain(TERMINAL_TITLE_RESET);
         } finally {
@@ -56,12 +58,6 @@ describe('runInteractiveChatSession terminal title management', () => {
         }
     });
 });
-
-function createExitOnlyTuiHandle(): ChatTuiHandle {
-    const store = createChatStore();
-    store.enqueueEvent({ type: 'line', value: '/exit' });
-    return createChatTuiHandle(store, () => {});
-}
 
 async function captureStderr<T>(fn: () => Promise<T>): Promise<{ readonly result: T; readonly stderr: string }> {
     const writes: string[] = [];

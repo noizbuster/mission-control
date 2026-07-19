@@ -1,3 +1,4 @@
+import * as terminalText from '@mission-control/tui';
 import {
     clampTextOffset,
     nextGraphemeOffset,
@@ -9,6 +10,14 @@ import {
     truncateTerminalText,
 } from '@mission-control/tui';
 import { describe, expect, it } from 'vitest';
+
+type TerminalTextWithClip = typeof terminalText & {
+    readonly clipTerminalText: (value: string, columns: number) => string;
+};
+
+function hasClipTerminalText(value: typeof terminalText): value is TerminalTextWithClip {
+    return 'clipTerminalText' in value;
+}
 
 describe('terminal text display offsets', () => {
     it('segments basic text into grapheme clusters', () => {
@@ -88,6 +97,23 @@ describe('terminal text display offsets', () => {
         expect(clampTextOffset(text, -1)).toBe(0);
         expect(clampTextOffset(text, 999)).toBe(text.length);
     });
+
+    it('snaps interior combining and ZWJ offsets against the full string', () => {
+        const value = 'e\u0301👨‍👩‍👧‍👦';
+
+        expect(nextGraphemeOffset(value, 0)).toBe(2);
+        expect(nextGraphemeOffset(value, 1)).toBe(2);
+        expect(nextGraphemeOffset(value, 2)).toBe(13);
+        expect(nextGraphemeOffset(value, 7)).toBe(13);
+        expect(previousGraphemeOffset(value, 1)).toBe(0);
+        expect(previousGraphemeOffset(value, 2)).toBe(0);
+        expect(previousGraphemeOffset(value, 7)).toBe(2);
+        expect(previousGraphemeOffset(value, 13)).toBe(2);
+        expect(terminalOffsetForDisplayColumn(value, 0)).toBe(0);
+        expect(terminalOffsetForDisplayColumn(value, 1)).toBe(2);
+        expect(terminalOffsetForDisplayColumn(value, 2)).toBe(2);
+        expect(terminalOffsetForDisplayColumn(value, 3)).toBe(13);
+    });
 });
 
 describe('truncateTerminalText', () => {
@@ -132,6 +158,21 @@ describe('truncateTerminalText', () => {
         expect(truncateTerminalText(text, 3)).toBe('a~');
         // Budget 4: content 3 cols fits 'a' + emoji exactly.
         expect(truncateTerminalText(text, 4)).toBe(`a${emoji}~`);
+    });
+
+    it('omits an oversized marker and clips normalized column budgets safely', () => {
+        expect(truncateTerminalText('abc', 1, '🙂')).toBe('a');
+        expect(truncateTerminalText('abc', 0, '~')).toBe('');
+        expect(truncateTerminalText('abc', 1.9, '~')).toBe('~');
+    });
+
+    it('exports grapheme-safe clipping through the public terminal text surface', () => {
+        expect(hasClipTerminalText(terminalText)).toBe(true);
+        if (!hasClipTerminalText(terminalText)) return;
+
+        expect(terminalText.clipTerminalText('e\u0301🙂', 1)).toBe('e\u0301');
+        expect(terminalText.clipTerminalText('🙂a', 1)).toBe('');
+        expect(terminalText.clipTerminalText('abc', 1.9)).toBe('a');
     });
 });
 

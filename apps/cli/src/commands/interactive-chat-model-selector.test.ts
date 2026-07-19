@@ -95,6 +95,28 @@ const defaultModelSelection: ModelProviderSelection = {
 };
 
 describe('terminal model selector stream ownership', () => {
+    it('writes exact trusted redraw controls only to the low-level terminal stream', async () => {
+        // Given
+        const input = new FakeModelPickerInput();
+        const output = new FakeModelPickerOutput();
+        const displayWrites: string[] = [];
+        const selectModel = createTerminalModelSelectorFromStreams(
+            { write: (text: string) => displayWrites.push(text) },
+            { input, output },
+        );
+        const selectionPromise = selectModel(localVariantChoices, defaultModelSelection, { title: 'Select model' });
+
+        // When
+        input.send('\u001b[B');
+        input.send('\r');
+        await selectionPromise;
+
+        // Then
+        expect(output.getOutput()).toBe('\u001b[7F\u001b[0J');
+        expect(displayWrites.join('')).not.toContain('\u001b');
+        expect(displayWrites.join('')).toContain('Select model');
+    });
+
     it('cancels the terminal model picker on Ctrl+C and detaches stdin', async () => {
         const input = new FakeModelPickerInput();
         const output = new FakeModelPickerOutput();
