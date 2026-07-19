@@ -1,15 +1,18 @@
 #!/usr/bin/env node
 
-import type { ChatInputEvent } from '../apps/cli/src/commands/interactive-chat-io.js';
 import type { CommandExecutionRequest, CommandExecutionResult } from '../packages/core/src/index.js';
+import {
+    bufferedOutput,
+    createDeferred,
+    emptyAuthStore,
+    initializeGitWorkspace,
+    scriptedInput,
+    tempRoot,
+} from './coding-agent-built-dist-smoke-support.ts';
 import { approvePendingSmokePatch, scriptedCodingSmokeProvider } from './coding-agent-smoke-support.ts';
-import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { promisify } from 'node:util';
 
-const execFileAsync = promisify(execFile);
 const smokeCompletionTimeoutMs = 15_000;
 
 const { parseArgs } = await import('@mission-control/cli/args');
@@ -26,8 +29,8 @@ const {
 const tempRoots: string[] = [];
 
 try {
-    const dataDir = await tempRoot('mctrl-built-dist-smoke-data-');
-    const workspaceRoot = await tempRoot('mctrl-built-dist-smoke-workspace-');
+    const dataDir = await tempRoot('mctrl-built-dist-smoke-data-', tempRoots);
+    const workspaceRoot = await tempRoot('mctrl-built-dist-smoke-workspace-', tempRoots);
     const authFilePath = join(dataDir, 'auth.json');
     const nestedRoot = join(workspaceRoot, 'nested');
     const sessionId = 'session_built_dist_smoke_coding_agent';
@@ -43,6 +46,9 @@ try {
     const provider = scriptedCodingSmokeProvider();
     const chatOutput = bufferedOutput();
     const initialRunCompleted = createDeferred();
+    const editApprovalRequested = createDeferred();
+    const writeApprovalRequested = createDeferred();
+    const bashApprovalRequested = createDeferred();
     const firstOutput = await runAgent(parseArgs(['--session', sessionId, '--model', 'local/local-echo']), {
         authStore: emptyAuthStore(authFilePath),
         chatInput: scriptedInput(
@@ -54,7 +60,12 @@ try {
                 { type: 'interrupt' },
                 { type: 'interrupt' },
             ],
-            { beforeIndex: 4, until: withTimeout(initialRunCompleted.promise, 'initial run completion') },
+            [
+                { beforeIndex: 1, until: editApprovalRequested.promise },
+                { beforeIndex: 2, until: writeApprovalRequested.promise },
+                { beforeIndex: 3, until: bashApprovalRequested.promise },
+                { beforeIndex: 4, until: withTimeout(initialRunCompleted.promise, 'initial run completion') },
+            ],
         ),
         chatOutput: chatOutput.output,
         workspaceRoot,
@@ -62,6 +73,19 @@ try {
         provider,
         plainPromptGraph: 'coding-agent',
         onRuntimeEvent: (event) => {
+            if (event.type === 'approval.requested') {
+                switch (event.approvalRecord?.subject.id) {
+                    case 'file.edit':
+                        editApprovalRequested.resolve();
+                        break;
+                    case 'file.write':
+                        writeApprovalRequested.resolve();
+                        break;
+                    case 'bash.run':
+                        bashApprovalRequested.resolve();
+                        break;
+                }
+            }
             if (event.type === 'run.completed') {
                 initialRunCompleted.resolve();
             }
@@ -112,10 +136,10 @@ try {
     const resumedRunCompleted = createDeferred();
     const resumedOutput = await runAgent(parseArgs(['--session', sessionId, '--model', 'local/local-echo']), {
         authStore: emptyAuthStore(authFilePath),
-        chatInput: scriptedInput([{ type: 'line', value: '/continue' }, { type: 'interrupt' }, { type: 'interrupt' }], {
-            beforeIndex: 1,
-            until: withTimeout(resumedRunCompleted.promise, 'resumed run completion'),
-        }),
+        chatInput: scriptedInput(
+            [{ type: 'line', value: '/continue' }, { type: 'interrupt' }, { type: 'interrupt' }],
+            [{ beforeIndex: 1, until: withTimeout(resumedRunCompleted.promise, 'resumed run completion') }],
+        ),
         chatOutput: bufferedOutput().output,
         workspaceRoot,
         commandExecutor: (request) => fakeBashExecutor(request, nestedRoot),
@@ -178,50 +202,6 @@ try {
     await Promise.all(tempRoots.map((path) => rm(path, { recursive: true, force: true })));
 }
 
-function emptyAuthStore(authFilePath: string) {
-    return {
-        authFilePath,
-        readAuthFile: async () => ({ $schema: 'https://mission-control.dev/auth.schema.json', credentials: {} }),
-        saveCredential: async () => undefined,
-        setDefaultSelection: async () => undefined,
-        deleteCredential: async () => undefined,
-        listCredentialSummaries: async () => [],
-        getDefaultSelection: async () => undefined,
-        getModelRoles: async () => ({}),
-        setModelRole: async () => undefined,
-        clearModelRole: async () => undefined,
-    };
-}
-
-function scriptedInput(
-    events: readonly ChatInputEvent[],
-    wait?: { readonly beforeIndex: number; readonly until: Promise<void> },
-) {
-    let index = 0;
-    return {
-        read: async () => {
-            if (wait !== undefined && index === wait.beforeIndex) {
-                await wait.until;
-            }
-            const event = events[index] ?? { type: 'interrupt' as const };
-            index += 1;
-            return event;
-        },
-        close: () => undefined,
-    };
-}
-
-function createDeferred(): { readonly promise: Promise<void>; readonly resolve: () => void } {
-    let resolve: (() => void) | undefined;
-    const promise = new Promise<void>((promiseResolve) => {
-        resolve = promiseResolve;
-    });
-    if (resolve === undefined) {
-        throw new Error('deferred initialization failed');
-    }
-    return { promise, resolve };
-}
-
 function withTimeout(promise: Promise<void>, label: string): Promise<void> {
     let timeout: ReturnType<typeof setTimeout> | undefined;
     const timeoutPromise = new Promise<never>((_resolve, reject) => {
@@ -234,20 +214,6 @@ function withTimeout(promise: Promise<void>, label: string): Promise<void> {
             clearTimeout(timeout);
         }
     });
-}
-
-function bufferedOutput() {
-    const chunks: string[] = [];
-    return {
-        output: {
-            write(text: string) {
-                chunks.push(text);
-            },
-            getOutput() {
-                return chunks.join('');
-            },
-        },
-    };
 }
 
 async function fakeBashExecutor(
@@ -265,12 +231,6 @@ async function fakeBashExecutor(
         stderr: '',
         durationMs: 1,
     };
-}
-
-async function initializeGitWorkspace(workspaceRoot: string): Promise<void> {
-    await execFileAsync('git', ['init'], { cwd: workspaceRoot });
-    await execFileAsync('git', ['config', 'user.email', 'smoke@example.com'], { cwd: workspaceRoot });
-    await execFileAsync('git', ['config', 'user.name', 'Smoke Test'], { cwd: workspaceRoot });
 }
 
 function diagnosticRecords(output: string): readonly unknown[] {
@@ -306,10 +266,4 @@ function tailLines(output: string): readonly string[] {
         .split(/\r?\n/)
         .filter((line) => line.length > 0)
         .slice(-12);
-}
-
-async function tempRoot(prefix: string): Promise<string> {
-    const path = await mkdtemp(join(tmpdir(), prefix));
-    tempRoots.push(path);
-    return path;
 }

@@ -16,20 +16,22 @@
  * (`scriptedMcpToolsSmokeProvider`) proposes the glob + mcp tool calls deterministically —
  * no network, no real provider credentials, no flaky timers.
  */
-import type { ChatInputEvent } from '../apps/cli/src/commands/interactive-chat-io.js';
 import type { AgentEvent } from '../packages/protocol/src/index.js';
+import {
+    bufferedOutput,
+    emptyAuthStore,
+    initializeGitWorkspace,
+    scriptedInput,
+    tempRoot,
+} from './coding-agent-built-dist-smoke-support.ts';
 import {
     createScriptedMcpToolsCapture,
     scriptedMcpToolsSmokeProvider,
 } from './coding-agent-smoke-mcp-tools-provider.ts';
-import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { promisify } from 'node:util';
 
-const execFileAsync = promisify(execFile);
 const fixtureServerPath = fileURLToPath(
     new URL('../packages/core/src/tools/mcp/fixtures/stdio-fixture-server.mjs', import.meta.url),
 );
@@ -45,9 +47,9 @@ const tempRoots: string[] = [];
 const capturedEvents: AgentEvent[] = [];
 
 try {
-    const dataDir = await tempRoot('mctrl-mcp-smoke-data-');
-    const configDir = await tempRoot('mctrl-mcp-smoke-config-');
-    const workspaceRoot = await tempRoot('mctrl-mcp-smoke-workspace-');
+    const dataDir = await tempRoot('mctrl-mcp-smoke-data-', tempRoots);
+    const configDir = await tempRoot('mctrl-mcp-smoke-config-', tempRoots);
+    const workspaceRoot = await tempRoot('mctrl-mcp-smoke-workspace-', tempRoots);
     const authFilePath = join(dataDir, 'auth.json');
     const sessionId = 'session_mcp_tools_smoke';
     const sessionJsonlPath = join(dataDir, 'sessions', `${sessionId}.jsonl`);
@@ -65,20 +67,28 @@ try {
     const capture = createScriptedMcpToolsCapture();
     const provider = scriptedMcpToolsSmokeProvider(capture, { fixtureServerName: 'fixture' });
     const chatOutput = bufferedOutput();
+    const runCompleted = createDeferred();
 
     const output = await runAgent(parseArgs(['--session', sessionId, '--model', 'local/local-echo']), {
         authStore: emptyAuthStore(authFilePath),
-        chatInput: scriptedInput([
-            { type: 'line', value: 'use glob and mcp tools to explore' },
-            { type: 'line', value: 'always' },
-            { type: 'interrupt' },
-            { type: 'interrupt' },
-        ]),
+        chatInput: scriptedInput(
+            [
+                { type: 'line', value: 'use glob and mcp tools to explore' },
+                { type: 'line', value: 'always' },
+                { type: 'interrupt' },
+                { type: 'interrupt' },
+            ],
+            [{ beforeIndex: 2, until: runCompleted.promise }],
+        ),
         chatOutput: chatOutput.output,
         workspaceRoot,
         provider,
+        plainPromptGraph: 'coding-agent',
         onRuntimeEvent: (event) => {
             capturedEvents.push(event);
+            if (event.type === 'run.completed') {
+                runCompleted.resolve();
+            }
         },
     });
 
@@ -215,53 +225,6 @@ async function writeMcpConfig(workspaceRoot: string, fixturePath: string): Promi
     await writeFile(join(workspaceRoot, '.mcp.json'), `${JSON.stringify(config, null, 2)}\n`, 'utf8');
 }
 
-function emptyAuthStore(authFilePath: string) {
-    return {
-        authFilePath,
-        readAuthFile: async () => ({ $schema: 'https://mission-control.dev/auth.schema.json', credentials: {} }),
-        saveCredential: async () => undefined,
-        setDefaultSelection: async () => undefined,
-        deleteCredential: async () => undefined,
-        listCredentialSummaries: async () => [],
-        getDefaultSelection: async () => undefined,
-        getModelRoles: async () => ({}),
-        setModelRole: async () => undefined,
-        clearModelRole: async () => undefined,
-    };
-}
-
-function scriptedInput(events: readonly ChatInputEvent[]) {
-    let index = 0;
-    return {
-        read: async () => {
-            const event = events[index] ?? { type: 'interrupt' as const };
-            index += 1;
-            return event;
-        },
-        close: () => undefined,
-    };
-}
-
-function bufferedOutput() {
-    const chunks: string[] = [];
-    return {
-        output: {
-            write(text: string) {
-                chunks.push(text);
-            },
-            getOutput() {
-                return chunks.join('');
-            },
-        },
-    };
-}
-
-async function initializeGitWorkspace(workspaceRoot: string): Promise<void> {
-    await execFileAsync('git', ['init'], { cwd: workspaceRoot });
-    await execFileAsync('git', ['config', 'user.email', 'smoke@example.com'], { cwd: workspaceRoot });
-    await execFileAsync('git', ['config', 'user.name', 'Smoke Test'], { cwd: workspaceRoot });
-}
-
 function assertContains(haystack: string, needle: string, message: string): void {
     if (!haystack.includes(needle)) {
         throw new Error(`${message} — searched for "${needle}" in ${haystack.length} chars of system prompt`);
@@ -274,8 +237,13 @@ function assertNotContains(haystack: string, needle: string, message: string): v
     }
 }
 
-async function tempRoot(prefix: string): Promise<string> {
-    const path = await mkdtemp(join(tmpdir(), prefix));
-    tempRoots.push(path);
-    return path;
+function createDeferred(): { readonly promise: Promise<void>; readonly resolve: () => void } {
+    let resolve: (() => void) | undefined;
+    const promise = new Promise<void>((promiseResolve) => {
+        resolve = promiseResolve;
+    });
+    if (resolve === undefined) {
+        throw new Error('deferred initialization failed');
+    }
+    return { promise, resolve };
 }

@@ -1,4 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import {
+    readNxConfig,
+    readProjectConfig,
+    readRootManifest,
+    readTargetCommand,
+    readTargetCwd,
+    readTuiManifest,
+} from './nx-workspace-test-support';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -52,125 +60,6 @@ const requiredProjects = [
         targets: ['build', 'test', 'typecheck'],
     },
 ] as const;
-
-type JsonObject = Record<string, unknown>;
-
-type RootManifest = {
-    readonly scripts?: Record<string, string>;
-    readonly devDependencies?: Record<string, string>;
-};
-
-type NxConfig = {
-    readonly namedInputs?: JsonObject;
-    readonly targetDefaults?: JsonObject;
-};
-
-type ProjectConfig = {
-    readonly name?: string;
-    readonly targets?: JsonObject;
-    readonly implicitDependencies?: readonly string[];
-};
-
-function readJson(path: string): unknown {
-    return JSON.parse(readFileSync(join(root, path), 'utf8'));
-}
-
-function readRootManifest(): RootManifest {
-    const parsed = readJson('package.json');
-    if (!isRootManifest(parsed)) {
-        throw new Error('package.json is not a root manifest');
-    }
-    return parsed;
-}
-
-function readNxConfig(): NxConfig {
-    const parsed = readJson('nx.json');
-    if (!isNxConfig(parsed)) {
-        throw new Error('nx.json is not an Nx config');
-    }
-    return parsed;
-}
-
-function readProjectConfig(path: string): ProjectConfig {
-    const parsed = readJson(path);
-    if (!isProjectConfig(parsed)) {
-        throw new Error(`${path} is not an Nx project config`);
-    }
-    return parsed;
-}
-
-function readTargetCommand(config: ProjectConfig, target: string): string | undefined {
-    const targetConfig = config.targets?.[target];
-    if (!isRecord(targetConfig)) {
-        return undefined;
-    }
-    const options = Reflect.get(targetConfig, 'options');
-    if (!isRecord(options)) {
-        return undefined;
-    }
-    const command = Reflect.get(options, 'command');
-    return typeof command === 'string' ? command : undefined;
-}
-
-function isRootManifest(value: unknown): value is RootManifest {
-    if (!isRecord(value)) {
-        return false;
-    }
-    // biome-ignore lint/complexity/useLiteralKeys: JsonObject (Record<string, unknown>) requires bracket access per noPropertyAccessFromIndexSignature
-    const scripts = value['scripts'];
-    // biome-ignore lint/complexity/useLiteralKeys: JsonObject (Record<string, unknown>) requires bracket access per noPropertyAccessFromIndexSignature
-    const devDependencies = value['devDependencies'];
-    return (
-        (scripts === undefined || isStringRecord(scripts)) &&
-        (devDependencies === undefined || isStringRecord(devDependencies))
-    );
-}
-
-function isNxConfig(value: unknown): value is NxConfig {
-    if (!isRecord(value)) {
-        return false;
-    }
-    // biome-ignore lint/complexity/useLiteralKeys: JsonObject (Record<string, unknown>) requires bracket access per noPropertyAccessFromIndexSignature
-    const namedInputs = value['namedInputs'];
-    // biome-ignore lint/complexity/useLiteralKeys: JsonObject (Record<string, unknown>) requires bracket access per noPropertyAccessFromIndexSignature
-    const targetDefaults = value['targetDefaults'];
-    return (
-        (namedInputs === undefined || isRecord(namedInputs)) &&
-        (targetDefaults === undefined || isRecord(targetDefaults))
-    );
-}
-
-function isProjectConfig(value: unknown): value is ProjectConfig {
-    if (!isRecord(value)) {
-        return false;
-    }
-    // biome-ignore lint/complexity/useLiteralKeys: JsonObject (Record<string, unknown>) requires bracket access per noPropertyAccessFromIndexSignature
-    const name = value['name'];
-    // biome-ignore lint/complexity/useLiteralKeys: JsonObject (Record<string, unknown>) requires bracket access per noPropertyAccessFromIndexSignature
-    const targets = value['targets'];
-    // biome-ignore lint/complexity/useLiteralKeys: JsonObject (Record<string, unknown>) requires bracket access per noPropertyAccessFromIndexSignature
-    const implicitDependencies = value['implicitDependencies'];
-    return (
-        (name === undefined || typeof name === 'string') &&
-        (targets === undefined || isRecord(targets)) &&
-        (implicitDependencies === undefined || isStringArray(implicitDependencies))
-    );
-}
-
-function isRecord(value: unknown): value is JsonObject {
-    return typeof value === 'object' && value !== null;
-}
-
-function isStringRecord(value: unknown): value is Record<string, string> {
-    if (!isRecord(value)) {
-        return false;
-    }
-    return Object.values(value).every((item) => typeof item === 'string');
-}
-
-function isStringArray(value: unknown): value is readonly string[] {
-    return Array.isArray(value) && value.every((item) => typeof item === 'string');
-}
 
 describe('Nx workspace', () => {
     it('routes root scripts through Nx', () => {
@@ -276,6 +165,22 @@ describe('Nx workspace', () => {
 
         expect(boundary).not.toMatch(/it\.skip|skipIf/u);
         expect(boundary).not.toContain('not yet created');
+    });
+
+    it('runs TUI tests from the package with native FFI enabled by Vitest', () => {
+        // Given: the TUI package and Nx target are the two default test entrypoints.
+        const project = readProjectConfig('apps/tui/project.json');
+        const viteConfig = readFileSync(join(root, 'apps/tui/vite.config.ts'), 'utf8');
+
+        // When: either default entrypoint is inspected.
+        // Then: both use the shell-free package command from the workspace root and shared Vitest FFI config.
+        expect(readTuiManifest().scripts?.test).toBe(
+            'pnpm --dir ../.. exec vitest run --config apps/tui/vite.config.ts apps/tui/src --reporter verbose',
+        );
+        expect(readTargetCwd(project, 'test')).toBe('apps/tui');
+        expect(readTargetCommand(project, 'test')).toBe('pnpm test');
+        expect(viteConfig).toContain("environment: 'node'");
+        expect(viteConfig).toContain("execArgv: ['--experimental-ffi']");
     });
 
     it('defines Nx projects for every workspace boundary', () => {
