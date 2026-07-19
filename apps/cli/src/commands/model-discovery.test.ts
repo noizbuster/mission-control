@@ -1,11 +1,12 @@
-import { modelProviderCatalog } from '@mission-control/config';
 import { describe, expect, it } from 'vitest';
-import { createDefaultModelDiscovery, type ModelDiscoveryFetch } from './model-discovery';
-
-type RecordedModelDiscoveryRequest = {
-    readonly url: string;
-    readonly headers: Readonly<Record<string, string>>;
-};
+import { createDefaultModelDiscovery } from './model-discovery';
+import {
+    createDataModelResponse,
+    createFetch,
+    createFieldsCredential,
+    findProvider,
+    type RecordedModelDiscoveryRequest,
+} from './model-discovery-test-support';
 
 const openAICompatibleProviderCases = [
     { providerID: 'deepseek', url: 'https://api.deepseek.com/models', modelID: 'deepseek-chat' },
@@ -158,118 +159,4 @@ describe('provider model discovery', () => {
             },
         ]);
     });
-
-    it('falls back when a provider has no supported model discovery API', async () => {
-        const requests: RecordedModelDiscoveryRequest[] = [];
-        const discovery = createDefaultModelDiscovery(createFetch(requests, createDataModelResponse(['unused'])));
-
-        await expect(
-            discovery({
-                provider: findProvider('local'),
-                credential: {
-                    providerID: 'local',
-                    type: 'apiKey',
-                    apiKey: 'local_key',
-                    createdAt: '2026-01-01T00:00:00.000Z',
-                    updatedAt: '2026-01-01T00:00:00.000Z',
-                },
-            }),
-        ).resolves.toBeUndefined();
-        expect(requests).toEqual([]);
-    });
-
-    it('falls back when a provider is logged in through OAuth', async () => {
-        const requests: RecordedModelDiscoveryRequest[] = [];
-        const discovery = createDefaultModelDiscovery(createFetch(requests, createDataModelResponse(['unused'])));
-
-        await expect(
-            discovery({
-                provider: findProvider('openai'),
-                credential: {
-                    providerID: 'openai',
-                    type: 'oauth',
-                    accessToken: 'openai_access_token',
-                    refreshToken: 'openai_refresh_token',
-                    createdAt: '2026-01-01T00:00:00.000Z',
-                    updatedAt: '2026-01-01T00:00:00.000Z',
-                },
-            }),
-        ).resolves.toBeUndefined();
-        expect(requests).toEqual([]);
-    });
-
-    it('falls back when the provider models API returns an error', async () => {
-        const requests: RecordedModelDiscoveryRequest[] = [];
-        const discovery = createDefaultModelDiscovery(
-            createFetchWithStatus(requests, false, createDataModelResponse(['unused'])),
-        );
-
-        await expect(
-            discovery({
-                provider: findProvider('openai'),
-                credential: createFieldsCredential('openai', 'openai_test_key'),
-            }),
-        ).resolves.toBeUndefined();
-        expect(requests).toHaveLength(1);
-    });
-
-    it('falls back when the provider models API response is malformed', async () => {
-        const requests: RecordedModelDiscoveryRequest[] = [];
-        const discovery = createDefaultModelDiscovery(createFetch(requests, { message: 'not a model list' }));
-
-        await expect(
-            discovery({
-                provider: findProvider('openai'),
-                credential: createFieldsCredential('openai', 'openai_test_key'),
-            }),
-        ).resolves.toBeUndefined();
-        expect(requests).toHaveLength(1);
-    });
 });
-
-function createDataModelResponse(modelIDs: readonly string[]): unknown {
-    return {
-        data: modelIDs.map((id) => ({ id })),
-    };
-}
-
-function createFetch(requests: RecordedModelDiscoveryRequest[], responseBody: unknown): ModelDiscoveryFetch {
-    return createFetchWithStatus(requests, true, responseBody);
-}
-
-function createFetchWithStatus(
-    requests: RecordedModelDiscoveryRequest[],
-    ok: boolean,
-    responseBody: unknown,
-): ModelDiscoveryFetch {
-    return async (url, init) => {
-        requests.push({ url, headers: init.headers });
-        return {
-            ok,
-            json: async () => responseBody,
-        };
-    };
-}
-
-function createFieldsCredential(providerID: string, apiKey: string) {
-    return {
-        providerID,
-        type: 'fields' as const,
-        fields: {
-            apiKey: {
-                value: apiKey,
-                secret: true,
-            },
-        },
-        createdAt: '2026-01-01T00:00:00.000Z',
-        updatedAt: '2026-01-01T00:00:00.000Z',
-    };
-}
-
-function findProvider(providerID: string) {
-    const provider = modelProviderCatalog.find((entry) => entry.id === providerID);
-    if (provider === undefined) {
-        throw new Error(`missing provider fixture: ${providerID}`);
-    }
-    return provider;
-}

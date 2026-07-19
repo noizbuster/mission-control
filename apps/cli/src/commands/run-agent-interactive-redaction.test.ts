@@ -7,15 +7,10 @@ import {
     ProviderTurnError,
     readLocalSessionReplay,
 } from '@mission-control/core';
-import type { ProviderStreamChunk } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args';
 import { runAgent } from './run-agent';
-import {
-    createBufferedChatOutput,
-    createEmptyAuthStore,
-    createScriptedChatInput,
-} from './run-agent-chat-test-support';
+import { createBufferedChatOutput, createEmptyAuthStore, createScriptedChatInput } from './run-agent-chat-test-support';
 import { providerFromTurns } from './run-agent-tool-registry-test-support';
 import { runSessionCommand } from './session';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -23,6 +18,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const allowedHarnessArgs = ['--eval', "console.log('mission-control command.run harness ok')"] as const;
+const hostileDisplayPayload =
+    'credential sk-displayblocker123 OSC:\u001b]52;c;UE9D\u0007 C0:\u0001 C1:\u009b CR:\r TAB:\t BIDI:\u202e';
+const sanitizedDisplayPayload =
+    'credential [REDACTED_CREDENTIAL] OSC:\\u{001B}]52;c;UE9D\\u{0007} C0:\\u{0001} C1:\\u{009B} CR:\\u{000D} TAB:\\u{0009} BIDI:\\u{202E}';
 
 describe('interactive coding-agent redaction', () => {
     const tempRoots: string[] = [];
@@ -158,12 +157,12 @@ describe('interactive coding-agent redaction', () => {
         expect(patchPreview).toContain('Patch preview for file.patch');
     });
 
-    it('redacts raw provider failures in CLI errors persisted replay and replay JSONL', async () => {
+    it('sanitizes a synchronous provider throw in the interactive catch while preserving raw event controls', async () => {
         // Given
         const dataDir = await tempRoot('mctrl-redaction-failure-data-');
         const workspaceRoot = await tempRoot('mctrl-redaction-failure-workspace-');
         const sessionId = 'session_cli_redaction_failure';
-        const secret = ['sk', 'cli_failure_123'].join('-');
+        const rawFailure = `provider exploded ${hostileDisplayPayload}`;
         const chatOutput = createBufferedChatOutput();
         vi.stubEnv(missionControlDataDirEnvKey, dataDir);
 
@@ -173,17 +172,22 @@ describe('interactive coding-agent redaction', () => {
             chatInput: createScriptedChatInput([{ type: 'line', value: 'trigger provider failure' }]),
             chatOutput: chatOutput.output,
             workspaceRoot,
-            provider: throwingProvider(`provider exploded ${secret}`),
+            provider: synchronouslyThrowingProvider(rawFailure),
         });
         const replay = await runSessionCommand(parseArgs(['session', 'replay', sessionId, '--jsonl']));
         const storedReplay = await readStoredReplay(dataDir, sessionId);
 
         // Then
         const chat = chatOutput.getOutput();
-        expect(chat).toContain('Error:');
-        expect(storedReplay.projection.envelopes.some((envelope) => envelope.event.type === 'task.failed')).toBe(true);
-        expect(JSON.stringify({ chat, replay, storedReplay })).toContain('[REDACTED_CREDENTIAL]');
-        expect(JSON.stringify({ chat, replay, storedReplay })).not.toContain(secret);
+        expect(chat).toContain(`provider exploded ${sanitizedDisplayPayload}`);
+        const storedFailure = storedReplay.projection.envelopes.find(
+            (envelope) => envelope.event.type === 'task.failed',
+        );
+        expect(storedFailure?.event.message).toContain(
+            `provider exploded ${hostileDisplayPayload.replace('sk-displayblocker123', '[REDACTED_CREDENTIAL]')}`,
+        );
+        expect(replay.stdout).toContain('[REDACTED_CREDENTIAL]');
+        expect(chat).not.toContain(hostileDisplayPayload);
     });
 
     async function tempRoot(prefix: string): Promise<string> {
@@ -214,28 +218,14 @@ function fakeSecretCommandExecutor(
     });
 }
 
-function throwingProvider(message: string): ProviderAdapter {
+function synchronouslyThrowingProvider(message: string): ProviderAdapter {
     return {
         streamTurn() {
-            return rejectingProviderStream(message);
-        },
-    };
-}
-
-function rejectingProviderStream(message: string): AsyncIterable<ProviderStreamChunk> {
-    return {
-        [Symbol.asyncIterator]() {
-            return {
-                next(): Promise<IteratorResult<ProviderStreamChunk>> {
-                    return Promise.reject(
-                        new ProviderTurnError({
-                            code: 'provider_auth_failed',
-                            message,
-                            retryable: false,
-                        }),
-                    );
-                },
-            };
+            throw new ProviderTurnError({
+                code: 'provider_auth_failed',
+                message,
+                retryable: false,
+            });
         },
     };
 }

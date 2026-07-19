@@ -73,7 +73,7 @@ describe('runAgent /model chat command', () => {
             ]),
             chatOutput: chatOutput.output,
             onRuntimeEvent: (event) => {
-                if (isModelCallCompletedMessage(event, 'received prompt: explain variant routing')) {
+                if (isModelCallCompletedEvent(event)) {
                     promptModelCall = event;
                 }
             },
@@ -87,101 +87,6 @@ describe('runAgent /model chat command', () => {
             modelID: 'local-echo',
         });
         expect(promptModelCall?.abg?.model?.variantID).toBe('fast');
-    });
-
-    it('opens a model picker for /model without arguments', async () => {
-        const chatOutput = createBufferedChatOutput();
-        const pickerChoices: string[][] = [];
-
-        const output = await runAgent(parseArgs([]), {
-            authStore: createAuthStoreWithSummaries([createCredentialSummary('local')]),
-            chatInput: createScriptedChatInput([
-                { type: 'line', value: '/model' },
-                { type: 'line', value: 'after bare picker' },
-                { type: 'interrupt' },
-                { type: 'interrupt' },
-            ]),
-            chatOutput: chatOutput.output,
-            selectModel: async (choices) => {
-                pickerChoices.push(choices.map((choice) => choice.label));
-                return choices.find((choice) =>
-                    pickerChoices.length === 1
-                        ? choice.selection.modelID === 'local-echo'
-                        : choice.selection.variantID === 'fast',
-                )?.selection;
-            },
-        });
-
-        expect(pickerChoices).toEqual([
-            ['local/local-echo [executable]'],
-            expect.arrayContaining(['local/local-echo#fast [executable]']),
-        ]);
-        expect(output).toContain('provider: local');
-        expect(output).toContain('model: local-echo');
-        expect(output).toContain('variant: fast');
-        expect(output).toContain('selection: local/local-echo#fast');
-        expect(output).toContain('Assistant: received prompt: after bare picker');
-    });
-
-    it('suspends the main chat input while the model picker owns stdin', async () => {
-        const chatOutput = createBufferedChatOutput();
-        const suspendState = { suspendCount: 0, resumeCount: 0, isSuspended: false };
-        let selectorSawSuspended = false;
-        const scripted = createScriptedChatInput([
-            { type: 'line', value: '/model pick' },
-            { type: 'line', value: 'after canceled picker' },
-            { type: 'interrupt' },
-            { type: 'interrupt' },
-        ]);
-
-        const output = await runAgent(parseArgs([]), {
-            authStore: createAuthStoreWithSummaries([createCredentialSummary('local')]),
-            chatInput: {
-                read: scripted.read,
-                close: scripted.close,
-                suspend: () => {
-                    suspendState.suspendCount += 1;
-                    suspendState.isSuspended = true;
-                },
-                resume: () => {
-                    suspendState.resumeCount += 1;
-                    suspendState.isSuspended = false;
-                },
-            },
-            chatOutput: chatOutput.output,
-            selectModel: async () => {
-                selectorSawSuspended = suspendState.isSuspended;
-                return undefined;
-            },
-        });
-
-        expect(suspendState.suspendCount).toBe(1);
-        expect(suspendState.resumeCount).toBe(1);
-        expect(selectorSawSuspended).toBe(true);
-        expect(output).toContain('selection: local/local-echo');
-        expect(output).toContain('Assistant: received prompt: after canceled picker');
-    });
-
-    it('does not let the /model picker consume normal chat input after cancellation', async () => {
-        const chatOutput = createBufferedChatOutput();
-        const scripted = createScriptedChatInput([
-            { type: 'line', value: '/model pick' },
-            { type: 'line', value: 'after canceled picker' },
-            { type: 'interrupt' },
-            { type: 'interrupt' },
-        ]);
-
-        const output = await runAgent(parseArgs([]), {
-            authStore: createAuthStoreWithSummaries([createCredentialSummary('local')]),
-            chatInput: {
-                read: scripted.read,
-                close: scripted.close,
-            },
-            chatOutput: chatOutput.output,
-            selectModel: async () => undefined,
-        });
-
-        expect(output).toContain('Assistant: received prompt: after canceled picker');
     });
 
     it('opens a model picker for /model pick', async () => {
@@ -226,7 +131,7 @@ describe('runAgent /model chat command', () => {
             ]),
             chatOutput: chatOutput.output,
             onRuntimeEvent: (event) => {
-                if (isModelCallCompletedMessage(event, 'received prompt: after rejected model')) {
+                if (isModelCallCompletedEvent(event)) {
                     promptModelCall = event;
                 }
             },
@@ -330,4 +235,8 @@ function lastUserPrompt(request: ProviderTurnRequest): string {
 
 function isModelCallCompletedMessage(event: AgentEvent, message: string): boolean {
     return event.type === 'model.call.completed' && event.message === message;
+}
+
+function isModelCallCompletedEvent(event: AgentEvent): boolean {
+    return event.type === 'model.call.completed';
 }

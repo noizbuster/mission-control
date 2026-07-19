@@ -12,11 +12,7 @@ import type { AgentEvent } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args';
 import { runAgent } from './run-agent';
-import {
-    createBufferedChatOutput,
-    createEmptyAuthStore,
-    createScriptedChatInput,
-} from './run-agent-chat-test-support';
+import { createBufferedChatOutput, createEmptyAuthStore, createScriptedChatInput } from './run-agent-chat-test-support';
 import { replayedTypes } from './session-replay-test-support';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -71,10 +67,23 @@ describe('runAgent interactive coding agent — graph engine', () => {
     });
 
     it('interrupts an active graph turn', async () => {
+        // Given
         const dataDir = await tempRoot('mctrl-chat-graph-interrupt-');
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
         const chatOutput = createBufferedChatOutput();
+        const agentStatuses: string[] = [];
+        let clearAgentStatusCalls = 0;
+        const recordingOutput = {
+            ...chatOutput.output,
+            setAgentStatus: (status: string) => {
+                agentStatuses.push(status);
+            },
+            clearAgentStatus: () => {
+                clearAgentStatusCalls += 1;
+            },
+        };
 
+        // When
         const output = await runAgent(
             parseArgs(['--session', 'session_interactive_graph_interrupt', '--engine', 'graph']),
             {
@@ -85,7 +94,7 @@ describe('runAgent interactive coding agent — graph engine', () => {
                     { type: 'interrupt' },
                     { type: 'interrupt' },
                 ]),
-                chatOutput: chatOutput.output,
+                chatOutput: recordingOutput,
                 provider: createDeterministicProvider([
                     { kind: 'wait', ms: 30_000 },
                     { kind: 'response_completed', content: 'too late' },
@@ -93,10 +102,13 @@ describe('runAgent interactive coding agent — graph engine', () => {
             },
         );
 
+        // Then
         expect(output).toContain('Interrupted active run');
         expect(output).not.toContain('too late');
         const types = await replayedTypes('session_interactive_graph_interrupt');
         expect(types).toEqual(expect.arrayContaining(['run.interrupted']));
         expect(types).not.toContain('run.completed');
+        expect(agentStatuses.length).toBeGreaterThan(0);
+        expect(clearAgentStatusCalls).toBeGreaterThan(0);
     });
 });

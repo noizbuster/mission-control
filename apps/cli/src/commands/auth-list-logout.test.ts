@@ -226,9 +226,8 @@ describe('runAuthCommand auth list and logout', () => {
         expect(logout).toBe('Logged out anthropic\n');
         expect(list).not.toContain('anthropic Anthropic');
         expect(list).not.toContain('anthropic_key');
-        expect(list).toContain(
-            'cloudflare-ai-gateway Cloudflare AI Gateway - cf_s...oken (3 fields) - default cloudflare-ai-gateway/anthropic/claude-3-5-haiku',
-        );
+        expect(list).toContain('cloudflare-ai-gateway Cloudflare AI Gateway - cf_s...oken (3 fields)');
+        await expect(store.getDefaultSelection()).resolves.toBeUndefined();
         await expect(store.listCredentialSummaries()).resolves.toEqual([
             {
                 providerID: 'cloudflare-ai-gateway',

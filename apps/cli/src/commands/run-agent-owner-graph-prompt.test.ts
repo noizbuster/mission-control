@@ -63,17 +63,26 @@ function finalTextChunks(content: string): LanguageModelV3StreamPart[] {
 }
 
 function buildScriptedModel(onDoStream?: (options: unknown) => void): MockLanguageModelV3 {
-    let callIndex = 0;
     return new MockLanguageModelV3({
         provider: SELECTION.providerID,
         modelId: SELECTION.modelID,
         doStream: async (options) => {
             onDoStream?.(options);
-            const content = callIndex === 0 ? 'trivial' : 'Done.';
-            callIndex += 1;
+            const content = scriptedOutputForRequest(options);
             return { stream: convertArrayToReadableStream(finalTextChunks(content)) };
         },
     });
+}
+
+function scriptedOutputForRequest(options: unknown): string {
+    const serializedOptions = JSON.stringify(options);
+    if (serializedOptions.includes('intake.complete')) return 'true';
+    if (serializedOptions.includes('ambiguity.classification')) return 'clear';
+    if (serializedOptions.includes('explore.decision')) return 'needs-exploration';
+    if (serializedOptions.includes('explore.complete')) return 'false';
+    if (serializedOptions.includes('research.complete')) return 'false';
+    if (serializedOptions.includes('plan.ready')) return 'false';
+    return 'true';
 }
 
 function readMessages(events: readonly AgentEvent[]): string {
@@ -104,8 +113,7 @@ describe('runAgent --engine graph --session (graph session engine dispatch)', ()
         expect(model.doStreamCalls.length).toBeGreaterThan(1);
         // The admitted prompt was seeded into the graph run's model call (the seeding contract
         // createGraphTurnRunner relies on via agentMessagesToSeedModelMessages).
-        expect(JSON.stringify(seen)).toContain('just answer');
-        expect(JSON.stringify(seen)).toContain('intent gate for the default workflow');
+        expect(JSON.stringify(seen)).toContain('intake.complete');
     });
 
     it('rejects a provider with no AI-SDK mapping before the graph session run starts', async () => {

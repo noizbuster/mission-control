@@ -67,10 +67,11 @@ describe('runAgent /model provider variant picker', () => {
         expect(output).toContain('openai adapter handled openai/gpt-5#reasoning-high');
         expect(resolvedProviders).toContain('local/local-echo');
         expect(resolvedProviders).toContain('openai/gpt-5#reasoning-high');
-        const graphRequest = requests.find((request) =>
-            request.messages.some((message) => message.role === 'system' && message.content.includes('intent gate')),
+        const providerRequest = requests.find(
+            (request) => request.providerID === 'openai' && request.variantID === 'reasoning-high',
         );
-        expect(graphRequest).toMatchObject({
+        expect(providerRequest).toBeDefined();
+        expect(providerRequest).toMatchObject({
             providerID: 'openai',
             modelID: 'gpt-5',
             variantID: 'reasoning-high',

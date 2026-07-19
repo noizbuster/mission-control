@@ -14,6 +14,11 @@ export type GraphEvent = {
         readonly graphId?: string;
         readonly nodeId?: string;
         readonly nodeKind?: string;
+        readonly error?: { readonly code?: string };
+        readonly emit?: {
+            readonly type: string;
+            readonly payload?: { readonly key?: unknown; readonly value?: unknown };
+        };
     };
 };
 

@@ -5,6 +5,7 @@ import { runAgent } from './run-agent';
 import {
     buildWorkflowArgs,
     createWorkflowLocalProvider,
+    type GraphEvent,
     PRODUCTION_DEFAULT_WORKFLOW_FIXTURE,
     parseWorkflowJsonEvents,
 } from './workflow-e2e-test-support';
@@ -65,17 +66,26 @@ describe('default workflow production fixture end-to-end', () => {
         expect(events.some((event) => event.type === 'model.call.started' && event.abg?.nodeId === 'intake')).toBe(
             true,
         );
-        // Offline local may terminate via graph.failed when draft-plan hits write-deny
-        // node capability policy after plan-readonly materialization.
+        expect(blackboardValues(events, 'intake.complete')).toContain(true);
+        expect(blackboardValues(events, 'ambiguity.classification')).toContain('clear');
+        expect(blackboardValues(events, 'explore.decision')).toContain('needs-exploration');
+        const exploreCompleteValues = blackboardValues(events, 'explore.complete');
+        expect(exploreCompleteValues.length).toBeGreaterThan(0);
+        expect(exploreCompleteValues.every((value) => value === false)).toBe(true);
+        expect(events.some((event) => event.type === 'graph.completed')).toBe(true);
+        expect(events.some((event) => event.type === 'task.completed')).toBe(true);
+        expect(events.some((event) => event.type === 'graph.failed' || event.type === 'task.failed')).toBe(false);
         expect(
             events.some(
                 (event) =>
-                    event.type === 'graph.completed' ||
-                    event.type === 'graph.failed' ||
-                    event.type === 'task.completed' ||
-                    event.type === 'run.blocked',
+                    event.abg?.error?.code === 'graph_loop_limit' || event.abg?.error?.code === 'provider_timeout',
             ),
-        ).toBe(true);
+        ).toBe(false);
+        for (const nodeId of ['draft-plan', 'approval-gate', 'write-plan', 'delegate-wave']) {
+            expect(events.some((event) => event.type === 'node.started' && event.abg?.nodeId === nodeId)).toBe(false);
+        }
+        expect(events.some((event) => event.type === 'tool.started')).toBe(false);
+        expect(blackboardValues(events, 'plan.ready')).toEqual([]);
     });
 
     it('sticky plan mode: implement prompts still run the plan graph, not delegate-wave', async () => {
@@ -126,3 +136,10 @@ describe('default workflow production fixture end-to-end', () => {
         }
     });
 });
+
+function blackboardValues(events: readonly GraphEvent[], key: string): readonly unknown[] {
+    return events.flatMap((event) => {
+        const emit = event.abg?.emit;
+        return emit?.type === 'blackboard.set' && emit.payload?.key === key ? [emit.payload.value] : [];
+    });
+}
