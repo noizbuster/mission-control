@@ -1,10 +1,24 @@
 import type { CodingReplayStep } from '@mission-control/core';
 import type { AgentEvent, AgentEventEnvelope } from '@mission-control/protocol';
-import { describe, expect, it } from 'vitest';
-import { reconstructSessionTranscript } from './session-transcript-reconstruction';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { writeLocalSessionEvents } from './session-test-support';
+import { loadSessionTranscript, reconstructSessionTranscript } from './session-transcript-reconstruction';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const SESSION_ID = 'session_test';
 const NOW = '2026-07-01T00:00:00.000Z';
+const hostileReplayPayload =
+    '한국어 👨‍👩‍👧\ncredential sk-reconstructionraw123 OSC:\u001b]52;c;UE9D\u0007 C0:\u0001 C1:\u009b CR:\r TAB:\t DEL:\u007f BIDI:\u202e';
+const persistedReplayPayload = hostileReplayPayload.replace('sk-reconstructionraw123', '[REDACTED_CREDENTIAL]');
+const tempRoots: string[] = [];
+
+afterEach(async () => {
+    vi.unstubAllEnvs();
+    await Promise.all(tempRoots.map((path) => rm(path, { recursive: true, force: true })));
+    tempRoots.length = 0;
+});
 
 function envelope(
     sequence: number,
@@ -162,5 +176,52 @@ describe('reconstructSessionTranscript', () => {
         ];
         const result = reconstructSessionTranscript({ envelopes, codingSteps: [] });
         expect(result).toBe('');
+    });
+
+    it('reconstructs raw prompt, provider, error, and tool bytes in durable order without mutating replay data', () => {
+        // Given
+        const envelopes = [
+            envelope(1, userPromptEvent(hostileReplayPayload)),
+            envelope(2, { type: 'model.call.completed', timestamp: NOW }),
+            envelope(3, { type: 'model.call.completed', timestamp: NOW }),
+            envelope(4, { type: 'model.call.completed', timestamp: NOW }),
+            envelope(5, { type: 'tool.failed', timestamp: NOW, taskId: 'raw-tool-call-id' }),
+        ];
+        const steps = [
+            providerMessageStep(2, hostileReplayPayload),
+            providerFailureStep(3, hostileReplayPayload),
+            toolCallStep(4, 'raw-tool-call-id', hostileReplayPayload),
+            toolResultStep(5, 'raw-tool-call-id', 'failed', { message: hostileReplayPayload }),
+        ];
+
+        // When
+        const result = reconstructSessionTranscript({ envelopes, codingSteps: steps });
+
+        // Then
+        expect(result).toBe(
+            `You: ${hostileReplayPayload}\nAssistant: ${hostileReplayPayload}\nError: ${hostileReplayPayload}\n${hostileReplayPayload} failed: ${hostileReplayPayload}\n`,
+        );
+        expect(envelopes[0]?.event.message).toBe(hostileReplayPayload);
+        expect(steps[0]).toEqual(providerMessageStep(2, hostileReplayPayload));
+        expect(steps[2]).toEqual(toolCallStep(4, 'raw-tool-call-id', hostileReplayPayload));
+    });
+
+    it('preserves replay bytes after persistence-time credential redaction in loadSessionTranscript', async () => {
+        // Given
+        const dataDir = await mkdtemp(join(tmpdir(), 'mctrl-session-transcript-display-'));
+        tempRoots.push(dataDir);
+        const sessionId = 'session_terminal_display_replay';
+        vi.stubEnv('MCTRL_DATA_DIR', dataDir);
+        await writeLocalSessionEvents({
+            dataDir,
+            sessionId,
+            events: [{ ...userPromptEvent(hostileReplayPayload), sessionId }],
+        });
+
+        // When
+        const transcript = await loadSessionTranscript(sessionId);
+
+        // Then
+        expect(transcript).toBe(`You: ${persistedReplayPayload}\n`);
     });
 });

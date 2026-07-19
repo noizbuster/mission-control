@@ -1,4 +1,8 @@
-import { createSlashCommandMenuState, interruptTokenEncodingFamily } from '@mission-control/tui/state';
+import {
+    createSlashCommandMenuState,
+    interruptTokenEncodingFamily,
+    sanitizeTerminalDisplayText,
+} from '@mission-control/tui/state';
 import { createTerminalChatInputBuffer } from './interactive-chat-input-block';
 import {
     type TerminalKeyboardMode,
@@ -21,7 +25,7 @@ import { stdin as processInput, stdout as processOutput } from 'node:process';
 export type { ChatInputEvent } from '@mission-control/tui/state';
 export type { ChatInputRenderContext } from './interactive-chat-terminal-renderer';
 
-import type { ChatInputEvent } from '@mission-control/tui/state';
+import type { ChatInputEvent, TranscriptPart } from '@mission-control/tui/state';
 
 export type ChatInput = {
     readonly read: () => Promise<ChatInputEvent>;
@@ -34,6 +38,8 @@ export type ChatInput = {
 
 export type ChatOutput = {
     readonly write: (text: string) => void;
+    readonly writeTranscriptPart?: (part: TranscriptPart, fallbackText: string) => void;
+    readonly writeTranscriptFallback?: (text: string) => void;
     readonly getOutput?: () => string;
     readonly setAgentStatus?: (text: string) => void;
     readonly clearAgentStatus?: () => void;
@@ -57,7 +63,7 @@ export const maxChatPromptLength = 8_000;
 export function createTerminalChatOutput(): ChatOutput {
     return {
         write: (text: string) => {
-            processOutput.write(text);
+            processOutput.write(sanitizeTerminalDisplayText(text));
         },
     };
 }
