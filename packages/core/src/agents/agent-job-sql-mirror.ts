@@ -2,6 +2,7 @@ import type { Client } from '@libsql/client';
 import { type LocalLibsqlWriteTarget, runLocalLibsqlWrite } from '../db/local-libsql-db';
 import { runLocalLibsqlClientTransaction } from '../db/local-libsql-transaction';
 import type { SessionBackgroundJob, SessionPendingWait } from '../memory/session-status-derivation';
+import { resolveAskUserInputWait, startAskUserInputWait } from '../tools/ask-user-wait-sql';
 import {
     activeJobStatuses,
     backgroundJobFrom,
@@ -23,10 +24,11 @@ import type {
 } from './agent-job-sql-mirror-types';
 import type { BackgroundJobHandle } from './async-job-manager';
 import type { AgentRef, RuntimeAgentPersistenceMirror } from './runtime-registry';
+import type { TaskToolSubagentMirror } from './task-tool-runtime-types';
 
 export type { AgentJobRecoveryReport, ResolveSubagentWaitInput, StartSubagentWaitInput };
 
-export class SqlAgentJobMirror implements RuntimeAgentPersistenceMirror {
+export class SqlAgentJobMirror implements RuntimeAgentPersistenceMirror, TaskToolSubagentMirror {
     private pending: Promise<void> = Promise.resolve();
     private pendingError: Error | undefined;
 
@@ -120,6 +122,18 @@ export class SqlAgentJobMirror implements RuntimeAgentPersistenceMirror {
             return;
         }
         await this.writeTransaction((client) => resolveSubagentWaitWithJob(client, input, now));
+    }
+
+    async startUserInputWait(input: { readonly sessionId: string; readonly toolCallId: string }): Promise<void> {
+        await this.writeTransaction((client) =>
+            startAskUserInputWait({ client, sessionId: input.sessionId, toolCallId: input.toolCallId }),
+        );
+    }
+
+    async resolveUserInputWait(input: { readonly sessionId: string; readonly toolCallId: string }): Promise<void> {
+        await this.writeTransaction((client) =>
+            resolveAskUserInputWait({ client, sessionId: input.sessionId, toolCallId: input.toolCallId }),
+        );
     }
 
     async loadPendingWaits(parentSessionId: string): Promise<readonly SessionPendingWait[]> {

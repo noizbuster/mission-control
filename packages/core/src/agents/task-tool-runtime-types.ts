@@ -16,4 +16,12 @@ export interface TaskToolSubagentMirror {
         },
         client?: Client,
     ) => Promise<void>;
+    readonly startUserInputWait?: (input: {
+        readonly sessionId: string;
+        readonly toolCallId: string;
+    }) => Promise<void>;
+    readonly resolveUserInputWait?: (input: {
+        readonly sessionId: string;
+        readonly toolCallId: string;
+    }) => Promise<void>;
 }

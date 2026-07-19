@@ -139,14 +139,54 @@ async function registerAskUserForHost(
     options: RegisterDefaultCodingToolsOptions,
 ): Promise<void> {
     if (options.hostKind === 'noninteractive') {
-        await registerAskUserTool(registry, { requestUserQuestion: () => Promise.resolve('') });
+        await registerAskUserTool(registry, {
+            requestUserQuestion: () => Promise.resolve(''),
+            nonInteractive: true,
+        });
         return;
     }
     if (options.requestUserQuestion === undefined) return;
+    const userInputWait = createInteractiveAskUserWaitMirror(options);
     await registerAskUserTool(registry, {
         requestUserQuestion: options.requestUserQuestion,
         ...(options.requestUserQuestions !== undefined ? { requestUserQuestions: options.requestUserQuestions } : {}),
+        ...(userInputWait !== undefined ? { userInputWait } : {}),
     });
+}
+
+type InteractiveAskUserWaitMirror = {
+    readonly start: (context: { readonly toolCallId: string }) => Promise<void>;
+    readonly resolve: (context: { readonly toolCallId: string }) => Promise<void>;
+};
+
+function createInteractiveAskUserWaitMirror(
+    options: Extract<RegisterDefaultCodingToolsOptions, { hostKind: 'interactive' }>,
+): InteractiveAskUserWaitMirror | undefined {
+    const mirror = options.services?.mirror;
+    if (mirror === undefined || !hasUserInputWaitMethods(mirror)) return undefined;
+    const sessionId = options.sessionId;
+    return {
+        start: (context) => mirror.startUserInputWait({ sessionId, toolCallId: context.toolCallId }),
+        resolve: (context) => mirror.resolveUserInputWait({ sessionId, toolCallId: context.toolCallId }),
+    };
+}
+
+function hasUserInputWaitMethods(mirror: object): mirror is {
+    readonly startUserInputWait: (input: {
+        readonly sessionId: string;
+        readonly toolCallId: string;
+    }) => Promise<void>;
+    readonly resolveUserInputWait: (input: {
+        readonly sessionId: string;
+        readonly toolCallId: string;
+    }) => Promise<void>;
+} {
+    return (
+        'startUserInputWait' in mirror &&
+        'resolveUserInputWait' in mirror &&
+        typeof mirror.startUserInputWait === 'function' &&
+        typeof mirror.resolveUserInputWait === 'function'
+    );
 }
 
 async function registerMutationTools(

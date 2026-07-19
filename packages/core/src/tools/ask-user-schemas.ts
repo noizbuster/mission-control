@@ -94,6 +94,21 @@ export type AskUserQuestionRequest = {
     readonly multiple?: boolean;
 };
 
+export type AskUserUserInputWaitContext = {
+    readonly toolCallId: string;
+};
+
+/**
+ * Optional durable wait mirror for interactive `ask_user`. Hosts that own a
+ * session DB implement start/resolve against `session_awaits` (reason
+ * `user_input`) so public session status becomes `awaiting` while the host
+ * callback is pending. Non-interactive mode never invokes this mirror.
+ */
+export type AskUserUserInputWaitMirror = {
+    readonly start: (context: AskUserUserInputWaitContext) => void | Promise<void>;
+    readonly resolve: (context: AskUserUserInputWaitContext) => void | Promise<void>;
+};
+
 export type AskUserToolOptions = {
     readonly requestUserQuestion: (request: AskUserQuestionRequest) => Promise<string>;
     /**
@@ -112,6 +127,7 @@ export type AskUserToolOptions = {
      */
     readonly nonInteractive?: boolean;
     readonly onAskBlocked?: (event: AskUserBlockedEvent) => void;
+    readonly userInputWait?: AskUserUserInputWaitMirror;
 };
 
 /**

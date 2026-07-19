@@ -19,8 +19,17 @@ export type {
     AskUserOutput,
     AskUserQuestionRequest,
     AskUserToolOptions,
+    AskUserUserInputWaitContext,
+    AskUserUserInputWaitMirror,
 } from './ask-user-schemas';
 export { askUserInputSchema, askUserOutputSchema, askUserParametersJsonSchema } from './ask-user-schemas';
+export {
+    createAskUserWaitMirrorFromTaskMirror,
+    createSqlAskUserUserInputWaitMirror,
+    resolveAskUserInputWait,
+    startAskUserInputWait,
+    waitIdForAskUserToolCall,
+} from './ask-user-wait-sql';
 
 /** Sentinel returned in non-interactive mode; non-empty so it is not mistaken for a real free-text answer. */
 export const ASK_USER_BLOCKED_ANSWER = '(blocked: awaiting user input — no interactive host)';
@@ -112,7 +121,7 @@ export function createAskUserToolRegistration(
             'Use ask_user when you need user input or a decision you cannot resolve with other tools. ' +
             'Provide clear options when possible; the user may also type a custom answer. ' +
             'Do not use ask_user for information you can obtain yourself by reading files or running commands.',
-        execute: async (input) => {
+        execute: async (input, context) => {
             const multiMode = input.questions !== undefined;
             // In multi-question mode `questions` takes precedence over the legacy
             // `options` field. Each entry is reordered recommended-first so the
@@ -125,7 +134,7 @@ export function createAskUserToolRegistration(
 
             // Non-interactive hosts (--no-tui/--json) cannot block on a human.
             // Emit the ask-blocked event then return a sentinel — never await a
-            // callback that would hang the run.
+            // callback that would hang the run. Do not open a durable user_input wait.
             if (options.nonInteractive) {
                 const event: AskUserBlockedEvent = {
                     question: input.question,
@@ -135,19 +144,31 @@ export function createAskUserToolRegistration(
                 return { answer: ASK_USER_BLOCKED_ANSWER };
             }
 
-            if (multiMode) {
-                const answers =
-                    options.requestUserQuestions !== undefined
-                        ? await options.requestUserQuestions(requests)
-                        : await sequentialAnswers(options, requests);
-                const labeled = input.questions.map((question, i) => formatLabeledAnswer(question, answers[i] ?? ''));
-                return { answer: labeled.join('\n') };
+            const wait = options.userInputWait;
+            if (wait !== undefined) {
+                await wait.start({ toolCallId: context.toolCallId });
             }
-            const answer = await options.requestUserQuestion({
-                question: input.question,
-                options: input.options,
-            });
-            return { answer };
+            try {
+                if (multiMode) {
+                    const answers =
+                        options.requestUserQuestions !== undefined
+                            ? await options.requestUserQuestions(requests)
+                            : await sequentialAnswers(options, requests);
+                    const labeled = input.questions.map((question, i) =>
+                        formatLabeledAnswer(question, answers[i] ?? ''),
+                    );
+                    return { answer: labeled.join('\n') };
+                }
+                const answer = await options.requestUserQuestion({
+                    question: input.question,
+                    options: input.options,
+                });
+                return { answer };
+            } finally {
+                if (wait !== undefined) {
+                    await wait.resolve({ toolCallId: context.toolCallId });
+                }
+            }
         },
         // The execute layer already emits a labeled, newline-joined string for
         // multi-question responses, so the model-facing output passes through

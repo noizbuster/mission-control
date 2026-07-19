@@ -435,6 +435,74 @@ describe('createAskUserToolRegistration', () => {
         });
     });
 
+    describe('user_input wait mirror (interactive)', () => {
+        it('starts a user_input wait before the host callback and resolves it after answer', async () => {
+            // Given: deferred interactive host callback + recording wait mirror
+            const sequence: string[] = [];
+            let releaseAnswer: ((value: string) => void) | undefined;
+            const pendingAnswer = new Promise<string>((resolve) => {
+                releaseAnswer = resolve;
+            });
+            const registration = createAskUserToolRegistration({
+                requestUserQuestion: async () => {
+                    sequence.push('callback');
+                    return pendingAnswer;
+                },
+                userInputWait: {
+                    start: async ({ toolCallId }) => {
+                        sequence.push(`start:${toolCallId}`);
+                    },
+                    resolve: async ({ toolCallId }) => {
+                        sequence.push(`resolve:${toolCallId}`);
+                    },
+                },
+            });
+            const context = createContext();
+
+            // When: execute begins and is still pending on the host
+            const executePromise = registration.execute({ question: 'Deploy?', options: ['yes'] }, context);
+            await Promise.resolve();
+            await Promise.resolve();
+
+            // Then: wait started with the tool call id before the host answered
+            expect(sequence).toEqual([`start:${context.toolCallId}`, 'callback']);
+
+            // When: host answers
+            releaseAnswer?.('yes');
+            const output = await executePromise;
+
+            // Then: wait resolved after answer and answer is returned
+            expect(output).toEqual({ answer: 'yes' });
+            expect(sequence).toEqual([`start:${context.toolCallId}`, 'callback', `resolve:${context.toolCallId}`]);
+        });
+
+        it('resolves the user_input wait through try/finally when the host callback rejects', async () => {
+            // Given
+            const sequence: string[] = [];
+            const registration = createAskUserToolRegistration({
+                requestUserQuestion: async () => {
+                    sequence.push('callback');
+                    throw new Error('host cancelled');
+                },
+                userInputWait: {
+                    start: async ({ toolCallId }) => {
+                        sequence.push(`start:${toolCallId}`);
+                    },
+                    resolve: async ({ toolCallId }) => {
+                        sequence.push(`resolve:${toolCallId}`);
+                    },
+                },
+            });
+            const context = createContext();
+
+            // When / Then
+            await expect(registration.execute({ question: 'Deploy?', options: [] }, context)).rejects.toThrow(
+                'host cancelled',
+            );
+            expect(sequence).toEqual([`start:${context.toolCallId}`, 'callback', `resolve:${context.toolCallId}`]);
+        });
+    });
+
     describe('non-interactive mode (--no-tui/--json)', () => {
         it('emits an ask-blocked event and returns the blocked sentinel without awaiting the callback', async () => {
             const events: AskUserQuestionRequest[][] = [];
@@ -459,6 +527,32 @@ describe('createAskUserToolRegistration', () => {
 
             expect(output).toEqual({ answer: ASK_USER_BLOCKED_ANSWER });
             expect(events).toEqual([[{ question: 'Deploy?', options: ['yes', 'no'] }]]);
+        });
+
+        it('does not start a durable user_input wait for the non-interactive sentinel path', async () => {
+            // Given
+            const waitCalls: string[] = [];
+            const registration = createAskUserToolRegistration({
+                requestUserQuestion: () => {
+                    throw new Error('requestUserQuestion must not be called in nonInteractive mode');
+                },
+                nonInteractive: true,
+                userInputWait: {
+                    start: async () => {
+                        waitCalls.push('start');
+                    },
+                    resolve: async () => {
+                        waitCalls.push('resolve');
+                    },
+                },
+            });
+
+            // When
+            const output = await registration.execute({ question: 'Deploy?', options: [] }, createContext());
+
+            // Then
+            expect(output).toEqual({ answer: ASK_USER_BLOCKED_ANSWER });
+            expect(waitCalls).toEqual([]);
         });
 
         it('emits recommended-first reordered requests in multi-question mode', async () => {
