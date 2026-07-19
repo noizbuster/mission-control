@@ -1,3 +1,4 @@
+import { createObservabilityRedactor } from '@mission-control/core';
 import type {
     AgentEvent,
     ApprovalRecord,
@@ -6,6 +7,31 @@ import type {
     PermissionRequest,
 } from '@mission-control/protocol';
 import type { InteractiveToolOptions } from './interactive-coding-tools';
+
+export type VisibleApprovalAttempt = {
+    readonly state: 'visible';
+    readonly identity: symbol;
+    readonly request: PermissionRequest;
+    readonly record: ApprovalRecord;
+    readonly resolve: (decision: PermissionDecision) => void;
+};
+
+export type ApprovalAttempt =
+    | { readonly state: 'evaluating'; readonly identity: symbol; readonly request: PermissionRequest }
+    | {
+          readonly state: 'cancelled';
+          readonly identity: symbol;
+          readonly request: PermissionRequest;
+          readonly reason: string;
+      }
+    | VisibleApprovalAttempt
+    | {
+          readonly state: 'settling';
+          readonly identity: symbol;
+          readonly request: PermissionRequest;
+          readonly commitState: 'open' | 'claimed';
+          readonly cancellationReason?: string;
+      };
 
 export function parsePermissionReply(line: string): PermissionReply {
     const answer = line.trim().toLowerCase();
@@ -101,4 +127,62 @@ export function approvalDecisionRecord(record: ApprovalRecord, reply: Permission
         decidedAt: new Date().toISOString(),
         reason: reply.reason ?? record.reason,
     };
+}
+
+export function settleApprovalReply(
+    options: InteractiveToolOptions,
+    request: PermissionRequest,
+    record: ApprovalRecord,
+    reply: PermissionReply,
+): PermissionDecision {
+    options.output.write('\n');
+    options.output.hideApproval?.();
+    options.output.write(renderApprovalResult(request.action, reply.reply, reply.reason));
+    options.emitEvent(eventWithReply(options, reply));
+    const decidedRecord = approvalDecisionRecord(record, reply);
+    options.emitEvent(
+        eventWithApproval(options, 'approval.updated', decidedRecord, `approval updated: ${decidedRecord.state}`),
+    );
+    options.emitEvent(
+        eventWithApproval(
+            options,
+            reply.reply === 'deny' ? 'approval.blocked' : 'approval.resumed',
+            decidedRecord,
+            reply.reply === 'deny' ? `approval blocked: ${decidedRecord.state}` : 'approval resumed',
+        ),
+    );
+    return {
+        requestId: request.id,
+        status: reply.reply === 'deny' ? 'deny' : 'allow',
+        reason: reply.reason ?? 'interactive CLI approval',
+    };
+}
+
+export function prepareApprovalReply(
+    options: InteractiveToolOptions,
+    request: PermissionRequest,
+    reply: PermissionReply,
+): { readonly reply: PermissionReply; readonly remember: boolean } {
+    const normalizedReply = {
+        ...reply,
+        approvalId: reply.approvalId.length > 0 ? reply.approvalId : approvalIdFor(request),
+    } satisfies PermissionReply;
+    const redactor = options.observabilityRedactor ?? createObservabilityRedactor();
+    const canRemember = JSON.stringify(redactor.redactValue(request)) === JSON.stringify(request);
+    const effectiveReply: PermissionReply = canRemember
+        ? normalizedReply
+        : {
+              approvalId: normalizedReply.approvalId,
+              reply: normalizedReply.reply === 'deny' ? 'deny' : 'once',
+              reason: 'credential-bearing approval applied once',
+          };
+    return { reply: effectiveReply, remember: canRemember };
+}
+
+export function deniedReply(request: PermissionRequest, reason: string): PermissionReply {
+    return { approvalId: approvalIdFor(request), reply: 'deny', reason };
+}
+
+export function deniedDecision(request: PermissionRequest, reason: string): PermissionDecision {
+    return { requestId: request.id, status: 'deny', reason };
 }

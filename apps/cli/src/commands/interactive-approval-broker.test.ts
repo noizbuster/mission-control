@@ -23,20 +23,23 @@ describe('interactive approval broker', () => {
     });
 
     it('supports once replies without persisting a future allow rule', async () => {
-        const broker = createBroker();
+        const { broker, prompt } = createBroker();
         const first = broker.requestPermission(patchRequest('permission_patch_once'));
+        await prompt.shown();
         expect(broker.answer('once')).toBe(true);
         await expect(first).resolves.toMatchObject({ status: 'allow' });
 
+        prompt.reset();
         const second = broker.requestPermission(patchRequest('permission_patch_once_again'));
-        await waitForPendingApproval(broker);
+        await prompt.shown();
         expect(broker.answer('deny')).toBe(true);
         await expect(second).resolves.toMatchObject({ status: 'deny' });
     });
 
     it('supports always replies across matching requests in the same session', async () => {
-        const broker = createBroker();
+        const { broker, prompt } = createBroker();
         const first = broker.requestPermission(patchRequest('permission_patch_always'));
+        await prompt.shown();
         expect(broker.answer('always')).toBe(true);
         await expect(first).resolves.toMatchObject({ status: 'allow' });
 
@@ -46,28 +49,31 @@ describe('interactive approval broker', () => {
     });
 
     it('supports a one-shot primed approval for a previewed request id', async () => {
-        const broker = createBroker();
+        const { broker, prompt } = createBroker();
         const first = broker.requestPermission(patchRequest('permission_patch_primed'));
+        await prompt.shown();
         expect(broker.answer('once')).toBe(true);
         await expect(first).resolves.toMatchObject({ status: 'allow' });
 
-        broker.primeApproval('permission_patch_primed', 'interactive CLI approval');
+        broker.primeApproval(patchRequest('permission_patch_primed'), 'interactive CLI approval');
         await expect(broker.requestPermission(patchRequest('permission_patch_primed'))).resolves.toMatchObject({
             status: 'allow',
             reason: 'interactive CLI approval',
         });
 
+        prompt.reset();
         const third = broker.requestPermission(patchRequest('permission_patch_primed'));
-        await waitForPendingApproval(broker);
+        await prompt.shown();
         expect(broker.answer('deny')).toBe(true);
         await expect(third).resolves.toMatchObject({ status: 'deny' });
     });
 
     it('emits permission reply events and deny results', async () => {
         const events: AgentEvent[] = [];
-        const broker = createBroker(events);
+        const { broker, prompt } = createBroker(events);
         const pending = broker.requestPermission(patchRequest('permission_patch_deny'));
 
+        await prompt.shown();
         expect(broker.answer('deny')).toBe(true);
         await expect(pending).resolves.toMatchObject({ status: 'deny' });
         expect(events.map((event) => event.type)).toEqual(
@@ -82,7 +88,8 @@ describe('interactive approval broker', () => {
         // Given
         const secret = ['sk', 'approval_metadata_123'].join('-');
         const events: AgentEvent[] = [];
-        const options = baseBrokerOptions(events);
+        const prompt = approvalPromptTracker();
+        const options = baseBrokerOptions(events, prompt);
         const broker = createInteractiveApprovalBroker(options);
         const request: PermissionRequest = {
             id: 'permission_secret_metadata',
@@ -97,7 +104,7 @@ describe('interactive approval broker', () => {
 
         // When
         const pending = broker.requestPermission(request);
-        await waitForPendingApproval(broker);
+        await prompt.shown();
         broker.answer('deny');
         await pending;
         const observable = JSON.stringify({ events, output: options.output.getOutput() });
@@ -111,8 +118,9 @@ describe('interactive approval broker', () => {
         // Given
         const secret = ['configured', 'approval', 'pattern'].join('_');
         const events: AgentEvent[] = [];
+        const prompt = approvalPromptTracker();
         const options = {
-            ...baseBrokerOptions(events),
+            ...baseBrokerOptions(events, prompt),
             observabilityRedactor: createObservabilityRedactor({ secrets: [secret] }),
         };
         const broker = createInteractiveApprovalBroker(options);
@@ -125,7 +133,7 @@ describe('interactive approval broker', () => {
 
         // When
         const pending = broker.requestPermission(request);
-        await waitForPendingApproval(broker);
+        await prompt.shown();
         broker.answer('always');
         await pending;
         const dataDir = process.env['MCTRL_DATA_DIR'];
@@ -148,8 +156,10 @@ describe('interactive approval broker', () => {
     // Before the fix each turn made its own session and "this session" approvals vanished.
     it('preserves a session-scoped always approval across brokers sharing a permission session', async () => {
         const shared = new PermissionSession();
-        const turnOne = createInteractiveApprovalBroker(baseBrokerOptions(), shared);
+        const prompt = approvalPromptTracker();
+        const turnOne = createInteractiveApprovalBroker(baseBrokerOptions([], prompt), shared);
         const first = turnOne.requestPermission(patchRequest('permission_patch_session_shared'));
+        await prompt.shown();
         expect(turnOne.answer('session')).toBe(true);
         await expect(first).resolves.toMatchObject({ status: 'allow' });
 
@@ -161,10 +171,11 @@ describe('interactive approval broker', () => {
 });
 
 function createBroker(events: AgentEvent[] = []) {
-    return createInteractiveApprovalBroker(baseBrokerOptions(events));
+    const prompt = approvalPromptTracker();
+    return { broker: createInteractiveApprovalBroker(baseBrokerOptions(events, prompt)), prompt };
 }
 
-function baseBrokerOptions(events: AgentEvent[] = []) {
+function baseBrokerOptions(events: AgentEvent[] = [], prompt?: ReturnType<typeof approvalPromptTracker>) {
     let output = '';
     return {
         workspaceRoot: '/workspace',
@@ -177,6 +188,7 @@ function baseBrokerOptions(events: AgentEvent[] = []) {
             getOutput: () => output,
             showApproval: (_action: string, reason?: string) => {
                 output += reason ?? '';
+                prompt?.show();
             },
         },
         emitEvent: (event: AgentEvent) => {
@@ -198,16 +210,18 @@ function patchRequest(id: string): PermissionRequest {
     };
 }
 
-async function nextTick(): Promise<void> {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-}
-
-async function waitForPendingApproval(broker: ReturnType<typeof createInteractiveApprovalBroker>): Promise<void> {
-    for (let attempt = 0; attempt < 20; attempt += 1) {
-        if (broker.hasPending()) {
-            return;
-        }
-        await nextTick();
-    }
-    expect(broker.hasPending()).toBe(true);
+function approvalPromptTracker() {
+    let resolveShown = (): void => undefined;
+    let shown = new Promise<void>((resolve) => {
+        resolveShown = resolve;
+    });
+    return {
+        shown: () => shown,
+        show: () => resolveShown(),
+        reset: () => {
+            shown = new Promise<void>((resolve) => {
+                resolveShown = resolve;
+            });
+        },
+    };
 }
