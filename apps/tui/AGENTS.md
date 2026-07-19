@@ -2,7 +2,7 @@
 
 ## Overview
 
-`apps/tui` is the private Solid/OpenTUI app consumed by `apps/cli` via lazy import. It owns the Solid JSX component tree (`@opentui/solid`), the keymap platform, the terminal viewport abstraction, the markdown/diff rendering pipelines, the clipboard service, and the `ChatStore` state cluster. It MUST NOT import from `apps/cli` or `@mission-control/cli`, and MUST NOT own CLI command parsing, auth, sessions, providers, or runtime orchestration. Those concerns stay in `apps/cli` and `packages/core`.
+`apps/tui` is the private Solid/OpenTUI app consumed by `apps/cli` via lazy import. It owns the Solid JSX component tree (`@opentui/solid`), the keymap platform, the terminal viewport abstraction, the markdown/diff rendering pipelines, the clipboard service, typed transcript rendering, display-only projections, and the `ChatStore` state cluster. It MUST NOT import from `apps/cli` or `@mission-control/cli`, and MUST NOT own CLI command parsing, auth, sessions, providers, or runtime orchestration. Those concerns stay in `apps/cli` and `packages/core`.
 
 The dependency direction is strictly CLI -> TUI. The CLI lazy-loads `@mission-control/tui/create-chat-tui` only when the interactive TUI is active (`useTui === true`); noninteractive `mc --no-tui`/`--json`/`--jsonl` runs never load this package.
 
@@ -14,7 +14,7 @@ CLI runtime side effects (dashboard data loading, agent enable/disable, model ov
 src/
 |-- index.ts                  # barrel: pure primitives (terminal-text, chat, markdown) + state cluster
 |-- terminal-text.ts          # pure: terminalDisplayWidth, segmentTerminalText, truncate, padEnd
-|-- chat.ts                   # pure: ChatBlock, parseMessageBlocks, classifyLine, QuestionOption
+|-- chat.ts                   # pure: legacy ChatBlock fallback parser, classifyLine, QuestionOption
 |-- markdown.ts               # pure: streamBlocks (streaming markdown healer, imports marked + remend)
 |-- create-chat-tui.tsx       # TUI mount function: builds ChatStore, mounts App, returns ChatTuiHandle
 |-- replay-overlay.tsx        # replay overlay mount (ABG overlay over a replay session)
@@ -31,11 +31,13 @@ src/
 |   |-- ChatInputArea.tsx     # input wrapper
 |   |-- ChatInputTextarea.tsx # native <textarea> wrapper (owns cursor/selection/IME)
 |   |-- ChatTranscript.tsx    # native <scrollbox> wrapper (owns output scroll)
+|   |-- TranscriptPartRenderer.tsx, TypedTranscriptRows.tsx, TypedBlockPanel.tsx  # typed transcript renderers
 |   |-- OverlayPanels.tsx     # approval/question/model/level/rename overlays
 |   |-- SlashMenuPanel.tsx    # slash command autocomplete
 |   |-- StatusBar.tsx         # provider/model/variant/project/branch/session
 |   |-- Banner.tsx, Separator.tsx, ToolCard.tsx, ...
 |   |-- AbgOverlay.tsx        # ABG monitoring overlay (+Panes A/B/Minimap)
+|   |-- abg-display-projection.ts  # display-only ABG and blackboard projections
 |   |-- MissionPanelOverlay.tsx  # mission panel overlay
 |   |-- ModelsOverlay.tsx     # model assignment overlay
 |   |-- markdown/             # markdown pipeline: Markdown.tsx, theme, highlight, ansi-renderer, ansi-theme, stream, tree-sitter-highlighter, parsers-config, syntax-rules, text-attributes, render-cache
@@ -49,6 +51,8 @@ src/
 `-- state/                    # pure TUI state cluster (NO framework or OpenTUI runtime imports)
     |-- index.ts              # barrel re-exported via @mission-control/tui/state
     |-- chat-store.ts         # ChatStore external store (subscribe/getSnapshot contract)
+    |-- transcript-part.ts    # TUI-local TranscriptPart union and stable-ID upsert
+    |-- terminal-display-sanitizer.ts  # display-only credential redaction and control escaping
     |-- chat-tui-types.ts     # ChatTuiHandle, ChatTuiRuntimeOptions
     |-- chat-app-actions.ts   # ChatAppActions callback interface (CLI-injected side effects)
     |-- chat-selector-store.ts, chat-input-event.ts
@@ -63,19 +67,21 @@ src/
 | Task | Location | Notes |
 | --- | --- | --- |
 | TUI mount factory | `src/create-chat-tui.tsx` | `createChatTui(options)` builds a `ChatStore`, dynamic-imports the renderer + keymap provider + `App`, mounts the Solid tree, and returns the imperative `ChatTuiHandle` consumed by `interactive-chat.ts`. `createChatTuiHandle(store, unmountFn)` is the testable seam that constructs the handle without the native renderer. |
-| Chat state store | `src/state/chat-store.ts` | `ChatStore` owns all chat UI state (output, input mirror, overlays, menus, history, event queue) behind `subscribe()` + `getSnapshot()`. `createChatStore` factory; 16ms-coalesced `emitOutput`; overlay-mode state machine; `waitForEvent`/`enqueueEvent` event queue. |
+| Chat state store | `src/state/chat-store.ts` | `ChatStore` owns chat UI state, including `transcriptParts` and legacy `outputText`, behind `subscribe()` + `getSnapshot()`. `emitTranscriptPart()` upserts a stable ID in first-seen order and retains fallback text for legacy consumers; `replaceTranscript()` restores both forms. It also keeps raw question text, headers, options, and answers separate from escaped display values. |
 | Store selector hook | shared `useSolidStoreSelector` | Use `useSolidStoreSelector(store, selector)` from `platform/use-solid-store-selector.ts` to project a `subscribe`/`getSnapshot` store into a Solid accessor. Do not hand-roll `createSignal` + `onMount` + `subscribe` + `onCleanup` external-store bridges per component; use the shared helper. |
 | TUI handle types | `src/state/chat-tui-types.ts` | `ChatTuiHandle`, `ChatTuiRuntimeOptions` (carries optional `missionControlServices` and `actions` injected by the CLI). |
 | CLI side-effect interface | `src/state/chat-app-actions.ts` | `ChatAppActions` callback interface (`loadDashboardAgentEntries`, `loadMissionPanelRows`, `toggleAgentDisabled`, `setAgentModelOverride`, `isValidModelPattern`). CLI provides implementations; components call them. |
-| Chat block parsing | `src/chat.ts` (via `@mission-control/tui/chat`) | `parseMessageBlocks` splits `outputText` into `ChatBlock` records (user/assistant/thinking/error/tool/system). Pure, zero imports. |
+| Legacy chat block parsing | `src/chat.ts` (via `@mission-control/tui/chat`) | `parseMessageBlocks` splits legacy `outputText` into `ChatBlock` records (user/assistant/thinking/error/tool/system). Pure, zero imports. It is a fallback path, not the primary transcript model. |
 | Chat test support | `src/components/chat-test-support.ts` | `TextareaLike`, `createRecordingTextarea`, `createRecordingScrollbox`, `makeKeyEvent`, and framework-free test helpers for native renderable seams. |
 | Root component | `src/app.tsx` | Thin composer: wires hooks, then branches fullscreen (`FullscreenOverlays`) vs normal flex siblings (upper + dock + modals). Layout modules live under `src/app/` (`AgentSpinner`, `ModalPopup`, upper region, modal overlays). Reads `ChatStore` snapshots through Solid signals/accessors. |
 | Input textarea | `src/components/ChatInputTextarea.tsx` | Wraps native `<textarea>` (`TextareaRenderable`): owns editable text, cursor, selection, IME composition. |
-| Output transcript | `src/components/ChatTranscript.tsx` | Wraps native `<scrollbox>` (`ScrollBoxRenderable`): owns output scroll and windowing via `stickyScroll`. |
+| Output transcript | `src/components/ChatTranscript.tsx` | Wraps native `<scrollbox>` (`ScrollBoxRenderable`) and renders `transcriptParts` first. It falls back to parsed `ChatBlock` rows only when no typed parts exist. |
+| Typed transcript rendering | `src/state/transcript-part.ts`, `src/components/TranscriptPartRenderer.tsx`, `src/components/TypedTranscriptRows.tsx`, `src/components/TypedBlockPanel.tsx` | TUI-local `TranscriptPart` variants preserve semantic rows. `TranscriptPartRenderer` exhaustively routes them to typed rows; stable same-ID updates replace the mounted row, and lifecycle-aware rows keep active or multiline bodies expanded while settled one-line rows collapse. |
+| Display sanitization | `src/state/terminal-display-sanitizer.ts`, `src/components/Toast.tsx`, `src/components/OverlayPanels.tsx` | Sanitize only terminal-bound text, with credential redaction and control escaping. Question overlays render escaped text and options but resolve raw answers; toasts sanitize title and message when rendered. |
 | Overlay panels | `src/components/OverlayPanels.tsx` | Approval, question, model picker, level picker, rename overlays. Arrow-key navigation over `ChatStore`. |
 | Status bar | `src/components/StatusBar.tsx` | Renders provider/model/variant/project/branch/session; `formatStatus` exported for unit tests. |
 | Tool card | `src/components/ToolCard.tsx` | Bordered card; `hasDiffContent` auto-routes to `<DiffView>` or yellow prose lines; `expanded` prop collapses to header. |
-| ABG overlay | `src/components/AbgOverlay.tsx` | ABG monitoring overlay with panes A/B and minimap. Consumes `AbgOverlayState` from `src/state/abg-overlay-state.ts`. |
+| ABG overlay | `src/components/AbgOverlay.tsx`, `src/components/abg-display-projection.ts`, `src/components/AbgOverlayPanesBDisplay.tsx` | ABG monitoring overlay with panes A/B and minimap. Graph and pane data are projected only for display. Raw graph keys and edge endpoints must never be sanitized in storage; blackboard labels are sorted by raw key and receive deterministic collision suffixes after display sanitization. |
 | Markdown renderer | `src/components/markdown/Markdown.tsx` | opentui-native markdown: token walker to IR (`InlineRun`/`RenderLine`/`RenderBlock`) to `<box>`/`<text>`. Pure helpers (`getCachedBlocks`, `reflowRuns`, `renderInlineToRuns`, `computeTableColumnWidths`) exported for unit tests. 64-entry LRU cache. |
 | Markdown theme | `src/components/markdown/theme.ts` | `darkTheme` (14 element styles + `highlightCode` slot), `noColorTheme`. `TerminalTextStyle` = subset of opentui `<text>` props. |
 | Markdown streaming healer | `src/markdown.ts` (via `@mission-control/tui/markdown`) | `streamBlocks` heals incomplete markdown (open `**`, ```` ``` ```` fence) via `remend` and splits live input into renderable blocks. Never throws. |
@@ -158,7 +164,11 @@ Four chords have documented app-action meanings that collide with the textarea's
 
 ### Output Rendering
 
-Output text is parsed into `ChatBlock` objects by `parseMessageBlocks()` (in `src/chat.ts`). Each block kind routes to a dedicated renderer: user (cyan bar), assistant (green bar, markdown), thinking (magenta bar, markdown), error (red bar), tool (`<ToolCard>`), system (dim text). The markdown pipeline walks `marked` tokens into a serializable IR styled by `theme.ts`, with code-block syntax highlighting from `highlight.ts` and streaming-unsafe markdown healing from `stream.ts`. A 64-entry LRU cache keys on `(text, width, streaming, theme)`.
+`ChatStore` renders typed `TranscriptPart` rows first. `TranscriptPartRenderer` dispatches the TUI-local union to `TypedTranscriptRows` and `TypedBlockPanel`; same-ID updates replace the existing row without changing its position. With expansion enabled, active one-line tool rows remain compact, active multiline tool rows can expand, active subagent rows remain collapsed, and settled one-line or multiline tool/subagent rows expose their bodies. `ChatBlock` parsing through `parseMessageBlocks()` remains the fallback when no typed rows exist, and `legacy` typed parts use that renderer for compatibility.
+
+Canonical raw execution, history, permission, answer, identity, and topology values remain unsanitized. Only terminal-bound transcript, question, toast, and ABG display projections are credential-redacted then control-escaped; `ChatStore` may hold public display copies beside private raw question state. The sanitizer retains line feeds and normal Unicode, including CJK text. Toast titles and messages are sanitized when mounted. ABG graph rows, minimaps, panes, and blackboard values are projected for display only. Raw graph keys and edge endpoints must never be sanitized in storage; blackboard display labels are collision-safe through deterministic suffixes after sanitization.
+
+Typed assistant, reasoning, and legacy text still use the markdown pipeline, which walks `marked` tokens into a serializable IR styled by `theme.ts`, with code-block syntax highlighting from `highlight.ts` and streaming-unsafe markdown healing from `stream.ts`. A 64-entry LRU cache keys on `(text, width, streaming, theme)`.
 
 ### Clipboard
 
@@ -193,6 +203,8 @@ Flat `<text>` blocks are explicitly `selectable`; `Markdown` leaves default sele
 - `src/import-graph.test.ts` scans the 3 pure source files and asserts no `@opentui/*`, framework-runtime, `apps/cli`, or `@mission-control/cli` imports. Keep it green when adding pure modules.
 - `tests/tui-cli-boundary.test.ts` (root) scans all non-test source under `src/` and asserts no `apps/cli`/`../cli`/`@mission-control/cli` references.
 - `platform/terminal-global-policy.test.ts` scans `src/` for direct `process.stdout.columns/rows` reads. No allowed files.
+- Typed transcript coverage lives in `state/chat-store.test.ts`, `state/transcript-fallback.test.ts`, `components/ChatTranscript.test.tsx`, `components/TranscriptPartRenderer*.test.tsx`, `components/TypedTranscriptRows.lifecycle.test.tsx`, and `components/typed-transcript-selection.test.tsx`. It covers typed-first selection, legacy fallback, stable same-ID updates, renderer reactivity, lifecycle-aware expansion, and selection retention.
+- Display sanitization coverage lives in `components/QuestionOverlay.terminal-sanitization.test.tsx`, `components/Toast.terminal-sanitization.test.tsx`, `components/AbgOverlay.terminal-sanitization.test.tsx`, `components/AbgMinimap.terminal-sanitization.test.tsx`, and `components/abg-display-projection.test.ts`. It covers display-only escaping, raw question answers, raw graph topology, and deterministic blackboard-label collisions.
 - Prefer Solid headless/pure-helper tests for components. Keep state cluster tests framework-free.
 - Run focused TUI tests with `NX_DAEMON=false NX_ISOLATE_PLUGINS=false pnpm exec nx run tui:test` or `pnpm exec vitest run apps/tui/src/<file>.test.ts`.
 

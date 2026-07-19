@@ -18,6 +18,7 @@ import { useTransientToast } from './app/use-transient-toast';
 import { ChatBottomDock } from './components/ChatBottomDock';
 import { ChatTranscript } from './components/ChatTranscript';
 import { bottomDockPolicy } from './components/chat-bottom-dock-policy';
+import { CHAT_BG } from './components/chat-theme';
 import { DialogOverlay, DialogProvider } from './components/dialog/dialog';
 import { DialogHost } from './components/dialog/dialog-host';
 import { KeymapChrome } from './platform/keymap/keymap-chrome';
@@ -77,6 +78,7 @@ function AppMain(props: AppProps): JSX.Element {
     const initialPrefs = props.store.getAbgOverlayPrefsSnapshot();
     const [abgActiveTab, setAbgActiveTab] = createSignal(initialPrefs.activeTabIndex);
     const [abgScrollOffset, setAbgScrollOffset] = createSignal(initialPrefs.scrollOffset);
+    const [abgPanX, setAbgPanX] = createSignal(0);
 
     const keymap = useKeymap();
     const renderer = useRenderer();
@@ -104,6 +106,7 @@ function AppMain(props: AppProps): JSX.Element {
         textareaHandle,
         setAbgActiveTab,
         setAbgScrollOffset,
+        setAbgPanX,
         abgOverlayController,
     });
 
@@ -121,7 +124,9 @@ function AppMain(props: AppProps): JSX.Element {
         handleSubmit,
     });
 
-    const messageBlocks = createStableMessageBlocks(() => snapshot().outputText);
+    const messageBlocks = createStableMessageBlocks(() =>
+        snapshot().transcriptParts.length > 0 ? '' : snapshot().outputText,
+    );
     const overlayActive = () => snapshot().overlayMode !== 'none';
     const showWelcome = () => welcomeData !== undefined && snapshot().outputText === '' && !overlayActive();
     const promptRepaintKey = () =>
@@ -137,7 +142,7 @@ function AppMain(props: AppProps): JSX.Element {
         overlayMode: () => snapshot().overlayMode,
         generating: () => snapshot().generating,
         promptRepaintKey,
-        abgNavKey: () => `${abgActiveTab()}:${abgScrollOffset()}`,
+        abgNavKey: () => `${abgActiveTab()}:${abgScrollOffset()}:${abgPanX()}`,
     });
 
     const showAbgMinimap = () => snapshot().abgMinimapVisible && !overlayActive() && abgOverlayController !== undefined;
@@ -154,7 +159,7 @@ function AppMain(props: AppProps): JSX.Element {
                 width={dimensions().width}
                 height={dimensions().height}
                 flexDirection="column"
-                backgroundColor="#0a0a0a"
+                backgroundColor={CHAT_BG}
                 onMouseUp={handleSelectionMouseUp}
             >
                 <Show when={isFullscreenOverlay()}>
@@ -166,6 +171,7 @@ function AppMain(props: AppProps): JSX.Element {
                         abgOverlayController={abgOverlayController}
                         abgActiveTabIndex={abgActiveTab()}
                         abgScrollOffset={abgScrollOffset()}
+                        abgPanX={abgPanX()}
                     />
                 </Show>
                 <Show when={!isFullscreenOverlay()}>
@@ -177,8 +183,10 @@ function AppMain(props: AppProps): JSX.Element {
                             transcript={
                                 <ChatTranscript
                                     blocks={messageBlocks()}
+                                    transcriptParts={snapshot().transcriptParts}
                                     scrollboxRef={scrollboxHandle}
                                     generating={snapshot().generating}
+                                    showThinking={snapshot().showThinking}
                                     toolOutputExpanded={snapshot().toolOutputExpanded}
                                 />
                             }

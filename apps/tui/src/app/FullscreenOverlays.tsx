@@ -2,14 +2,14 @@
 
 import { TextAttributes } from '@opentui/core';
 import { type JSX, Show } from 'solid-js';
-import { buildDiffViewerModel, DiffViewerOverlay } from '../platform/keymap/diff-viewer';
-import type { TerminalViewport } from '../platform/terminal-viewport';
-import type { AbgOverlayController } from '../state/abg-overlay-controller';
-import type { ChatStore, ChatStoreState } from '../state/chat-store';
 import { ABG_OVERLAY_TABS, AbgOverlay, type AbgOverlayTab } from '../components/AbgOverlay';
 import { ModelsOverlay } from '../components/ModelsOverlay';
 import { OverlayFrame } from '../components/OverlayFrame';
 import type { StatusBarProps } from '../components/StatusBar';
+import { buildDiffViewerModel, DiffViewerOverlay } from '../platform/keymap/diff-viewer';
+import type { TerminalViewport } from '../platform/terminal-viewport';
+import type { AbgOverlayController } from '../state/abg-overlay-controller';
+import type { ChatStore, ChatStoreState } from '../state/chat-store';
 
 export type FullscreenOverlaysProps = {
     readonly store: ChatStore;
@@ -19,6 +19,7 @@ export type FullscreenOverlaysProps = {
     readonly abgOverlayController: AbgOverlayController | undefined;
     readonly abgActiveTabIndex: number;
     readonly abgScrollOffset: number;
+    readonly abgPanX?: number;
 };
 
 export function FullscreenOverlays(props: FullscreenOverlaysProps): JSX.Element {
@@ -50,6 +51,7 @@ export function FullscreenOverlays(props: FullscreenOverlaysProps): JSX.Element 
                                 store={controller().store}
                                 activeTab={activeTab()}
                                 scrollOffset={props.abgScrollOffset}
+                                panX={props.abgPanX ?? 0}
                                 modelLabel={modelLabel()}
                                 viewport={props.viewport}
                             />

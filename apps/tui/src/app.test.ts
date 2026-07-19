@@ -9,6 +9,44 @@ vi.mock('@mission-control/core', () => ({
     resolveMissionControlDataDir: () => '/tmp/mission-control-test',
     resolveUserConfigDir: () => '/tmp/mission-control-test-config',
 }));
+vi.mock('@opentui/keymap/solid', () => ({ useKeymap: () => undefined }));
+vi.mock('@opentui/solid', () => ({
+    useRenderer: () => undefined,
+    useTerminalDimensions: () => undefined,
+}));
+vi.mock('solid-js', () => ({
+    Show: () => undefined,
+    createMemo: () => () => [],
+    createSignal: () => [() => 0, () => undefined],
+}));
+vi.mock('./app/FullscreenOverlays', () => ({ FullscreenOverlays: () => undefined }));
+vi.mock('./app/ModalOverlays', () => ({ ModalOverlays: () => undefined }));
+vi.mock('./app/UpperRegion', () => ({ UpperRegion: () => undefined }));
+vi.mock('./app/use-global-keyboard', () => ({ useGlobalKeyboard: () => undefined }));
+vi.mock('./app/use-keymap-layers', () => ({ useKeymapLayers: () => undefined }));
+vi.mock('./app/use-renderable-handles', () => ({ useRenderableHandles: () => undefined }));
+vi.mock('./app/use-repaint-effects', () => ({ useRepaintEffects: () => undefined }));
+vi.mock('./app/use-selection-mouseup', () => ({ useSelectionMouseUp: () => undefined }));
+vi.mock('./app/use-submit', () => ({ useSubmit: () => undefined }));
+vi.mock('./app/use-transient-toast', () => ({ useTransientToast: () => undefined }));
+vi.mock('./components/ChatBottomDock', () => ({ ChatBottomDock: () => undefined }));
+vi.mock('./components/ChatTranscript', () => ({ ChatTranscript: () => undefined }));
+vi.mock('./components/chat-bottom-dock-policy', () => ({ bottomDockPolicy: () => undefined }));
+vi.mock('./components/chat-theme', () => ({ CHAT_BG: '' }));
+vi.mock('./components/dialog/dialog', () => ({
+    DialogOverlay: () => undefined,
+    DialogProvider: () => undefined,
+}));
+vi.mock('./components/dialog/dialog-host', () => ({ DialogHost: () => undefined }));
+vi.mock('./platform/keymap/keymap-chrome', () => ({ KeymapChrome: () => undefined }));
+vi.mock('./platform/providers/index', () => ({
+    useChatSession: () => undefined,
+    useTuiClipboard: () => undefined,
+    useTuiLocalPreferences: () => undefined,
+    useTuiPromptStash: () => undefined,
+    useTuiRuntime: () => undefined,
+}));
+vi.mock('./platform/use-solid-store-selector', () => ({ useSolidStoreSelector: () => undefined }));
 
 /**
  * Re-export smoke only. Multi-file topology pins live in

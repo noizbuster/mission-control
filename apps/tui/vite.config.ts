@@ -1,9 +1,13 @@
 import type { Plugin } from 'vite';
-import { defineConfig } from 'vite';
 import solidPlugin from 'vite-plugin-solid';
+import { defineConfig } from 'vitest/config';
 import { fileURLToPath } from 'node:url';
 
 const coreTestShim = sourceEntry('./test-support/core-test-shim.ts');
+const coreRedactionSource = sourceEntry('../../packages/core/src/redaction.ts');
+const terminalTextSource = sourceEntry('./src/terminal-text.ts');
+const tuiMainBarrel = '@mission-control/tui';
+const tuiStateSourceSegment = '/apps/tui/src/state/';
 
 const entryPoints = {
     index: sourceEntry('./src/index.ts'),
@@ -54,9 +58,28 @@ function resolveSolidNodeRuntime(sourcePath: string): string {
     return sourcePath;
 }
 
-function isExternalDependency(id: string): boolean {
+function isTuiStateMainBarrelImport(id: string, importer: string | undefined): boolean {
+    const normalizedImporter = importer?.replaceAll('\\', '/');
+    return id === tuiMainBarrel && normalizedImporter?.includes(tuiStateSourceSegment) === true;
+}
+
+function isExternalDependency(id: string, importer?: string): boolean {
+    if (isTuiStateMainBarrelImport(id, importer)) return false;
     if (id.startsWith('node:')) return true;
     return externalPackages.some((packageName) => id === packageName || id.startsWith(`${packageName}/`));
+}
+
+function resolveTuiStateMainBarrelImports(): Plugin {
+    return {
+        name: 'resolve-tui-state-main-barrel-imports',
+        enforce: 'pre',
+        resolveId(source, importer) {
+            if (isTuiStateMainBarrelImport(source, importer)) {
+                return terminalTextSource;
+            }
+            return undefined;
+        },
+    };
 }
 
 // Node resolves bare `solid-js` to the SSR build (onMount no-op). Force client runtime.
@@ -82,6 +105,7 @@ function rewriteSolidJsNodeImports(): Plugin {
 
 export default defineConfig(({ mode }) => ({
     plugins: [
+        resolveTuiStateMainBarrelImports(),
         solidPlugin({
             solid: {
                 moduleName: '@opentui/solid',
@@ -100,7 +124,19 @@ export default defineConfig(({ mode }) => ({
         }),
         rewriteSolidJsNodeImports(),
     ],
-    resolve: mode === 'test' ? { alias: { '@mission-control/core': coreTestShim } } : undefined,
+    resolve:
+        mode === 'test'
+            ? {
+                  alias: [
+                      { find: '@mission-control/core/redaction', replacement: coreRedactionSource },
+                      { find: '@mission-control/core', replacement: coreTestShim },
+                  ],
+              }
+            : undefined,
+    test: {
+        environment: 'node',
+        execArgv: ['--experimental-ffi'],
+    },
     build: {
         outDir: 'dist',
         emptyOutDir: true,

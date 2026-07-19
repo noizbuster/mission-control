@@ -1,17 +1,10 @@
 import { useKeyboard } from '@opentui/solid';
 import type { Setter } from 'solid-js';
-import {
-    buildDiffViewerModel,
-    moveLine,
-    nextFile,
-    nextHunk,
-    prevFile,
-    prevHunk,
-} from '../platform/keymap/diff-viewer';
-import type { AbgOverlayController } from '../state/abg-overlay-controller';
-import type { ChatStore } from '../state/chat-store';
 import { ABG_OVERLAY_TABS } from '../components/AbgOverlay';
 import type { ChatTextareaHandle } from '../components/ChatInputTextarea';
+import { buildDiffViewerModel, moveLine, nextFile, nextHunk, prevFile, prevHunk } from '../platform/keymap/diff-viewer';
+import type { AbgOverlayController } from '../state/abg-overlay-controller';
+import type { ChatStore } from '../state/chat-store';
 
 /**
  * Shared deps for the App global keyboard sink (Ctrl+C + overlay-only keys).
@@ -22,6 +15,7 @@ export type GlobalKeyboardDeps = {
     readonly textareaHandle: ChatTextareaHandle;
     readonly setAbgActiveTab: Setter<number>;
     readonly setAbgScrollOffset: Setter<number>;
+    readonly setAbgPanX: Setter<number>;
     readonly abgOverlayController: AbgOverlayController | undefined;
 };
 
@@ -31,7 +25,7 @@ export type GlobalKeyboardDeps = {
  * ChatInputArea onKeyDown (e.g. Ctrl+G).
  */
 export function useGlobalKeyboard(deps: GlobalKeyboardDeps): void {
-    const { store, textareaHandle, setAbgActiveTab, setAbgScrollOffset, abgOverlayController } = deps;
+    const { store, textareaHandle, setAbgActiveTab, setAbgScrollOffset, setAbgPanX, abgOverlayController } = deps;
 
     useKeyboard((key) => {
         const isCtrlC = key.ctrl && key.name === 'c';
@@ -77,11 +71,13 @@ export function useGlobalKeyboard(deps: GlobalKeyboardDeps): void {
                 const idx = Number.parseInt(key.name, 10) - 1;
                 setAbgActiveTab(idx);
                 setAbgScrollOffset(0);
+                setAbgPanX(0);
                 return;
             }
             if (key.name === 'tab') {
                 setAbgActiveTab((i) => (i + 1) % ABG_OVERLAY_TABS.length);
                 setAbgScrollOffset(0);
+                setAbgPanX(0);
                 return;
             }
             if (key.name === 'up') {
@@ -90,6 +86,14 @@ export function useGlobalKeyboard(deps: GlobalKeyboardDeps): void {
             }
             if (key.name === 'down') {
                 setAbgScrollOffset((o) => Math.max(0, o - 1));
+                return;
+            }
+            if (key.name === 'left') {
+                setAbgPanX((o) => o + 4);
+                return;
+            }
+            if (key.name === 'right') {
+                setAbgPanX((o) => Math.max(0, o - 4));
                 return;
             }
             if (key.name === 'r' && abgOverlayController !== undefined) {

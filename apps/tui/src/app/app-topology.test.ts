@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 367 -> current 375 pure LOC; one multi-file App topology matrix pins mount shape, imports, overlays, and keymap wiring.
 import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -11,10 +12,7 @@ const testFilePattern = /\.(test|spec)\.(ts|tsx)$/u;
 
 const ROOT_BOX_NEEDLE = 'width={dimensions().width}';
 
-const MODAL_MODES = [
-    'agents-dashboard',
-    'mission-panel',
-] as const;
+const MODAL_MODES = ['agents-dashboard', 'mission-panel'] as const;
 
 const FULLSCREEN_MODES = ['abg', 'diff-viewer', 'models-overlay'] as const;
 
@@ -44,7 +42,6 @@ const PROVIDER_HOOK_NEEDLES = [
 function readSource(relativePath: string): string {
     return readFileSync(resolve(root, relativePath), 'utf8');
 }
-
 
 function collectAppModuleFiles(): readonly string[] {
     const absoluteDir = resolve(root, chatAppDir);
@@ -260,6 +257,15 @@ describe('App OpenCode layout wiring', () => {
         expect(dockSource).toContain('dimensions().height');
     });
 
+    it('threads typed transcript rows and the thinking preference into ChatTranscript', () => {
+        const appSource = readSource(chatAppRootFile);
+        const transcriptBlock = sliceBetween(appSource, '<ChatTranscript', '/>');
+
+        expect(transcriptBlock).toContain('transcriptParts={snapshot().transcriptParts}');
+        expect(transcriptBlock).toContain('showThinking={snapshot().showThinking}');
+        expect(transcriptBlock).toContain('toolOutputExpanded={snapshot().toolOutputExpanded}');
+    });
+
     it('keeps dock as a flexShrink sibling of the flexGrow upper region', () => {
         const appSource = readSource(chatAppRootFile);
         const mainStart = appSource.indexOf('function AppMain');
@@ -343,7 +349,11 @@ describe('keyboard and keymap layer topology', () => {
         expect(chatAppSource).toContain('useGlobalKeyboard');
         expect(keyboardSource).toContain('useKeyboard');
         expect(keyboardSource).toContain("key.ctrl && key.name === 'c'");
-        expect(keyboardSource).toContain("key.name === 'escape' || (key.ctrl && key.name === 'g')");
+        expect(keyboardSource).toContain("key.name === 'escape'");
+        expect(keyboardSource).toContain("key.ctrl && key.name === 'g'");
+        expect(keyboardSource).toContain("key.name === 'left'");
+        expect(keyboardSource).toContain("key.name === 'right'");
+        expect(keyboardSource).toContain('setAbgPanX');
         expect(keyboardSource).toContain('textareaHandle.get()?.focused');
     });
 

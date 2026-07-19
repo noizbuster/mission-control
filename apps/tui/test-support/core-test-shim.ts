@@ -32,6 +32,7 @@ export {
     type TuiPluginSource,
 } from '../../../packages/core/src/plugins/tui-plugin-host';
 export type { ProviderAuthStore } from '../../../packages/core/src/providers/provider-auth-store';
+export { redactCredentialText } from '../../../packages/core/src/providers/redaction-handler';
 export {
     ContinuationRuntime,
     type ContinuationState,

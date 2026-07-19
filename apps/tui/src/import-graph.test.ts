@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -31,6 +31,15 @@ const topLevelPureSourceFiles = [
     'apps/tui/src/terminal-text.ts',
     'apps/tui/src/chat.ts',
     'apps/tui/src/markdown.ts',
+] as const;
+
+const typeOnlyStateExportModules = [
+    'auth-provider-keypress-types',
+    'chat-app-actions',
+    'chat-input-event',
+    'chat-tui-types',
+    'mission-services-types',
+    'welcome-data-types',
 ] as const;
 
 /**
@@ -74,6 +83,10 @@ const forbiddenImportStrings = [
 const blockCommentPattern = /\/\*[\s\S]*?\*\//gu;
 const lineCommentPattern = /\/\/.*$/gmu;
 
+vi.mock('@mission-control/tui', () => {
+    throw new Error('state modules must not resolve the main barrel at runtime');
+});
+
 function stripComments(source: string): string {
     return source.replace(blockCommentPattern, '').replace(lineCommentPattern, '');
 }
@@ -104,5 +117,23 @@ describe('apps/tui/src pure-subpath import-graph guard', () => {
 
         expect(componentSource).toContain("from './highlight'");
         expect(themeSource).toContain("from './highlight'");
+    });
+
+    it('keeps type-only state modules out of the main barrel runtime graph', () => {
+        const stateIndexSource = readFileSync(join(root, stateSourceRoot, 'index.ts'), 'utf8');
+
+        for (const moduleName of typeOnlyStateExportModules) {
+            expect(stateIndexSource).toContain(`export type * from './${moduleName}';`);
+            expect(stateIndexSource).not.toContain(`export * from './${moduleName}';`);
+        }
+    });
+
+    it('resolves state terminal-text consumers without loading the main barrel', async () => {
+        const [commandMenu] = await Promise.all([
+            import('./state/interactive-chat-command-menu'),
+            import('./state/interactive-chat-cursor-navigation'),
+        ]);
+
+        expect(typeof commandMenu.createSlashCommandMenuState).toBe('function');
     });
 });

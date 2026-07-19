@@ -1,17 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createChatStore } from '../state/chat-store';
 import { asTextareaRef, createRecordingTextarea } from '../components/chat-test-support';
+import { createChatStore } from '../state/chat-store';
 import { useSubmit } from './use-submit';
 
 vi.mock('@mission-control/tui', async () => await import('../terminal-text'));
 vi.mock('@mission-control/tui/chat', async () => await import('../chat'));
-vi.mock('@mission-control/core', () => ({
-    ContinuationRuntime: class ContinuationRuntime {},
-    MAIN_AGENT_ID: 'main',
-    readBoulder: () => undefined,
-    resolveMissionControlDataDir: () => '/tmp/mission-control-test',
-    resolveUserConfigDir: () => '/tmp/mission-control-test-config',
-}));
+vi.mock('@mission-control/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@mission-control/core')>();
+    return {
+        ContinuationRuntime: class ContinuationRuntime {},
+        MAIN_AGENT_ID: 'main',
+        readBoulder: () => undefined,
+        redactCredentialText: actual.redactCredentialText,
+        resolveMissionControlDataDir: () => '/tmp/mission-control-test',
+        resolveUserConfigDir: () => '/tmp/mission-control-test-config',
+    };
+});
 
 function flushSubmitTimers(): void {
     // IME-safe double setTimeout(0): two nested macrotasks.

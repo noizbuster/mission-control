@@ -5,6 +5,57 @@ import { createAbgOverlayController, createAbgOverlayStore, createChatStore } fr
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+type TranscriptPart =
+    | { readonly id: string; readonly type: 'user'; readonly text: string }
+    | { readonly id: string; readonly type: 'assistant'; readonly text: string }
+    | { readonly id: string; readonly type: 'reasoning'; readonly text: string }
+    | { readonly id: string; readonly type: 'inline-tool'; readonly text: string }
+    | { readonly id: string; readonly type: 'block-tool'; readonly text: string }
+    | { readonly id: string; readonly type: 'diff'; readonly text: string }
+    | { readonly id: string; readonly type: 'code'; readonly text: string }
+    | { readonly id: string; readonly type: 'command'; readonly text: string }
+    | { readonly id: string; readonly type: 'subagent'; readonly text: string }
+    | { readonly id: string; readonly type: 'status'; readonly text: string }
+    | { readonly id: string; readonly type: 'event'; readonly text: string }
+    | { readonly id: string; readonly type: 'error'; readonly text: string }
+    | { readonly id: string; readonly type: 'legacy'; readonly text: string };
+
+type TypedTranscriptHandle = {
+    readonly emitTranscriptPart: (part: TranscriptPart, fallbackText: string) => void;
+    readonly replaceTranscript: (parts: readonly TranscriptPart[], outputText: string) => void;
+};
+
+type TypedTranscriptSnapshot = {
+    readonly transcriptParts: readonly TranscriptPart[];
+};
+
+type TypedTranscriptStore = {
+    readonly getSnapshot: () => TypedTranscriptSnapshot;
+};
+
+function hasTypedTranscriptHandle(value: object): value is TypedTranscriptHandle {
+    return (
+        'emitTranscriptPart' in value &&
+        typeof value.emitTranscriptPart === 'function' &&
+        'replaceTranscript' in value &&
+        typeof value.replaceTranscript === 'function'
+    );
+}
+
+function hasTypedTranscriptSnapshot(value: unknown): value is TypedTranscriptSnapshot {
+    return (
+        typeof value === 'object' &&
+        value !== null &&
+        'transcriptParts' in value &&
+        Array.isArray(value.transcriptParts)
+    );
+}
+
+function hasTypedTranscriptStore(value: object): value is TypedTranscriptStore {
+    if (!('getSnapshot' in value) || typeof value.getSnapshot !== 'function') return false;
+    return hasTypedTranscriptSnapshot(value.getSnapshot());
+}
+
 function readCreateChatTuiSource(): string {
     return readFileSync(resolve(process.cwd(), 'apps/tui/src/create-chat-tui.tsx'), 'utf8');
 }
@@ -12,7 +63,9 @@ function readCreateChatTuiSource(): string {
 const CHAT_TUI_HANDLE_METHODS = [
     'waitForEvent',
     'emitOutput',
+    'emitTranscriptPart',
     'replaceOutputText',
+    'replaceTranscript',
     'getOutput',
     'showModelPicker',
     'showSessionPicker',
@@ -48,6 +101,44 @@ const CHAT_TUI_HANDLE_METHODS = [
 ] as const;
 
 describe('create-chat-tui', () => {
+    it('requires the typed transcript handle seam before the imperative loop can emit rich parts', () => {
+        // Given: the current handle built from a concrete ChatStore.
+        const handle = createChatTuiHandle(createChatStore(), () => {});
+
+        // When: the capability is inspected without a static missing-member reference.
+        const supportsTypedTranscript = hasTypedTranscriptHandle(handle);
+
+        // Then: the missing handle seam reports the explicit RED contract failure.
+        expect(
+            supportsTypedTranscript,
+            'ChatTuiHandle must expose emitTranscriptPart(part, fallbackText) and replaceTranscript(parts, outputText).',
+        ).toBe(true);
+    });
+
+    it('forwards typed transcript emission and replacement through the handle to the store', () => {
+        // Given: a handle and store joined by the existing imperative seam.
+        const store = createChatStore();
+        const transcriptStore: object = store;
+        const handle = createChatTuiHandle(store, () => {});
+        if (!hasTypedTranscriptHandle(handle) || !hasTypedTranscriptStore(transcriptStore)) return;
+        const assistantPart: TranscriptPart = {
+            id: 'assistant-handle-1',
+            type: 'assistant',
+            text: 'The handle emitted this rich response.',
+        };
+        const replacementParts: readonly TranscriptPart[] = [
+            { id: 'user-handle-1', type: 'user', text: 'Restore the replay.' },
+        ];
+
+        // When: the imperative caller emits then replaces typed transcript state.
+        handle.emitTranscriptPart(assistantPart, 'Assistant: The handle emitted this rich response.\n');
+        handle.replaceTranscript(replacementParts, 'You: Restore the replay.\n');
+
+        // Then: the store is the single observable owner of both projections.
+        expect(transcriptStore.getSnapshot().transcriptParts).toEqual(replacementParts);
+        expect(store.getOutput()).toBe('You: Restore the replay.\n');
+    });
+
     it('returns a handle structurally assignable to ChatTuiHandle with full method surface', () => {
         const store = createChatStore();
         const handle: ChatTuiHandle = createChatTuiHandle(store, () => {});

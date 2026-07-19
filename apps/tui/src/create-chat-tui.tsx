@@ -17,7 +17,10 @@ export function createChatTuiHandle(store: ChatStore, unmountFn: () => void): Ch
     return {
         waitForEvent: () => store.waitForEvent(),
         emitOutput: (text) => store.emitOutput(text),
+        emitTranscriptPart: (part, fallbackText) => store.emitTranscriptPart(part, fallbackText),
+        emitTranscriptFallback: (text) => store.emitTranscriptFallback(text),
         replaceOutputText: (text) => store.replaceOutputText(text),
+        replaceTranscript: (parts, outputText) => store.replaceTranscript(parts, outputText),
         getOutput: () => store.getOutput(),
         showModelPicker: (choices) => store.showModelPicker(choices),
         showSessionPicker: (entries) => store.showSessionPicker(entries),

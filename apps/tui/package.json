@@ -49,7 +49,7 @@
   },
   "scripts": {
     "build": "vite build && tsc -p tsconfig.json --emitDeclarationOnly",
-    "test": "sh -c 'cd ../.. && while [ \"${1:-}\" = \"--\" ]; do shift; done; vitest run --reporter verbose \"$@\"' --",
+    "test": "pnpm --dir ../.. exec vitest run --config apps/tui/vite.config.ts apps/tui/src --reporter verbose",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   }
 }
