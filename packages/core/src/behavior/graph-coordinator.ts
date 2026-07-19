@@ -1,5 +1,13 @@
-// allow: SIZE_OK -- HEAD 410 -> current 477 pure LOC; one bounded graph execution state machine (progress-contract wire).
+// allow: SIZE_OK -- HEAD 604 -> current 609 pure LOC; one bounded graph execution state machine (progress-contract wire).
 import type { AbgNodeSpec, AbgPolicyDecision, AbgSignal, AgentEvent } from '@mission-control/protocol';
+import {
+    abortableRetrySleep,
+    computeProviderRetryDelayMs,
+    DEFAULT_PROVIDER_MAX_RETRY_DELAY_MS,
+    DEFAULT_PROVIDER_RETRY_BASE_DELAY_MS,
+    isAbortRequested,
+    isIndefiniteProviderWaitError,
+} from '../providers/provider-retry-policy';
 import { type AuthorableAbgGraph, createAuthorableAbgGraph } from './authorable-graph';
 import {
     applyNodeRunBudgetGrant,
@@ -8,13 +16,6 @@ import {
     hardCeilingForNodeRunBudget,
     type NodeRunBudgetExtensionDecision,
 } from './budget/node-run-budget-extension';
-import {
-    abortableRetrySleep,
-    computeProviderRetryDelayMs,
-    DEFAULT_PROVIDER_MAX_RETRY_DELAY_MS,
-    DEFAULT_PROVIDER_RETRY_BASE_DELAY_MS,
-    isIndefiniteProviderWaitError,
-} from '../providers/provider-retry-policy';
 import { CANONICAL_FAILURE_CODES } from './failure-taxonomy';
 import {
     type CoordinatorState,
@@ -23,8 +24,8 @@ import {
     hasNode,
     nodeModel,
 } from './graph-coordinator-helpers';
-import { failureCodeFromSignal, failureMessageFromSignal } from './graph-coordinator-node-signals';
 import { runQueuedNode } from './graph-coordinator-node-runner';
+import { failureCodeFromSignal, failureMessageFromSignal } from './graph-coordinator-node-signals';
 import {
     clearAllCorrections,
     clearNodeCorrection,
@@ -56,7 +57,7 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
         // `provider_aborted` is retryable in isTerminalToolFailureError, so without this gate a
         // user cancel would re-enqueue the node up to maxAttempts before the loop noticed. The
         // turn runner maps any aborted run to `interrupted` regardless of how we settle here.
-        if (input.abortSignal?.aborted === true) {
+        if (isAbortRequested(input.abortSignal)) {
             clearAllCorrections(state);
             return failGraph(
                 graph.id,
@@ -180,9 +181,7 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                             failGraph: (code, message, terminalError) =>
                                 failGraph(graph.id, input, state.events, code, message, terminalError),
                             ...(result.lastSignal !== undefined ? { lastSignal: result.lastSignal } : {}),
-                            ...(result.lastEventType !== undefined
-                                ? { lastEventType: result.lastEventType }
-                                : {}),
+                            ...(result.lastEventType !== undefined ? { lastEventType: result.lastEventType } : {}),
                             ...(result.lastPolicyDecision !== undefined
                                 ? { lastPolicyDecision: result.lastPolicyDecision }
                                 : {}),
@@ -216,9 +215,12 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                     }
                     // Rate-limit / usage-exhaustion: wait indefinitely with exponential backoff
                     // (cap ~30m). Do not burn the finite node attempt budget.
-                    if (isIndefiniteProviderWaitError(result.lastSignal?.error ?? result.lastSignal)) {
-                        const waitAttempt =
-                            (state.indefiniteProviderWaitByNodeId.get(result.node.id) ?? 0) + 1;
+                    const providerWaitError =
+                        result.lastSignal?.type === 'failure'
+                            ? (result.lastSignal.error ?? result.lastSignal)
+                            : result.lastSignal;
+                    if (isIndefiniteProviderWaitError(providerWaitError)) {
+                        const waitAttempt = (state.indefiniteProviderWaitByNodeId.get(result.node.id) ?? 0) + 1;
                         state.indefiniteProviderWaitByNodeId.set(result.node.id, waitAttempt);
                         const delayMs = computeProviderRetryDelayMs(
                             waitAttempt,
@@ -227,7 +229,7 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                         );
                         const sleep = input.providerRetrySleep ?? abortableRetrySleep;
                         await sleep(delayMs, input.abortSignal);
-                        if (input.abortSignal?.aborted === true) {
+                        if (isAbortRequested(input.abortSignal)) {
                             clearAllCorrections(state);
                             return failGraph(
                                 graph.id,
@@ -252,7 +254,10 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                     const consecutiveFailures = (state.consecutiveFailuresByNodeId.get(result.node.id) ?? 0) + 1;
                     state.consecutiveFailuresByNodeId.set(result.node.id, consecutiveFailures);
                     if (consecutiveFailures < state.maxAttempts) {
-                        if (failureCodeFromSignal(result.lastSignal) === CANONICAL_FAILURE_CODES.INVALID_STRUCTURED_OUTPUT) {
+                        if (
+                            failureCodeFromSignal(result.lastSignal) ===
+                            CANONICAL_FAILURE_CODES.INVALID_STRUCTURED_OUTPUT
+                        ) {
                             setStructuredOutputCorrection(
                                 state,
                                 result.node,

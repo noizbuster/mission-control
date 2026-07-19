@@ -3,10 +3,17 @@ export {
     type AskUserOutput,
     type AskUserQuestionRequest,
     type AskUserToolOptions,
+    type AskUserUserInputWaitContext,
+    type AskUserUserInputWaitMirror,
     askUserInputSchema,
     askUserOutputSchema,
     createAskUserToolRegistration,
+    createAskUserWaitMirrorFromTaskMirror,
+    createSqlAskUserUserInputWaitMirror,
     registerAskUserTool,
+    resolveAskUserInputWait,
+    startAskUserInputWait,
+    waitIdForAskUserToolCall,
 } from './ask-user-tool';
 export {
     type AstEditInput,
@@ -128,7 +135,12 @@ export {
     wireNativesFsCacheInvalidator,
 } from './file-mutation';
 export { createFilePatchToolRegistration, type FilePatchToolOptions, registerFilePatchTool } from './file-patch';
-export { createFileWriteToolRegistration, type FileWriteToolOptions, registerFileWriteTool } from './file-write';
+export {
+    createFileWriteToolRegistration,
+    FILE_WRITE_ARGUMENTS_PARSE_BUDGET_BYTES,
+    type FileWriteToolOptions,
+    registerFileWriteTool,
+} from './file-write';
 export {
     createEnvImageCredentialResolver,
     createGenerateImageToolRegistration,

@@ -63,6 +63,9 @@ export class ToolRegistry {
         };
         this.registrations.set(metadata.name, {
             advertisement,
+            ...(registration.maxArgumentsBytes !== undefined
+                ? { maxArgumentsBytes: registration.maxArgumentsBytes }
+                : {}),
             invoke: (value, context) => invokeToolRegistration(registration, value, context),
         });
         return advertisement;
@@ -106,6 +109,21 @@ export class ToolRegistry {
                 failedToolSettlement(
                     input,
                     protocolError('tool_failed', `stale tool call rejected: ${input.toolName}`),
+                ),
+            );
+        }
+        if (
+            registered.maxArgumentsBytes !== undefined &&
+            Buffer.byteLength(input.argumentsJson, 'utf8') > registered.maxArgumentsBytes
+        ) {
+            return commitToolSettlement(
+                input,
+                failedToolSettlement(
+                    input,
+                    protocolError(
+                        'tool_failed',
+                        `${input.toolName.replaceAll('.', '_')}_arguments_too_large: maximum ${registered.maxArgumentsBytes} bytes`,
+                    ),
                 ),
             );
         }

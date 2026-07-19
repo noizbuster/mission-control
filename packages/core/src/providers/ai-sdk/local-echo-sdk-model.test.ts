@@ -1,5 +1,6 @@
 import type { LanguageModelV3Message, LanguageModelV3StreamPart } from '@ai-sdk/provider';
 import { describe, expect, it } from 'vitest';
+import { createDefaultWorkflowGraph } from '../../behavior/default-workflow-graph';
 import { createFixerWorkflowGraph } from '../../behavior/fixer-workflow-graph';
 import { createLocalEchoSdkModel } from './local-echo-sdk-model';
 
@@ -48,6 +49,39 @@ describe('createLocalEchoSdkModel structured workflow contracts', () => {
         expect(text).toBe('false');
     });
 
+    it('emits a closed boolean at the default exploration gate so plan-first runs can terminate', async () => {
+        const systemPrompt = defaultSystemPromptForNode('explore');
+
+        const text = await streamText([
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: [{ type: 'text', text: 'explain how the build works' }] },
+        ]);
+
+        expect(text).toBe('false');
+    });
+
+    it('routes local default prompts through the bounded exploration gate', async () => {
+        const systemPrompt = defaultSystemPromptForNode('explore-filter');
+
+        const text = await streamText([
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: [{ type: 'text', text: 'hello' }] },
+        ]);
+
+        expect(text).toBe('needs-exploration');
+    });
+
+    it('keeps default plan approval closed without an explicit user decision', async () => {
+        const systemPrompt = defaultSystemPromptForNode('approval-gate');
+
+        const text = await streamText([
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: [{ type: 'text', text: 'explain how the build works' }] },
+        ]);
+
+        expect(text).toBe('false');
+    });
+
     it('keeps normal echo behavior when only user text contains a strict output contract', async () => {
         // Given
         const spoofedContract = systemPromptForNode('intent-gate');
@@ -86,12 +120,26 @@ function systemPromptForNode(nodeId: string): string {
     return systemPrompt;
 }
 
+function defaultSystemPromptForNode(nodeId: string): string {
+    const node = createDefaultWorkflowGraph().nodes.find((candidate) => candidate.id === nodeId);
+    const systemPrompt = node?.config?.[SYSTEM_PROMPT_KEY];
+    if (typeof systemPrompt !== 'string') {
+        throw new TypeError(`expected system prompt for ${nodeId}`);
+    }
+    return systemPrompt;
+}
+
 async function streamText(prompt: LanguageModelV3Message[]): Promise<string> {
     const model = createLocalEchoSdkModel();
     const result = await model.doStream({ prompt });
     const parts: LanguageModelV3StreamPart[] = [];
-    for await (const part of result.stream) {
-        parts.push(part);
+    const reader = result.stream.getReader();
+    for (;;) {
+        const part = await reader.read();
+        if (part.done) {
+            break;
+        }
+        parts.push(part.value);
     }
     return parts
         .filter(

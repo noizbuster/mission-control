@@ -12,17 +12,18 @@ const DELEGATION_GUARD_PREFIX = 'Two checks before delegation:';
 const DELEGATION_GUARD_OUTPUT_CONTRACT = 'Output ONLY `true` or `false`';
 
 // --- Plan-first default / planner contracts ---
-const PLAN_INTAKE_PREFIX = 'You are a planning consultant. Summarize the user request';
-const PLAN_INTAKE_GOAL = 'Summarize the user request into a concise GOAL';
-const AMBIGUITY_PREFIX = 'Classify the request ambiguity';
-const EXPLORE_FILTER_PREFIX = 'Second filter within the clear branch';
+const PLAN_INTAKE_OUTPUT_KEY = 'intake.complete';
+const AMBIGUITY_OUTPUT_KEY = 'ambiguity.classification';
+const EXPLORE_DECISION_OUTPUT_KEY = 'explore.decision';
+const EXPLORE_COMPLETE_OUTPUT_KEY = 'explore.complete';
+const RESEARCH_COMPLETE_OUTPUT_KEY = 'research.complete';
 const EXPLORE_COMPLETE_CONTRACT = 'Output ONLY the JSON boolean `true` when complete';
 const RESEARCH_UNCLEAR_PREFIX = 'The request outcome is fuzzy';
-const ADOPT_DEFAULTS_PREFIX = 'Record each adopted best-practice default';
-const DRAFT_PLAN_PREFIX = 'Draft the plan as .omo/drafts/';
-const DRAFT_PLAN_EXEC_PREFIX = 'Draft an execution-ready plan as .omo/drafts/';
+const ADOPT_DEFAULTS_OUTPUT_KEY = 'defaults.adopted';
+const DRAFT_PLAN_OUTPUT_KEY = 'plan.drafted';
+const APPROVAL_GATE_OUTPUT_KEY = 'plan.ready';
 const APPROVAL_GATE_CONTRACT = 'Output ONLY the JSON boolean `true` when the user explicitly approves';
-const WRITE_PLAN_PREFIX = 'Only reached AFTER approval';
+const WRITE_PLAN_OUTPUT_KEY = 'plan.written';
 
 export function localOutputForSystemContract(systemPrompt: string, userPrompt: string): string | undefined {
     if (systemPrompt.startsWith(FIXER_INTENT_GATE_PREFIX) && systemPrompt.includes(INTENT_GATE_OUTPUT_CONTRACT)) {
@@ -35,36 +36,38 @@ export function localOutputForSystemContract(systemPrompt: string, userPrompt: s
         return 'false';
     }
 
-    if (systemPrompt.startsWith(PLAN_INTAKE_PREFIX) || systemPrompt.includes(PLAN_INTAKE_GOAL)) {
+    if (systemPrompt.includes(PLAN_INTAKE_OUTPUT_KEY)) {
         return 'true';
     }
-    if (systemPrompt.startsWith(AMBIGUITY_PREFIX) || systemPrompt.includes('ambiguity.classification')) {
+    if (systemPrompt.includes(AMBIGUITY_OUTPUT_KEY)) {
         return classifyAmbiguity(userPrompt);
     }
-    if (systemPrompt.startsWith(EXPLORE_FILTER_PREFIX) || systemPrompt.includes('explore.decision')) {
-        return classifyExploreDecision(userPrompt);
+    if (systemPrompt.includes(EXPLORE_DECISION_OUTPUT_KEY)) {
+        return 'needs-exploration';
     }
     if (
-        systemPrompt.includes(EXPLORE_COMPLETE_CONTRACT) &&
-        (systemPrompt.includes('Explore the relevant') ||
-            systemPrompt.startsWith(RESEARCH_UNCLEAR_PREFIX) ||
-            systemPrompt.includes('Deep exploration'))
+        systemPrompt.includes(EXPLORE_COMPLETE_OUTPUT_KEY) ||
+        systemPrompt.includes(RESEARCH_COMPLETE_OUTPUT_KEY) ||
+        (systemPrompt.includes(EXPLORE_COMPLETE_CONTRACT) &&
+            (systemPrompt.includes('Explore the relevant') ||
+                systemPrompt.startsWith(RESEARCH_UNCLEAR_PREFIX) ||
+                systemPrompt.includes('Deep exploration')))
     ) {
-        return 'true';
+        return 'false';
     }
-    if (systemPrompt.startsWith(ADOPT_DEFAULTS_PREFIX) || systemPrompt.includes('defaults.adopted when complete')) {
+    if (systemPrompt.includes(ADOPT_DEFAULTS_OUTPUT_KEY)) {
         return 'true';
     }
     // Intentionally no auto-complete for ask-one-question: auto-true re-enters
     // assess-ambiguity and can loop under offline local providers.
-    if (systemPrompt.startsWith(DRAFT_PLAN_PREFIX) || systemPrompt.startsWith(DRAFT_PLAN_EXEC_PREFIX)) {
+    if (systemPrompt.includes(DRAFT_PLAN_OUTPUT_KEY)) {
         return 'true';
     }
-    if (systemPrompt.includes(APPROVAL_GATE_CONTRACT)) {
+    if (systemPrompt.includes(APPROVAL_GATE_OUTPUT_KEY) || systemPrompt.includes(APPROVAL_GATE_CONTRACT)) {
         // Offline local runs never receive an interactive approval; keep the gate closed.
         return 'false';
     }
-    if (systemPrompt.startsWith(WRITE_PLAN_PREFIX)) {
+    if (systemPrompt.includes(WRITE_PLAN_OUTPUT_KEY)) {
         return 'true';
     }
     return undefined;
@@ -100,15 +103,4 @@ function classifyAmbiguity(userPrompt: string): 'clear' | 'unclear' | 'on-the-fe
     // Prefer clear so offline local runs advance into explore/draft rather than
     // looping on ask-one-question without a human reply.
     return 'clear';
-}
-
-function classifyExploreDecision(userPrompt: string): 'needs-exploration' | 'direct-draft' {
-    const normalized = userPrompt.trim().toLowerCase();
-    if (/^(hello|hi|hey|thanks|thank you)\b/.test(normalized)) {
-        return 'direct-draft';
-    }
-    if (normalized.split(/\s+/).length <= 4 && /^(rename|typo|comment)\b/.test(normalized)) {
-        return 'direct-draft';
-    }
-    return 'needs-exploration';
 }

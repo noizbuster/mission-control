@@ -22,6 +22,8 @@ import { dirname } from 'node:path';
 
 export type { FileWriteToolOptions } from './file-write-schemas';
 
+export const FILE_WRITE_ARGUMENTS_PARSE_BUDGET_BYTES = 256 * 1024;
+
 export async function registerFileWriteTool(
     registry: ToolRegistry,
     options: FileWriteToolOptions,
@@ -42,6 +44,7 @@ export async function createFileWriteToolRegistration(
         inputSchema: fileWriteInputSchema,
         outputSchema: fileWriteOutputSchema,
         outputLimit: { maxModelOutputChars: resolved.maxModelOutputChars },
+        maxArgumentsBytes: FILE_WRITE_ARGUMENTS_PARSE_BUDGET_BYTES,
         execute: (input, context) => applyFileWriteTool(resolved, guard, input, context.toolCallId),
         toModelOutput: fileWriteModelOutput,
         toEvents: writeDiffEvents,

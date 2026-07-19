@@ -6,11 +6,7 @@
  * attempt budget. Abort always wins.
  */
 
-import {
-    CANONICAL_FAILURE_CODES,
-    classifyFailure,
-    type FailureClassification,
-} from '../behavior/failure-taxonomy';
+import { CANONICAL_FAILURE_CODES, classifyFailure, type FailureClassification } from '../behavior/failure-taxonomy';
 
 /** First backoff step (attempt 1 → next wait). */
 export const DEFAULT_PROVIDER_RETRY_BASE_DELAY_MS = 1_000;
@@ -105,11 +101,15 @@ export function hasUsageExhaustionSignal(error: unknown): boolean {
     return USAGE_EXHAUSTION_MESSAGE_MARKERS.some((marker) => text.includes(marker));
 }
 
+export function isAbortRequested(signal: AbortSignal | undefined): boolean {
+    return signal?.aborted === true;
+}
+
 export async function abortableRetrySleep(ms: number, signal: AbortSignal | undefined): Promise<void> {
     if (ms <= 0) {
         return;
     }
-    if (signal?.aborted === true) {
+    if (isAbortRequested(signal)) {
         return;
     }
     await new Promise<void>((resolve) => {

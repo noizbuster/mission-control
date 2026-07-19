@@ -15,126 +15,26 @@
  * Two provider output shapes (Anthropic-style reasoning; OpenAI-style plain) at the
  * LanguageModelV3 layer — where the SDK's dispatch/loop-control behavior lives.
  */
-import type { LanguageModelV3StreamPart } from '@ai-sdk/provider';
 import type { AbgSignal } from '@mission-control/protocol';
-import type { ModelMessage, TextStreamPart, ToolSet } from 'ai';
 import { stepCountIs, streamText } from 'ai';
-import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
+import { MockLanguageModelV3 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
-import { z } from 'zod';
 import { assembleSystemPrompt } from '../../../context/system-prompt';
 import { wrapFlatProviderAsSdkModel } from '../../../providers/ai-sdk/flat-provider-bridge';
 import { createDeterministicProvider } from '../../../providers/deterministic-provider';
-import { ToolRegistry } from '../../../tools/tool-registry';
-import type { ToolRegistration } from '../../../tools/tool-registry-types';
+import type { PolicyGateFn } from './abg-tool-bridge';
+import { runLlmActor } from './llm-actor-node';
 import {
-    AbgToolBridgeError,
-    bridgeAdvertisementsToAiSdk,
-    bridgeAdvertisementToAiSdk,
-    createAbgToolSettlementLedger,
-    type PolicyGateFn,
-} from './abg-tool-bridge';
-import { abgSignalsFromStreamPart, type StreamPartAdapterContext } from './ai-sdk-adapter';
-import { type LlmActorModel, runLlmActor } from './llm-actor-node';
-
-const NOW = '2026-06-16T00:00:00.000Z';
-const tick = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-
-function buildUsage() {
-    return {
-        inputTokens: { total: 4, noCache: 4, cacheRead: 0, cacheWrite: 0 },
-        outputTokens: { total: 6, text: 6, reasoning: 0 },
-    };
-}
-
-function eventTypes(signals: readonly AbgSignal[]): string[] {
-    return signals
-        .filter((signal): signal is Extract<AbgSignal, { type: 'emit' }> => signal.type === 'emit')
-        .map((signal) => signal.event.type);
-}
-
-function anthropicShapeChunks(): LanguageModelV3StreamPart[] {
-    return [
-        { type: 'stream-start', warnings: [] },
-        { type: 'reasoning-start', id: 'r1' },
-        { type: 'reasoning-delta', id: 'r1', delta: 'deciding to echo' },
-        { type: 'reasoning-end', id: 'r1' },
-        { type: 'text-start', id: 't1' },
-        { type: 'text-delta', id: 't1', delta: 'Calling echo.' },
-        { type: 'text-end', id: 't1' },
-        { type: 'tool-input-start', id: 'call_1', toolName: 'echo' },
-        { type: 'tool-input-delta', id: 'call_1', delta: JSON.stringify({ text: 'hi' }) },
-        { type: 'tool-input-end', id: 'call_1' },
-        { type: 'tool-call', toolCallId: 'call_1', toolName: 'echo', input: JSON.stringify({ text: 'hi' }) },
-        { type: 'finish', finishReason: { unified: 'tool-calls', raw: undefined }, usage: buildUsage() },
-    ];
-}
-
-function openaiShapeChunks(): LanguageModelV3StreamPart[] {
-    return [
-        { type: 'stream-start', warnings: [] },
-        { type: 'text-start', id: 't' },
-        { type: 'text-delta', id: 't', delta: 'Echoing.' },
-        { type: 'text-end', id: 't' },
-        { type: 'tool-input-start', id: 'call_a', toolName: 'echo' },
-        { type: 'tool-input-delta', id: 'call_a', delta: JSON.stringify({ text: 'hi' }) },
-        { type: 'tool-input-end', id: 'call_a' },
-        { type: 'tool-call', toolCallId: 'call_a', toolName: 'echo', input: JSON.stringify({ text: 'hi' }) },
-        { type: 'finish', finishReason: { unified: 'tool-calls', raw: undefined }, usage: buildUsage() },
-    ];
-}
-
-function buildMockModel(provider: string, modelId: string, chunks: LanguageModelV3StreamPart[]): MockLanguageModelV3 {
-    return new MockLanguageModelV3({
-        provider,
-        modelId,
-        doStream: async () => ({ stream: convertArrayToReadableStream(chunks) }),
-    });
-}
-
-const echoRegistration: ToolRegistration<{ text: string }, { text: string }> = {
-    name: 'echo',
-    description: 'Echo a string back to the model.',
-    capabilityClasses: ['read'],
-    parametersJsonSchema: {
-        type: 'object',
-        properties: { text: { type: 'string' } },
-        required: ['text'],
-        additionalProperties: false,
-    },
-    inputSchema: z.object({ text: z.string() }),
-    outputSchema: z.object({ text: z.string() }),
-    outputLimit: { maxModelOutputChars: 2000 },
-    execute: async (input) => ({ text: input.text }),
-    toModelOutput: (output) => output.text,
-};
-
-function buildEchoTools(policyGate: PolicyGateFn): ReturnType<typeof bridgeAdvertisementsToAiSdk> {
-    const registry = new ToolRegistry();
-    const advertisement = registry.register(echoRegistration);
-    return bridgeAdvertisementsToAiSdk(registry, [advertisement], { policyGate });
-}
-
-const messages: ModelMessage[] = [{ role: 'user', content: 'please echo hi' }];
-
-async function collectSignals(
-    model: LlmActorModel,
-    tools: ReturnType<typeof buildEchoTools>,
-): Promise<readonly AbgSignal[]> {
-    const collected: AbgSignal[] = [];
-    for await (const signal of runLlmActor({
-        graphId: 'g1',
-        nodeId: 'llm-1',
-        model,
-        system: assembleSystemPrompt(),
-        messages,
-        tools,
-        now: () => NOW,
-    })) {
-        collected.push(signal);
-    }
-    return collected;
-}
+    anthropicShapeChunks,
+    buildEchoTools,
+    buildMockModel,
+    collectSignals,
+    eventTypes,
+    messages,
+    NOW,
+    openaiShapeChunks,
+    tick,
+} from './llm-actor-node-test-support';
 
 describe('LLMActor node — Phase 0 gating spike', () => {
     it.each([
@@ -235,14 +135,69 @@ describe('LLMActor node — Phase 0 gating spike', () => {
         expect(eventTypes(signals)).toContain('llm.error');
     });
 
-    it('marks a flat-provider retry exhaustion for the graph coordinator', async () => {
+    it('emits provider_aborted without a second provider call when aborted during retry sleep', async () => {
         // Given
+        let retrySleepCalls = 0;
+        let retrySleepSignal: AbortSignal | undefined;
+        const controller = new AbortController();
         const provider = createDeterministicProvider([
             {
                 kind: 'response_failed',
                 error: {
                     code: 'provider_rate_limited',
                     message: 'temporarily overloaded',
+                    retryable: true,
+                },
+            },
+        ]);
+        const model = wrapFlatProviderAsSdkModel({
+            provider,
+            providerID: 'zai-coding-plan',
+            modelID: 'glm-5.2',
+            retryLimit: 0,
+            retrySleep: async (_delayMs, signal) => {
+                retrySleepCalls += 1;
+                retrySleepSignal = signal;
+                controller.abort();
+            },
+        });
+        const tools = buildEchoTools(async () => ({ allowed: true }));
+        const signals: AbgSignal[] = [];
+
+        // When
+        for await (const signal of runLlmActor({
+            graphId: 'g1',
+            nodeId: 'llm-1',
+            model,
+            system: assembleSystemPrompt(),
+            messages,
+            tools,
+            signal: controller.signal,
+            now: () => NOW,
+        })) {
+            signals.push(signal);
+        }
+
+        // Then
+        expect(provider.attemptCount()).toBe(1);
+        expect(retrySleepCalls).toBe(1);
+        expect(retrySleepSignal).toBe(controller.signal);
+        expect(signals.at(-1)).toMatchObject({
+            type: 'failure',
+            error: { code: 'provider_aborted' },
+        });
+        expect(signals.some((signal) => signal.type === 'success')).toBe(false);
+        expect(eventTypes(signals)).toContain('llm.error');
+    });
+
+    it('marks a flat-provider retry exhaustion for the graph coordinator', async () => {
+        // Given
+        const provider = createDeterministicProvider([
+            {
+                kind: 'response_failed',
+                error: {
+                    code: 'provider_timeout',
+                    message: 'provider timed out',
                     retryable: true,
                 },
             },
@@ -262,8 +217,8 @@ describe('LLMActor node — Phase 0 gating spike', () => {
         expect(signals.at(-1)).toMatchObject({
             type: 'failure',
             error: {
-                code: 'provider_rate_limited',
-                message: 'temporarily overloaded',
+                code: 'provider_timeout',
+                message: 'provider timed out',
                 retryable: true,
                 retryExhausted: true,
                 providerError: true,
@@ -281,209 +236,5 @@ describe('LLMActor node — Phase 0 gating spike', () => {
         }
         // Without the stepCountIs(1) constraint the SDK runs its own loop -> 2 model calls.
         expect(model.doStreamCalls.length).toBe(2);
-    });
-});
-
-describe('ai-sdk-adapter', () => {
-    const ctx: StreamPartAdapterContext = { graphId: 'g1', nodeId: 'llm-1', now: () => NOW };
-
-    it('maps stream parts to ABG events', () => {
-        const textOut = abgSignalsFromStreamPart(
-            { type: 'text-delta', id: 't', text: 'hi' } as TextStreamPart<ToolSet>,
-            ctx,
-        );
-        expect(eventTypes(textOut)).toEqual(['llm.text.delta']);
-
-        const toolCallOut = abgSignalsFromStreamPart(
-            { type: 'tool-call', toolCallId: 'c', toolName: 'echo', input: '{}' } as TextStreamPart<ToolSet>,
-            ctx,
-        );
-        expect(eventTypes(toolCallOut)).toEqual(['llm.tool_call.proposed']);
-
-        const toolResultOut = abgSignalsFromStreamPart(
-            { type: 'tool-result', toolCallId: 'c', toolName: 'echo', output: 'ok' } as TextStreamPart<ToolSet>,
-            ctx,
-        );
-        expect(eventTypes(toolResultOut)).toEqual(['tool.completed']);
-    });
-
-    it('maps tool-error and tool-output-denied to ABG events (review fix #3)', () => {
-        const toolErrorOut = abgSignalsFromStreamPart(
-            { type: 'tool-error', toolCallId: 'c', toolName: 'echo' } as TextStreamPart<ToolSet>,
-            ctx,
-        );
-        expect(eventTypes(toolErrorOut)).toEqual(['tool.failed']);
-
-        const deniedOut = abgSignalsFromStreamPart(
-            { type: 'tool-output-denied', toolCallId: 'c', toolName: 'echo' } as TextStreamPart<ToolSet>,
-            ctx,
-        );
-        expect(eventTypes(deniedOut)).toEqual(['tool.denied']);
-    });
-
-    it('redacts credentials from SDK error parts before emitting llm.error', () => {
-        const secret = ['sk', 'sdk_error_part_123'].join('-');
-        const out = abgSignalsFromStreamPart(
-            { type: 'error', error: new Error(`provider exploded ${secret}`) } as TextStreamPart<ToolSet>,
-            ctx,
-        );
-        expect(eventTypes(out)).toEqual(['llm.error']);
-        const event = out[0];
-        if (event?.type !== 'emit') throw new Error('expected emit');
-        expect((event.event.payload as { error: string }).error).toBe('provider exploded [REDACTED_CREDENTIAL]');
-        expect(JSON.stringify(event)).not.toContain(secret);
-    });
-
-    it('recovers a failed settlement from the ledger so tool-result maps to tool.failed (not completed)', () => {
-        // The SDK emits a `tool-result` (not `tool-error`) for a failed settlement because the
-        // bridge surfaces failures to the model as a string. Without the ledger the adapter would
-        // mislabel it `completed`; the ledger restores the true `failed` status + structured error.
-        const ledger = createAbgToolSettlementLedger();
-        ledger.record({
-            toolCallId: 'c',
-            toolName: 'echo',
-            status: 'failed',
-            error: { code: 'tool_failed', message: 'echo blew up', retryable: false },
-        });
-        const out = abgSignalsFromStreamPart(
-            {
-                type: 'tool-result',
-                toolCallId: 'c',
-                toolName: 'echo',
-                output: 'Tool "echo" failed (tool_failed): echo blew up',
-            } as TextStreamPart<ToolSet>,
-            { ...ctx, settlementLedger: ledger },
-        );
-        expect(eventTypes(out)).toEqual(['tool.failed']);
-        const event = out[0];
-        if (event?.type !== 'emit') throw new Error('expected emit');
-        expect((event.event.payload as { error: { code: string } }).error.code).toBe('tool_failed');
-    });
-
-    it('carries the settlement output on tool.completed and falls back to part.output without a ledger', () => {
-        const ledger = createAbgToolSettlementLedger();
-        ledger.record({ toolCallId: 'c', toolName: 'echo', status: 'completed', output: 'echoed: hi' });
-        const withLedger = abgSignalsFromStreamPart(
-            {
-                type: 'tool-result',
-                toolCallId: 'c',
-                toolName: 'echo',
-                output: 'model-facing string',
-            } as TextStreamPart<ToolSet>,
-            { ...ctx, settlementLedger: ledger },
-        );
-        expect(eventTypes(withLedger)).toEqual(['tool.completed']);
-        const ledgerEvent = withLedger[0];
-        if (ledgerEvent?.type !== 'emit') throw new Error('expected emit');
-        // The ledger's settlement output (the parity value) wins over the SDK's model-facing string.
-        expect((ledgerEvent.event.payload as { output: unknown }).output).toBe('echoed: hi');
-
-        // No ledger -> fall back to the part's own output (unchanged pre-enrichment shape).
-        const withoutLedger = abgSignalsFromStreamPart(
-            {
-                type: 'tool-result',
-                toolCallId: 'c',
-                toolName: 'echo',
-                output: 'fallback output',
-            } as TextStreamPart<ToolSet>,
-            ctx,
-        );
-        const fallbackEvent = withoutLedger[0];
-        if (fallbackEvent?.type !== 'emit') throw new Error('expected emit');
-        expect((fallbackEvent.event.payload as { output: unknown }).output).toBe('fallback output');
-    });
-
-    it('coerces a tool-error part into a tool.failed ProtocolError', () => {
-        const out = abgSignalsFromStreamPart(
-            {
-                type: 'tool-error',
-                toolCallId: 'c',
-                toolName: 'echo',
-                error: new Error('execute threw'),
-            } as TextStreamPart<ToolSet>,
-            ctx,
-        );
-        expect(eventTypes(out)).toEqual(['tool.failed']);
-        const event = out[0];
-        if (event?.type !== 'emit') throw new Error('expected emit');
-        expect((event.event.payload as { error: { code: string; message: string } }).error).toEqual({
-            code: 'unknown',
-            message: 'execute threw',
-            retryable: false,
-        });
-    });
-});
-
-describe('abg-tool-bridge', () => {
-    it('surfaces failed-settlement errors to the model instead of "" (review fix #2)', async () => {
-        const registry = new ToolRegistry();
-        const advertisement = registry.register(echoRegistration);
-        const bridged = bridgeAdvertisementToAiSdk(registry, advertisement, {});
-        if (bridged.execute === undefined) {
-            throw new Error('bridged tool is missing execute');
-        }
-        // { wrong: 1 } fails echo's z.object({ text: z.string() }) -> schema_invalid settlement
-        const result = await bridged.execute(
-            { wrong: 1 },
-            { toolCallId: 'c1', messages: [] as ModelMessage[], abortSignal: new AbortController().signal },
-        );
-        expect(result).toContain('failed (schema_invalid)');
-    });
-
-    it('rejects a malformed parametersJsonSchema at bridge build time (review fix #5)', () => {
-        const registry = new ToolRegistry();
-        const advertisement = registry.register({
-            ...echoRegistration,
-            name: 'bad-schema',
-            parametersJsonSchema: { notASchema: true },
-        });
-        expect(() => bridgeAdvertisementToAiSdk(registry, advertisement, {})).toThrow(AbgToolBridgeError);
-    });
-
-    it('records the settlement outcome in the ledger (status/output/error parity for the tool emits)', async () => {
-        const registry = new ToolRegistry();
-        const advertisement = registry.register(echoRegistration);
-        const ledger = createAbgToolSettlementLedger();
-        const bridged = bridgeAdvertisementToAiSdk(registry, advertisement, { settlementLedger: ledger });
-        if (bridged.execute === undefined) throw new Error('bridged tool missing execute');
-
-        // completed: echo({ text: 'hi' }) settles completed with an output the adapter will carry.
-        await bridged.execute(
-            { text: 'hi' },
-            { toolCallId: 'c_ok', messages: [] as ModelMessage[], abortSignal: new AbortController().signal },
-        );
-        const completed = ledger.lookup('c_ok');
-        expect(completed?.status).toBe('completed');
-        expect(completed?.output).not.toBeUndefined();
-
-        // failed: { wrong: 1 } fails echo's input zod schema -> schema_invalid settlement.
-        await bridged.execute(
-            { wrong: 1 },
-            { toolCallId: 'c_bad', messages: [] as ModelMessage[], abortSignal: new AbortController().signal },
-        );
-        const failed = ledger.lookup('c_bad');
-        expect(failed?.status).toBe('failed');
-        expect(failed?.error?.code).toBe('schema_invalid');
-    });
-
-    it('records a denied policy gate as a failed settlement so the emit is not mislabeled completed', async () => {
-        const registry = new ToolRegistry();
-        const advertisement = registry.register(echoRegistration);
-        const ledger = createAbgToolSettlementLedger();
-        const deny: PolicyGateFn = async () => ({ allowed: false, reason: 'not permitted' });
-        const bridged = bridgeAdvertisementToAiSdk(registry, advertisement, {
-            policyGate: deny,
-            settlementLedger: ledger,
-        });
-        if (bridged.execute === undefined) throw new Error('bridged tool missing execute');
-
-        const result = await bridged.execute(
-            { text: 'hi' },
-            { toolCallId: 'c_deny', messages: [] as ModelMessage[], abortSignal: new AbortController().signal },
-        );
-        expect(result).toContain('BLOCKED');
-        const entry = ledger.lookup('c_deny');
-        expect(entry?.status).toBe('failed');
-        expect(entry?.error?.code).toBe('unknown');
     });
 });

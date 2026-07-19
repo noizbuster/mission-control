@@ -47,6 +47,7 @@ export type ToolRegistration<Input, Output> = {
     readonly inputSchema: z.ZodType<Input>;
     readonly outputSchema: z.ZodType<Output>;
     readonly outputLimit: ToolOutputLimit;
+    readonly maxArgumentsBytes?: number;
     readonly execute: (input: Input, context: ToolExecutionContext) => Output | Promise<Output>;
     readonly toModelOutput?: (output: Output) => string;
     readonly toEvents?: (output: Output, context: ToolExecutionContext) => readonly AgentEvent[];
@@ -111,5 +112,6 @@ export type ParsedToolOutput =
 
 export type RegisteredTool = {
     readonly advertisement: ToolAdvertisement;
+    readonly maxArgumentsBytes?: number;
     readonly invoke: (value: unknown, context: ToolExecutionContext) => Promise<ParsedToolOutput>;
 };

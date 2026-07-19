@@ -28,7 +28,15 @@ describe('createLocalCodingProvider structured workflow contracts', () => {
         expect(content).toBe('clear');
     });
 
-    it('emits true for the explore completion gate', async () => {
+    it('routes local plan-first prompts through the bounded exploration gate', async () => {
+        const request = requestWithSystem('explore-filter', 'hello');
+
+        const content = await completedContent(request);
+
+        expect(content).toBe('needs-exploration');
+    });
+
+    it('emits false for the plan-first explore completion gate', async () => {
         // Given
         const request = requestWithSystem('explore', 'ground the plan in the codebase');
 
@@ -36,7 +44,15 @@ describe('createLocalCodingProvider structured workflow contracts', () => {
         const content = await completedContent(request);
 
         // Then
-        expect(content).toBe('true');
+        expect(content).toBe('false');
+    });
+
+    it('keeps plan approval closed without an explicit user decision', async () => {
+        const request = requestWithSystem('approval-gate', 'explain how the build works');
+
+        const content = await completedContent(request);
+
+        expect(content).toBe('false');
     });
 });
 

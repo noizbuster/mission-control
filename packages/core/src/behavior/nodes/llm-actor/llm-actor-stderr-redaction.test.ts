@@ -41,7 +41,12 @@ describe('LLMActor provider error stderr boundary', () => {
             expect(stderrError).not.toHaveBeenCalled();
             expect(failure).toMatchObject({
                 type: 'failure',
-                error: 'No output generated. Check the stream for errors.',
+                error: {
+                    message: 'No output generated. Check the stream for errors.',
+                    code: 'unknown',
+                    providerError: true,
+                    retryable: false,
+                },
             });
             expect(errorEvent?.event.payload).toEqual({ error: 'provider rejected [REDACTED_CREDENTIAL]' });
             expect(JSON.stringify(signals)).not.toContain(secret);

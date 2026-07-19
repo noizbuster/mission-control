@@ -19,20 +19,21 @@
  */
 
 import type { AbgSignal } from '@mission-control/protocol';
-import type { ModelMessage, ToolSet } from 'ai';
+import type { ModelMessage } from 'ai';
 import { stepCountIs, streamText } from 'ai';
-import { createObservabilityRedactor, type ObservabilityRedactor } from '../../../providers/observability-redactor';
+import { createObservabilityRedactor } from '../../../providers/observability-redactor';
 import {
     abortableRetrySleep,
     computeProviderRetryDelayMs,
     DEFAULT_PROVIDER_MAX_RETRY_DELAY_MS,
     DEFAULT_PROVIDER_RETRY_BASE_DELAY_MS,
+    isAbortRequested,
     isIndefiniteProviderWaitError,
 } from '../../../providers/provider-retry-policy';
 import { errorToString } from '../../../util/error-to-string';
 import { createAbgEmitSignal } from '../../abg-emit';
-import type { AbgToolSettlementLedger } from './abg-tool-bridge';
 import { abgSignalsFromStreamPart, createStreamPartObservabilityState } from './ai-sdk-adapter';
+import type { LlmActorRunInput, LlmActorTurnResult } from './llm-actor-node-types';
 import {
     approvalBlockFailure,
     classifyProviderStreamError,
@@ -44,42 +45,7 @@ import {
     terminalToolFailure,
 } from './llm-actor-settlements';
 
-type StreamTextParameters = Parameters<typeof streamText>[0];
-
-/** The Vercel AI SDK model type accepted by `streamText({ model })`. */
-export type LlmActorModel = StreamTextParameters['model'];
-
-/**
- * The result of one `LLMActor` turn (one model call + one tool batch, per
- * `stopWhen: stepCountIs(1)`). `responseMessages` is the assistant turn INCLUDING every
- * tool-result message (the SDK includes executed tool results in `response.messages`),
- * so the graph can append it to the Blackboard and re-enter with the full history —
- * the loop the SDK's own multi-step machinery would otherwise own.
- */
-export type LlmActorTurnResult = {
-    readonly text: string;
-    readonly usage: unknown;
-    readonly responseMessages: readonly ModelMessage[];
-};
-
-export type LlmActorRunInput = {
-    readonly graphId?: string;
-    readonly nodeId: string;
-    readonly model: LlmActorModel;
-    readonly system: string;
-    readonly messages: NonNullable<StreamTextParameters['messages']>;
-    readonly tools?: ToolSet;
-    readonly toolChoice?: NonNullable<StreamTextParameters['toolChoice']>;
-    readonly signal?: AbortSignal;
-    readonly now: () => string;
-    readonly settlementLedger?: AbgToolSettlementLedger;
-    readonly haltOnFailedToolSettlement?: boolean;
-    readonly observabilityRedactor?: ObservabilityRedactor;
-    readonly captureRawTurnResult?: (result: LlmActorTurnResult) => void;
-    readonly retrySleep?: (delayMs: number, signal: AbortSignal | undefined) => Promise<void>;
-    readonly retryBaseDelayMs?: number;
-    readonly maxRetryDelayMs?: number;
-};
+export type { LlmActorModel, LlmActorRunInput, LlmActorTurnResult } from './llm-actor-node-types';
 
 export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSignal> {
     const { nodeId, now } = input;
@@ -151,17 +117,10 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
             turnResponseMessages = response.messages;
             break;
         } catch (error) {
-            if (
-                !sawStreamPart &&
-                input.signal?.aborted !== true &&
-                isIndefiniteProviderWaitError(error)
-            ) {
+            const surfacedMessage = error instanceof Error ? error.message : errorToString(error);
+            if (!sawStreamPart && !isAbortRequested(input.signal) && isIndefiniteProviderWaitError(error)) {
                 providerWaitAttempt += 1;
-                const delayMs = computeProviderRetryDelayMs(
-                    providerWaitAttempt,
-                    retryBaseDelayMs,
-                    maxRetryDelayMs,
-                );
+                const delayMs = computeProviderRetryDelayMs(providerWaitAttempt, retryBaseDelayMs, maxRetryDelayMs);
                 yield createAbgEmitSignal({
                     graphId: input.graphId,
                     nodeId,
@@ -171,12 +130,12 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
                         attempt: providerWaitAttempt,
                         delayMs,
                         reason: classifyProviderStreamError(error)?.code ?? 'provider_rate_limited',
-                        message: observabilityRedactor.redactText(errorToString(error)),
+                        message: observabilityRedactor.redactText(surfacedMessage),
                     }),
                     timestamp: now(),
                 });
                 await retrySleep(delayMs, input.signal);
-                if (input.signal?.aborted === true) {
+                if (isAbortRequested(input.signal)) {
                     yield createAbgEmitSignal({
                         graphId: input.graphId,
                         nodeId,
@@ -207,7 +166,7 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
             // Redact credentials from the surfaced error message (parity with the flat path, which
             // redacts provider error messages at the provider-event layer) so a provider failure
             // carrying a secret does not leak into the `llm.error` emit (rendered + persisted).
-            const message = observabilityRedactor.redactText(errorToString(error));
+            const message = observabilityRedactor.redactText(surfacedMessage);
             const classified = classifyProviderStreamError(error);
             const errorCode = classified?.code ?? extractProviderErrorCode(error);
             const retryable = classified?.retryable ?? extractProviderErrorRetryable(error);

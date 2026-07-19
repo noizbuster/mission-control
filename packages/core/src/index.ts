@@ -1,4 +1,4 @@
-// allow: SIZE_OK -- HEAD 508 -> current 551 pure LOC; explicit public API export barrel retained for compatibility review.
+// allow: SIZE_OK -- HEAD 581 -> current 586 pure LOC; explicit public API export barrel retained for compatibility review.
 export * from './abg-overlay/index';
 export type { AgentRuntimeOptions, RunGraphOptions } from './agent-runtime';
 export { AgentRuntime } from './agent-runtime';
@@ -14,6 +14,11 @@ export { resolveGraphAgentModels } from './behavior/agent-model-resolver';
 export type { AuthorableAbgGraph } from './behavior/authorable-graph';
 export { createAuthorableAbgGraph, resolveAbgNodeModel } from './behavior/authorable-graph';
 export type { BehaviorNode, BehaviorNodeType } from './behavior/behavior-node';
+export {
+    type AgentNodeRunBudgetGrantorOptions,
+    createAgentNodeRunBudgetGrantor,
+    formatBudgetRequestPrompt,
+} from './behavior/budget/agent-node-run-budget-grantor';
 export {
     type BudgetConfig,
     type BudgetCostEvent,
@@ -31,21 +36,16 @@ export {
     type TokenUsage,
 } from './behavior/budget/cost-ledger';
 export {
-    createAgentNodeRunBudgetGrantor,
-    formatBudgetRequestPrompt,
-    type AgentNodeRunBudgetGrantorOptions,
-} from './behavior/budget/agent-node-run-budget-grantor';
-export {
+    type ApplyNodeRunBudgetGrantInput,
+    type ApplyNodeRunBudgetGrantResult,
     applyNodeRunBudgetGrant,
     DEFAULT_MAX_NODE_RUN_BUDGET_EXTENSIONS,
     DEFAULT_NODE_RUN_BUDGET_GRANT,
     hardCeilingForNodeRunBudget,
-    parseAgentBudgetDecisionText,
-    type ApplyNodeRunBudgetGrantInput,
-    type ApplyNodeRunBudgetGrantResult,
     type NodeRunBudgetExtensionDecision,
     type NodeRunBudgetExtensionRequest,
     type NodeRunBudgetExtensionRequester,
+    parseAgentBudgetDecisionText,
 } from './behavior/budget/node-run-budget-extension';
 export { BUILTIN_MODES, BUILTIN_WORKFLOWS, registerBuiltinWorkflows } from './behavior/builtin-workflows';
 export {
@@ -184,7 +184,12 @@ export {
     createNativesClient,
     type NativesClient,
 } from './native/natives-client';
-export { PermissionSession, type PermissionSessionOptions } from './permission/session';
+export {
+    PermissionAuthorityCommitCancelledError,
+    PermissionSession,
+    type PermissionSessionOptions,
+    type RememberReplyOptions,
+} from './permission/session';
 export { PermissionRuleStore, type PermissionRuleStoreOptions } from './permission/store';
 export { createAllowPermissionDecision, createDefaultPermissionDecision } from './permissions';
 export { readBoulder } from './persistence/boulder-store';
@@ -235,6 +240,14 @@ export {
 } from './providers/google/gemini-generate-content-provider';
 export { createLocalCodingProvider } from './providers/local-coding-provider';
 export {
+    type CreateOAuthRefreshingCredentialResolverInput,
+    createOAuthRefreshingCredentialResolver,
+    DEFAULT_OAUTH_REFRESH_SKEW_MS,
+    type OAuthCredentialPersist,
+    type OAuthTokenRefresher,
+    oauthCredentialNeedsRefresh,
+} from './providers/oauth-credential-refresh';
+export {
     composeObservabilityRedactors,
     createObservabilityRedactor,
     OBSERVABILITY_CIRCULAR,
@@ -266,14 +279,6 @@ export {
     OpenAICompatibleTransportError,
     type OpenAICompatibleTransportRequest,
 } from './providers/openai-compatible/openai-compatible-provider';
-export {
-    createOAuthRefreshingCredentialResolver,
-    DEFAULT_OAUTH_REFRESH_SKEW_MS,
-    type CreateOAuthRefreshingCredentialResolverInput,
-    type OAuthCredentialPersist,
-    type OAuthTokenRefresher,
-    oauthCredentialNeedsRefresh,
-} from './providers/oauth-credential-refresh';
 export {
     createProviderAuthStoreCredentialResolver,
     createProviderAuthStoreObservabilityRedactor,
