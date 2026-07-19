@@ -5,22 +5,21 @@ import type { AbgOverlayController } from './abg-overlay-controller';
 import type { ApprovalLevel } from './approval-level';
 import type { ChatAppActions } from './chat-app-actions';
 import type { ChatInputEvent } from './chat-input-event';
-import type {
-    DashboardAgentEntry,
-    HistoryPickerEntry,
-    MissionPanelRow,
-    SessionPickerEntry,
-} from './chat-store';
+import type { DashboardAgentEntry, HistoryPickerEntry, MissionPanelRow, SessionPickerEntry } from './chat-store';
 import type { ModelChoice } from './interactive-chat-model';
 import type { MissionControlServicesLike } from './mission-services-types';
 import type { ModelsOverlayRoleRow } from './models-overlay-state';
+import type { TranscriptPart } from './transcript-part';
 import type { WelcomeData } from './welcome-data-types';
 
 /** Public surface consumed by the imperative chat loop. */
 export type ChatTuiHandle = {
     readonly waitForEvent: () => Promise<ChatInputEvent>;
     readonly emitOutput: (text: string) => void;
+    readonly emitTranscriptPart: (part: TranscriptPart, fallbackText: string) => void;
+    readonly emitTranscriptFallback: (text: string) => void;
     readonly replaceOutputText: (text: string) => void;
+    readonly replaceTranscript: (parts: readonly TranscriptPart[], outputText: string) => void;
     readonly getOutput: () => string;
     readonly showModelPicker: (choices: readonly ModelChoice[]) => Promise<ModelProviderSelection | undefined>;
     readonly showSessionPicker: (entries: readonly SessionPickerEntry[]) => Promise<string | undefined>;

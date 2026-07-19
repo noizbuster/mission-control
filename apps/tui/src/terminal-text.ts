@@ -1,15 +1,14 @@
 /**
  * Pure terminal text width / grapheme / truncation helpers shared by the CLI
  * noninteractive renderers and the OpenTUI TUI. No React, no opentui, no
- * node:ffi — uses only the standard `Intl.Segmenter` (with a code-unit
- * fallback). Extracted from the CLI app so both packages compile during the
+ * node:ffi — uses the standard `Intl.Segmenter` with a targeted no-dependency
+ * fallback. Extracted from the CLI app so both packages compile during the
  * component move (Todo 4).
  */
 
-type TextSegment = {
-    readonly segment: string;
-    readonly index: number;
-};
+import { fallbackSegmentTerminalText, type TerminalTextSegment } from './terminal-grapheme-fallback';
+
+type TextSegment = TerminalTextSegment;
 
 type IntlSegmenter = {
     segment(value: string): Iterable<TextSegment>;
@@ -22,7 +21,7 @@ export function segmentTerminalText(value: string): readonly TextSegment[] {
     if (value.length === 0) {
         return [];
     }
-    return [...graphemeSegmenter.segment(value)];
+    return graphemeSegmenter === undefined ? fallbackSegmentTerminalText(value) : [...graphemeSegmenter.segment(value)];
 }
 
 export function previousGraphemeOffset(value: string, cursorOffset: number): number {
@@ -30,8 +29,14 @@ export function previousGraphemeOffset(value: string, cursorOffset: number): num
     if (offset === 0) {
         return 0;
     }
-    const segments = segmentTerminalText(value.slice(0, offset));
-    return segments.at(-1)?.index ?? Math.max(0, offset - 1);
+    const segments = segmentTerminalText(value);
+    for (let index = segments.length - 1; index >= 0; index -= 1) {
+        const segment = segments[index];
+        if (segment !== undefined && segment.index < offset) {
+            return segment.index;
+        }
+    }
+    return 0;
 }
 
 export function nextGraphemeOffset(value: string, cursorOffset: number): number {
@@ -39,8 +44,13 @@ export function nextGraphemeOffset(value: string, cursorOffset: number): number 
     if (offset >= value.length) {
         return value.length;
     }
-    const segment = segmentTerminalText(value.slice(offset)).at(0);
-    return Math.min(value.length, offset + (segment?.segment.length ?? 1));
+    for (const segment of segmentTerminalText(value)) {
+        const end = segment.index + segment.segment.length;
+        if (end > offset) {
+            return end;
+        }
+    }
+    return value.length;
 }
 
 export function clampTextOffset(value: string, cursorOffset: number): number {
@@ -55,27 +65,31 @@ export function terminalDisplayWidth(value: string): number {
     return width;
 }
 
-export function truncateTerminalText(value: string, columns: number, marker: string = '~'): string {
-    const limit = Math.max(1, columns);
-    if (terminalDisplayWidth(value) <= limit) {
-        return value;
-    }
-    const markerWidth = terminalDisplayWidth(marker);
-    const contentLimit = Math.max(0, limit - markerWidth);
-    if (contentLimit === 0) {
-        return marker;
-    }
+export function clipTerminalText(value: string, columns: number): string {
+    const limit = normalizeTerminalColumns(columns);
     let result = '';
     let width = 0;
     for (const { segment } of segmentTerminalText(value)) {
         const nextWidth = terminalGraphemeWidth(segment);
-        if (width + nextWidth > contentLimit) {
+        if (width + nextWidth > limit) {
             break;
         }
         result += segment;
         width += nextWidth;
     }
-    return `${result}${marker}`;
+    return result;
+}
+
+export function truncateTerminalText(value: string, columns: number, marker: string = '~'): string {
+    const limit = normalizeTerminalColumns(columns);
+    if (terminalDisplayWidth(value) <= limit) {
+        return value;
+    }
+    const markerWidth = terminalDisplayWidth(marker);
+    if (markerWidth > limit) {
+        return clipTerminalText(value, limit);
+    }
+    return `${clipTerminalText(value, limit - markerWidth)}${marker}`;
 }
 
 export function padEndToDisplayWidth(text: string, width: number): string {
@@ -99,23 +113,14 @@ export function terminalOffsetForDisplayColumn(value: string, column: number): n
     return value.length;
 }
 
-function createGraphemeSegmenter(): IntlSegmenter {
+function createGraphemeSegmenter(): IntlSegmenter | undefined {
     const segmenter =
         Intl.Segmenter === undefined ? undefined : new Intl.Segmenter(undefined, { granularity: 'grapheme' });
-    if (segmenter !== undefined) {
-        return segmenter;
-    }
-    return {
-        segment(value: string) {
-            const segments: TextSegment[] = [];
-            let index = 0;
-            for (const segment of Array.from(value)) {
-                segments.push({ segment, index });
-                index += segment.length;
-            }
-            return segments;
-        },
-    };
+    return segmenter;
+}
+
+function normalizeTerminalColumns(columns: number): number {
+    return Number.isFinite(columns) ? Math.max(0, Math.trunc(columns)) : 0;
 }
 
 function terminalGraphemeWidth(segment: string): number {
@@ -143,8 +148,8 @@ function isZeroWidthCodePoint(codePoint: number, character: string): boolean {
     return (
         codePoint === 0 ||
         codePoint === 0x200d ||
-        codePoint === 0xfe0e ||
-        codePoint === 0xfe0f ||
+        (codePoint >= 0xfe00 && codePoint <= 0xfe0f) ||
+        (codePoint >= 0xe0100 && codePoint <= 0xe01ef) ||
         codePoint < 32 ||
         (codePoint >= 0x7f && codePoint <= 0x9f) ||
         combiningMarkRegex.test(character)
@@ -153,6 +158,7 @@ function isZeroWidthCodePoint(codePoint: number, character: string): boolean {
 
 function isEmojiLike(segment: string): boolean {
     return (
+        isKeycapSequence(segment) ||
         segment.includes('\u200d') ||
         segment.includes('\ufe0f') ||
         [...segment].some((character) => {
@@ -160,6 +166,10 @@ function isEmojiLike(segment: string): boolean {
             return codePoint !== undefined && codePoint >= 0x1f000 && codePoint <= 0x1faff;
         })
     );
+}
+
+function isKeycapSequence(segment: string): boolean {
+    return /^[0-9#*]\ufe0f?\u20e3$/u.test(segment);
 }
 
 function isFullwidthCodePoint(codePoint: number): boolean {
