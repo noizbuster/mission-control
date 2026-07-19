@@ -31,12 +31,12 @@ describe('desktop awaiting session compatibility', () => {
             },
         };
 
-        expect(DesktopSessionSummarySchema.safeParse(summaryPayload('session_invalid_kind', staleAwaiting)).success).toBe(
-            false,
-        );
-        expect(DesktopSessionSnapshotSchema.safeParse(snapshotPayload('session_invalid_kind', staleAwaiting)).success).toBe(
-            false,
-        );
+        expect(
+            DesktopSessionSummarySchema.safeParse(summaryPayload('session_invalid_kind', staleAwaiting)).success,
+        ).toBe(false);
+        expect(
+            DesktopSessionSnapshotSchema.safeParse(snapshotPayload('session_invalid_kind', staleAwaiting)).success,
+        ).toBe(false);
     });
 });
 

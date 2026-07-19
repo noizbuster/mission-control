@@ -161,18 +161,16 @@ describe('desktop session schemas', () => {
                     runId: 'run_without_child',
                 },
             },
+            {
+                kind: 'approval',
+                source: { approvalId: 'approval_patch', runId: 'run_approval' },
+            },
         ] as const;
 
-        for (const awaiting of malformedAwaitingDetails) {
-            expect(
-                DesktopSessionSummarySchema.safeParse(
-                    summaryPayload({
-                        sessionId: `session_invalid_${awaiting.reason}`,
-                        status: 'awaiting',
-                        awaiting,
-                    }),
-                ).success,
-            ).toBe(false);
+        for (const [index, awaiting] of malformedAwaitingDetails.entries()) {
+            const fields = { sessionId: `session_invalid_${index}`, status: 'awaiting', awaiting } as const;
+            expect(DesktopSessionSummarySchema.safeParse(summaryPayload(fields)).success).toBe(false);
+            expect(DesktopSessionSnapshotSchema.safeParse(snapshotPayload(fields)).success).toBe(false);
         }
         expect(
             DesktopSessionSnapshotSchema.safeParse(
