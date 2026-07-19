@@ -11,9 +11,13 @@ import type { AgentSnapshot } from '@mission-control/protocol';
 import type { CliSessionCatalogDiagnostic } from './session-catalog';
 
 export type SessionProjectionReadState = {
-    readonly records: ReadonlyMap<string, SessionProjectionSessionRecord>;
+    readonly records: ReadonlyMap<string, SessionCatalogProjectionSessionRecord>;
     readonly diagnostics: readonly CliSessionCatalogDiagnostic[];
     readonly store: SqliteSessionProjectionStore;
+};
+
+type SessionCatalogProjectionSessionRecord = SessionProjectionSessionRecord & {
+    readonly parentSessionId?: string | undefined;
 };
 
 export async function readSessionProjectionState(): Promise<SessionProjectionReadState> {

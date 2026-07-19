@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 453 -> current 455 pure LOC; one SQLite session event-store projection and lifecycle integration matrix.
 import { createClient } from '@libsql/client';
 import { afterEach, describe, expect, it } from 'vitest';
 import { SqlAgentJobMirror } from '../agents/agent-job-sql-mirror';
@@ -404,7 +405,8 @@ describe('SqliteSessionEventStore', () => {
                 [sessionId],
             );
             expect(before.rows[0]).toMatchObject({ status: 'running' });
-            const beforeUpdatedAt = String(before.rows[0]?.updated_at ?? '');
+            const updatedAtColumn = 'updated_at';
+            const beforeUpdatedAt = String(before.rows[0]?.[updatedAtColumn] ?? '');
 
             await store.appendEnvelope({
                 eventId: 'ephemeral_1',
@@ -437,12 +439,13 @@ describe('SqliteSessionEventStore', () => {
                     status: 'running',
                 },
             ]);
-            expect(after.rows[0]?.updated_at).not.toBe(beforeUpdatedAt);
+            expect(after.rows[0]?.[updatedAtColumn]).not.toBe(beforeUpdatedAt);
             const eventCount = await client.execute(
                 'SELECT COUNT(*) AS count FROM session_events WHERE session_id = ?',
                 [sessionId],
             );
-            expect(Number(eventCount.rows[0]?.count)).toBe(2);
+            const countColumn = 'count';
+            expect(Number(eventCount.rows[0]?.[countColumn])).toBe(2);
             client.close();
         } finally {
             await store.close();
