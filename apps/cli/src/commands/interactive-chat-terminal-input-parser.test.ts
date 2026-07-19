@@ -32,4 +32,10 @@ describe('terminal input parser', () => {
         expect(parser.takeBufferedTokens()).toEqual(['\u0003', 'x', '\u001b[D']);
         expect(parser.takeBufferedTokens()).toEqual([]);
     });
+
+    it('keeps adjacent combining and ZWJ graphemes intact within one decoded chunk', () => {
+        const parser = createTerminalInputParser();
+
+        expect(parser.readTokens('e\u0301👨‍👩‍👧‍👦')).toEqual(['e\u0301', '👨‍👩‍👧‍👦']);
+    });
 });

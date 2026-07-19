@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 280 -> current 269 pure LOC; one coding-agent lifecycle matrix shares runtime fixtures and ordered event assertions.
 import type { AbgSignal, AgentEvent } from '@mission-control/protocol';
 import {
     type AbgOverlayStore,
@@ -7,6 +8,7 @@ import {
 } from '@mission-control/tui/state';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { interactiveGraphStreamSignal, wireAbgOverlay } from './interactive-coding-agent';
+import { createProviderRenderState } from './interactive-coding-transcript-render-state';
 import { performance } from 'node:perf_hooks';
 
 const TS = '2026-01-01T00:00:00.000Z';
@@ -116,12 +118,9 @@ describe('ABG overlay wiring — 33ms coalescing + non-throwing observer (Wave 2
                 }
             };
 
-            const tap = interactiveGraphStreamSignal(
-                output,
-                { streamingText: false, streamingThinking: false, toolCount: 0, toolNames: [] },
-                '/ws',
-                [throwingObserver],
-            );
+            const tap = interactiveGraphStreamSignal(output, createProviderRenderState('observer-error'), '/ws', [
+                throwingObserver,
+            ]);
 
             await tap(emitDeltaSignal('n1', 'a'));
             await tap(emitDeltaSignal('n1', 'b'));
@@ -136,15 +135,12 @@ describe('ABG overlay wiring — 33ms coalescing + non-throwing observer (Wave 2
         it('rethrows non-Error observer failures', async () => {
             const output = bufferedOutput();
             const throwingObserver: (signal: AbgSignal) => void = () => {
-                throw 'non-error observer failure';
+                throw String('non-error observer failure');
             };
 
-            const tap = interactiveGraphStreamSignal(
-                output,
-                { streamingText: false, streamingThinking: false, toolCount: 0, toolNames: [] },
-                '/ws',
-                [throwingObserver],
-            );
+            const tap = interactiveGraphStreamSignal(output, createProviderRenderState('observer-non-error'), '/ws', [
+                throwingObserver,
+            ]);
 
             await expect(tap(emitDeltaSignal('n1', 'a'))).rejects.toBe('non-error observer failure');
         });
@@ -163,19 +159,13 @@ describe('ABG overlay wiring — 33ms coalescing + non-throwing observer (Wave 2
                 },
             };
             const stderrWrite = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
-            const tap = interactiveGraphStreamSignal(
-                output,
-                { streamingText: false, streamingThinking: false, toolCount: 0, toolNames: [] },
-                '/ws',
-            );
+            const tap = interactiveGraphStreamSignal(output, createProviderRenderState('render-error'), '/ws');
 
             // When: a stream delta triggers render.
             await expect(tap(emitDeltaSignal('n1', 'hello'))).resolves.toBeUndefined();
 
             // Then: the error is reported without aborting the signal pipeline.
-            expect(stderrWrite).toHaveBeenCalledWith(
-                expect.stringContaining('Failed to create SyntaxStyle'),
-            );
+            expect(stderrWrite).toHaveBeenCalledWith(expect.stringContaining('Failed to create SyntaxStyle'));
             expect(chunks.join('')).toContain('Error: Failed to create SyntaxStyle');
             stderrWrite.mockRestore();
         });
@@ -281,7 +271,7 @@ describe('ABG overlay wiring — 33ms coalescing + non-throwing observer (Wave 2
             const baselineOutput = bufferedOutput();
             const baselineTap = interactiveGraphStreamSignal(
                 baselineOutput,
-                { streamingText: false, streamingThinking: false, toolCount: 0, toolNames: [] },
+                createProviderRenderState('baseline'),
                 '/ws',
             );
 
@@ -291,7 +281,7 @@ describe('ABG overlay wiring — 33ms coalescing + non-throwing observer (Wave 2
             const overlayOutput = bufferedOutput();
             const overlayTap = interactiveGraphStreamSignal(
                 overlayOutput,
-                { streamingText: false, streamingThinking: false, toolCount: 0, toolNames: [] },
+                createProviderRenderState('overlay'),
                 '/ws',
                 [wiring.observer],
             );

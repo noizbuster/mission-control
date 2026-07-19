@@ -6,13 +6,33 @@ import {
 } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
 import type { ActiveCodingAgentTurnOutcome, CodingAgentTurnOptions } from './interactive-coding-agent-types';
-import type { ProviderRenderState } from './interactive-coding-graph-rendering';
+import {
+    type ProviderRenderState,
+    settleInterruptedToolTranscriptParts,
+    settleTerminalToolTranscriptParts,
+} from './interactive-coding-transcript-render-state';
+import { emitTranscriptFallback, emitTranscriptPart } from './interactive-transcript-emission';
 
 type OwnedTurnOptions = Omit<CodingAgentTurnOptions, 'prompt'> & { readonly prompt?: string };
+
+type InteractiveTaskEventOptions = Pick<
+    OwnedTurnOptions,
+    'sessionId' | 'turnId' | 'modelProviderSelection' | 'emitEvent'
+>;
+
+type ReceiptSettlementOptions = InteractiveTaskEventOptions & Pick<OwnedTurnOptions, 'output'>;
 
 type OwnedTurnAction = {
     readonly taskStartedMessage: string;
     readonly execute: (owner: SessionRunOwner) => Promise<SessionRunOwnerReceipt>;
+};
+
+export type ReceiptSettlementInput = {
+    readonly options: ReceiptSettlementOptions;
+    readonly receipt: SessionRunOwnerReceipt;
+    readonly renderState: ProviderRenderState;
+    readonly observabilityRedactor: ObservabilityRedactor;
+    readonly turnStartedAt: number;
 };
 
 export async function runOwnedCodingAgentTurn(
@@ -29,12 +49,12 @@ export async function runOwnedCodingAgentTurn(
         observabilityRedactor,
     );
     const receipt = await action.execute(owner);
-    settleReceipt(options, receipt, renderState, observabilityRedactor, turnStartedAt);
+    settleReceipt({ options, receipt, renderState, observabilityRedactor, turnStartedAt });
     return receipt.status;
 }
 
 export function emitInteractiveTaskEvent(
-    options: OwnedTurnOptions,
+    options: InteractiveTaskEventOptions,
     event: {
         readonly type: 'task.started' | 'task.completed' | 'task.failed';
         readonly message: string;
@@ -59,15 +79,16 @@ export function emitInteractiveTaskEvent(
     );
 }
 
-function settleReceipt(
-    options: OwnedTurnOptions,
-    receipt: SessionRunOwnerReceipt,
-    renderState: ProviderRenderState,
-    observabilityRedactor: ObservabilityRedactor,
-    turnStartedAt: number,
-): void {
+export function settleReceipt(input: ReceiptSettlementInput): void {
+    const { options, receipt, renderState, observabilityRedactor, turnStartedAt } = input;
     switch (receipt.status) {
-        case 'completed':
+        case 'completed': {
+            const completedParts = settleTerminalToolTranscriptParts(renderState, 'completed');
+            if (options.output.writeTranscriptPart !== undefined) {
+                for (const part of completedParts) {
+                    emitTranscriptPart(options.output, part, '');
+                }
+            }
             emitInteractiveTaskEvent(
                 options,
                 {
@@ -77,12 +98,21 @@ function settleReceipt(
                 },
                 observabilityRedactor,
             );
-            options.output.write(
+            emitTranscriptFallback(
+                options.output,
                 formatCodingTurnFooter(turnStartedAt, 'completed', renderState.finalMessage ?? 'run completed'),
             );
             return;
-        case 'interrupted':
-            options.output.write('Interrupted active run\n');
+        }
+        case 'interrupted': {
+            const interruptedParts = settleInterruptedToolTranscriptParts(renderState);
+            if (interruptedParts === undefined) return;
+            if (options.output.writeTranscriptPart !== undefined) {
+                for (const part of interruptedParts) {
+                    emitTranscriptPart(options.output, part, '');
+                }
+            }
+            emitTranscriptFallback(options.output, 'Interrupted active run\n');
             emitInteractiveTaskEvent(
                 options,
                 {
@@ -92,17 +122,53 @@ function settleReceipt(
                 },
                 observabilityRedactor,
             );
-            options.output.write(formatCodingTurnFooter(turnStartedAt, 'interrupted', 'interrupted by user'));
+            emitTranscriptFallback(
+                options.output,
+                formatCodingTurnFooter(turnStartedAt, 'interrupted', 'interrupted by user'),
+            );
             return;
+        }
         case 'blocked_on_approval': {
             const reason = receipt.reason ?? 'approval required';
-            options.output.write(formatBlockedRunMessage(reason, receipt.toolCallId));
-            options.output.write(formatCodingTurnFooter(turnStartedAt, 'blocked', reason));
+            emitTranscriptFallback(options.output, formatBlockedRunMessage(reason, receipt.toolCallId));
+            emitTranscriptFallback(options.output, formatCodingTurnFooter(turnStartedAt, 'blocked', reason));
             return;
         }
         case 'failed': {
+            const failedParts = settleTerminalToolTranscriptParts(renderState, 'failed');
+            if (options.output.writeTranscriptPart !== undefined) {
+                for (const part of failedParts) {
+                    emitTranscriptPart(options.output, part, '');
+                }
+            }
             const reason = observabilityRedactor.redactText(receipt.reason ?? 'run failed');
-            options.output.write(`Error: ${reason}\n`);
+            const fallbackText = `Error: ${reason}\n`;
+            if (options.output.writeTranscriptPart === undefined) {
+                emitTranscriptFallback(options.output, fallbackText);
+            } else {
+                const priorEmission =
+                    renderState.lastGraphErrorEmission?.reason === reason
+                        ? renderState.lastGraphErrorEmission
+                        : undefined;
+                const needsTypedPart = priorEmission?.typedPartEmitted !== true;
+                const needsExactFallback = priorEmission?.exactReceiptFallbackWritten !== true;
+                if (needsTypedPart) {
+                    const receiptIdentity = receipt.runId ?? renderState.executionTurnId;
+                    emitTranscriptPart(
+                        options.output,
+                        {
+                            id: `receipt:${encodeURIComponent(receiptIdentity)}:error`,
+                            type: 'error',
+                            text: reason,
+                            error: reason,
+                            status: 'failed',
+                        },
+                        needsExactFallback ? fallbackText : '',
+                    );
+                } else if (needsExactFallback) {
+                    emitTranscriptFallback(options.output, fallbackText);
+                }
+            }
             emitInteractiveTaskEvent(
                 options,
                 {
@@ -119,7 +185,7 @@ function settleReceipt(
                 },
                 observabilityRedactor,
             );
-            options.output.write(formatCodingTurnFooter(turnStartedAt, 'failed', reason));
+            emitTranscriptFallback(options.output, formatCodingTurnFooter(turnStartedAt, 'failed', reason));
             return;
         }
         case 'idle':

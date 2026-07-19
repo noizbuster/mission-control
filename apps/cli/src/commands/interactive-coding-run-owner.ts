@@ -16,14 +16,11 @@ import { buildCodingAgentSystemPromptEnv, loadTrustedProjectInstructionResources
 import { createGraphObservabilityRedactor } from './graph-observability-redactor';
 import type { createInteractiveApprovalBroker } from './interactive-approval-broker';
 import type { CodingAgentTurnOptions } from './interactive-coding-agent-types';
-import {
-    interactiveGraphStreamSignal,
-    type ProviderRenderState,
-    renderInteractiveGraphDurableEvent,
-} from './interactive-coding-graph-rendering';
+import { interactiveGraphStreamSignal, renderInteractiveGraphDurableEvent } from './interactive-coding-graph-rendering';
 import { type AbgOverlayWiring, wireAbgOverlay } from './interactive-coding-overlay';
 import { renderInteractiveToolSettlement, renderProviderEnvelope } from './interactive-coding-provider-rendering';
 import { createInteractiveToolRegistry, preflightInteractiveToolCall } from './interactive-coding-tools';
+import type { ProviderRenderState } from './interactive-coding-transcript-render-state';
 import type { InteractiveGraphSignalObserver } from './interactive-graph-signal-observers';
 import {
     closeProductionToolRegistry,
@@ -69,6 +66,8 @@ export async function createInteractiveRunOwner(
     });
     const projectInstructionResources = await loadTrustedProjectInstructionResources(options.workspaceRoot);
     const toolOptions = {
+        executionTurnId: renderState.executionTurnId,
+        renderState,
         workspaceRoot: options.workspaceRoot,
         sessionId: options.sessionId,
         modelProviderSelection: options.modelProviderSelection,
@@ -174,7 +173,7 @@ export async function createInteractiveRunOwner(
                 return preflightInteractiveToolCall(toolCall, toolOptions, approvals);
             },
             onToolSettlement: (settlement: ToolInvocationSettlement) => {
-                renderInteractiveToolSettlement(options.output, settlement);
+                renderInteractiveToolSettlement(options.output, settlement, renderState);
                 overlayWiring?.onToolSettlement?.(settlement);
             },
             ...(options.taskRuntimeServices?.sessionControlHost !== undefined

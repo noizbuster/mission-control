@@ -1,6 +1,4 @@
-// allow: SIZE_OK — indivisible state machine; every transition mutates the same
-// closure variables (activeTurn, exiting, pendingInterrupt, currentModelProviderSelection).
-// Extracting sub-units would require passing 5+ mutable refs as parameters.
+// allow: SIZE_OK -- HEAD 280 -> current 277 pure LOC; one chat-agent runner state machine shares active-turn, exit, interrupt, and model-selection state.
 /**
  * Background agent runner state machine.
  *
@@ -34,6 +32,7 @@ import { actionResult, type ChatActionResult } from './interactive-chat-action-r
 import type { ChatInputEvent, ChatOutput } from './interactive-chat-io';
 import { maxChatPromptLength } from './interactive-chat-io';
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent';
+import { emitTranscriptFallback } from './interactive-transcript-emission';
 
 const YIELD_BEFORE_READ_MS = 25;
 
@@ -104,6 +103,8 @@ function createStoreEventPump(store: ChatStore): { readonly read: () => Promise<
 export function createStoreChatOutput(store: ChatStore): ChatOutput {
     return {
         write: (text: string) => store.emitOutput(text),
+        writeTranscriptPart: (part, fallbackText) => store.emitTranscriptPart(part, fallbackText),
+        writeTranscriptFallback: (text) => store.emitTranscriptFallback(text),
         getOutput: () => store.getOutput(),
         setAgentStatus: (text: string) => store.setAgentStatus(text),
         clearAgentStatus: () => store.clearAgentStatus(),
@@ -276,7 +277,7 @@ export function startChatAgentRunner(options: AgentRunnerOptions): AgentRunnerHa
                     result = await dispatch(action, { activeTurn });
                 } catch (error) {
                     const message = error instanceof Error ? error.message : String(error);
-                    chatOutput.write(`Error: ${message}\n`);
+                    emitTranscriptFallback(chatOutput, `Error: ${message}\n`);
                     store.setGenerating(false);
                     continue;
                 }
@@ -287,11 +288,7 @@ export function startChatAgentRunner(options: AgentRunnerOptions): AgentRunnerHa
         } finally {
             // G10: cleanup runs even on exception.
             activeTurn?.interrupt('force');
-            try {
-                await cleanup();
-            } catch {
-                // cleanup errors are non-fatal during teardown
-            }
+            await Promise.allSettled([cleanup()]);
         }
     }
 
@@ -311,11 +308,7 @@ export function startChatAgentRunner(options: AgentRunnerOptions): AgentRunnerHa
             exiting = true;
             activeTurn?.interrupt('force');
             store.enqueueEvent({ type: 'interrupt', source: 'ctrl-c' });
-            try {
-                await loopPromise;
-            } catch {
-                // loop exited via exception; cleanup already ran in finally
-            }
+            await Promise.allSettled([loopPromise]);
         },
     };
 }

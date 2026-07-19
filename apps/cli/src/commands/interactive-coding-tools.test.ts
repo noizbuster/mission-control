@@ -1,4 +1,9 @@
-import { InProcessLspClient, type LspDiagnostic } from '@mission-control/core';
+import {
+    createSqlTaskRuntimeServices,
+    InProcessLspClient,
+    type LspDiagnostic,
+    openSqliteSessionProjectionStore,
+} from '@mission-control/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createInteractiveToolRegistry, preflightInteractiveToolCall } from './interactive-coding-tools';
 import {
@@ -37,8 +42,8 @@ describe('interactive coding tools preflight', () => {
                     approvalRequests.push(request.id);
                     return { requestId: request.id, status: 'allow', reason: 'unexpected' };
                 },
-                primeApproval: (requestId) => {
-                    primedRequests.push(requestId);
+                primeApproval: (request) => {
+                    primedRequests.push(request.id);
                 },
                 answer: () => false,
                 cancel: () => undefined,
@@ -75,8 +80,8 @@ describe('interactive coding tools preflight', () => {
                     approvalRequests.push(request.id);
                     return { requestId: request.id, status: 'allow', reason: 'unexpected' };
                 },
-                primeApproval: (requestId) => {
-                    primedRequests.push(requestId);
+                primeApproval: (request) => {
+                    primedRequests.push(request.id);
                 },
                 answer: () => false,
                 cancel: () => undefined,
@@ -110,8 +115,8 @@ describe('interactive coding tools preflight', () => {
                     approvalRequests.push(request.id);
                     return { requestId: request.id, status: 'allow', reason: 'unexpected' };
                 },
-                primeApproval: (requestId) => {
-                    primedRequests.push(requestId);
+                primeApproval: (request) => {
+                    primedRequests.push(request.id);
                 },
                 answer: () => false,
                 cancel: () => undefined,
@@ -267,5 +272,71 @@ describe('interactive coding tool registry surface', () => {
         });
         expect(settlement.result.status).toBe('completed');
         expect(JSON.stringify(settlement.structuredOutput)).toContain('Type mismatch');
+    });
+
+    it('marks the parent session awaiting/user_input while interactive ask_user is pending', async () => {
+        // Given
+        const workspaceRoot = mkdtempSync(join(tmpdir(), 'mctrl-interactive-ask-user-await-'));
+        tempRoots.push(workspaceRoot);
+        const dataDir = mkdtempSync(join(tmpdir(), 'mctrl-interactive-ask-user-data-'));
+        tempRoots.push(dataDir);
+        const services = await createSqlTaskRuntimeServices(dataDir, { recoverActiveJobs: false });
+        const publicStore = await openSqliteSessionProjectionStore({ dataDir });
+        const output = createBufferedChatOutput();
+        let releaseAnswer: ((value: string) => void) | undefined;
+        const pendingAnswer = new Promise<string>((resolve) => {
+            releaseAnswer = resolve;
+        });
+        let markHostEntered: () => void = () => undefined;
+        const hostEntered = new Promise<void>((resolve) => {
+            markHostEntered = resolve;
+        });
+        const registry = await createInteractiveToolRegistry(
+            {
+                ...toolOptions(output.output, workspaceRoot),
+                requestUserQuestion: async () => {
+                    markHostEntered();
+                    return pendingAnswer;
+                },
+                services,
+            },
+            fakeBroker(),
+        );
+        const askUser = registry.registry.advertise().find((advertisement) => advertisement.name === 'ask_user');
+        if (askUser === undefined) throw new Error('ask_user was not registered');
+
+        // When: invoke ask_user and leave the host callback pending
+        const invokePromise = registry.registry.invoke({
+            toolCallId: 'ask_user_pending',
+            toolName: 'ask_user',
+            advertisedVersion: askUser.version,
+            argumentsJson: JSON.stringify({ question: 'Ship it?', options: ['yes', 'no'] }),
+        });
+        await hostEntered;
+        await services.flush();
+        const whilePending = await publicStore.getSession('session_interactive_tools');
+
+        // Then
+        expect(whilePending).toMatchObject({
+            sessionId: 'session_interactive_tools',
+            status: 'awaiting',
+            awaiting: {
+                reason: 'user_input',
+                source: { toolCallId: 'ask_user_pending' },
+            },
+        });
+
+        // When: host answers
+        releaseAnswer?.('yes');
+        const settlement = await invokePromise;
+        await services.flush();
+        const afterAnswer = await publicStore.getSession('session_interactive_tools');
+        publicStore.close();
+        await services.close();
+
+        // Then
+        expect(settlement.result.status).toBe('completed');
+        expect(afterAnswer?.status).not.toBe('awaiting');
+        expect(afterAnswer?.awaiting).toBeUndefined();
     });
 });

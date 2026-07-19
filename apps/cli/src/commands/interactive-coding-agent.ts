@@ -8,9 +8,13 @@ import {
 } from '@mission-control/core';
 import { createInteractiveApprovalBroker } from './interactive-approval-broker';
 import type { ActiveCodingAgentTurn, CodingAgentTurnOptions } from './interactive-coding-agent-types';
-import type { ProviderRenderState } from './interactive-coding-graph-rendering';
 import { createInteractiveRunOwner } from './interactive-coding-run-owner';
 import { emitInteractiveTaskEvent, runOwnedCodingAgentTurn } from './interactive-coding-run-settlement';
+import {
+    createProviderRenderState,
+    settleTerminalToolTranscriptParts,
+} from './interactive-coding-transcript-render-state';
+import { emitTranscriptFallback, emitTranscriptPart } from './interactive-transcript-emission';
 import { closeProductionToolRegistry } from './production-tool-registry';
 
 export type {
@@ -65,12 +69,7 @@ async function startOwnedCodingAgentTurn(
         { ...options, observabilityRedactor: approvalRedactor },
         options.permissionSession,
     );
-    const renderState: ProviderRenderState = {
-        streamingText: false,
-        streamingThinking: false,
-        toolCount: 0,
-        toolNames: [],
-    };
+    const renderState = createProviderRenderState(options.turnId);
     const { owner, tools, observabilityRedactor, overlayWiring } = await createInteractiveRunOwner(
         options,
         approvals,
@@ -81,7 +80,13 @@ async function startOwnedCodingAgentTurn(
     const outcome = runOwnedCodingAgentTurn(options, owner, renderState, action, approvalRedactor)
         .catch((error: unknown) => {
             const message = approvalRedactor.redactText(error instanceof Error ? error.message : String(error));
-            options.output.write(`Error: ${message}\n`);
+            const failedParts = settleTerminalToolTranscriptParts(renderState, 'failed');
+            if (options.output.writeTranscriptPart !== undefined) {
+                for (const part of failedParts) {
+                    emitTranscriptPart(options.output, part, '');
+                }
+            }
+            emitTranscriptFallback(options.output, `Error: ${message}\n`);
             settleCrashedCodingTurn(options, message, approvalRedactor, owner.status().runId);
             return 'failed' as const;
         })

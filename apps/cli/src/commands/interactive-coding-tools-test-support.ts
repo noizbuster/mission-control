@@ -9,6 +9,7 @@ import type {
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import type { InteractiveApprovalBroker } from './interactive-approval-broker';
 import type { InteractiveToolOptions } from './interactive-coding-tools';
+import { createProviderRenderState, type ProviderRenderState } from './interactive-coding-transcript-render-state';
 
 export const noLspServers: LspServerManagerDeps = { commandExists: async () => false };
 
@@ -33,7 +34,7 @@ export function fakeBroker(): InteractiveApprovalBroker {
             status: 'allow',
             reason: 'test broker',
         }),
-        primeApproval: () => undefined,
+        primeApproval: (_request, _reason) => undefined,
         answer: () => false,
         cancel: () => undefined,
         hasPending: () => false,
@@ -46,9 +47,11 @@ export function toolOptions(
     workspaceRoot = '/workspace',
     resolveSdkModel?: SdkModelResolver,
     lspClient?: LspClient,
-): InteractiveToolOptions {
+): InteractiveToolOptions & { readonly executionTurnId: string; readonly renderState: ProviderRenderState } {
     const modelProviderSelection: ModelProviderSelection = { providerID: 'local', modelID: 'local-echo' };
     return {
+        executionTurnId: 'test-interactive-tools-turn',
+        renderState: createProviderRenderState('test-interactive-tools-turn'),
         workspaceRoot,
         sessionId: 'session_interactive_tools',
         modelProviderSelection,

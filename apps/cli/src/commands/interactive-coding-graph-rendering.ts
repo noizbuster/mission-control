@@ -1,36 +1,36 @@
 import { redactCredentialText, type ToolInvocationSettlement } from '@mission-control/core';
-import type { AbgSignal, AgentEvent } from '@mission-control/protocol';
+import type { AbgSignal } from '@mission-control/protocol';
+import { sanitizeTerminalDisplayText } from '@mission-control/tui/state';
 import type { ChatOutput } from './interactive-chat-io';
-import { parseFileWriteOutput } from './interactive-coding-file-write-preview';
-import {
-    extractSignalError,
-    formatToolCountSummary,
-    readDeltaFromSignal,
-    readErrorMessage,
-    readReasoningDeltaFromSignal,
-    readStringField,
-    readToolCallProposal,
-    structuredToolOutput,
-} from './interactive-coding-signal-payload';
-import { parseFileEditOutput, parseFilePatchOutput, renderToolPreview } from './interactive-coding-tool-preview';
-import { formatToolResultActivity } from './interactive-coding-tool-activity';
+import { reportGraphRenderFailure } from './interactive-coding-graph-render-failure';
 import {
     describeRetryableFailure,
     formatNodeRetryStatus,
     formatNodeWorkingStatus,
 } from './interactive-coding-graph-status';
 import {
+    extractSignalError,
+    readDeltaFromSignal,
+    readReasoningDeltaFromSignal,
+    readStringField,
+    readToolCallProposal,
+} from './interactive-coding-signal-payload';
+import { renderToolPreview } from './interactive-coding-tool-preview';
+import {
+    currentGraphTurnPrefix,
+    graphOccurrencePartId,
+    graphTurnPartId,
+    openGraphTurn,
+    type ProviderRenderState,
+    recordGraphErrorEmission,
+} from './interactive-coding-transcript-render-state';
+import {
     type InteractiveGraphSignalObserver,
     notifyInteractiveGraphSignalObservers,
 } from './interactive-graph-signal-observers';
+import { emitTranscriptFallback, emitTranscriptPart } from './interactive-transcript-emission';
 
-export type ProviderRenderState = {
-    streamingText: boolean;
-    streamingThinking: boolean;
-    finalMessage?: string;
-    toolCount: number;
-    toolNames: string[];
-};
+export { renderInteractiveGraphDurableEvent } from './interactive-coding-graph-durable-rendering';
 
 export function interactiveGraphStreamSignal(
     output: ChatOutput,
@@ -43,119 +43,10 @@ export function interactiveGraphStreamSignal(
             const renderResult = renderInteractiveGraphSignal(output, state, workspaceRoot, signal);
             if (renderResult !== undefined) await renderResult;
         } catch (error: unknown) {
-            reportGraphRenderFailure(output, error);
+            reportGraphRenderFailure(output, error instanceof Error ? error : new Error(String(error)));
         }
         notifyInteractiveGraphSignalObservers(extraObservers, signal);
     };
-}
-
-function reportGraphRenderFailure(output: ChatOutput, error: unknown): void {
-    const message = error instanceof Error ? error.message : String(error);
-    process.stderr.write(`Interactive graph render failed: ${message}\n`);
-    try {
-        output.write(`Error: ${message}\n`);
-    } catch (writeError: unknown) {
-        const writeMessage = writeError instanceof Error ? writeError.message : String(writeError);
-        process.stderr.write(`Interactive graph render error write failed: ${writeMessage}\n`);
-    }
-}
-
-export function renderInteractiveGraphDurableEvent(
-    output: ChatOutput,
-    state: ProviderRenderState,
-    event: AgentEvent,
-): void {
-    if (event.type === 'decision.selected') {
-        const message = typeof event.message === 'string' ? event.message.trim() : '';
-        if (message.length > 0) {
-            output.write(`→ ${message}\n`);
-        }
-        return;
-    }
-    if (event.type === 'attempt.started') {
-        const nodeId = event.abg?.nodeId;
-        if (typeof nodeId === 'string' && nodeId.length > 0) {
-            const attempt = typeof event.abg?.attempt === 'number' ? event.abg.attempt : undefined;
-            output.setAgentStatus?.(formatNodeWorkingStatus(nodeId, attempt));
-        }
-        return;
-    }
-    if (event.type === 'attempt.failed') {
-        const nodeId = event.abg?.nodeId;
-        const failure = describeRetryableFailure(event.abg?.error);
-        if (typeof nodeId === 'string' && nodeId.length > 0 && failure.retryable) {
-            output.setAgentStatus?.(
-                formatNodeRetryStatus({
-                    nodeId,
-                    shortReason: failure.shortReason,
-                    ...(typeof event.abg?.attempt === 'number' ? { attempt: event.abg.attempt } : {}),
-                    ...(typeof event.abg?.maxAttempts === 'number' ? { maxAttempts: event.abg.maxAttempts } : {}),
-                }),
-            );
-            return;
-        }
-        output.clearAgentStatus?.();
-        return;
-    }
-
-    const emit = event.abg?.emit;
-    if (emit === undefined) return;
-    if (emit.type === 'llm.turn.completed') {
-        output.clearAgentStatus?.();
-        if (state.streamingThinking) {
-            output.write('\n');
-            state.streamingThinking = false;
-        }
-        if (state.toolCount > 0) {
-            const noun = state.toolCount === 1 ? 'tool' : 'tools';
-            output.write(`✓ ${state.toolCount} ${noun} (${formatToolCountSummary(state.toolNames)})\n`);
-            state.toolCount = 0;
-            state.toolNames = [];
-        }
-        const text = readStringField(emit.payload, 'text') ?? '';
-        if (state.streamingText) {
-            output.write('\n');
-            state.streamingText = false;
-        } else if (text.length > 0) {
-            output.write(`Assistant: ${text}\n`);
-        }
-        if (text.length > 0) state.finalMessage = text;
-        return;
-    }
-    if (emit.type === 'tool.completed' || emit.type === 'tool.failed') {
-        state.toolCount += 1;
-        state.toolNames = [...state.toolNames, readStringField(emit.payload, 'toolName') ?? 'tool'];
-        output.clearAgentStatus?.();
-        if (state.streamingText || state.streamingThinking) {
-            output.write('\n');
-            state.streamingText = false;
-            state.streamingThinking = false;
-        }
-        renderGraphToolSettlement(output, emit.payload, emit.type === 'tool.completed' ? 'completed' : 'failed');
-        return;
-    }
-    if (emit.type === 'llm.error') {
-        const errorText = readStringField(emit.payload, 'error') ?? 'LLM error';
-        const errorCode = readStringField(emit.payload, 'errorCode');
-        const failure = describeRetryableFailure({
-            message: errorText,
-            ...(errorCode !== undefined ? { code: errorCode, retryable: true } : {}),
-        });
-        const nodeId = event.abg?.nodeId;
-        if (failure.retryable && typeof nodeId === 'string' && nodeId.length > 0) {
-            output.setAgentStatus?.(
-                formatNodeRetryStatus({
-                    nodeId,
-                    shortReason: failure.shortReason,
-                    ...(typeof event.abg?.attempt === 'number' ? { attempt: event.abg.attempt } : {}),
-                    ...(typeof event.abg?.maxAttempts === 'number' ? { maxAttempts: event.abg.maxAttempts } : {}),
-                }),
-            );
-            return;
-        }
-        output.clearAgentStatus?.();
-        output.write(`Error: ${redactCredentialText(errorText)}\n`);
-    }
 }
 
 function renderInteractiveGraphSignal(
@@ -166,8 +57,13 @@ function renderInteractiveGraphSignal(
 ): Promise<void> | undefined {
     if (signal.type === 'started') {
         closeStreams(output, state);
-        output.write(`▸ ${signal.nodeId}\n`);
-        output.setAgentStatus?.(formatNodeWorkingStatus(signal.nodeId));
+        const statusText = formatNodeWorkingStatus(sanitizeTerminalDisplayText(signal.nodeId));
+        emitTranscriptPart(
+            output,
+            { id: graphOccurrencePartId(state), type: 'status', text: statusText, status: 'running' },
+            `▸ ${signal.nodeId}\n`,
+        );
+        output.setAgentStatus?.(statusText);
         return;
     }
     if (signal.type === 'failure') {
@@ -177,32 +73,89 @@ function renderInteractiveGraphSignal(
             // Keep the spinner above the prompt; durable attempt.failed fills attempt/max.
             output.setAgentStatus?.(
                 formatNodeRetryStatus({
-                    nodeId: signal.nodeId,
-                    shortReason: failure.shortReason,
+                    nodeId: sanitizeTerminalDisplayText(signal.nodeId),
+                    shortReason: sanitizeTerminalDisplayText(failure.shortReason),
                 }),
             );
             return;
         }
         output.clearAgentStatus?.();
-        output.write(`✗ ${signal.nodeId}: ${extractSignalError(signal.error)}\n`);
+        const redactedErrorText = redactCredentialText(extractSignalError(signal.error));
+        const turnPrefix = currentGraphTurnPrefix(state, signal.nodeId);
+        const fallbackText = `✗ ${signal.nodeId}: ${redactedErrorText}\n`;
+        if (turnPrefix === undefined) {
+            emitTranscriptFallback(output, fallbackText);
+        } else {
+            emitTranscriptPart(
+                output,
+                {
+                    id: graphTurnPartId(turnPrefix, 'error'),
+                    type: 'error',
+                    text: redactedErrorText,
+                    error: redactedErrorText,
+                    status: 'failed',
+                },
+                fallbackText,
+            );
+        }
+        recordGraphErrorEmission(state, {
+            reason: redactedErrorText,
+            typedPartEmitted: turnPrefix !== undefined && output.writeTranscriptPart !== undefined,
+            exactReceiptFallbackWritten: false,
+        });
+        return;
+    }
+    if (signal.type === 'emit' && signal.event.type === 'workflow.transitioned') {
+        emitTranscriptPart(
+            output,
+            {
+                id: graphOccurrencePartId(state, signal.event.id),
+                type: 'event',
+                text: signal.event.type,
+                status: 'informational',
+                eventId: signal.event.id,
+                eventType: signal.event.type,
+                timestamp: signal.event.timestamp,
+            },
+            '',
+        );
         return;
     }
     if (signal.type === 'emit' && signal.event.type === 'llm.turn.started') {
+        openGraphTurn(state, signal.nodeId, signal.event.id);
         output.setAgentStatus?.('Thinking...');
         return;
     }
     const reasoningDelta = readReasoningDeltaFromSignal(signal);
     if (reasoningDelta !== undefined) {
+        const turnPrefix = currentGraphTurnPrefix(state, signal.nodeId);
+        const partId = turnPrefix === undefined ? undefined : graphTurnPartId(turnPrefix, 'reasoning');
+        const redactedDelta = redactCredentialText(reasoningDelta, []);
+        const text =
+            partId === undefined ? redactedDelta : `${state.reasoningTextByRequest.get(partId) ?? ''}${redactedDelta}`;
+        if (partId !== undefined) state.reasoningTextByRequest.set(partId, text);
+        let fallbackText = '';
         if (output.isShowThinking?.() !== false) {
-            if (!state.streamingThinking) {
-                if (state.streamingText) {
-                    output.write('\n');
-                    state.streamingText = false;
-                }
-                output.write('Thinking: ');
+            const continuesActiveThinking = state.streamingThinking && state.streamingThinkingPartId === partId;
+            if (!continuesActiveThinking) {
+                if (state.streamingText || state.streamingThinking) emitTranscriptFallback(output, '\n');
+                state.streamingText = false;
+                delete state.streamingTextPartId;
+                fallbackText = `Thinking: ${redactedDelta}`;
                 state.streamingThinking = true;
+                if (partId === undefined) {
+                    delete state.streamingThinkingPartId;
+                } else {
+                    state.streamingThinkingPartId = partId;
+                }
+            } else {
+                fallbackText = redactedDelta;
             }
-            output.write(reasoningDelta);
+        }
+        if (partId === undefined) {
+            emitTranscriptFallback(output, fallbackText);
+        } else {
+            emitTranscriptPart(output, { id: partId, type: 'reasoning', text, status: 'streaming' }, fallbackText);
         }
         return;
     }
@@ -210,80 +163,56 @@ function renderInteractiveGraphSignal(
     if (delta !== undefined) {
         output.clearAgentStatus?.();
         if (state.streamingThinking) {
-            output.write('\n');
+            emitTranscriptFallback(output, '\n');
             state.streamingThinking = false;
+            delete state.streamingThinkingPartId;
         }
-        if (!state.streamingText) {
-            output.write('Assistant: ');
-            state.streamingText = true;
+        const turnPrefix = currentGraphTurnPrefix(state, signal.nodeId);
+        const partId = turnPrefix === undefined ? undefined : graphTurnPartId(turnPrefix, 'assistant');
+        const redactedDelta = redactCredentialText(delta, []);
+        const text =
+            partId === undefined ? redactedDelta : `${state.assistantTextByRequest.get(partId) ?? ''}${redactedDelta}`;
+        if (partId !== undefined) state.assistantTextByRequest.set(partId, text);
+        const fallbackText = state.streamingText
+            ? state.streamingTextPartId === partId
+                ? redactedDelta
+                : `\nAssistant: ${redactedDelta}`
+            : `Assistant: ${redactedDelta}`;
+        state.streamingText = true;
+        if (partId === undefined) {
+            delete state.streamingTextPartId;
+            emitTranscriptFallback(output, fallbackText);
+        } else {
+            state.streamingTextPartId = partId;
+            emitTranscriptPart(output, { id: partId, type: 'assistant', text, status: 'streaming' }, fallbackText);
         }
-        output.write(delta);
         return;
     }
     if (signal.type === 'emit' && signal.event.type === 'tool.started') {
-        output.setAgentStatus?.(`Running ${readStringField(signal.event.payload, 'toolName') ?? 'tool'}...`);
+        const toolName = readStringField(signal.event.payload, 'toolName') ?? 'tool';
+        output.setAgentStatus?.(`Running ${sanitizeTerminalDisplayText(toolName)}...`);
         return;
     }
     const proposal = readToolCallProposal(signal);
     if (proposal === undefined) return undefined;
-    output.setAgentStatus?.(`Calling ${proposal.toolName}...`);
+    output.setAgentStatus?.(`Calling ${sanitizeTerminalDisplayText(proposal.toolName)}...`);
     if (state.streamingText) {
-        output.write('\n');
+        emitTranscriptFallback(output, '\n');
         state.streamingText = false;
+        delete state.streamingTextPartId;
     }
-    return renderToolPreview(proposal, output, workspaceRoot);
-}
-
-function renderGraphToolSettlement(output: ChatOutput, payload: unknown, status: 'completed' | 'failed'): void {
-    const toolName = readStringField(payload, 'toolName') ?? 'tool';
-    const modelOutput = readStringField(payload, 'output');
-    const structured = structuredToolOutput(payload);
-    output.write(
-        `${formatToolResultActivity(toolName, status, {
-            ...(modelOutput !== undefined ? { modelOutput } : {}),
-            ...(structured !== undefined ? { structuredOutput: structured } : {}),
-            ...(status === 'failed'
-                ? { errorMessage: readErrorMessage(payload) ?? 'unknown error' }
-                : {}),
-        })}\n`,
-    );
-    if (output.isToolOutputExpanded?.() === false) return;
-    if (status === 'failed') return;
-    if (toolName === 'command.run' || toolName === 'bash.run') {
-        if (modelOutput !== undefined && modelOutput.includes('\n')) {
-            output.write(`Command output for ${toolName}\n${modelOutput}\n`);
-        }
-        return;
-    }
-    if (toolName === 'file.patch') {
-        const parsed = structured === undefined ? undefined : parseFilePatchOutput(structured);
-        if (parsed !== undefined && parsed.appliedFiles.length > 1) {
-            output.write(`Applied patch: ${parsed.appliedFiles.join(', ')}\n`);
-        }
-        return;
-    }
-    if (toolName === 'file.edit') {
-        const parsed = structured === undefined ? undefined : parseFileEditOutput(structured);
-        if (parsed !== undefined) {
-            const noun = parsed.occurrencesReplaced === 1 ? 'occurrence' : 'occurrences';
-            output.write(`Applied edit: ${parsed.appliedFiles.join(', ')} (${parsed.occurrencesReplaced} ${noun})\n`);
-        }
-        return;
-    }
-    if (toolName === 'file.write') {
-        const parsed = structured === undefined ? undefined : parseFileWriteOutput(structured);
-        if (parsed !== undefined) {
-            output.write(
-                `${parsed.operation === 'created' ? 'Created' : 'Replaced'} file: ${parsed.appliedFiles.join(', ')}\n`,
-            );
-        }
-    }
+    return renderToolPreview(proposal, output, {
+        state,
+        ...(workspaceRoot !== undefined ? { workspaceRoot } : {}),
+    });
 }
 
 function closeStreams(output: ChatOutput, state: ProviderRenderState): void {
-    if (state.streamingText || state.streamingThinking) output.write('\n');
+    if (state.streamingText || state.streamingThinking) emitTranscriptFallback(output, '\n');
     state.streamingText = false;
+    delete state.streamingTextPartId;
     state.streamingThinking = false;
+    delete state.streamingThinkingPartId;
 }
 
 export type { ToolInvocationSettlement };

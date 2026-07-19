@@ -1,4 +1,4 @@
-// allow: SIZE_OK -- HEAD 888 -> current 930 pure LOC; one interactive chat event-loop state machine after action extraction.
+// allow: SIZE_OK -- HEAD 930 -> current 951 pure LOC; one interactive chat event-loop state machine after action extraction.
 import {
     type AgentRuntime,
     type AskUserQuestionRequest,
@@ -87,6 +87,7 @@ import { formatModelProviderStatus } from './interactive-chat-status';
 import { createUndoRedoStack, type UndoRedoStack } from './interactive-chat-undo-redo-stack';
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent';
 import { interactiveSessionCliStdout } from './interactive-session-cli-stdout';
+import { emitTranscriptFallback } from './interactive-transcript-emission';
 import {
     getOrCreateMissionControlServices,
     isOmoRootNotFoundError,
@@ -273,6 +274,8 @@ export async function runInteractiveChatSession(
         (tuiHandle !== undefined
             ? {
                   write: (text) => tuiHandle.emitOutput(text),
+                  writeTranscriptPart: (part, fallbackText) => tuiHandle.emitTranscriptPart(part, fallbackText),
+                  writeTranscriptFallback: (text) => tuiHandle.emitTranscriptFallback(text),
                   getOutput: () => tuiHandle.getOutput(),
                   setAgentStatus: (text) => tuiHandle.setAgentStatus(text),
                   clearAgentStatus: () => tuiHandle.clearAgentStatus(),
@@ -287,12 +290,30 @@ export async function runInteractiveChatSession(
     // the durable session store is never modified by undo/redo.
     let conversationText = '';
     let undoRedoStack = createUndoRedoStack();
+    const baseWriteTranscriptPart = baseChatOutput.writeTranscriptPart;
+    const baseWriteTranscriptFallback = baseChatOutput.writeTranscriptFallback;
     const chatOutput: ChatOutput = {
         ...baseChatOutput,
         write: (text: string) => {
             conversationText += text;
             baseChatOutput.write(text);
         },
+        ...(baseWriteTranscriptPart !== undefined
+            ? {
+                  writeTranscriptPart: (part, fallbackText) => {
+                      conversationText += fallbackText;
+                      baseWriteTranscriptPart(part, fallbackText);
+                  },
+              }
+            : {}),
+        ...(baseWriteTranscriptFallback !== undefined
+            ? {
+                  writeTranscriptFallback: (text: string) => {
+                      conversationText += text;
+                      baseWriteTranscriptFallback(text);
+                  },
+              }
+            : {}),
     };
     const showExitHint = (message: string): void => {
         if (chatOutput.showNotice !== undefined) {
@@ -896,7 +917,7 @@ export async function runInteractiveChatSession(
                 }
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
-                chatOutput.write(`Error: ${message}\n`);
+                emitTranscriptFallback(chatOutput, `Error: ${message}\n`);
                 if (tuiHandle !== undefined) {
                     tuiHandle.setGenerating(false);
                 }

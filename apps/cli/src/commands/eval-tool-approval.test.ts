@@ -65,21 +65,24 @@ describe('production eval approval gates', () => {
     it('returns typed failure without creating an eval runtime when interactive approval is cancelled', async () => {
         const workspaceRoot = createWorkspace(tempRoots, 'mctrl-eval-cancel-');
         const output = createBufferedChatOutput();
+        const approvalPending = deferredApproval();
         const events: AgentEvent[] = [];
         const probe = runtimeProbe();
         const options = {
-            ...toolOptions(output.output, workspaceRoot),
+            ...toolOptions({ ...output.output, showApproval: approvalPending.resolve }, workspaceRoot),
             emitEvent: (event: AgentEvent) => events.push(event),
             enableTrustedBash: true,
             evalContextManagerFactory: recordingRuntimeFactory(probe),
         };
         const broker = createInteractiveApprovalBroker(options, approvalSession());
-        broker.cancel('operator cancelled eval approval');
         const { registry } = await createInteractiveToolRegistry(options, broker);
 
-        const settlement = await invokeEval(registry, 'eval-cancelled', {
+        const invocation = invokeEval(registry, 'eval-cancelled', {
             cells: [{ language: 'js', code: 'process.exit(99)' }],
         });
+        await approvalPending.promise;
+        broker.cancel('operator cancelled eval approval');
+        const settlement = await invocation;
 
         expect(events.filter((event) => event.type === 'approval.requested')).toHaveLength(1);
         expect(settlement.result).toMatchObject({
