@@ -1,7 +1,11 @@
+import { openLocalSessionEventStore } from '@mission-control/core';
+import type { AgentEvent } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
     type CliSessionCatalogEntry,
     filterCatalogEntriesByWorkspace,
+    formatSessionCatalogEntry,
+    listSessionCatalogEntries,
     listSessionCatalogEntriesForWorkspace,
 } from './session-catalog';
 import { createSessionLog, useTempDataDir } from './session-import-export-fixtures';
@@ -198,4 +202,107 @@ describe('listSessionCatalogEntriesForWorkspace', () => {
             await rm(dataDir, { recursive: true, force: true });
         }
     });
+
+    it('projects blocked approval as status awaiting with approval reason', async () => {
+        // Given: a durable session whose latest run is blocked_on_approval with a pending approval.
+        const dataDir = await useTempDataDir();
+        const sessionId = 'session_catalog_blocked_approval';
+        try {
+            await writeDurableSession(dataDir, sessionId, blockedApprovalEvents(sessionId));
+
+            // When: the public catalog lists sessions from the projection store.
+            const entries = await listSessionCatalogEntries();
+            const entry = entries.find((candidate) => candidate.sessionId === sessionId);
+
+            // Then: catalog status is awaiting and awaiting.reason is approval.
+            expect(entry).toBeDefined();
+            if (entry === undefined) {
+                throw new Error('expected blocked approval catalog entry');
+            }
+            expect(entry).toMatchObject({
+                sessionId,
+                status: 'awaiting',
+                awaiting: {
+                    reason: 'approval',
+                    source: {
+                        approvalId: 'approval_patch',
+                        runId: 'run_1',
+                        toolCallId: 'patch_call',
+                    },
+                },
+            });
+            expect(typeof entry.status).toBe('string');
+            expect(formatSessionCatalogEntry(entry)).toContain(
+                'status=awaiting approval (approval=approval_patch,run=run_1,tool=patch_call)',
+            );
+        } finally {
+            await rm(dataDir, { recursive: true, force: true });
+        }
+    });
 });
+
+async function writeDurableSession(
+    dataDir: string,
+    sessionId: string,
+    events: readonly AgentEvent[],
+): Promise<void> {
+    const store = await openLocalSessionEventStore({
+        dataDir,
+        sessionId,
+        now: () => events[0]?.timestamp ?? '2026-07-04T10:00:00.000Z',
+        createEventId: (_event, sequence) => `evt_${sessionId}_${sequence}`,
+    });
+    try {
+        for (const event of events) {
+            await store.append(event);
+        }
+    } finally {
+        await store.close();
+    }
+}
+
+function blockedApprovalEvents(sessionId: string): readonly AgentEvent[] {
+    return [
+        {
+            type: 'session.started',
+            timestamp: '2026-07-04T10:00:00.000Z',
+            sessionId,
+            message: 'session started',
+        },
+        {
+            type: 'run.started',
+            timestamp: '2026-07-04T10:00:01.000Z',
+            sessionId,
+            message: 'run started',
+            run: { command: 'run', state: 'running', runId: 'run_1' },
+        },
+        {
+            type: 'approval.requested',
+            timestamp: '2026-07-04T10:00:02.000Z',
+            sessionId,
+            message: 'approval pending',
+            approvalRecord: {
+                approvalId: 'approval_patch',
+                requestId: 'permission_patch',
+                policyDecision: 'requires_approval',
+                state: 'pending',
+                subject: { kind: 'tool', id: 'file.patch' },
+                requestedAt: '2026-07-04T10:00:02.000Z',
+            },
+        },
+        {
+            type: 'run.blocked',
+            timestamp: '2026-07-04T10:00:03.000Z',
+            sessionId,
+            message: 'waiting for approval: file.patch',
+            run: {
+                command: 'run',
+                state: 'blocked_on_approval',
+                runId: 'run_1',
+                reason: 'waiting for approval: file.patch',
+                errorCode: 'tool_failed',
+                toolCallId: 'patch_call',
+            },
+        },
+    ];
+}

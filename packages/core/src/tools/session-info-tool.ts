@@ -1,3 +1,4 @@
+import { SessionAwaitingDetailsSchema } from '@mission-control/protocol';
 import { z } from 'zod';
 import { readSessionProjection, type SessionToolsOptions, summarizeProjection } from './session-tools-shared';
 import type { ToolRegistration } from './tool-registry-types';
@@ -14,6 +15,7 @@ export const sessionInfoOutputSchema = z.object({
     sessionId: z.string(),
     found: z.boolean(),
     status: z.string().optional(),
+    awaiting: SessionAwaitingDetailsSchema.optional(),
     eventCount: z.number().optional(),
     messageCount: z.number().optional(),
     createdAt: z.string().optional(),
@@ -40,9 +42,13 @@ export function formatSessionInfoModelOutput(output: SessionInfoOutput): string 
     }
     const agents =
         output.agentsUsed !== undefined && output.agentsUsed.length > 0 ? output.agentsUsed.join(', ') : 'none';
+    const statusLabel =
+        output.awaiting === undefined
+            ? (output.status ?? 'unknown')
+            : `${output.status ?? 'unknown'}/${output.awaiting.reason}`;
     const lines: string[] = [
         `Session ID: ${output.sessionId}`,
-        `Status: ${output.status ?? 'unknown'}`,
+        `Status: ${statusLabel}`,
         `Events: ${output.eventCount ?? 0}`,
         `Messages: ${output.messageCount ?? 0}`,
         `Created: ${output.createdAt ?? 'N/A'}`,
@@ -78,6 +84,7 @@ export function createSessionInfoToolRegistration(
                 sessionId: summary.sessionId,
                 found: true,
                 status: summary.status,
+                ...(summary.awaiting !== undefined ? { awaiting: summary.awaiting } : {}),
                 eventCount: summary.eventCount,
                 messageCount: summary.messageCount,
                 ...(summary.createdAt !== undefined ? { createdAt: summary.createdAt } : {}),

@@ -194,6 +194,33 @@ describe('session_* tools over database sessions', () => {
         expect(settlement.result.status).toBe('completed');
         expect(settlement.modelOutput?.content).toContain('registry acknowledged');
     });
+
+    it('session_list exposes status awaiting and approval reason for a blocked approval fixture', async () => {
+        // Given: a durable session blocked on a pending file.patch approval.
+        const dataDir = await freshDataDir();
+        const sessionId = 'ses_blocked_approval';
+        await writeSession(dataDir, sessionId, blockedApprovalEvents(sessionId));
+
+        // When: the model-facing session_list tool summarizes the store.
+        const list = createSessionListToolRegistration({ dataDir });
+        const listOutput = await list.execute({}, fixtureContext);
+        const entry = listOutput.sessions.find((session) => session.sessionId === sessionId);
+
+        // Then: string status remains present and awaiting details carry the approval reason.
+        expect(entry).toMatchObject({
+            sessionId,
+            status: 'awaiting',
+            awaiting: {
+                reason: 'approval',
+                source: {
+                    approvalId: 'approval_patch',
+                    runId: 'run_1',
+                    toolCallId: 'patch_call',
+                },
+            },
+        });
+        expect(typeof entry?.status).toBe('string');
+    });
 });
 
 function registerAll(registry: ToolRegistry, dataDir: string): void {
@@ -272,4 +299,50 @@ function assistantEvent(sessionId: string, providerTurnId: string, content: stri
             visibility: 'model_visible',
         },
     };
+}
+
+function blockedApprovalEvents(sessionId: string): readonly AgentEvent[] {
+    return [
+        {
+            type: 'session.started',
+            timestamp: '2026-07-04T10:00:00.000Z',
+            sessionId,
+            message: 'session started',
+        },
+        {
+            type: 'run.started',
+            timestamp: '2026-07-04T10:00:01.000Z',
+            sessionId,
+            message: 'run started',
+            run: { command: 'run', state: 'running', runId: 'run_1' },
+        },
+        {
+            type: 'approval.requested',
+            timestamp: '2026-07-04T10:00:02.000Z',
+            sessionId,
+            message: 'approval pending',
+            approvalRecord: {
+                approvalId: 'approval_patch',
+                requestId: 'permission_patch',
+                policyDecision: 'requires_approval',
+                state: 'pending',
+                subject: { kind: 'tool', id: 'file.patch' },
+                requestedAt: '2026-07-04T10:00:02.000Z',
+            },
+        },
+        {
+            type: 'run.blocked',
+            timestamp: '2026-07-04T10:00:03.000Z',
+            sessionId,
+            message: 'waiting for approval: file.patch',
+            run: {
+                command: 'run',
+                state: 'blocked_on_approval',
+                runId: 'run_1',
+                reason: 'waiting for approval: file.patch',
+                errorCode: 'tool_failed',
+                toolCallId: 'patch_call',
+            },
+        },
+    ];
 }

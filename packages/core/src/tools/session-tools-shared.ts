@@ -1,4 +1,4 @@
-import type { AgentEventEnvelope } from '@mission-control/protocol';
+import type { AgentEventEnvelope, SessionAwaitingDetails } from '@mission-control/protocol';
 import { resolveMissionControlDataDir } from '../memory/data-dir';
 import { openLocalSessionProjectionStore, readLocalSessionReplay } from '../memory/local-session-store';
 import { REDACTED_CREDENTIAL } from '../providers/redaction-handler';
@@ -22,6 +22,7 @@ export type SessionMessageEntry = {
 export type SessionSummary = {
     readonly sessionId: string;
     readonly status: string;
+    readonly awaiting?: SessionAwaitingDetails;
     readonly eventCount: number;
     readonly messageCount: number;
     readonly createdAt?: string;
@@ -88,6 +89,7 @@ export function summarizeProjection(sessionId: string, projection: SessionReplay
     return {
         sessionId,
         status: projection.snapshot.status,
+        ...(projection.snapshot.awaiting !== undefined ? { awaiting: projection.snapshot.awaiting } : {}),
         eventCount: events.length,
         messageCount: projection.codingSteps.filter((step) => step.kind === 'provider.message').length,
         ...(first !== undefined ? { createdAt: first } : {}),

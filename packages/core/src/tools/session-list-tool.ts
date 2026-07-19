@@ -1,3 +1,4 @@
+import { SessionAwaitingDetailsSchema } from '@mission-control/protocol';
 import { z } from 'zod';
 import {
     listSessionIds,
@@ -36,6 +37,7 @@ export const sessionListOutputSchema = z.object({
         z.object({
             sessionId: z.string(),
             status: z.string(),
+            awaiting: SessionAwaitingDetailsSchema.optional(),
             eventCount: z.number(),
             messageCount: z.number(),
             createdAt: z.string().optional(),
@@ -59,7 +61,9 @@ export function formatSessionListModelOutput(output: SessionListOutput): string 
     const separator = '|---|---|---|---|---|---|---|';
     const rows = output.sessions.map((session) => {
         const agents = session.agentsUsed.length > 0 ? session.agentsUsed.join(', ') : 'none';
-        return `| ${session.sessionId} | ${session.eventCount} | ${session.messageCount} | ${session.status} | ${session.createdAt ?? 'N/A'} | ${session.updatedAt ?? 'N/A'} | ${agents} |`;
+        const status =
+            session.awaiting === undefined ? session.status : `${session.status}/${session.awaiting.reason}`;
+        return `| ${session.sessionId} | ${session.eventCount} | ${session.messageCount} | ${status} | ${session.createdAt ?? 'N/A'} | ${session.updatedAt ?? 'N/A'} | ${agents} |`;
     });
     const hint = output.truncated ? `\n[truncated; pass a smaller date window or lower limit for more]` : '';
     return [header, separator, ...rows].join('\n') + hint;
