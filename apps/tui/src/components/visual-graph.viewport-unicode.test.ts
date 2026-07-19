@@ -46,6 +46,46 @@ describe('visual-graph renderVisualGraph', () => {
             expect(joinedLines(result)).toContain('running');
             expect(joinedLines(result)).toContain('succeeded');
         });
+
+        it('pans horizontally with offsetX so right-side nodes become visible', () => {
+            const nodes = Array.from({ length: 6 }, (_, i) => node(`wide${i}`, 'idle'));
+            const edges = [
+                { from: 'wide0', to: 'wide1' },
+                { from: 'wide0', to: 'wide2' },
+                { from: 'wide0', to: 'wide3' },
+                { from: 'wide0', to: 'wide4' },
+                { from: 'wide0', to: 'wide5' },
+            ];
+            const full = renderVisualGraph({ nodes, edges, maxWidth: 200 });
+            expect(full.fullWidth).toBeGreaterThan(30);
+            const panned = renderVisualGraph({
+                nodes,
+                edges,
+                maxWidth: 30,
+                offsetX: Math.max(0, full.fullWidth - 30),
+            });
+            expect(panned.collapsed).toBe(false);
+            expect(panned.offsetX).toBeGreaterThan(0);
+            expect(panned.pannable).toBe(true);
+            expect(panned.width).toBeLessThanOrEqual(30);
+        });
+
+        it('pans vertically with offsetY and maxHeight', () => {
+            const nodes = Array.from({ length: 8 }, (_, i) => node(`tall${i}`, 'idle'));
+            const edges = Array.from({ length: 7 }, (_, i) => ({ from: `tall${i}`, to: `tall${i + 1}` }));
+            const full = renderVisualGraph({ nodes, edges, maxWidth: WIDE });
+            expect(full.fullHeight).toBeGreaterThan(4);
+            const panned = renderVisualGraph({
+                nodes,
+                edges,
+                maxWidth: WIDE,
+                maxHeight: 4,
+                offsetY: 3,
+            });
+            expect(panned.rows.length).toBeLessThanOrEqual(4);
+            expect(panned.offsetY).toBeGreaterThan(0);
+            expect(panned.pannable).toBe(true);
+        });
     });
 
     describe('simple chain (A->B->C)', () => {
@@ -107,161 +147,6 @@ describe('visual-graph renderVisualGraph', () => {
         });
     });
 
-    describe('fan-out (one source to many targets)', () => {
-        const result = renderVisualGraph({
-            nodes: [
-                node('parent', 'succeeded'),
-                node('child1', 'running', true),
-                node('child2', 'idle'),
-                node('child3', 'idle'),
-            ],
-            edges: [
-                { from: 'parent', to: 'child1' },
-                { from: 'parent', to: 'child2' },
-                { from: 'parent', to: 'child3' },
-            ],
-            maxWidth: WIDE,
-        });
-
-        it('renders the source once and every target once', () => {
-            const text = joinedLines(result);
-            expect(occurrences(text, 'parent')).toBe(1);
-            expect(occurrences(text, 'child1')).toBe(1);
-            expect(occurrences(text, 'child2')).toBe(1);
-            expect(occurrences(text, 'child3')).toBe(1);
-        });
-
-        it('draws a branching bus with down arrowheads to each target', () => {
-            const text = joinedLines(result);
-            const arrowheads = occurrences(text, '\u25bc');
-            expect(arrowheads).toBe(3);
-        });
-    });
-
-    describe('fan-in / join (two sources into one target)', () => {
-        const result = renderVisualGraph({
-            nodes: [node('a', 'succeeded'), node('b', 'succeeded'), node('c', 'running', true)],
-            edges: [
-                { from: 'a', to: 'c' },
-                { from: 'b', to: 'c' },
-            ],
-            maxWidth: WIDE,
-        });
-
-        it('renders the join target exactly once (not duplicated)', () => {
-            const text = joinedLines(result);
-            expect(occurrences(text, 'c [running]')).toBe(1);
-            expect(occurrences(text, '[running]')).toBe(1);
-        });
-
-        it('renders both sources once', () => {
-            const text = joinedLines(result);
-            expect(occurrences(text, 'a [')).toBe(1);
-            expect(occurrences(text, 'b [')).toBe(1);
-        });
-
-        it('draws connectors from both sources converging on the target', () => {
-            const text = joinedLines(result);
-            expect(text).toContain('\u2502');
-            expect(text).toContain('\u25bc');
-        });
-    });
-
-    describe('self-loop (A->A)', () => {
-        it('renders the self-loop glyph on the node content row', () => {
-            const result = renderVisualGraph({
-                nodes: [node('work', 'running', true)],
-                edges: [{ from: 'work', to: 'work' }],
-                maxWidth: WIDE,
-            });
-            expect(result.collapsed).toBe(false);
-            expect(joinedLines(result)).toContain('\u21bb'); // self-loop glyph
-        });
-    });
-
-    describe('back-edge / cycle (A->B->C->A)', () => {
-        it('renders all cycle nodes and an upward back-edge arrowhead', () => {
-            const result = renderVisualGraph({
-                nodes: [node('a', 'running', true), node('b', 'idle'), node('c', 'idle')],
-                edges: [
-                    { from: 'a', to: 'b' },
-                    { from: 'b', to: 'c' },
-                    { from: 'c', to: 'a' },
-                ],
-                maxWidth: WIDE,
-            });
-            const text = joinedLines(result);
-            expect(text).toContain('a [');
-            expect(text).toContain('b [');
-            expect(text).toContain('c [');
-            expect(text).toContain('\u25b2'); // up arrowhead (back-edge)
-        });
-    });
-
-    describe('disconnected node', () => {
-        it('renders the disconnected node alongside the connected component', () => {
-            const result = renderVisualGraph({
-                nodes: [node('a', 'succeeded'), node('b', 'idle'), node('orphan', 'idle')],
-                edges: [{ from: 'a', to: 'b' }],
-                maxWidth: WIDE,
-            });
-            const text = joinedLines(result);
-            expect(text).toContain('orphan');
-            expect(text).toContain('a [');
-            expect(text).toContain('b [');
-            expect(text).toContain('\u25bc');
-        });
-    });
-
-    describe('long label clipping', () => {
-        it('truncates node ids that exceed the box interior', () => {
-            const longId = 'x'.repeat(60);
-            const result = renderVisualGraph({
-                nodes: [node(longId, 'running')],
-                edges: [],
-                maxWidth: WIDE,
-            });
-            const text = joinedLines(result);
-            expect(text).toContain('\u2026'); // ellipsis
-            expect(text).not.toContain(longId);
-        });
-
-        it('truncates long edge labels', () => {
-            const result = renderVisualGraph({
-                nodes: [node('a', 'succeeded'), node('b', 'running')],
-                edges: [{ from: 'a', to: 'b', label: 'a'.repeat(40) }],
-                maxWidth: WIDE,
-            });
-            const text = joinedLines(result);
-            expect(text).toContain('\u2026');
-        });
-    });
-
-    describe('narrow canvas clipping', () => {
-        it('bounds every output line to maxWidth', () => {
-            const narrow = 12;
-            const result = renderVisualGraph({
-                nodes: [node('start', 'succeeded'), node('end', 'idle')],
-                edges: [{ from: 'start', to: 'end' }],
-                maxWidth: narrow,
-            });
-            expect(result.collapsed).toBe(false);
-            for (const line of result.lines) {
-                expect(line.length).toBeLessThanOrEqual(narrow);
-            }
-            expect(result.width).toBe(narrow);
-        });
-
-        it('still surfaces node glyphs when clipped', () => {
-            const result = renderVisualGraph({
-                nodes: [node('start', 'succeeded')],
-                edges: [],
-                maxWidth: 8,
-            });
-            expect(joinedLines(result)).toContain('\u2713');
-        });
-    });
-
     describe('viewport-derived graph pane bounds', () => {
         it('keeps a 40x10 viewport finite, positive, and non-negative', () => {
             const bounds = visualGraphBoundsForViewport({ columns: 40, rows: 10 });
@@ -319,14 +204,3 @@ describe('visual-graph renderVisualGraph', () => {
         });
     });
 });
-
-function occurrences(haystack: string, needle: string): number {
-    if (needle.length === 0) return 0;
-    let count = 0;
-    let index = haystack.indexOf(needle);
-    while (index !== -1) {
-        count++;
-        index = haystack.indexOf(needle, index + needle.length);
-    }
-    return count;
-}

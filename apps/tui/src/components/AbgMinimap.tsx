@@ -5,6 +5,7 @@ import { createMemo, For, type JSX, Show } from 'solid-js';
 import type { TerminalViewport } from '../platform/terminal-viewport';
 import { useSolidStoreSelector } from '../platform/use-solid-store-selector';
 import type { AbgOverlayStore } from '../state/abg-overlay-state';
+import { projectVisualGraphInputForDisplay } from './abg-display-projection';
 import { nodeStatusTheme, STATUS_FG_GRAY } from './abg-status-theme';
 import {
     renderVisualGraph,
@@ -102,7 +103,7 @@ export function AbgMinimap(props: AbgMinimapProps): JSX.Element {
             minimapMaxWidthForViewport(props.viewport),
         );
         return {
-            graph: renderVisualGraph(input),
+            graph: renderVisualGraph(projectVisualGraphInputForDisplay(input)),
             recentStatuses: computeRecentStatuses(snap.nodeChangedAtMs, snap.nodes, Date.now()),
         };
     });

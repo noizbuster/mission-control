@@ -35,12 +35,13 @@ describe('ABG overlay reactive navigation source contract', () => {
         expect(source).not.toMatch(/const isActive = tab === activeTab/);
     });
 
-    test('repaint effects track abgNavKey for tab/scroll paint', () => {
+    test('repaint effects track abgNavKey for tab/scroll/pan paint', () => {
         const source = readFileSync(resolve(process.cwd(), 'apps/tui/src/app/use-repaint-effects.ts'), 'utf8');
         const appSource = readFileSync(resolve(process.cwd(), 'apps/tui/src/app.tsx'), 'utf8');
         expect(source).toContain('abgNavKey');
         expect(appSource).toContain('abgNavKey:');
         expect(appSource).toContain('abgActiveTab()');
         expect(appSource).toContain('abgScrollOffset()');
+        expect(appSource).toContain('abgPanX()');
     });
 });

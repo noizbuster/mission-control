@@ -7,7 +7,8 @@ import { useSolidStoreSelector } from '../platform/use-solid-store-selector';
 import type { AbgOverlayState, AbgOverlayStore } from '../state/abg-overlay-state';
 import { DEFAULT_REFRESH_MS } from '../state/abg-overlay-state';
 import { GraphPane, NodesPane, OverviewPane } from './AbgOverlayPanesA';
-import { ApprovalsPane, BlackboardPane, CostPolicyPane, TimelinePane, ToolsPane } from './AbgOverlayPanesB';
+import { ApprovalsPane, BlackboardPane, CostPolicyPane, TimelinePane, ToolsPane } from './AbgOverlayPanesBDisplay';
+import { sanitizeAbgDisplayText } from './abg-display-projection';
 import { graphStatusTheme, STATUS_FG_GRAY } from './abg-status-theme';
 
 export { scrolledSlice } from './abg-scroll';
@@ -73,6 +74,7 @@ export interface AbgOverlayProps {
     readonly store: AbgOverlayStore;
     readonly activeTab: AbgOverlayTab;
     readonly scrollOffset: number;
+    readonly panX?: number;
     readonly modelLabel: string;
     readonly viewport: TerminalViewport;
     readonly refreshMs?: number;
@@ -85,7 +87,7 @@ const yellowFg = '#ffff00';
 
 function truncateGraphId(graphId: string | undefined, maxLen: number = 20): string {
     if (graphId === undefined) return '(no graph)';
-    return truncateTerminalText(graphId, maxLen, '\u2026');
+    return truncateTerminalText(sanitizeAbgDisplayText(graphId), maxLen, '\u2026');
 }
 
 function formatCostSummary(state: AbgOverlayState): string {
@@ -111,7 +113,9 @@ function Header(props: { state: AbgOverlayState; modelLabel: string; refreshMs: 
             <box flexDirection="row">
                 <text {...dimAttrs}>{props.modelLabel}</text>
                 <text> </text>
-                <text {...dimAttrs}>sidecar:{props.state.nativeSidecarStatus || 'unknown'}</text>
+                <text {...dimAttrs}>
+                    sidecar:{sanitizeAbgDisplayText(props.state.nativeSidecarStatus || 'unknown')}
+                </text>
                 <text> </text>
                 <text {...dimAttrs}>{formatCostSummary(props.state)}</text>
                 <text> </text>
@@ -152,6 +156,7 @@ type PaneBodyProps = {
     modelLabel: string;
     viewport: TerminalViewport;
     scrollOffset: number;
+    panX: number;
 };
 
 function PaneBody(props: PaneBodyProps): JSX.Element {
@@ -172,6 +177,7 @@ function PaneBody(props: PaneBodyProps): JSX.Element {
                     modelLabel={props.modelLabel}
                     viewport={props.viewport}
                     scrollOffset={props.scrollOffset}
+                    panX={props.panX}
                 />
             </Match>
             <Match when={props.activeTab === 'nodes'}>
@@ -204,7 +210,9 @@ function FooterHint(props: { narrow: boolean }): JSX.Element {
                     Terminal too narrow for full overlay — widen to ≥100 cols for all panes
                 </text>
             ) : (
-                <text {...dimAttrs}>1-8 tabs | Tab cycle | ↑↓ scroll | r refresh | c clear | Ctrl+G/Esc close</text>
+                <text {...dimAttrs}>
+                    1-8 tabs | Tab cycle | ↑↓←→ pan graph | r refresh | c clear | Ctrl+G/Esc close
+                </text>
             )}
         </box>
     );
@@ -218,15 +226,16 @@ export function AbgOverlay(props: AbgOverlayProps): JSX.Element {
 
     return (
         <box flexDirection="column" height="100%" shouldFill={true}>
-            <Header state={state()} modelLabel={props.modelLabel} refreshMs={refreshMs()} />
+            <Header state={state()} modelLabel={sanitizeAbgDisplayText(props.modelLabel)} refreshMs={refreshMs()} />
             <TabStrip activeTab={visibleTab()} />
             <box flexGrow={1} shouldFill={true}>
                 <PaneBody
                     activeTab={visibleTab()}
                     state={state()}
-                    modelLabel={props.modelLabel}
+                    modelLabel={sanitizeAbgDisplayText(props.modelLabel)}
                     viewport={props.viewport}
                     scrollOffset={props.scrollOffset}
+                    panX={props.panX ?? 0}
                 />
             </box>
             <FooterHint narrow={narrow()} />

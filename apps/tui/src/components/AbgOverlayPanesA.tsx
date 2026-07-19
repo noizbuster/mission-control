@@ -2,18 +2,12 @@
 
 import { truncateTerminalText } from '@mission-control/tui';
 import { For, type JSX, Show } from 'solid-js';
-import type { TerminalViewport } from '../platform/terminal-viewport';
 import type { AbgOverlayState } from '../state/abg-overlay-state';
+import { sanitizeAbgDisplayText } from './abg-display-projection';
 import { scrolledSlice } from './abg-scroll';
 import { graphStatusTheme, nodeStatusTheme, STATUS_FG_GRAY } from './abg-status-theme';
-import { useSpinnerFrame } from './spinner';
-import {
-    renderVisualGraph,
-    type VisualGraphEdge,
-    type VisualGraphNode,
-    type VisualGraphRow,
-    visualGraphBoundsForViewport,
-} from './visual-graph';
+
+export { GraphPane, type GraphPaneProps } from './AbgOverlayGraphPane';
 
 export interface PaneProps {
     readonly state: AbgOverlayState;
@@ -21,15 +15,11 @@ export interface PaneProps {
     readonly scrollOffset?: number;
 }
 
-export type GraphPaneProps = PaneProps & {
-    readonly viewport: TerminalViewport;
-};
-
 const dimAttrs = { dim: true };
 const boldAttrs = { bold: true };
 
 function truncate(text: string, max: number): string {
-    return truncateTerminalText(text, max, '\u2026');
+    return truncateTerminalText(sanitizeAbgDisplayText(text), max, '\u2026');
 }
 
 function formatCostSummary(state: AbgOverlayState): string {
@@ -46,7 +36,6 @@ function isEmptyState(state: AbgOverlayState): boolean {
 }
 
 const cyanFg = '#00ffff';
-const yellowFg = '#ffff00';
 const redFg = '#ff0000';
 const focusedStyle = { fg: cyanFg, bold: true };
 
@@ -57,7 +46,9 @@ export function OverviewPane(props: PaneProps): JSX.Element {
         props.state.graphStatus !== undefined ? graphStatusTheme(props.state.graphStatus).foreground : STATUS_FG_GRAY;
     const statusText = () => props.state.graphStatus ?? 'idle';
     const liveOutputLines = () =>
-        scrolledSlice(props.state.lastLiveDelta.split('\n').slice(-8), props.scrollOffset ?? 0);
+        scrolledSlice(props.state.lastLiveDelta.split('\n').slice(-8), props.scrollOffset ?? 0).map(
+            sanitizeAbgDisplayText,
+        );
     const knownGraphs = () =>
         scrolledSlice(
             [...props.state.graphs.values()].sort((left, right) => left.graphId.localeCompare(right.graphId)),
@@ -84,9 +75,11 @@ export function OverviewPane(props: PaneProps): JSX.Element {
                     <text> </text>
                     <text {...dimAttrs}>{props.state.runState}</text>
                     <text> </text>
-                    <text {...dimAttrs}>{props.modelLabel}</text>
+                    <text {...dimAttrs}>{sanitizeAbgDisplayText(props.modelLabel)}</text>
                     <text> </text>
-                    <text {...dimAttrs}>sidecar:{props.state.nativeSidecarStatus || 'unknown'}</text>
+                    <text {...dimAttrs}>
+                        sidecar:{sanitizeAbgDisplayText(props.state.nativeSidecarStatus || 'unknown')}
+                    </text>
                     <text> </text>
                     <text {...dimAttrs}>{formatCostSummary(props.state)}</text>
                 </box>
@@ -123,7 +116,9 @@ export function OverviewPane(props: PaneProps): JSX.Element {
                 ) : null}
                 {props.state.lastError !== undefined ? (
                     <box marginTop={1}>
-                        <text {...(redFg !== undefined ? { fg: redFg } : {})}>Error: {props.state.lastError}</text>
+                        <text {...(redFg !== undefined ? { fg: redFg } : {})}>
+                            Error: {sanitizeAbgDisplayText(props.state.lastError)}
+                        </text>
                     </box>
                 ) : null}
                 <box flexDirection="column" marginTop={1}>
@@ -131,115 +126,6 @@ export function OverviewPane(props: PaneProps): JSX.Element {
                     <For each={liveOutputLines()}>{(line) => <text {...dimAttrs}>{line}</text>}</For>
                 </box>
             </box>
-        </Show>
-    );
-}
-
-function renderVisualRow(row: VisualGraphRow, spinnerGlyph: string): JSX.Element {
-    if (row.kind === 'connector') {
-        const text = row.segments.map((segment) => segment.text).join('');
-        return <text {...dimAttrs}>{text}</text>;
-    }
-    return (
-        <box flexDirection="row">
-            <For each={row.segments}>
-                {(segment) => {
-                    const fg = segment.status !== undefined ? nodeStatusTheme(segment.status).foreground : undefined;
-                    return <text {...(fg !== undefined ? { fg } : dimAttrs)}>{segment.text}</text>;
-                }}
-            </For>
-            {row.isActive ? <text {...(yellowFg !== undefined ? { fg: yellowFg } : {})}> {spinnerGlyph}</text> : null}
-        </box>
-    );
-}
-
-export function GraphPane(props: GraphPaneProps): JSX.Element {
-    const { glyph: spinnerGlyph } = useSpinnerFrame();
-    const graphBounds = () => visualGraphBoundsForViewport(props.viewport);
-    const visual = () => {
-        const state = props.state;
-        if (isEmptyState(state)) return undefined;
-        const nodes = [...state.nodes.entries()];
-        const visualNodes: VisualGraphNode[] = nodes.map(([nodeId, status]) => ({
-            nodeId,
-            status,
-            isActive: state.activeNodeIds.includes(nodeId),
-        }));
-        const visualEdges: VisualGraphEdge[] = state.graphEdges.map((edge) => ({
-            from: edge.source,
-            to: edge.target,
-            ...(edge.condition !== undefined ? { label: edge.condition } : {}),
-        }));
-        const bounds = graphBounds();
-        return renderVisualGraph({
-            nodes: visualNodes,
-            edges: visualEdges,
-            maxWidth: bounds.maxWidth,
-        });
-    };
-    const scrolledRows = () => {
-        const rendered = visual();
-        if (rendered === undefined) return [];
-        return scrolledSlice(rendered.rows, props.scrollOffset ?? 0);
-    };
-
-    return (
-        <Show
-            when={!isEmptyState(props.state) && visual() !== undefined}
-            fallback={
-                <box flexDirection="column" marginTop={1}>
-                    <text {...dimAttrs}>No active ABG run</text>
-                </box>
-            }
-        >
-            {(() => {
-                const state = props.state;
-                const graphId = state.focusedGraphId ?? state.activeGraphId ?? '(no graph)';
-                const childGraphs = [...state.graphs.values()]
-                    .filter((summary) => summary.parentGraphId === graphId)
-                    .sort((left, right) => left.graphId.localeCompare(right.graphId));
-                const rendered = visual();
-                if (rendered === undefined) {
-                    return (
-                        <box flexDirection="column" marginTop={1}>
-                            <text {...dimAttrs}>No active ABG run</text>
-                        </box>
-                    );
-                }
-                return (
-                    <box flexDirection="column" marginTop={1}>
-                        <text {...boldAttrs}>{graphId}</text>
-                        <scrollbox marginLeft={2} maxHeight={graphBounds().maxHeight} stickyScroll>
-                            <For each={scrolledRows()}>{(row) => renderVisualRow(row, spinnerGlyph())}</For>
-                        </scrollbox>
-                        {childGraphs.length > 0 ? (
-                            <box marginTop={1} flexDirection="column">
-                                <text {...boldAttrs} {...dimAttrs}>
-                                    Child Graphs ({childGraphs.length})
-                                </text>
-                                <For each={childGraphs}>
-                                    {(child) => {
-                                        const themeFg = graphStatusTheme(child.status).foreground;
-                                        const childFg = themeFg !== STATUS_FG_GRAY ? themeFg : undefined;
-                                        return (
-                                            <box flexDirection="row" marginLeft={2}>
-                                                <text {...dimAttrs}>↳</text>
-                                                <text> </text>
-                                                <text {...(childFg !== undefined ? { fg: childFg } : dimAttrs)}>
-                                                    {child.status}
-                                                </text>
-                                                <text> </text>
-                                                <text>{truncate(child.graphId, 30)}</text>
-                                                <text {...dimAttrs}> events={child.eventCount}</text>
-                                            </box>
-                                        );
-                                    }}
-                                </For>
-                            </box>
-                        ) : null}
-                    </box>
-                );
-            })()}
         </Show>
     );
 }
