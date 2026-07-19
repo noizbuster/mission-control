@@ -44,6 +44,7 @@ describe('CLI entrypoint', () => {
         expect(help).toContain('mc run "summarize this repository" --session session_demo --jsonl');
         expect(help).toContain('mc graph run examples/abg/research-answer.graph.json --session session_graph --jsonl');
         expect(help).toContain('mc session list');
+        expect(help).toContain('mc session status [session-id]');
         expect(help).toContain('mc session export session_demo /tmp/session_demo.mctrl-session.json');
         expect(help).toContain('mc session import /tmp/session_demo.mctrl-session.json');
         expect(help).toContain('mc session replay session_demo --jsonl');

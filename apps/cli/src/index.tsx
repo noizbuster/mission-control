@@ -81,6 +81,7 @@ export function createHelpText(): string {
         '  mc run "summarize this repository" --session session_demo --jsonl',
         '  mc graph run examples/abg/research-answer.graph.json --session session_graph --jsonl',
         '  mc session list',
+        '  mc session status [session-id]',
         '  mc session show session_demo',
         '  mc session export session_demo /tmp/session_demo.mctrl-session.json',
         '  mc session import /tmp/session_demo.mctrl-session.json',
@@ -134,6 +135,7 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
             process.stdout.write(await runModelsCommand(args));
             return;
         case 'session-list':
+        case 'session-status':
         case 'session-show':
         case 'session-export':
         case 'session-import':

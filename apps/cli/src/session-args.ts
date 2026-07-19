@@ -26,6 +26,16 @@ export function parseSessionArgs(argv: readonly string[]): CliArgs {
                 throw new Error(`Unsupported session list argument: ${argv[1]}`);
             }
             return createSessionArgs('session-list');
+        case 'status': {
+            if (argv.slice(1).includes('--json')) {
+                throw new Error('session status does not support --json');
+            }
+            const sessionId = argv[1];
+            if (argv[2] !== undefined) {
+                throw new Error(`Unsupported session status argument: ${argv[2]}`);
+            }
+            return { ...createSessionArgs('session-status'), ...(sessionId !== undefined ? { sessionId } : {}) };
+        }
         case 'show': {
             const sessionId = argv[1];
             if (sessionId === undefined) {

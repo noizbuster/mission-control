@@ -13,6 +13,7 @@ export type CliCommand =
     | 'auth-logout'
     | 'models'
     | 'session-list'
+    | 'session-status'
     | 'session-show'
     | 'session-replay'
     | 'session-export'

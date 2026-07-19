@@ -11,7 +11,12 @@ import type { CliArgs } from '../args';
 import { type CliCommandResult, successfulCliCommand } from '../cli-command-result';
 import { formatSessionStatusWithSource } from '../ui/session-status-format';
 import { exportSessionArchiveFile, importSessionArchiveFile } from './session-archive';
-import { formatSessionCatalogEntry, listSessionCatalogEntries, readSessionCatalogEntry } from './session-catalog';
+import {
+    type CliSessionCatalogEntry,
+    formatSessionCatalogEntry,
+    listSessionCatalogEntries,
+    readSessionCatalogEntry,
+} from './session-catalog';
 import { CliSessionCommandError } from './session-command-error';
 import { deleteSessionTree } from './session-delete-command';
 import { parseCliSessionId } from './session-id';
@@ -28,6 +33,10 @@ export async function runSessionCommand(args: CliArgs): Promise<CliCommandResult
             return successfulCliCommand(
                 (await listSessionCatalogEntries(observabilityRedactor)).map(formatSessionCatalogEntry).join('\n'),
             );
+        }
+        case 'session-status': {
+            const observabilityRedactor = await loadObservabilityRedactor();
+            return successfulCliCommand(await statusSession(args.sessionId, observabilityRedactor));
         }
         case 'session-show': {
             const observabilityRedactor = await loadObservabilityRedactor();
@@ -79,6 +88,40 @@ export async function runSessionCommand(args: CliArgs): Promise<CliCommandResult
 
 function stripTrailingLineFeed(value: string): string {
     return value.endsWith('\n') ? value.slice(0, -1) : value;
+}
+
+async function statusSession(
+    sessionId: string | undefined,
+    observabilityRedactor: ObservabilityRedactor,
+): Promise<string> {
+    if (sessionId === undefined) {
+        return (await listSessionCatalogEntries(observabilityRedactor)).map(formatSessionStatusLine).join('\n');
+    }
+    const parsedSessionId = requireValidSessionId(sessionId);
+    const entry = await readSessionCatalogEntry(parsedSessionId, undefined, observabilityRedactor);
+    if (entry.status === 'missing') {
+        throw new CliSessionCommandError({
+            code: 'session_not_found',
+            message: `Session not found: ${parsedSessionId}`,
+            sessionId: parsedSessionId,
+        });
+    }
+    return formatSessionStatusLine(entry);
+}
+
+function formatSessionStatusLine(entry: CliSessionCatalogEntry): string {
+    const awaiting = entry.status === 'awaiting' ? entry.awaiting : undefined;
+    return [
+        `session=${entry.sessionId}`,
+        `status=${entry.status}`,
+        awaiting === undefined ? undefined : `reason=${awaiting.reason}`,
+        awaiting?.source.runId === undefined ? undefined : `runId=${awaiting.source.runId}`,
+        awaiting?.source.toolCallId === undefined ? undefined : `toolCallId=${awaiting.source.toolCallId}`,
+        awaiting?.source.childSessionId === undefined ? undefined : `childSessionId=${awaiting.source.childSessionId}`,
+        entry.updatedAt === undefined ? undefined : `updatedAt=${entry.updatedAt}`,
+    ]
+        .filter((part) => part !== undefined)
+        .join(' ');
 }
 
 async function showSession(sessionId: string, observabilityRedactor: ObservabilityRedactor) {
