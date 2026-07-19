@@ -1,12 +1,21 @@
 /** @jsxImportSource @opentui/solid */
 
 import { For, type JSX, Show } from 'solid-js';
+import type { TranscriptPartStatus } from '../state/transcript-part';
 import {
+    buildInlineToolLabel,
+    CHAT_ASSISTANT_PAD_LEFT,
+    CHAT_ERROR,
     CHAT_PANEL_BG,
+    CHAT_SECONDARY,
+    CHAT_SUCCESS,
     CHAT_TEXT,
     CHAT_TEXT_MUTED,
     CHAT_TOOL_ICON_WIDTH,
-    buildInlineToolLabel,
+    CHAT_USER_MARGIN_TOP,
+    CHAT_USER_PAD_X,
+    CHAT_USER_PAD_Y,
+    CHAT_WARNING,
     toolIconForTitle,
 } from './chat-theme';
 import { DiffView } from './diff/DiffView';
@@ -17,7 +26,45 @@ export type ToolCardProps = {
     readonly lines: readonly string[];
     readonly title?: string;
     readonly expanded: boolean;
+    readonly status?: TranscriptPartStatus;
+    readonly bodyMode?: ToolCardBodyMode;
 };
+
+export type ToolCardBodyMode = 'auto' | 'plain';
+
+export type ToolStatusPresentation = {
+    readonly label: string | undefined;
+    readonly glyph: string | undefined;
+    readonly color: string;
+};
+
+export function toolStatusPresentation(status: TranscriptPartStatus | undefined): ToolStatusPresentation {
+    switch (status) {
+        case undefined:
+            return { label: undefined, glyph: undefined, color: CHAT_TEXT_MUTED };
+        case 'pending':
+        case 'running':
+        case 'streaming':
+            return { label: 'Running', glyph: '~', color: CHAT_WARNING };
+        case 'completed':
+            return { label: 'Completed', glyph: '+', color: CHAT_SUCCESS };
+        case 'failed':
+            return { label: 'Failed', glyph: '!', color: CHAT_ERROR };
+        case 'denied':
+            return { label: 'Denied', glyph: 'x', color: CHAT_ERROR };
+        case 'cancelled':
+        case 'interrupted':
+            return { label: 'Interrupted', glyph: 'x', color: CHAT_WARNING };
+        case 'background':
+            return { label: 'Background', glyph: '>', color: CHAT_SECONDARY };
+        case 'informational':
+            return { label: 'Info', glyph: 'i', color: CHAT_TEXT_MUTED };
+        case 'historical':
+            return { label: 'Historical', glyph: 'i', color: CHAT_TEXT_MUTED };
+        default:
+            return assertNever(status, 'tool status');
+    }
+}
 
 /**
  * Detect whether the block contains unified-diff content. Returns true when any
@@ -27,6 +74,17 @@ export type ToolCardProps = {
  */
 export function hasDiffContent(lines: readonly string[]): boolean {
     return lines.some((line) => line.startsWith('+') || line.startsWith('-') || line.startsWith('@@'));
+}
+
+export function shouldRenderToolBodyAsDiff(lines: readonly string[], mode: ToolCardBodyMode): boolean {
+    switch (mode) {
+        case 'auto':
+            return hasDiffContent(lines);
+        case 'plain':
+            return false;
+        default:
+            return assertNever(mode, 'tool body mode');
+    }
 }
 
 /**
@@ -49,7 +107,15 @@ export function ToolCard(props: ToolCardProps): JSX.Element {
     const title = () => props.title;
     const lines = () => props.lines;
     const expanded = () => props.expanded;
-    const header = () => buildHeaderLabel(title(), lines().length, expanded());
+    const bodyMode = () => props.bodyMode ?? 'auto';
+    const status = () => toolStatusPresentation(props.status);
+    const header = () => {
+        const base = buildHeaderLabel(title(), lines().length, expanded());
+        const current = status();
+        return current.label === undefined || current.glyph === undefined
+            ? base
+            : `[${current.glyph}] ${current.label}: ${base}`;
+    };
     const icon = () => toolIconForTitle(title());
     const showBlock = () => expanded() && lines().length > 0;
 
@@ -57,11 +123,11 @@ export function ToolCard(props: ToolCardProps): JSX.Element {
         <Show
             when={showBlock()}
             fallback={
-                <box paddingLeft={3} flexDirection="row" flexShrink={0}>
-                    <text width={CHAT_TOOL_ICON_WIDTH} fg={CHAT_TEXT_MUTED}>
+                <box paddingLeft={CHAT_ASSISTANT_PAD_LEFT} flexDirection="row" flexShrink={0}>
+                    <text width={CHAT_TOOL_ICON_WIDTH} fg={status().color}>
                         {icon()}
                     </text>
-                    <text flexGrow={1} fg={CHAT_TEXT_MUTED}>
+                    <text selectable flexGrow={1} fg={status().color}>
                         {header()}
                     </text>
                 </box>
@@ -71,29 +137,38 @@ export function ToolCard(props: ToolCardProps): JSX.Element {
                 border={['left']}
                 customBorderChars={LEFT_ACCENT_BORDER}
                 borderColor={CHAT_PANEL_BG}
-                paddingTop={1}
-                paddingBottom={1}
-                paddingLeft={2}
-                marginTop={0}
+                paddingTop={CHAT_USER_PAD_Y}
+                paddingBottom={CHAT_USER_PAD_Y}
+                paddingLeft={CHAT_USER_PAD_X}
                 backgroundColor={CHAT_PANEL_BG}
                 flexDirection="column"
                 flexShrink={0}
-                gap={1}
+                gap={CHAT_USER_MARGIN_TOP}
             >
-                <box flexDirection="row" paddingLeft={3}>
-                    <text width={CHAT_TOOL_ICON_WIDTH} fg={CHAT_TEXT_MUTED}>
+                <box flexDirection="row" paddingLeft={CHAT_ASSISTANT_PAD_LEFT}>
+                    <text width={CHAT_TOOL_ICON_WIDTH} fg={status().color}>
                         {icon()}
                     </text>
-                    <text flexGrow={1} fg={CHAT_TEXT_MUTED}>
+                    <text selectable flexGrow={1} fg={status().color}>
                         {header()}
                     </text>
                 </box>
-                {hasDiffContent(lines()) ? (
+                {shouldRenderToolBodyAsDiff(lines(), bodyMode()) ? (
                     <DiffView lines={renderDiff(lines().join('\n'))} />
                 ) : (
-                    <For each={lines()}>{(line) => <text fg={CHAT_TEXT}>{line}</text>}</For>
+                    <For each={lines()}>
+                        {(line) => (
+                            <text selectable fg={CHAT_TEXT}>
+                                {line}
+                            </text>
+                        )}
+                    </For>
                 )}
             </box>
         </Show>
     );
+}
+
+function assertNever(value: never, label: string): never {
+    throw new Error(`Unexpected ${label}: ${value}`);
 }

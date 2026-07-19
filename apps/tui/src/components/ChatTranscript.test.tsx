@@ -1,14 +1,13 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { MacOSScrollAccel } from '@opentui/core';
 import { describe, expect, it, vi } from 'vitest';
 import {
     ChatTranscriptScrollbox,
     type ChatTranscriptScrollOptions,
     chatTranscriptScrollOptions,
-    MarkdownPanel,
-    MessageBlock,
 } from './ChatTranscript';
+import { LegacyMessageBlock, MarkdownPanel } from './LegacyTranscriptRenderer';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 vi.mock('@mission-control/tui', async () => await import('../terminal-text'));
 vi.mock('@mission-control/tui/chat', async () => await import('../chat'));
@@ -62,7 +61,7 @@ describe('chatTranscriptScrollOptions', () => {
 describe('ChatTranscript component exports', () => {
     it('keeps callable Solid component seams', () => {
         expect(typeof ChatTranscriptScrollbox).toBe('function');
-        expect(typeof MessageBlock).toBe('function');
+        expect(typeof LegacyMessageBlock).toBe('function');
         expect(typeof MarkdownPanel).toBe('function');
     });
 
@@ -75,18 +74,59 @@ describe('ChatTranscript component exports', () => {
 describe('ChatTranscript stream-stability topology', () => {
     it('lists blocks with Index (position) not For (identity) to avoid remount flicker', () => {
         const source = readFileSync(resolve(process.cwd(), 'apps/tui/src/components/ChatTranscript.tsx'), 'utf8');
-        const transcriptFn = source.slice(source.indexOf('export function ChatTranscript'));
-        expect(transcriptFn).toContain('<Index each={props.blocks}>');
-        expect(transcriptFn).not.toContain('<For each={props.blocks}>');
+        const legacySource = readFileSync(
+            resolve(process.cwd(), 'apps/tui/src/components/LegacyTranscriptRenderer.tsx'),
+            'utf8',
+        );
+        expect(source).toContain('<Index each={props.blocks}>');
+        expect(source).not.toContain('<For each={props.blocks}>');
         expect(source).toContain('isStreaming={props.generating && index === props.blocks.length - 1}');
-        expect(source).toContain('const joined = () => joinBlockText(lines(), prefix())');
-        expect(source).toContain('streaming={streaming()}');
+        expect(legacySource).toContain('const joined = () => joinBlockText(lines(), prefix())');
+        expect(legacySource).toContain('streaming={streaming()}');
+    });
+
+    it('uses typed parts as the sole transcript list whenever semantic rows exist', () => {
+        const source = readFileSync(resolve(process.cwd(), 'apps/tui/src/components/ChatTranscript.tsx'), 'utf8');
+        const transcriptFn = source.slice(source.indexOf('export function ChatTranscript'));
+
+        expect(transcriptFn).toContain('props.transcriptParts.length > 0');
+        expect(transcriptFn).toContain('<Index each={props.transcriptParts}>');
+        expect(transcriptFn).toContain('<TranscriptPartRenderer');
+        expect(transcriptFn).toContain('fallback={');
+        expect(transcriptFn).toContain('<LegacyTranscriptBlocks');
+        expect(transcriptFn).toContain('showThinking={props.showThinking}');
+    });
+
+    it('passes final-row position reactively to typed transcript rows', () => {
+        // Given: the typed transcript list and its renderer boundary.
+        const transcriptSource = readFileSync(
+            resolve(process.cwd(), 'apps/tui/src/components/ChatTranscript.tsx'),
+            'utf8',
+        );
+        const rendererSource = readFileSync(
+            resolve(process.cwd(), 'apps/tui/src/components/TranscriptPartRenderer.tsx'),
+            'utf8',
+        );
+        const rowsSource = readFileSync(
+            resolve(process.cwd(), 'apps/tui/src/components/TypedTranscriptRows.tsx'),
+            'utf8',
+        );
+
+        // When: the source topology is checked without native FFI rendering.
+
+        // Then: only the current final legacy part receives streaming ownership.
+        expect(transcriptSource).toContain('isLast={index === props.transcriptParts.length - 1}');
+        expect(rendererSource).toContain('isLast={props.isLast}');
+        expect(rowsSource).toContain('isFinalLegacyPartStreaming(props.generating, props.isLast)');
     });
 });
 
 describe('OpenCode-style transcript chrome', () => {
     it('uses left-accent user/error panels and padding-only assistant markdown', () => {
-        const source = readFileSync(resolve(process.cwd(), 'apps/tui/src/components/ChatTranscript.tsx'), 'utf8');
+        const source = readFileSync(
+            resolve(process.cwd(), 'apps/tui/src/components/LegacyTranscriptRenderer.tsx'),
+            'utf8',
+        );
 
         expect(source).toContain('LEFT_ACCENT_BORDER');
         expect(source).toContain('CHAT_PRIMARY');

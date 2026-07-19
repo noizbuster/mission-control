@@ -13,7 +13,7 @@ export type InvertedSegment = {
 
 export type DiffLine = {
     readonly kind: DiffLineKind;
-    /** Tab-expanded content (prefix marker stripped for added/removed/context). */
+    /** Tab-expanded text with its original added, removed, or context marker. */
     readonly text: string;
     readonly invertedSegments?: ReadonlyArray<InvertedSegment>;
 };
@@ -23,6 +23,7 @@ const TAB_REPLACEMENT = '   ';
 type ClassifiedLine = {
     readonly kind: DiffLineKind;
     readonly content: string;
+    readonly marker: string;
 };
 
 type SegmentedLine = {
@@ -39,21 +40,21 @@ type SegmentedLine = {
  */
 function classifyLine(line: string): ClassifiedLine {
     if (line.startsWith('--- ') || line.startsWith('+++ ') || line.startsWith('Target: ')) {
-        return { kind: 'meta', content: line };
+        return { kind: 'meta', content: line, marker: '' };
     }
     if (line.startsWith('@@')) {
-        return { kind: 'hunk', content: line };
+        return { kind: 'hunk', content: line, marker: '' };
     }
     if (line.startsWith('-')) {
-        return { kind: 'removed', content: line.slice(1) };
+        return { kind: 'removed', content: line.slice(1), marker: '-' };
     }
     if (line.startsWith('+')) {
-        return { kind: 'added', content: line.slice(1) };
+        return { kind: 'added', content: line.slice(1), marker: '+' };
     }
     if (line.startsWith(' ')) {
-        return { kind: 'context', content: line.slice(1) };
+        return { kind: 'context', content: line.slice(1), marker: ' ' };
     }
-    return { kind: 'context', content: line };
+    return { kind: 'context', content: line, marker: '' };
 }
 
 function replaceTabs(text: string): string {
@@ -126,11 +127,19 @@ function computeIntraLine(
     };
 }
 
-function toDiffLine(kind: DiffLineKind, segmented: SegmentedLine): DiffLine {
+function toDiffLine(kind: DiffLineKind, marker: string, segmented: SegmentedLine): DiffLine {
+    const text = `${marker}${segmented.text}`;
     if (segmented.segments.length === 0) {
-        return { kind, text: segmented.text };
+        return { kind, text };
     }
-    return { kind, text: segmented.text, invertedSegments: segmented.segments };
+    return {
+        kind,
+        text,
+        invertedSegments: segmented.segments.map(({ start, end }) => ({
+            start: start + marker.length,
+            end: end + marker.length,
+        })),
+    };
 }
 
 /**
@@ -152,7 +161,7 @@ export function renderDiff(diffText: string): DiffLine[] {
         const current = classifyLine(lines[i] ?? '');
 
         if (current.kind !== 'removed') {
-            result.push({ kind: current.kind, text: replaceTabs(current.content) });
+            result.push({ kind: current.kind, text: `${current.marker}${replaceTabs(current.content)}` });
             i++;
             continue;
         }
@@ -177,14 +186,14 @@ export function renderDiff(diffText: string): DiffLine[] {
 
         if (removedContents.length === 1 && addedContents.length === 1) {
             const { removed, added } = computeIntraLine(removedContents[0] ?? '', addedContents[0] ?? '');
-            result.push(toDiffLine('removed', removed));
-            result.push(toDiffLine('added', added));
+            result.push(toDiffLine('removed', '-', removed));
+            result.push(toDiffLine('added', '+', added));
         } else {
             for (const content of removedContents) {
-                result.push({ kind: 'removed', text: content });
+                result.push({ kind: 'removed', text: `-${content}` });
             }
             for (const content of addedContents) {
-                result.push({ kind: 'added', text: content });
+                result.push({ kind: 'added', text: `+${content}` });
             }
         }
     }

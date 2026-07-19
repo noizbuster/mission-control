@@ -1,5 +1,5 @@
 /** @jsxImportSource @opentui/solid */
-// allow: SIZE_OK — collection of overlay components sharing the same imports.
+// allow: SIZE_OK -- HEAD 769 -> current ~769 pure LOC; pre-existing overlay collection touched for a line-neutral progress-count correction.
 import { resolveUserConfigDir } from '@mission-control/core';
 import { padEndToDisplayWidth } from '@mission-control/tui';
 import { MouseButton, type MouseEvent, TextAttributes } from '@opentui/core';
@@ -28,8 +28,6 @@ import {
 } from './overlay-theme';
 
 const MODEL_PICKER_MAX_VISIBLE = 10;
-
-
 
 // ---------------------------------------------------------------------------
 // ApprovalOverlay
@@ -240,7 +238,7 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): JSX.Element {
             <box height={1}>
                 <text fg={ACCENTS.question} attributes={TextAttributes.BOLD}>
                     {multiBatch()
-                        ? ` Question (${snapshot().questionTabIndex + 1}/${snapshot().questionTabs.length}) `
+                        ? ` Question (${snapshot().questionTabIndex + 1}/${snapshot().questionTabs.length + 1}) `
                         : ' Question '}
                 </text>
             </box>

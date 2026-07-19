@@ -1,5 +1,13 @@
+/** @jsxImportSource @opentui/solid */
+
 import { describe, expect, it } from 'vitest';
-import { buildHeaderLabel, hasDiffContent, ToolCard } from './ToolCard';
+import {
+    buildHeaderLabel,
+    hasDiffContent,
+    shouldRenderToolBodyAsDiff,
+    ToolCard,
+    toolStatusPresentation,
+} from './ToolCard';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -83,9 +91,27 @@ describe('ToolCard component', () => {
         expect(typeof ToolCard).toBe('function');
     });
 
-    it('routes expanded diff content through DiffView', () => {
-        expect(source).toContain('hasDiffContent(lines())');
+    it('routes expanded auto-mode diff content through DiffView', () => {
+        expect(source).toContain('return hasDiffContent(lines);');
+        expect(source).toContain('shouldRenderToolBodyAsDiff(lines(), bodyMode())');
         expect(source).toContain('<DiffView lines={renderDiff(lines().join');
+    });
+
+    it('keeps typed command literals as byte-preserving selectable plain rows', () => {
+        // Given: a typed command body whose literal rows resemble unified diff syntax.
+        const literalLines = ['+literal', '-literal', '@@ literal', '\tcommand tab', '  command whitespace', '   '];
+
+        // When: the explicit body mode selects the existing plain-row renderer.
+        const autoRendersAsDiff = shouldRenderToolBodyAsDiff(literalLines, 'auto');
+        const plainRendersAsDiff = shouldRenderToolBodyAsDiff(literalLines, 'plain');
+
+        // Then: inference remains available for auto callers while plain rows receive the original line values unchanged.
+        expect(hasDiffContent(literalLines)).toBe(true);
+        expect(autoRendersAsDiff).toBe(true);
+        expect(plainRendersAsDiff).toBe(false);
+        expect(source).toContain('const lines = () => props.lines;');
+        expect(source).toContain('<For each={lines()}>');
+        expect(source).toMatch(/<text selectable fg=\{CHAT_TEXT\}>\s*\{line\}\s*<\/text>/);
     });
 
     it('uses OpenCode inline icon row when collapsed and a left-accent panel when expanded', () => {
@@ -93,5 +119,12 @@ describe('ToolCard component', () => {
         expect(source).toContain('LEFT_ACCENT_BORDER');
         expect(source).toContain('toolIconForTitle');
         expect(source).toContain('CHAT_TOOL_ICON_WIDTH');
+    });
+
+    it('keeps failed and denied tool state visible through a glyph and label, not color alone', () => {
+        expect(toolStatusPresentation('failed').label).toBe('Failed');
+        expect(toolStatusPresentation('failed').glyph).toBe('!');
+        expect(toolStatusPresentation('denied').label).toBe('Denied');
+        expect(toolStatusPresentation('denied').glyph).toBe('x');
     });
 });

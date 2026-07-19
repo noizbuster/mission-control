@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { terminalDisplayWidth } from '../../terminal-text';
 import { renderDiff } from './render-diff';
 
 describe('renderDiff classification', () => {
@@ -29,14 +30,14 @@ describe('renderDiff classification', () => {
         ]);
     });
 
-    it('classifies a context line (leading space) stripping the marker', () => {
+    it('preserves a leading context marker while leaving unmarked prose unchanged', () => {
         const out = renderDiff(' unchanged line');
-        expect(out).toEqual([{ kind: 'context', text: 'unchanged line' }]);
+        expect(out).toEqual([{ kind: 'context', text: ' unchanged line' }]);
     });
 });
 
 describe('renderDiff intra-line word highlighting', () => {
-    it('marks only the changed token on a single removed+added edit', () => {
+    it('preserves added and removed markers while marking only changed body tokens', () => {
         const out = renderDiff(['-foo bar', '+foo baz'].join('\n'));
         expect(out).toHaveLength(2);
 
@@ -44,22 +45,19 @@ describe('renderDiff intra-line word highlighting', () => {
         expect(removed?.kind).toBe('removed');
         expect(added?.kind).toBe('added');
 
-        // Removed: text "foo bar", inverse only on "bar" -> [4,7).
-        expect(removed?.text).toBe('foo bar');
-        expect(removed?.invertedSegments).toEqual([{ start: 4, end: 7 }]);
+        expect(removed?.text).toBe('-foo bar');
+        expect(removed?.invertedSegments).toEqual([{ start: 5, end: 8 }]);
 
-        // Added: text "foo baz", inverse only on "baz" -> [4,7).
-        expect(added?.text).toBe('foo baz');
-        expect(added?.invertedSegments).toEqual([{ start: 4, end: 7 }]);
+        expect(added?.text).toBe('+foo baz');
+        expect(added?.invertedSegments).toEqual([{ start: 5, end: 8 }]);
     });
 
-    it('does NOT invert the common prefix "foo "', () => {
+    it('keeps the marker and common prefix outside inverse ranges', () => {
         const [removed] = renderDiff(['-foo bar', '+foo baz'].join('\n'));
         const segment = removed?.invertedSegments?.[0];
-        // The inverse range must start at or after the "foo " prefix (offset 4),
-        // never covering offset 0..4.
-        expect(segment?.start).toBe(4);
-        expect(segment?.end).toBe(7);
+        expect(removed?.text.slice(0, segment?.start)).toBe('-foo ');
+        expect(segment?.start).toBe(5);
+        expect(segment?.end).toBe(8);
     });
 
     it('produces no inverted segments for a multi-line add/remove block', () => {
@@ -72,28 +70,36 @@ describe('renderDiff intra-line word highlighting', () => {
         expect(out[1]?.kind).toBe('removed');
         expect(out[2]?.kind).toBe('added');
         expect(out[3]?.kind).toBe('added');
+        expect(out.map((line) => line.text)).toEqual(['-line one', '-line two', '+line three', '+line four']);
     });
 
     it('strips leading whitespace from the first changed part so indentation is not highlighted', () => {
         const out = renderDiff(['-  indented', '+  Indented'].join('\n'));
         const [removed] = out;
-        // text keeps the leading spaces; only "indented" is inverse -> [2, 10).
-        expect(removed?.text).toBe('  indented');
-        expect(removed?.invertedSegments).toEqual([{ start: 2, end: 10 }]);
+        expect(removed?.text).toBe('-  indented');
+        expect(removed?.invertedSegments).toEqual([{ start: 3, end: 11 }]);
     });
 
     it('expands tabs to three spaces before computing segments', () => {
         const out = renderDiff(['-\tcode', '+\tdone'].join('\n'));
         const [removed] = out;
-        expect(removed?.text).toBe('   code');
-        expect(removed?.invertedSegments).toEqual([{ start: 3, end: 7 }]);
+        expect(removed?.text).toBe('-   code');
+        expect(removed?.invertedSegments).toEqual([{ start: 4, end: 8 }]);
     });
 
     it('handles a pure deletion (removed with no following added) without segments', () => {
         const out = renderDiff(['-gone line', ' context after'].join('\n'));
         const [removed, ctx] = out;
-        expect(removed).toEqual({ kind: 'removed', text: 'gone line' });
-        expect(ctx).toEqual({ kind: 'context', text: 'context after' });
+        expect(removed).toEqual({ kind: 'removed', text: '-gone line' });
+        expect(ctx).toEqual({ kind: 'context', text: ' context after' });
+    });
+
+    it('preserves a 73-cell marked CJK row without truncating it at the 72-column boundary', () => {
+        const cjk72Columns = '가'.repeat(36);
+        const [added] = renderDiff(`+${cjk72Columns}`);
+
+        expect(added?.text).toBe(`+${cjk72Columns}`);
+        expect(terminalDisplayWidth(added?.text ?? '')).toBe(73);
     });
 });
 
@@ -114,9 +120,9 @@ describe('renderDiff real mctrl file.edit preview shape', () => {
         const removed = out[3];
         const added = out[4];
         // diffWords splits at the changed identifier; "computeValue" is inverse.
-        expect(removed?.text).toBe('const x = computeValue();');
-        expect(removed?.invertedSegments).toEqual([{ start: 10, end: 22 }]);
-        expect(added?.text).toBe('const x = computeValueCached();');
-        expect(added?.invertedSegments).toEqual([{ start: 10, end: 28 }]);
+        expect(removed?.text).toBe('-const x = computeValue();');
+        expect(removed?.invertedSegments).toEqual([{ start: 11, end: 23 }]);
+        expect(added?.text).toBe('+const x = computeValueCached();');
+        expect(added?.invertedSegments).toEqual([{ start: 11, end: 29 }]);
     });
 });

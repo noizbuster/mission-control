@@ -1,4 +1,5 @@
 import { For, type JSX } from 'solid-js';
+import { CHAT_DIFF_ADDED, CHAT_DIFF_REMOVED, CHAT_SECONDARY, CHAT_TEXT_MUTED } from '../chat-theme';
 import type { DiffLine, DiffLineKind } from './render-diff';
 
 export type DiffViewProps = {
@@ -15,11 +16,11 @@ export type DiffKindStyle = {
 };
 
 const KIND_STYLE: Readonly<Record<DiffLineKind, DiffKindStyle>> = {
-    added: { fg: '#00ff00' },
-    removed: { fg: '#ff0000' },
-    context: { dim: true },
-    hunk: { fg: '#00ffff' },
-    meta: { fg: '#00ffff' },
+    added: { fg: CHAT_DIFF_ADDED },
+    removed: { fg: CHAT_DIFF_REMOVED },
+    context: { fg: CHAT_TEXT_MUTED, dim: true },
+    hunk: { fg: CHAT_SECONDARY },
+    meta: { fg: CHAT_SECONDARY },
 };
 
 export function kindStyle(kind: DiffLineKind): DiffKindStyle {
@@ -75,7 +76,7 @@ function DiffRow({ line }: { readonly line: DiffLine }): JSX.Element {
         <box flexDirection="row">
             <For each={spans}>
                 {(span) => (
-                    <text {...rowStyle} {...(span.inverse ? { inverse: true } : {})}>
+                    <text selectable {...rowStyle} {...(span.inverse ? { inverse: true } : {})}>
                         {span.text}
                     </text>
                 )}
@@ -84,10 +85,10 @@ function DiffRow({ line }: { readonly line: DiffLine }): JSX.Element {
     );
 }
 
-export function DiffView({ lines }: DiffViewProps): JSX.Element {
+export function DiffView(props: DiffViewProps): JSX.Element {
     return (
         <box flexDirection="column">
-            <For each={lines}>{(line) => <DiffRow line={line} />}</For>
+            <For each={props.lines}>{(line) => <DiffRow line={line} />}</For>
         </box>
     );
 }

@@ -3,6 +3,7 @@ import { TextAttributes } from '@opentui/core';
 import { useTerminalDimensions } from '@opentui/solid';
 import { type JSX, Show } from 'solid-js';
 import { type TuiToastVariant, useTuiToast } from '../platform/providers/clipboard-toast-context';
+import { sanitizeTerminalDisplayText } from '../state/terminal-display-sanitizer';
 
 const TOAST_VARIANT_COLORS: Readonly<Record<TuiToastVariant, string>> = {
     info: '#00ffff',
@@ -45,12 +46,12 @@ export function Toast(): JSX.Element {
                     <Show when={current().title}>
                         {(title) => (
                             <text attributes={TextAttributes.BOLD} marginBottom={1} fg={TOAST_FOREGROUND}>
-                                {title()}
+                                {sanitizeTerminalDisplayText(title())}
                             </text>
                         )}
                     </Show>
                     <text fg={TOAST_FOREGROUND} wrapMode="word" width="100%">
-                        {current().message}
+                        {sanitizeTerminalDisplayText(current().message)}
                     </text>
                 </box>
             )}
