@@ -2,6 +2,7 @@ import type { ToolCall } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ChatOutput } from './interactive-chat-io';
 import { renderToolPreview } from './interactive-coding-tool-preview';
+import { createProviderRenderState } from './interactive-coding-transcript-render-state';
 import { createBufferedChatOutput } from './run-agent-chat-test-support';
 import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -29,12 +30,12 @@ describe('interactive coding tool preview', () => {
                 args: ['exec', 'vitest', 'run', `${secret}.test.ts`],
             }),
             output.output,
-            workspaceRoot,
+            previewOptions(workspaceRoot),
         );
         await renderToolPreview(
             toolCall('file.patch', 'patch_preview', { patch: addFilePatch('.preview-secret.txt', secret) }),
             output.output,
-            workspaceRoot,
+            previewOptions(workspaceRoot),
         );
         await renderToolPreview(
             toolCall('file.edit', 'edit_preview', {
@@ -44,7 +45,7 @@ describe('interactive coding tool preview', () => {
                 occurrence: 2,
             }),
             output.output,
-            workspaceRoot,
+            previewOptions(workspaceRoot),
         );
         await renderToolPreview(
             toolCall('file.write', 'write_preview_replace', {
@@ -52,7 +53,7 @@ describe('interactive coding tool preview', () => {
                 content: `after ${secret}\n`,
             }),
             output.output,
-            workspaceRoot,
+            previewOptions(workspaceRoot),
         );
 
         // Then
@@ -76,6 +77,7 @@ describe('interactive coding tool preview', () => {
                 replaceAll: false,
             }),
             output.output,
+            previewOptions(),
         );
 
         expect(output.getOutput()).toContain('Edit preview for file.edit');
@@ -95,7 +97,7 @@ describe('interactive coding tool preview', () => {
                 createParents: true,
             }),
             output.output,
-            workspaceRoot,
+            previewOptions(workspaceRoot),
         );
 
         expect(output.getOutput()).toContain('Create preview for file.write');
@@ -117,7 +119,7 @@ describe('interactive coding tool preview', () => {
                 content: 'replacement\n',
             }),
             output.output,
-            workspaceRoot,
+            previewOptions(workspaceRoot),
         );
 
         expect(output.getOutput()).toContain('Write preview for file.write');
@@ -138,7 +140,7 @@ describe('interactive coding tool preview', () => {
                 content: 'replacement\n',
             }),
             output.output,
-            workspaceRoot,
+            previewOptions(workspaceRoot),
         );
 
         expect(output.getOutput()).toContain('Write preview for file.write');
@@ -159,7 +161,7 @@ describe('interactive coding tool preview', () => {
                 content: 'replacement\n',
             }),
             output.output,
-            workspaceRoot,
+            previewOptions(workspaceRoot),
         );
 
         expect(output.getOutput()).toContain('Write preview for file.write');
@@ -180,10 +182,12 @@ describe('interactive coding tool preview', () => {
         await renderToolPreview(
             toolCall('file.patch', 'collapsed_patch', { patch: addFilePatch('hidden.txt', 'content') }),
             collapsedOutput,
+            previewOptions(),
         );
         await renderToolPreview(
             toolCall('command.run', 'collapsed_cmd', { command: 'echo', args: ['hi'] }),
             collapsedOutput,
+            previewOptions(),
         );
 
         const text = chunks.join('');
@@ -218,4 +222,11 @@ async function tempRoot(prefix: string): Promise<string> {
     const path = await mkdtemp(join(tmpdir(), prefix));
     tempRoots.push(path);
     return path;
+}
+
+function previewOptions(workspaceRoot?: string) {
+    return {
+        state: createProviderRenderState('tool-preview-test-turn'),
+        ...(workspaceRoot !== undefined ? { workspaceRoot } : {}),
+    };
 }

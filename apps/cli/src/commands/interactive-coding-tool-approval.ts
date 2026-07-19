@@ -1,7 +1,12 @@
 import type { ToolInvocationSettlement } from '@mission-control/core';
-import type { PermissionKind, PermissionRequest, ToolCall } from '@mission-control/protocol';
+import type { ModelProviderSelection, PermissionKind, PermissionRequest, ToolCall } from '@mission-control/protocol';
 import { ToolResultSchema } from '@mission-control/protocol';
+import { sanitizeTerminalDisplayText } from '@mission-control/tui/state';
 import type { InteractiveApprovalBroker } from './interactive-approval-broker';
+import {
+    FILE_WRITE_ARGUMENTS_PARSE_BUDGET_BYTES,
+    prepareFileWriteArgumentsPreview,
+} from './interactive-coding-file-write-preview';
 import { renderToolPreview } from './interactive-coding-tool-preview';
 import {
     parseBashRunPreview,
@@ -16,33 +21,63 @@ import {
     patchTargetPaths,
 } from './interactive-coding-tool-previews';
 import type { InteractiveToolOptions } from './interactive-coding-tools';
+import type { ProviderRenderState } from './interactive-coding-transcript-render-state';
 
 export async function preflightInteractiveToolCall(
     toolCall: ToolCall,
-    options: InteractiveToolOptions,
+    options: InteractiveToolOptions & {
+        readonly executionTurnId: string;
+        readonly renderState: ProviderRenderState;
+    },
     approvals: InteractiveApprovalBroker,
 ): Promise<ToolInvocationSettlement | undefined> {
-    if (toolCall.toolName === 'file.write' && parseFileWritePreview(toolCall.argumentsJson) === undefined)
-        return undefined;
-    await renderToolPreview(toolCall, options.output, options.workspaceRoot);
+    if (toolCall.toolName === 'file.write') {
+        const argumentsPreview = prepareFileWriteArgumentsPreview(toolCall.argumentsJson);
+        if (argumentsPreview.kind === 'raw') {
+            return failedToolSettlement(
+                toolCall,
+                options.modelProviderSelection,
+                `file_write_arguments_too_large: maximum ${FILE_WRITE_ARGUMENTS_PARSE_BUDGET_BYTES} bytes`,
+            );
+        }
+        if (parseFileWritePreview(toolCall.argumentsJson) === undefined) return undefined;
+    }
+    await renderToolPreview(toolCall, options.output, {
+        state: options.renderState,
+        ...(options.workspaceRoot !== undefined ? { workspaceRoot: options.workspaceRoot } : {}),
+    });
     if (toolCall.toolName === 'task') {
         const description = parseTaskDescription(toolCall.argumentsJson);
-        if (description !== undefined) options.output.showNotice?.(`Task: ${description}`);
+        if (description !== undefined) {
+            options.output.showNotice?.(`Task: ${sanitizeTerminalDisplayText(description)}`);
+        }
     }
     const request = approvalRequestForToolCall(toolCall, options.workspaceRoot);
     if (request === undefined) return undefined;
     const decision = await approvals.requestPermission(request);
     if (decision.status === 'allow') {
-        approvals.primeApproval(request.id, decision.reason);
+        approvals.primeApproval(request, decision.reason);
         return undefined;
     }
     const messagePrefix = decision.status === 'deny' ? 'approval_denied' : 'approval_required';
+    return failedToolSettlement(
+        toolCall,
+        options.modelProviderSelection,
+        `${messagePrefix}: ${decision.reason ?? 'interactive CLI approval'}`,
+    );
+}
+
+function failedToolSettlement(
+    toolCall: ToolCall,
+    modelProviderSelection: ModelProviderSelection,
+    message: string,
+): ToolInvocationSettlement {
     const result = ToolResultSchema.parse({
         toolCallId: toolCall.toolCallId,
         status: 'failed',
         error: {
             code: 'tool_failed',
-            message: `${messagePrefix}: ${decision.reason ?? 'interactive CLI approval'}`,
+            message,
             retryable: false,
         },
     });
@@ -57,7 +92,7 @@ export async function preflightInteractiveToolCall(
                 taskId: toolCall.toolCallId,
                 message: `tool failed: ${toolCall.toolName}`,
                 nativeSidecarStatus: 'mock',
-                modelProviderSelection: options.modelProviderSelection,
+                modelProviderSelection,
                 toolResult: result,
             },
         ],
