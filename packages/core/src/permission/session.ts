@@ -8,6 +8,18 @@ export type PermissionSessionOptions = {
     readonly persistedRuleStore?: PermissionRuleStore;
 };
 
+export type RememberReplyOptions = {
+    readonly tryCommitAuthority?: () => boolean;
+};
+
+export class PermissionAuthorityCommitCancelledError extends Error {
+    readonly name = 'PermissionAuthorityCommitCancelledError';
+
+    constructor() {
+        super('Permission authority commit was cancelled');
+    }
+}
+
 export class PermissionSession {
     private builtInRules: readonly PermissionRule[];
     private readonly persistedRuleStore: PermissionRuleStore | undefined;
@@ -33,7 +45,12 @@ export class PermissionSession {
         return evaluatePermissionRequest(normalizedRequest, rules, request.reason);
     }
 
-    async rememberReply(request: PermissionRequest, sessionId: string, reply: PermissionReply): Promise<void> {
+    async rememberReply(
+        request: PermissionRequest,
+        sessionId: string,
+        reply: PermissionReply,
+        options: RememberReplyOptions = {},
+    ): Promise<void> {
         const normalizedRequest = await normalizePermissionRequest(request);
         const scope = normalizedRequest.permission;
         if (scope === undefined || reply.reply === 'once') {
@@ -45,16 +62,25 @@ export class PermissionSession {
             decision: reply.reply,
             ...(scope.workspaceRoot !== undefined ? { workspaceRoot: scope.workspaceRoot } : {}),
         }));
-        this.sessionRules.set(sessionId, [...(this.sessionRules.get(sessionId) ?? []), ...nextRules]);
-        if (reply.reply === 'always' && reply.persist === true && scope.workspaceRoot !== undefined) {
-            await this.persistedRuleStore?.appendRules(
+        const persistedRuleStore = this.persistedRuleStore;
+        if (
+            reply.reply === 'always' &&
+            reply.persist === true &&
+            scope.workspaceRoot !== undefined &&
+            persistedRuleStore !== undefined
+        ) {
+            await persistedRuleStore.appendRules(
                 nextRules.map((rule) => ({
                     ...rule,
                     decision: 'always',
                     workspaceRoot: scope.workspaceRoot,
                 })),
+                { beforeCommit: () => commitAuthority(options) },
             );
+        } else {
+            commitAuthority(options);
         }
+        this.sessionRules.set(sessionId, [...(this.sessionRules.get(sessionId) ?? []), ...nextRules]);
     }
 
     consumeOnceRules(sessionId: string, rules: readonly PermissionRule[]): void {
@@ -81,6 +107,12 @@ export class PermissionSession {
         return [...builtInRules, ...(persisted ?? []), ...sessionRules].filter(
             (rule) => rule.decision !== 'once' || !consumedKeys.has(ruleKey(rule)),
         );
+    }
+}
+
+function commitAuthority(options: RememberReplyOptions): void {
+    if (options.tryCommitAuthority?.() === false) {
+        throw new PermissionAuthorityCommitCancelledError();
     }
 }
 

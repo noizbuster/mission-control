@@ -22,6 +22,10 @@ export type PermissionRuleStoreOptions = {
     readonly filePath?: string;
 };
 
+export type PermissionRuleAppendOptions = {
+    readonly beforeCommit?: () => void;
+};
+
 export class PermissionRuleStore {
     readonly filePath: string;
 
@@ -37,7 +41,7 @@ export class PermissionRuleStore {
         return normalizedRules.filter((rule) => rule.workspaceRoot === normalizedWorkspaceRoot);
     }
 
-    async appendRules(rules: readonly PermissionRule[]): Promise<void> {
+    async appendRules(rules: readonly PermissionRule[], options: PermissionRuleAppendOptions = {}): Promise<void> {
         if (rules.length === 0) {
             return;
         }
@@ -46,7 +50,7 @@ export class PermissionRuleStore {
             ...(await normalizePermissionRules(filterPersistedRules(existing.rules))),
             ...(await normalizePermissionRules(rules)),
         ]);
-        await writeRuleFile(this.filePath, { version: 1, rules: [...mergedRules] });
+        await writeRuleFile(this.filePath, { version: 1, rules: [...mergedRules] }, options);
     }
 }
 
@@ -63,12 +67,21 @@ async function readRuleFile(filePath: string): Promise<PermissionRuleFile> {
     return permissionRuleFileSchema.parse(JSON.parse(contents));
 }
 
-async function writeRuleFile(filePath: string, file: PermissionRuleFile): Promise<void> {
+async function writeRuleFile(
+    filePath: string,
+    file: PermissionRuleFile,
+    options: PermissionRuleAppendOptions,
+): Promise<void> {
     const tempPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
     await mkdir(dirname(filePath), { recursive: true });
-    await writeFile(tempPath, `${JSON.stringify(file, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
-    await rename(tempPath, filePath);
-    await rm(tempPath, { force: true });
+    try {
+        await writeFile(tempPath, `${JSON.stringify(file, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
+        options.beforeCommit?.();
+        await rename(tempPath, filePath);
+    } catch (error: unknown) {
+        await rm(tempPath, { force: true });
+        throw error;
+    }
 }
 
 function dedupeRules(rules: readonly PermissionRule[]): readonly PermissionRule[] {

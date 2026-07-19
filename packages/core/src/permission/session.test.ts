@@ -1,4 +1,4 @@
-import type { PermissionRequest } from '@mission-control/protocol';
+import type { PermissionRequest, PermissionRule } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 import { PermissionSession } from './session';
 import { PermissionRuleStore } from './store';
@@ -92,6 +92,27 @@ describe('PermissionSession', () => {
                 decision: { status: 'requires_approval' },
             },
         );
+    });
+
+    it('does not install authority when persisted rule storage fails', async () => {
+        // Given
+        const workspaceRoot = await tempRoot('mctrl-permission-workspace-');
+        const session = new PermissionSession({ persistedRuleStore: new RejectingPermissionRuleStore() });
+        const request = patchRequest('src/app.ts', workspaceRoot);
+
+        // When
+        const reply = session.rememberReply(request, 'session_persistence_failure', {
+            approvalId: 'approval_patch_persistence_failure',
+            reply: 'always',
+            reason: 'persist',
+            persist: true,
+        });
+
+        // Then
+        await expect(reply).rejects.toBeInstanceOf(PermissionRulePersistenceTestError);
+        await expect(session.evaluate(request, 'session_persistence_failure')).resolves.toMatchObject({
+            decision: { status: 'requires_approval' },
+        });
     });
 
     it('ignores raw relative persisted workspace roots on load and still matches absolute stored roots', async () => {
@@ -259,3 +280,11 @@ function patchRequest(path: string, workspaceRoot: string): PermissionRequest {
         },
     };
 }
+
+class RejectingPermissionRuleStore extends PermissionRuleStore {
+    override appendRules(_rules: readonly PermissionRule[]): Promise<void> {
+        return Promise.reject(new PermissionRulePersistenceTestError());
+    }
+}
+
+class PermissionRulePersistenceTestError extends Error {}
