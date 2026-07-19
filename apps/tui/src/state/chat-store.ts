@@ -1,8 +1,4 @@
-// allow: SIZE_OK — indivisible reactive store; the ~48-field state shape and
-// matching initial-state literal are pure data tables dictated by the bridge
-// core contract, and every action mutates the same state object. Dashboard
-// overlays nest as sub-state objects (agentsDashboard) to keep the top-level
-// field count flat.
+// allow: SIZE_OK -- HEAD 1593 -> current 1780 pure LOC; one reactive ChatStore owns the bridge state table and actions that mutate the same state object.
 
 import type { ProviderAuthStore } from '@mission-control/core';
 import { type ModelProviderSelection, type ModelRole } from '@mission-control/protocol';
@@ -28,8 +24,8 @@ import {
 } from './history-picker-state';
 import {
     createSlashCommandMenuState,
-    reduceSlashCommandMenuSelection,
     reduceSkillCommandMenuSelection,
+    reduceSlashCommandMenuSelection,
     reduceWorkflowCommandMenuSelection,
     type SlashCommandMenuState,
 } from './interactive-chat-command-menu';
@@ -51,6 +47,8 @@ import {
     setModelsOverlaySearchQuery as reduceModelsOverlaySearchQuery,
     selectModelForAssignment as selectModelForAssignmentReducer,
 } from './models-overlay-state';
+import { sanitizeTerminalDisplayText } from './terminal-display-sanitizer';
+import { type TranscriptPart, upsertTranscriptPart } from './transcript-part';
 
 export type { HistoryPickerEntry, HistoryPickerState } from './history-picker-state';
 
@@ -172,6 +170,7 @@ export type SessionPickerView = {
 
 export type ChatStoreState = {
     readonly outputText: string;
+    readonly transcriptParts: readonly TranscriptPart[];
     readonly sessionId: string;
     /** Live session display name; rename overlay falls back to `sessionId` when this is empty. */
     readonly sessionDisplayName: string;
@@ -255,6 +254,7 @@ export type AbgOverlayPrefsSnapshot = {
 };
 
 const WHITESPACE_PATTERN = /\s/u;
+const SUBMITTED_USER_PART_ID_PATTERN = /^submitted-user-(0|[1-9][0-9]*)$/u;
 const EMIT_COALESCE_MS = 16;
 // 20fps visible update during streaming; halves render frequency vs 16ms to keep
 // the main thread responsive for keyboard input while tokens pour in.
@@ -262,6 +262,22 @@ const STREAMING_EMIT_COALESCE_MS = 50;
 const CURSOR_UP = '\u001b[A';
 const CURSOR_DOWN = '\u001b[B';
 const APPROVAL_LEVEL_DEFAULT_INDEX = 1;
+
+function sanitizeQuestionOptionForDisplay(option: QuestionOption): QuestionOption {
+    return {
+        label: sanitizeTerminalDisplayText(option.label),
+        ...(option.description === undefined ? {} : { description: sanitizeTerminalDisplayText(option.description) }),
+    };
+}
+
+function sanitizeQuestionBatchEntryForDisplay(entry: QuestionBatchEntry): QuestionBatchEntry {
+    return {
+        question: sanitizeTerminalDisplayText(entry.question),
+        header: sanitizeTerminalDisplayText(entry.header),
+        options: entry.options.map(sanitizeQuestionOptionForDisplay),
+        multiple: entry.multiple,
+    };
+}
 
 export const APPROVAL_OPTIONS = [
     { key: 'once', label: 'Allow once', description: 'allow this request only' },
@@ -313,10 +329,19 @@ export class ChatStore {
     private levelPickerResolve: ((level: string | undefined) => void) | undefined;
     private questionResolve: ((answer: string) => void) | undefined;
     private questionBatchResolve: ((answers: string[]) => void) | undefined;
+    private rawQuestionText = '';
+    private rawQuestionHeader = '';
+    private rawQuestionOptions: readonly QuestionOption[] = [];
+    private rawQuestionCustomBuffer = '';
+    private rawQuestionTabs: readonly QuestionBatchEntry[] = [];
+    private rawQuestionAnswers: readonly (readonly string[])[] = [];
     private sessionPickerResolve: ((sessionId: string | undefined) => void) | undefined;
-    private emitScheduled = false;
+    private scheduledPublishTimeout: ReturnType<typeof setTimeout> | undefined;
+    private publishGeneration = 0;
     private transientNoticeCounter = 0;
     private historyEntryCounter = 0;
+    private submittedUserPartCounter = 0;
+    private legacyPartCounter = 0;
 
     constructor(options?: ChatStoreOptions) {
         this.workspaceRoot = options?.workspaceRoot ?? process.cwd();
@@ -324,6 +349,7 @@ export class ChatStore {
         const historyEntries = options?.initialHistoryEntries !== undefined ? [...options.initialHistoryEntries] : [];
         this.state = {
             outputText: '',
+            transcriptParts: [],
             sessionId: '',
             sessionDisplayName: '',
             inputMirror: '',
@@ -421,18 +447,46 @@ export class ChatStore {
 
     emitOutput(text: string): void {
         this.state.outputText += text;
-        if (!this.emitScheduled) {
-            this.emitScheduled = true;
-            const ms = this.state.generating ? STREAMING_EMIT_COALESCE_MS : EMIT_COALESCE_MS;
-            setTimeout(() => {
-                this.emitScheduled = false;
-                this.publish();
-            }, ms);
+        if (this.hasTypedTranscriptParts()) {
+            this.appendLegacyTranscriptPart(text);
         }
+        const ms = this.state.generating ? STREAMING_EMIT_COALESCE_MS : EMIT_COALESCE_MS;
+        this.schedulePublish(ms);
     }
 
     replaceOutputText(text: string): void {
         this.state.outputText = text;
+        this.state.transcriptParts = [];
+        this.legacyPartCounter = 0;
+        this.publish();
+    }
+
+    emitTranscriptPart(part: TranscriptPart, fallbackText: string): void {
+        this.appendTypedTranscriptPart(part);
+        this.state.outputText += fallbackText;
+        if ('status' in part && part.status === 'streaming') {
+            this.schedulePublish(STREAMING_EMIT_COALESCE_MS);
+            return;
+        }
+        this.publish();
+    }
+
+    emitTranscriptFallback(text: string): void {
+        this.state.outputText += text;
+        const ms = this.state.generating ? STREAMING_EMIT_COALESCE_MS : EMIT_COALESCE_MS;
+        this.schedulePublish(ms);
+    }
+
+    replaceTranscript(parts: readonly TranscriptPart[], outputText: string): void {
+        this.state.transcriptParts = parts;
+        this.state.outputText = outputText;
+        this.submittedUserPartCounter = parts.reduce((highestOccurrence, part) => {
+            const occurrenceText = SUBMITTED_USER_PART_ID_PATTERN.exec(part.id)?.[1];
+            if (occurrenceText === undefined) return highestOccurrence;
+            const occurrence = Number(occurrenceText);
+            return Number.isSafeInteger(occurrence) ? Math.max(highestOccurrence, occurrence) : highestOccurrence;
+        }, 0);
+        this.legacyPartCounter = 0;
         this.publish();
     }
 
@@ -521,10 +575,14 @@ export class ChatStore {
         options: readonly (string | QuestionOption)[],
         metadata?: { readonly header?: string; readonly multiple?: boolean },
     ): Promise<string> {
+        this.clearRawQuestionState();
+        this.rawQuestionText = question;
+        this.rawQuestionHeader = metadata?.header ?? '';
+        this.rawQuestionOptions = normalizeQuestionOptions(options);
         this.state.overlayMode = 'question';
-        this.state.questionText = question;
-        this.state.questionHeader = metadata?.header ?? '';
-        this.state.questionOptions = normalizeQuestionOptions(options);
+        this.state.questionText = sanitizeTerminalDisplayText(this.rawQuestionText);
+        this.state.questionHeader = sanitizeTerminalDisplayText(this.rawQuestionHeader);
+        this.state.questionOptions = this.rawQuestionOptions.map(sanitizeQuestionOptionForDisplay);
         this.state.questionSelectedIndex = 0;
         this.state.questionMultiple = metadata?.multiple ?? false;
         this.state.questionSelectedIndices = new Set<number>();
@@ -532,7 +590,7 @@ export class ChatStore {
         this.state.questionCustomBuffer = '';
         this.state.questionTabs = [];
         this.state.questionTabIndex = 0;
-        this.state.questionAnswers = [];
+        this.setQuestionAnswers([]);
         this.state.questionConfirmActive = false;
         this.publish();
         return new Promise<string>((resolve) => {
@@ -545,11 +603,12 @@ export class ChatStore {
      * trailing Confirm tab is added. Resolves with one answer string per
      * question (multi-select comma-joined), in order. */
     showQuestionBatch(entries: readonly QuestionBatchEntry[]): Promise<string[]> {
-        const tabs = entries.map((entry) => ({ ...entry, options: normalizeQuestionOptions(entry.options) }));
+        this.clearRawQuestionState();
+        this.rawQuestionTabs = entries.map((entry) => ({ ...entry, options: normalizeQuestionOptions(entry.options) }));
         this.state.overlayMode = 'question';
-        this.state.questionTabs = tabs;
+        this.state.questionTabs = this.rawQuestionTabs.map(sanitizeQuestionBatchEntryForDisplay);
         this.state.questionTabIndex = 0;
-        this.state.questionAnswers = tabs.map((): string[] => []);
+        this.setQuestionAnswers(this.rawQuestionTabs.map((): string[] => []));
         this.state.questionConfirmActive = false;
         this.loadQuestionTab(0);
         this.publish();
@@ -559,22 +618,27 @@ export class ChatStore {
     }
 
     private loadQuestionTab(index: number): void {
-        const tab = this.state.questionTabs[index];
-        if (tab === undefined) return;
-        this.state.questionText = tab.question;
-        this.state.questionHeader = tab.header;
-        this.state.questionOptions = tab.options;
-        this.state.questionMultiple = tab.multiple;
+        const rawTab = this.rawQuestionTabs[index];
+        const displayTab = this.state.questionTabs[index];
+        if (rawTab === undefined || displayTab === undefined) return;
+        this.rawQuestionText = rawTab.question;
+        this.rawQuestionHeader = rawTab.header;
+        this.rawQuestionOptions = rawTab.options;
+        this.state.questionText = displayTab.question;
+        this.state.questionHeader = displayTab.header;
+        this.state.questionOptions = displayTab.options;
+        this.state.questionMultiple = rawTab.multiple;
         this.state.questionSelectedIndex = 0;
-        const labels = this.state.questionAnswers[index] ?? [];
+        const labels = this.rawQuestionAnswers[index] ?? [];
         const indices = new Set<number>();
         for (const label of labels) {
-            const optIdx = tab.options.findIndex((option) => option.label === label);
+            const optIdx = rawTab.options.findIndex((option) => option.label === label);
             if (optIdx >= 0) indices.add(optIdx);
         }
         this.state.questionSelectedIndices = indices;
         this.state.questionCustomMode = false;
         this.state.questionCustomBuffer = '';
+        this.rawQuestionCustomBuffer = '';
     }
 
     /** Tabs + Confirm show when N>1 OR any question is multiple-select. */
@@ -618,10 +682,8 @@ export class ChatStore {
      * once for a lone non-multiple question. */
     private pickQuestionAnswer(label: string): void {
         const idx = this.state.questionTabIndex;
-        if (idx < this.state.questionTabs.length) {
-            this.state.questionAnswers = this.state.questionAnswers.map((answers, i) =>
-                i === idx ? [label] : answers,
-            );
+        if (idx < this.rawQuestionTabs.length) {
+            this.setQuestionAnswers(this.rawQuestionAnswers.map((answers, i) => (i === idx ? [label] : answers)));
         }
         if (!this.multiQuestionBatch()) {
             this.resolveQuestionBatch([label]);
@@ -632,14 +694,14 @@ export class ChatStore {
 
     /** Resolve the batch (multi-select answers comma-joined). Confirm-tab Enter. */
     confirmQuestionBatch(): void {
-        const answers = this.state.questionAnswers.map((labels) => labels.join(', '));
+        const answers = this.rawQuestionAnswers.map((labels) => labels.join(', '));
         this.resolveQuestionBatch(answers);
     }
 
     /** Cancel: resolve single with '', or the whole batch with empty answers. */
     rejectQuestion(): void {
-        if (this.state.questionTabs.length > 0) {
-            this.resolveQuestionBatch(this.state.questionTabs.map((): string => ''));
+        if (this.rawQuestionTabs.length > 0) {
+            this.resolveQuestionBatch(this.rawQuestionTabs.map((): string => ''));
             return;
         }
         this.resolveQuestion('');
@@ -652,16 +714,19 @@ export class ChatStore {
         this.state.questionTabs = [];
         this.state.questionAnswers = [];
         this.state.questionConfirmActive = false;
+        this.clearRawQuestionState();
         this.publish();
         resolve?.(answers);
     }
 
     resolveQuestion(answer: string): void {
+        const rawAnswer = this.rawQuestionAnswerForDisplay(answer);
         const resolve = this.questionResolve;
         this.questionResolve = undefined;
         this.state.overlayMode = 'none';
+        this.clearRawQuestionState();
         this.publish();
-        resolve?.(answer);
+        resolve?.(rawAnswer);
     }
 
     showRename(): void {
@@ -989,10 +1054,7 @@ export class ChatStore {
             this.publish();
             return undefined;
         }
-        const selectedIndex = Math.min(
-            Math.max(this.state.historyPicker.selectedIndex, 0),
-            newestFirst.length - 1,
-        );
+        const selectedIndex = Math.min(Math.max(this.state.historyPicker.selectedIndex, 0), newestFirst.length - 1);
         const selected = newestFirst[selectedIndex];
         this.state.historyPicker = closeHistoryPicker(this.state.historyPicker);
         this.publish();
@@ -1098,14 +1160,14 @@ export class ChatStore {
      * tab strip's "answered" state and the Confirm review stay live. */
     private syncMultiTabAnswers(): void {
         const idx = this.state.questionTabIndex;
-        const tab = this.state.questionTabs[idx];
+        const tab = this.rawQuestionTabs[idx];
         if (tab === undefined || !tab.multiple) return;
         const labels: string[] = [];
         for (const i of this.state.questionSelectedIndices) {
             const opt = tab.options[i];
             if (opt !== undefined) labels.push(opt.label);
         }
-        this.state.questionAnswers = this.state.questionAnswers.map((answers, i) => (i === idx ? labels : answers));
+        this.setQuestionAnswers(this.rawQuestionAnswers.map((answers, i) => (i === idx ? labels : answers)));
     }
 
     /**
@@ -1116,11 +1178,12 @@ export class ChatStore {
      */
     selectQuestionByClick(index: number): void {
         if (index < 0) return;
-        if (index >= this.state.questionOptions.length) {
+        if (index >= this.rawQuestionOptions.length) {
             if (this.state.questionMultiple) return;
             this.state.questionSelectedIndex = index;
             this.state.questionCustomMode = true;
             this.state.questionCustomBuffer = '';
+            this.rawQuestionCustomBuffer = '';
             this.publish();
             return;
         }
@@ -1137,7 +1200,7 @@ export class ChatStore {
             this.publish();
             return;
         }
-        const selected = this.state.questionOptions[index];
+        const selected = this.rawQuestionOptions[index];
         const label = selected?.label ?? '';
         if (this.state.questionTabs.length > 0) {
             this.pickQuestionAnswer(label);
@@ -1150,46 +1213,52 @@ export class ChatStore {
      * (or resolves for a lone question); batch multi adds the text; single mode
      * resolves outright. Exits custom-input mode in every case. */
     submitCustomAnswer(text: string): void {
+        const rawText = text === this.state.questionCustomBuffer ? this.rawQuestionCustomBuffer : text;
         this.state.questionCustomMode = false;
         this.state.questionCustomBuffer = '';
+        this.rawQuestionCustomBuffer = '';
         if (this.state.questionTabs.length === 0) {
-            this.resolveQuestion(text);
+            this.resolveQuestion(rawText);
             return;
         }
         if (this.state.questionMultiple) {
             const idx = this.state.questionTabIndex;
-            const current = this.state.questionAnswers[idx] ?? [];
-            if (!current.includes(text)) {
-                this.state.questionAnswers = this.state.questionAnswers.map((answers, i) =>
-                    i === idx ? [...current, text] : answers,
+            const current = this.rawQuestionAnswers[idx] ?? [];
+            if (!current.includes(rawText)) {
+                this.setQuestionAnswers(
+                    this.rawQuestionAnswers.map((answers, i) => (i === idx ? [...current, rawText] : answers)),
                 );
             }
             this.publish();
             return;
         }
-        this.pickQuestionAnswer(text);
+        this.pickQuestionAnswer(rawText);
     }
 
     enterQuestionCustomMode(): void {
         this.state.questionCustomMode = true;
         this.state.questionCustomBuffer = '';
+        this.rawQuestionCustomBuffer = '';
         this.publish();
     }
 
     appendQuestionCustom(text: string): void {
-        this.state.questionCustomBuffer += text;
+        this.rawQuestionCustomBuffer += text;
+        this.state.questionCustomBuffer = sanitizeTerminalDisplayText(this.rawQuestionCustomBuffer);
         this.publish();
     }
 
     deleteQuestionCustomChar(): void {
-        if (this.state.questionCustomBuffer.length === 0) return;
-        this.state.questionCustomBuffer = this.state.questionCustomBuffer.slice(0, -1);
+        if (this.rawQuestionCustomBuffer.length === 0) return;
+        this.rawQuestionCustomBuffer = this.rawQuestionCustomBuffer.slice(0, -1);
+        this.state.questionCustomBuffer = sanitizeTerminalDisplayText(this.rawQuestionCustomBuffer);
         this.publish();
     }
 
     exitQuestionCustomMode(): void {
         this.state.questionCustomMode = false;
         this.state.questionCustomBuffer = '';
+        this.rawQuestionCustomBuffer = '';
         this.publish();
     }
 
@@ -1585,6 +1654,11 @@ export class ChatStore {
             this.state.historyPicker = closeHistoryPicker(this.state.historyPicker);
         }
         if (!value.startsWith('/')) {
+            this.appendTypedTranscriptPart({
+                id: this.nextSubmittedUserPartId(),
+                type: 'user',
+                text: value,
+            });
             this.state.outputText += `You: ${value}\n`;
         }
         this.state.pasteStore.clear();
@@ -1632,11 +1706,106 @@ export class ChatStore {
         return id;
     }
 
+    private schedulePublish(ms: number): void {
+        if (this.scheduledPublishTimeout !== undefined) return;
+        this.publishGeneration += 1;
+        const generation = this.publishGeneration;
+        this.scheduledPublishTimeout = setTimeout(() => {
+            if (generation !== this.publishGeneration) return;
+            this.scheduledPublishTimeout = undefined;
+            this.publishSnapshot();
+        }, ms);
+    }
+
+    private cancelScheduledPublish(): void {
+        const timeout = this.scheduledPublishTimeout;
+        if (timeout === undefined) return;
+        this.scheduledPublishTimeout = undefined;
+        this.publishGeneration += 1;
+        clearTimeout(timeout);
+    }
+
     private publish(): void {
+        this.cancelScheduledPublish();
+        this.publishSnapshot();
+    }
+
+    private publishSnapshot(): void {
         this.snapshot = this.buildSnapshot();
+        this.notifyListeners();
+    }
+
+    private notifyListeners(): void {
         for (const listener of this.listeners) {
             listener();
         }
+    }
+
+    private hasTypedTranscriptParts(): boolean {
+        return this.state.transcriptParts.some((part) => part.type !== 'legacy');
+    }
+
+    private appendTypedTranscriptPart(part: TranscriptPart): void {
+        if (
+            !this.hasTypedTranscriptParts() &&
+            this.state.transcriptParts.length === 0 &&
+            this.state.outputText.length > 0
+        ) {
+            this.appendLegacyTranscriptPart(this.state.outputText);
+        }
+        const parts = upsertTranscriptPart(this.state.transcriptParts, part);
+        const previewStatus =
+            'status' in part && (part.status === 'completed' || part.status === 'failed') ? part.status : undefined;
+        this.state.transcriptParts =
+            previewStatus === undefined
+                ? parts
+                : parts.map((existing) =>
+                      existing.id === `${part.id}:preview` && 'status' in existing && existing.status === 'pending'
+                          ? { ...existing, status: previewStatus }
+                          : existing,
+                  );
+    }
+
+    private appendLegacyTranscriptPart(text: string): void {
+        if (text.length === 0) return;
+        const last = this.state.transcriptParts.at(-1);
+        if (last?.type === 'legacy') {
+            this.state.transcriptParts = [
+                ...this.state.transcriptParts.slice(0, -1),
+                { ...last, text: `${last.text}${text}` },
+            ];
+            return;
+        }
+        this.state.transcriptParts = [
+            ...this.state.transcriptParts,
+            { id: this.nextLegacyPartId(), type: 'legacy', text },
+        ];
+    }
+
+    private nextLegacyPartId(): string {
+        do {
+            this.legacyPartCounter += 1;
+        } while (this.state.transcriptParts.some((part) => part.id === `legacy-${this.legacyPartCounter}`));
+        return `legacy-${this.legacyPartCounter}`;
+    }
+
+    private nextSubmittedUserPartId(): string {
+        const occupiedIds = new Set(this.state.transcriptParts.map((part) => part.id));
+        let occurrence = this.submittedUserPartCounter;
+        while (occurrence < Number.MAX_SAFE_INTEGER) {
+            occurrence += 1;
+            const id = `submitted-user-${occurrence}`;
+            if (!occupiedIds.has(id)) {
+                this.submittedUserPartCounter = occurrence;
+                return id;
+            }
+        }
+        occurrence = 1;
+        while (occupiedIds.has(`submitted-user-${occurrence}`)) {
+            occurrence += 1;
+        }
+        this.submittedUserPartCounter = occurrence;
+        return `submitted-user-${occurrence}`;
     }
 
     private buildSnapshot(): ChatStoreState {
@@ -1649,6 +1818,37 @@ export class ChatStore {
                 draftSnapshot: this.state.historyPicker.draftSnapshot,
             },
         };
+    }
+
+    private setQuestionAnswers(answers: readonly (readonly string[])[]): void {
+        this.rawQuestionAnswers = answers;
+        this.state.questionAnswers = answers.map((labels) => labels.map(sanitizeTerminalDisplayText));
+    }
+
+    private rawQuestionAnswerForDisplay(answer: string): string {
+        const selectedOptions = this.rawQuestionOptions.filter((_option, index) =>
+            this.state.questionSelectedIndices.has(index),
+        );
+        const displaySelectedAnswer = this.state.questionOptions
+            .filter((_option, index) => this.state.questionSelectedIndices.has(index))
+            .map((option) => option.label)
+            .join(', ');
+        if (this.state.questionMultiple && answer === displaySelectedAnswer) {
+            return selectedOptions.map((option) => option.label).join(', ');
+        }
+        const selectedIndex = this.state.questionSelectedIndex;
+        const displayOption = this.state.questionOptions[selectedIndex];
+        const rawOption = this.rawQuestionOptions[selectedIndex];
+        return answer === displayOption?.label ? (rawOption?.label ?? answer) : answer;
+    }
+
+    private clearRawQuestionState(): void {
+        this.rawQuestionText = '';
+        this.rawQuestionHeader = '';
+        this.rawQuestionOptions = [];
+        this.rawQuestionCustomBuffer = '';
+        this.rawQuestionTabs = [];
+        this.rawQuestionAnswers = [];
     }
 
     private refreshFileAutocomplete(): void {

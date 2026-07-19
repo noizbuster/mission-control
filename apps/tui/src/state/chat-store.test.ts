@@ -1,5 +1,7 @@
+// allow: SIZE_OK -- HEAD 1477 -> current 1937 pure LOC; one ChatStore behavior matrix shares store lifecycle, timers, event queue, and overlay fixtures.
 import { extractUsageFromModelCallCompleted } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
+import { parseMessageBlocks } from '@mission-control/tui/chat';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createProviderPromptKeypressState } from './auth-provider-keypress';
 import type { ChatInputEvent } from './chat-input-event';
@@ -15,6 +17,10 @@ import {
     type SessionPickerEntry,
 } from './chat-store';
 import type { ModelChoice } from './interactive-chat-model';
+import type { TranscriptPart as RichTranscriptPart } from './transcript-part';
+
+const hostileDisplayPayload =
+    'credential sk-displayblocker123 OSC:\u001b]52;c;UE9D\u0007 C0:\u0001 C1:\u009b DEL:\u007f CR:\r TAB:\t BIDI:\u202e\n한국어 가족\u200D그림';
 
 function makeSelection(providerID: string, modelID: string): ModelProviderSelection {
     return { providerID, modelID };
@@ -171,6 +177,584 @@ describe('chat-store — replaceOutputText / getOutput', () => {
         store.replaceOutputText('line1\n');
         store.replaceOutputText('line2');
         expect(store.getOutput()).toBe('line2');
+    });
+});
+
+type TranscriptPart =
+    | { readonly id: string; readonly type: 'user'; readonly text: string }
+    | { readonly id: string; readonly type: 'assistant'; readonly text: string }
+    | { readonly id: string; readonly type: 'reasoning'; readonly text: string }
+    | { readonly id: string; readonly type: 'inline-tool'; readonly text: string }
+    | { readonly id: string; readonly type: 'block-tool'; readonly text: string }
+    | { readonly id: string; readonly type: 'diff'; readonly text: string }
+    | { readonly id: string; readonly type: 'code'; readonly text: string }
+    | { readonly id: string; readonly type: 'command'; readonly text: string }
+    | { readonly id: string; readonly type: 'subagent'; readonly text: string }
+    | { readonly id: string; readonly type: 'status'; readonly text: string }
+    | { readonly id: string; readonly type: 'event'; readonly text: string }
+    | { readonly id: string; readonly type: 'error'; readonly text: string }
+    | { readonly id: string; readonly type: 'legacy'; readonly text: string };
+
+type TypedTranscriptSnapshot = {
+    readonly transcriptParts: readonly TranscriptPart[];
+};
+
+type TypedTranscriptStore = {
+    readonly getSnapshot: () => TypedTranscriptSnapshot;
+    readonly emitTranscriptPart: (part: TranscriptPart, fallbackText: string) => void;
+    readonly replaceTranscript: (parts: readonly TranscriptPart[], outputText: string) => void;
+    readonly submitLine: (value: string) => void;
+};
+
+function isTranscriptPart(value: unknown): value is TranscriptPart {
+    if (typeof value !== 'object' || value === null) return false;
+    if (!('id' in value) || !('type' in value) || !('text' in value)) return false;
+    if (typeof value.id !== 'string' || typeof value.type !== 'string' || typeof value.text !== 'string') {
+        return false;
+    }
+    switch (value.type) {
+        case 'user':
+        case 'assistant':
+        case 'reasoning':
+        case 'inline-tool':
+        case 'block-tool':
+        case 'diff':
+        case 'code':
+        case 'command':
+        case 'subagent':
+        case 'status':
+        case 'event':
+        case 'error':
+        case 'legacy':
+            return true;
+        default:
+            return false;
+    }
+}
+
+function hasTypedTranscriptSnapshot(value: unknown): value is TypedTranscriptSnapshot {
+    return (
+        typeof value === 'object' &&
+        value !== null &&
+        'transcriptParts' in value &&
+        Array.isArray(value.transcriptParts) &&
+        value.transcriptParts.every(isTranscriptPart)
+    );
+}
+
+function hasTypedTranscriptStore(value: object): value is TypedTranscriptStore {
+    if (!('emitTranscriptPart' in value) || typeof value.emitTranscriptPart !== 'function') return false;
+    if (!('replaceTranscript' in value) || typeof value.replaceTranscript !== 'function') return false;
+    if (!('submitLine' in value) || typeof value.submitLine !== 'function') return false;
+    if (!('getSnapshot' in value) || typeof value.getSnapshot !== 'function') return false;
+    return hasTypedTranscriptSnapshot(value.getSnapshot());
+}
+
+describe('chat-store — typed transcript boundary (RED)', () => {
+    it('requires the typed transcript store seam before rich parts can be emitted', () => {
+        // Given: the current concrete ChatStore.
+        const store = createChatStore();
+        const transcriptStore: object = store;
+
+        // When: the typed transcript capability is inspected without a static missing-member reference.
+        const supportsTypedTranscript = hasTypedTranscriptStore(transcriptStore);
+
+        // Then: the missing seam reports the explicit RED contract failure.
+        expect(
+            supportsTypedTranscript,
+            'ChatStore must expose transcriptParts, emitTranscriptPart(part, fallbackText), and replaceTranscript(parts, outputText).',
+        ).toBe(true);
+    });
+
+    it('upserts a stable part ID without moving its first-seen transcript position', () => {
+        // Given: a store with a user row, a streaming assistant row, and a tool row.
+        const store = createChatStore();
+        const transcriptStore: object = store;
+        if (!hasTypedTranscriptStore(transcriptStore)) return;
+        const userPart: TranscriptPart = { id: 'user-1', type: 'user', text: 'Review the plan.' };
+        const assistantStart: TranscriptPart = { id: 'assistant-1', type: 'assistant', text: 'I am reviewing' };
+        const assistantFinal: TranscriptPart = {
+            id: 'assistant-1',
+            type: 'assistant',
+            text: 'I am reviewing the plan.',
+        };
+        const toolPart: TranscriptPart = { id: 'tool-1', type: 'inline-tool', text: 'repo.read AGENTS.md' };
+
+        // When: the assistant part is updated after later transcript rows have been emitted.
+        transcriptStore.emitTranscriptPart(userPart, 'You: Review the plan.\n');
+        transcriptStore.emitTranscriptPart(assistantStart, 'Assistant: I am reviewing');
+        transcriptStore.emitTranscriptPart(toolPart, '\ntool: repo.read AGENTS.md\n');
+        transcriptStore.emitTranscriptPart(assistantFinal, ' the plan.');
+
+        // Then: order is first-seen order and the assistant content is the latest stable-ID value.
+        expect(transcriptStore.getSnapshot().transcriptParts.map((part) => part.id)).toEqual([
+            'user-1',
+            'assistant-1',
+            'tool-1',
+        ]);
+        expect(transcriptStore.getSnapshot().transcriptParts[1]).toEqual(assistantFinal);
+    });
+
+    it('preserves byte-exact legacy fallback ordering for a 72-column CJK stream, tool, and error', () => {
+        // Given: a CJK assistant stream whose first chunk occupies 72 terminal columns.
+        const store = createChatStore();
+        const transcriptStore: object = store;
+        if (!hasTypedTranscriptStore(transcriptStore)) return;
+        const cjk72Columns = '가'.repeat(36);
+        const userPart: TranscriptPart = { id: 'user-cjk', type: 'user', text: '상태를 알려줘' };
+        const assistantStart: TranscriptPart = { id: 'assistant-cjk', type: 'assistant', text: cjk72Columns };
+        const assistantFinal: TranscriptPart = { id: 'assistant-cjk', type: 'assistant', text: `${cjk72Columns} 완료` };
+        const reasoningPart: TranscriptPart = { id: 'reasoning-cjk', type: 'reasoning', text: '출력을 확인합니다.' };
+        const toolPart: TranscriptPart = { id: 'tool-cjk', type: 'block-tool', text: '$ pnpm test' };
+        const errorPart: TranscriptPart = { id: 'error-cjk', type: 'error', text: '스트림이 중단되었습니다.' };
+        const fallbackText = [
+            'You: 상태를 알려줘\n',
+            `Assistant: ${cjk72Columns}`,
+            ' 완료\n',
+            'Thinking: 출력을 확인합니다.\n',
+            'tool: pnpm test\n',
+            '$ pnpm test\n',
+            'Error: 스트림이 중단되었습니다.\n',
+        ].join('');
+
+        // When: typed parts emit their legacy fallback fragments in mixed order.
+        transcriptStore.emitTranscriptPart(userPart, 'You: 상태를 알려줘\n');
+        transcriptStore.emitTranscriptPart(assistantStart, `Assistant: ${cjk72Columns}`);
+        transcriptStore.emitTranscriptPart(assistantFinal, ' 완료\n');
+        transcriptStore.emitTranscriptPart(reasoningPart, 'Thinking: 출력을 확인합니다.\n');
+        transcriptStore.emitTranscriptPart(toolPart, 'tool: pnpm test\n$ pnpm test\n');
+        transcriptStore.emitTranscriptPart(errorPart, 'Error: 스트림이 중단되었습니다.\n');
+
+        // Then: old output consumers see the exact legacy text and block ordering.
+        expect(store.getOutput()).toBe(fallbackText);
+        expect(parseMessageBlocks(store.getOutput()).map((block) => block.kind)).toEqual([
+            'user',
+            'assistant',
+            'thinking',
+            'tool',
+            'error',
+        ]);
+    });
+
+    it('replaceTranscript replaces typed parts and the byte-exact legacy output together', () => {
+        // Given: a store with existing typed output.
+        const store = createChatStore();
+        const transcriptStore: object = store;
+        if (!hasTypedTranscriptStore(transcriptStore)) return;
+        transcriptStore.emitTranscriptPart({ id: 'stale', type: 'status', text: 'stale' }, 'stale\n');
+        const replacementParts: readonly TranscriptPart[] = [
+            { id: 'user-replay', type: 'user', text: 'Replay this turn.' },
+            { id: 'assistant-replay', type: 'assistant', text: 'Replayed response.' },
+        ];
+        const replacementOutput = 'You: Replay this turn.\nAssistant: Replayed response.\n';
+
+        // When: replay supplies a complete replacement transcript.
+        transcriptStore.replaceTranscript(replacementParts, replacementOutput);
+
+        // Then: both store projections describe the same replacement.
+        expect(transcriptStore.getSnapshot().transcriptParts).toEqual(replacementParts);
+        expect(store.getOutput()).toBe(replacementOutput);
+    });
+
+    it('replaceOutputText clears typed state so legacy undo and replay do not retain stale parts', () => {
+        // Given: a typed part has been emitted.
+        const store = createChatStore();
+        const transcriptStore: object = store;
+        if (!hasTypedTranscriptStore(transcriptStore)) return;
+        transcriptStore.emitTranscriptPart(
+            { id: 'assistant-stale', type: 'assistant', text: 'stale response' },
+            'Assistant: stale response\n',
+        );
+
+        // When: an existing legacy replacement path rewrites output text.
+        store.replaceOutputText('You: restored prompt\n');
+
+        // Then: typed state is empty and the replacement remains byte-exact.
+        expect(transcriptStore.getSnapshot().transcriptParts).toEqual([]);
+        expect(store.getOutput()).toBe('You: restored prompt\n');
+    });
+
+    it('submitLine records a typed user part while preserving the current user fallback', () => {
+        // Given: a fresh store and an ordinary user submission.
+        const store = createChatStore();
+        const transcriptStore: object = store;
+        if (!hasTypedTranscriptStore(transcriptStore)) return;
+
+        // When: the prompt is submitted through the existing input boundary.
+        transcriptStore.submitLine('implement the typed transcript seam');
+
+        // Then: the typed user row and legacy output agree on the submitted text.
+        const parts = transcriptStore.getSnapshot().transcriptParts;
+        expect(parts).toHaveLength(1);
+        expect(parts[0]?.type).toBe('user');
+        expect(parts[0]?.text).toBe('implement the typed transcript seam');
+        expect(store.getOutput()).toBe('You: implement the typed transcript seam\n');
+    });
+
+    it('preserves byte-exact raw submitted user values while renderer sinks own terminal display safety', async () => {
+        // Given
+        const store = createChatStore();
+        const nextEvent = store.waitForEvent();
+
+        // When
+        store.submitLine(hostileDisplayPayload);
+
+        // Then
+        await expect(nextEvent).resolves.toEqual({ type: 'line', value: hostileDisplayPayload });
+        expect(store.getSnapshot().historyEntries.at(-1)?.text).toBe(hostileDisplayPayload);
+        expect(store.getSnapshot().transcriptParts.at(-1)).toEqual({
+            id: 'submitted-user-1',
+            type: 'user',
+            text: hostileDisplayPayload,
+        });
+        expect(store.getOutput()).toBe(`You: ${hostileDisplayPayload}\n`);
+    });
+});
+
+describe('chat-store — replayed submitted user IDs', () => {
+    it('allocates above the highest sparse safe occurrence without replacing replayed rows', () => {
+        // Given: replayed rows with sparse submitted-user occurrences across part types.
+        const store = createChatStore();
+        const replayedParts: readonly RichTranscriptPart[] = [
+            { id: 'submitted-user-0', type: 'user', text: 'zero' },
+            { id: 'assistant-between', type: 'assistant', text: 'between' },
+            { id: 'submitted-user-7', type: 'assistant', text: 'reserved occurrence' },
+        ];
+        store.replaceTranscript(replayedParts, 'replayed output\n');
+
+        // When: a user submits after replay restoration.
+        store.submitLine('fresh prompt');
+
+        // Then: replay order and objects survive, and the new row uses the next higher occurrence.
+        const snapshot = store.getSnapshot();
+        expect(snapshot.transcriptParts.slice(0, replayedParts.length)).toEqual(replayedParts);
+        expect(snapshot.transcriptParts.at(0)).toBe(replayedParts.at(0));
+        expect(snapshot.transcriptParts.map((part) => part.id)).toEqual([
+            'submitted-user-0',
+            'assistant-between',
+            'submitted-user-7',
+            'submitted-user-8',
+        ]);
+        expect(snapshot.transcriptParts.at(-1)).toEqual({
+            id: 'submitted-user-8',
+            type: 'user',
+            text: 'fresh prompt',
+        });
+        expect(snapshot.outputText).toBe('replayed output\nYou: fresh prompt\n');
+    });
+
+    it('ignores malformed and overflowing occurrences when reseeding', () => {
+        // Given: replayed IDs that resemble the internal namespace but are not exact safe occurrences.
+        const store = createChatStore();
+        store.submitLine('discarded first prompt');
+        store.submitLine('discarded second prompt');
+        const replayedParts: readonly RichTranscriptPart[] = [
+            { id: 'submitted-user--1', type: 'user', text: 'negative' },
+            { id: 'submitted-user-+1', type: 'user', text: 'positive sign' },
+            { id: 'submitted-user-01', type: 'user', text: 'leading zero' },
+            { id: 'submitted-user-1.0', type: 'user', text: 'decimal' },
+            { id: 'submitted-user-1suffix', type: 'user', text: 'suffix' },
+            { id: 'submitted-user-9007199254740992', type: 'user', text: 'overflow' },
+        ];
+        store.replaceTranscript(replayedParts, 'malformed replay\n');
+
+        // When: a user submits after replay restoration.
+        store.submitLine('safe prompt');
+
+        // Then: malformed occurrences do not advance the historical first generated occurrence.
+        expect(store.getSnapshot().transcriptParts.map((part) => part.id)).toEqual([
+            ...replayedParts.map((part) => part.id),
+            'submitted-user-1',
+        ]);
+        expect(store.getOutput()).toBe('malformed replay\nYou: safe prompt\n');
+    });
+
+    it('wraps from the maximum safe occurrence to the first collision-free positive occurrence', () => {
+        // Given: replay owns the maximum safe occurrence and two lower sparse occurrences.
+        const store = createChatStore();
+        const replayedParts: readonly RichTranscriptPart[] = [
+            { id: 'submitted-user-1', type: 'user', text: 'first' },
+            { id: 'submitted-user-3', type: 'user', text: 'third' },
+            { id: `submitted-user-${Number.MAX_SAFE_INTEGER}`, type: 'user', text: 'maximum' },
+        ];
+        store.replaceTranscript(replayedParts, 'maximum replay\n');
+
+        // When: a user submits after the safe counter cannot advance.
+        store.submitLine('wrapped prompt');
+
+        // Then: allocation fills the first positive gap and no replayed row is overwritten.
+        expect(store.getSnapshot().transcriptParts).toEqual([
+            ...replayedParts,
+            { id: 'submitted-user-2', type: 'user', text: 'wrapped prompt' },
+        ]);
+        expect(store.getOutput()).toBe('maximum replay\nYou: wrapped prompt\n');
+    });
+});
+
+describe('chat-store — typed streaming publication', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('coalesces 100 cumulative streaming updates into one 50ms publication with the latest state', () => {
+        const store = createChatStore();
+        const listener = vi.fn();
+        const initialSnapshot = store.getSnapshot();
+        store.subscribe(listener);
+
+        for (let index = 0; index < 100; index += 1) {
+            const textLength = Math.min(5, Math.floor(index / 20) + 1);
+            const previousTextLength = index === 0 ? 0 : Math.min(5, Math.floor((index - 1) / 20) + 1);
+            const text = 'hello'.slice(0, textLength);
+            const fallbackText = `${index === 0 ? 'Assistant: ' : ''}${text.slice(previousTextLength)}${index === 99 ? '\n' : ''}`;
+            store.emitTranscriptPart(
+                { id: 'assistant-stream', type: 'assistant', text, status: 'streaming' },
+                fallbackText,
+            );
+        }
+
+        expect(listener).not.toHaveBeenCalled();
+        expect(vi.getTimerCount()).toBe(1);
+        expect(store.getOutput()).toBe('Assistant: hello\n');
+        expect(store.getSnapshot()).toBe(initialSnapshot);
+
+        vi.advanceTimersByTime(49);
+        expect(listener).not.toHaveBeenCalled();
+        expect(store.getSnapshot()).toBe(initialSnapshot);
+
+        vi.advanceTimersByTime(1);
+        expect(listener).toHaveBeenCalledTimes(1);
+        expect(vi.getTimerCount()).toBe(0);
+        expect(store.getSnapshot()).not.toBe(initialSnapshot);
+        expect(store.getSnapshot().transcriptParts).toEqual([
+            { id: 'assistant-stream', type: 'assistant', text: 'hello', status: 'streaming' },
+        ]);
+        expect(store.getSnapshot().outputText).toBe('Assistant: hello\n');
+    });
+
+    it('keeps the first 50ms deadline when a later streaming update arrives', () => {
+        const store = createChatStore();
+        const listener = vi.fn();
+        store.subscribe(listener);
+        store.emitTranscriptPart(
+            { id: 'assistant-fixed-window', type: 'assistant', text: 'h', status: 'streaming' },
+            'Assistant: h',
+        );
+
+        vi.advanceTimersByTime(49);
+        store.emitTranscriptPart(
+            { id: 'assistant-fixed-window', type: 'assistant', text: 'hello', status: 'streaming' },
+            'ello\n',
+        );
+
+        expect(listener).not.toHaveBeenCalled();
+        expect(vi.getTimerCount()).toBe(1);
+        expect(store.getOutput()).toBe('Assistant: hello\n');
+
+        vi.advanceTimersByTime(1);
+        expect(listener).toHaveBeenCalledTimes(1);
+        expect(store.getSnapshot().transcriptParts).toEqual([
+            { id: 'assistant-fixed-window', type: 'assistant', text: 'hello', status: 'streaming' },
+        ]);
+    });
+
+    it.each([
+        'completed',
+        'failed',
+    ] as const)('publishes %s parts immediately and cancels the streaming timer', (status) => {
+        const store = createChatStore();
+        const listener = vi.fn();
+        store.subscribe(listener);
+        store.emitTranscriptPart(
+            { id: 'assistant-terminal', type: 'assistant', text: 'hel', status: 'streaming' },
+            'Assistant: hel',
+        );
+
+        store.emitTranscriptPart({ id: 'assistant-terminal', type: 'assistant', text: 'hello', status }, 'lo\n');
+
+        expect(listener).toHaveBeenCalledTimes(1);
+        expect(vi.getTimerCount()).toBe(0);
+        expect(store.getOutput()).toBe('Assistant: hello\n');
+        expect(store.getSnapshot().transcriptParts).toEqual([
+            { id: 'assistant-terminal', type: 'assistant', text: 'hello', status },
+        ]);
+
+        vi.advanceTimersByTime(50);
+        expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it('publishes an output replacement immediately and cancels the streaming timer', () => {
+        const store = createChatStore();
+        const listener = vi.fn();
+        store.subscribe(listener);
+        store.emitTranscriptPart(
+            { id: 'assistant-stale', type: 'assistant', text: 'stale', status: 'streaming' },
+            'Assistant: stale',
+        );
+
+        store.replaceOutputText('Assistant: restored\n');
+
+        expect(listener).toHaveBeenCalledTimes(1);
+        expect(vi.getTimerCount()).toBe(0);
+        expect(store.getSnapshot().transcriptParts).toEqual([]);
+        expect(store.getSnapshot().outputText).toBe('Assistant: restored\n');
+
+        vi.advanceTimersByTime(50);
+        expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it('publishes a transcript replacement immediately and cancels the streaming timer', () => {
+        const store = createChatStore();
+        const listener = vi.fn();
+        const replacementParts: readonly RichTranscriptPart[] = [
+            { id: 'assistant-restored', type: 'assistant', text: 'restored', status: 'completed' },
+        ];
+        store.subscribe(listener);
+        store.emitTranscriptPart(
+            { id: 'assistant-stale', type: 'assistant', text: 'stale', status: 'streaming' },
+            'Assistant: stale',
+        );
+
+        store.replaceTranscript(replacementParts, 'Assistant: restored\n');
+
+        expect(listener).toHaveBeenCalledTimes(1);
+        expect(vi.getTimerCount()).toBe(0);
+        expect(store.getSnapshot().transcriptParts).toEqual(replacementParts);
+        expect(store.getSnapshot().outputText).toBe('Assistant: restored\n');
+
+        vi.advanceTimersByTime(50);
+        expect(listener).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('chat-store — ordered typed and legacy transcript rows', () => {
+    it('preserves direct output before, between, and after typed parts without materializing typed fallbacks as legacy', () => {
+        // Given: historical output followed by semantic parts and direct bridge writes.
+        const store = createChatStore();
+        const assistant: RichTranscriptPart = {
+            id: 'assistant-ordered',
+            type: 'assistant',
+            text: 'typed assistant',
+            status: 'streaming',
+        };
+        const tool: RichTranscriptPart = {
+            id: 'tool-ordered',
+            type: 'inline-tool',
+            text: 'repo.read',
+            output: 'typed tool output',
+            status: 'completed',
+        };
+        vi.useFakeTimers();
+        store.emitOutput('legacy before\n');
+
+        // When: direct and typed writes interleave.
+        store.emitTranscriptPart(assistant, 'Assistant: typed assistant\n');
+        store.emitOutput('legacy between\n');
+        store.emitTranscriptPart(tool, 'tool: repo.read\n');
+        store.emitOutput('legacy after\n');
+        vi.runAllTimers();
+
+        // Then: only direct output becomes legacy rows and every row retains emission order.
+        expect(store.getSnapshot().transcriptParts).toEqual([
+            { id: 'legacy-1', type: 'legacy', text: 'legacy before\n' },
+            assistant,
+            { id: 'legacy-2', type: 'legacy', text: 'legacy between\n' },
+            tool,
+            { id: 'legacy-3', type: 'legacy', text: 'legacy after\n' },
+        ]);
+        expect(store.getOutput()).toBe(
+            'legacy before\nAssistant: typed assistant\nlegacy between\ntool: repo.read\nlegacy after\n',
+        );
+    });
+
+    it('replaces stable streaming rows in place while preserving their first-seen status order', () => {
+        // Given: historical output and active assistant/reasoning rows.
+        const store = createChatStore();
+        store.emitOutput('historical\n');
+        const assistantStart: RichTranscriptPart = {
+            id: 'assistant-stream',
+            type: 'assistant',
+            text: 'draft',
+            status: 'streaming',
+        };
+        const reasoningStart: RichTranscriptPart = {
+            id: 'reasoning-stream',
+            type: 'reasoning',
+            text: 'checking',
+            status: 'streaming',
+        };
+        store.emitTranscriptPart(assistantStart, 'Assistant: draft');
+        store.emitTranscriptPart(reasoningStart, 'Thinking: checking');
+
+        // When: same IDs receive completed replacements.
+        const assistantFinal: RichTranscriptPart = {
+            ...assistantStart,
+            text: 'final answer',
+            status: 'completed',
+        };
+        const reasoningFinal: RichTranscriptPart = {
+            ...reasoningStart,
+            text: 'checked',
+            status: 'completed',
+        };
+        store.emitTranscriptPart(assistantFinal, ' final answer');
+        store.emitTranscriptPart(reasoningFinal, ' checked');
+
+        // Then: no update moves the stable rows or creates fallback legacy rows.
+        expect(store.getSnapshot().transcriptParts).toEqual([
+            { id: 'legacy-1', type: 'legacy', text: 'historical\n' },
+            assistantFinal,
+            reasoningFinal,
+        ]);
+    });
+
+    it('resets generated legacy IDs when replacement clears or replaces the transcript', () => {
+        // Given: typed mode has generated a legacy row.
+        const store = createChatStore();
+        vi.useFakeTimers();
+        store.emitTranscriptPart({ id: 'assistant-reset', type: 'assistant', text: 'first' }, 'Assistant: first\n');
+        store.emitOutput('direct first\n');
+
+        // When: the legacy replacement path clears typed state before a new typed stream begins.
+        store.replaceOutputText('restored\n');
+        store.emitTranscriptPart({ id: 'assistant-next', type: 'assistant', text: 'next' }, 'Assistant: next\n');
+        store.emitOutput('direct next\n');
+        vi.runAllTimers();
+
+        // Then: the fresh ordered projection restarts legacy IDs consistently.
+        expect(store.getSnapshot().transcriptParts).toEqual([
+            { id: 'legacy-1', type: 'legacy', text: 'restored\n' },
+            { id: 'assistant-next', type: 'assistant', text: 'next' },
+            { id: 'legacy-2', type: 'legacy', text: 'direct next\n' },
+        ]);
+    });
+
+    it('restarts the legacy counter after a full transcript replacement without colliding with replayed rows', () => {
+        // Given: a replacement transcript which already owns its first legacy row.
+        const store = createChatStore();
+        vi.useFakeTimers();
+        store.replaceTranscript(
+            [
+                { id: 'legacy-1', type: 'legacy', text: 'replayed direct\n' },
+                { id: 'assistant-replay', type: 'assistant', text: 'replayed answer' },
+            ],
+            'replayed direct\nAssistant: replayed answer\n',
+        );
+
+        // When: a direct output write arrives after the replacement's typed row.
+        store.emitOutput('replayed tail\n');
+        vi.runAllTimers();
+
+        // Then: a new ordered legacy row is allocated after the replay-owned ID.
+        expect(store.getSnapshot().transcriptParts.at(-1)).toEqual({
+            id: 'legacy-2',
+            type: 'legacy',
+            text: 'replayed tail\n',
+        });
     });
 });
 
@@ -736,6 +1320,7 @@ describe('chat-store — ABG minimap toggle', () => {
         expect(second).not.toBe(first);
         expect(second.abgMinimapVisible).toBe(true);
     });
+
 });
 
 describe('chat-store — onModelCycleSelect callback', () => {
@@ -1562,10 +2147,7 @@ describe('chat-store — history picker + timestamped entries', () => {
 
     it('seeds historyEntries from initialHistoryEntries options', () => {
         const store = createChatStore({
-            initialHistoryEntries: [
-                makeHistoryEntry('a', 'older', 1),
-                makeHistoryEntry('b', 'newer', 2),
-            ],
+            initialHistoryEntries: [makeHistoryEntry('a', 'older', 1), makeHistoryEntry('b', 'newer', 2)],
         });
         expect(store.getSnapshot().historyEntries).toEqual([
             makeHistoryEntry('a', 'older', 1),
@@ -1576,10 +2158,7 @@ describe('chat-store — history picker + timestamped entries', () => {
 
     it('open → navigate → confirm returns selected text without changing inputMirror', () => {
         const store = createChatStore({
-            initialHistoryEntries: [
-                makeHistoryEntry('a', 'older', 1),
-                makeHistoryEntry('b', 'newer', 2),
-            ],
+            initialHistoryEntries: [makeHistoryEntry('a', 'older', 1), makeHistoryEntry('b', 'newer', 2)],
         });
         store.setInputMirror('draft');
         store.openHistoryPicker('draft');
@@ -1649,10 +2228,7 @@ describe('chat-store — history picker + timestamped entries', () => {
             initialHistoryEntries: [makeHistoryEntry('a', 'old', 1)],
         });
         store.openHistoryPicker('draft');
-        store.setHistoryEntries([
-            makeHistoryEntry('b', 'one', 10),
-            makeHistoryEntry('c', 'two', 20),
-        ]);
+        store.setHistoryEntries([makeHistoryEntry('b', 'one', 10), makeHistoryEntry('c', 'two', 20)]);
         const snapshot = store.getSnapshot();
         expect(snapshot.historyEntries.map((entry) => entry.text)).toEqual(['one', 'two']);
         expect(snapshot.historyPicker.open).toBe(false);
