@@ -208,7 +208,7 @@ describe('abg overlay state', () => {
             expect(store.isActive()).toBe(false);
         });
 
-        it('reset clears every field to its default (Metis 5.3 no-leak)', () => {
+        it('reset clears every field to its default (design note 5.3 no-leak)', () => {
             const store = createAbgOverlayStore();
             store.update((draft) => {
                 draft.activeGraphId = 'g1';
@@ -301,7 +301,7 @@ describe('abg overlay state', () => {
             expect(state.lastError).toBe('kaput');
         });
 
-        it('returns an empty patch and does not throw on a malformed signal (Metis 4.1)', () => {
+        it('returns an empty patch and does not throw on a malformed signal (design note 4.1)', () => {
             const store = createAbgOverlayStore();
             store.update((draft) => {
                 Object.assign(draft, projectAbgSignal(draft, startedSignal('n1')));
@@ -542,7 +542,7 @@ describe('abg overlay state', () => {
         });
     });
 
-    describe('extractUsageFromModelCallCompleted (Metis 1.4)', () => {
+    describe('extractUsageFromModelCallCompleted (design note 1.4)', () => {
         it('returns undefined when no usage chunk is present', () => {
             expect(extractUsageFromModelCallCompleted(modelCallCompleted(undefined))).toBeUndefined();
         });

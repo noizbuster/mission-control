@@ -316,7 +316,7 @@ function cloneState(state: AbgOverlayState): AbgOverlayDraft {
 
 /**
  * Pure fold of an {@link AbgSignal} (plane A live source) into state. Total and non-throwing
- * (Metis 4.1): every error returns an empty patch so a malformed signal cannot reject the node run.
+ * (design note 4.1): every error returns an empty patch so a malformed signal cannot reject the node run.
  * AbgSignal carries no timestamp outside its embedded `emit` event, so non-emit recent entries use
  * an empty timestamp placeholder (the integration layer may enrich it). `nodeChangedAtMs` is bumped
  * with the injected `now` clock only when a node status actually transitions; control-intent signals
@@ -529,7 +529,7 @@ function graphStatusForEventType(type: string): AbgGraphStatus | undefined {
  * Pure fold of a durable {@link AgentEvent} (plane B) into state. Filters to overlay-relevant
  * events (abg.graphId present OR a runtime/approval/command/diff/model/... type), updates runState
  * and graphStatus for lifecycle events, accumulates token usage on `model.call.completed`, and
- * appends a redacted recentEvents entry. costCents is never derived here (Metis 1.4: no pricing
+ * appends a redacted recentEvents entry. costCents is never derived here (design note 1.4: no pricing
  * table ships).
  */
 export function projectAgentEvent(state: AbgOverlayState, event: AgentEvent): Partial<AbgOverlayState> {
@@ -669,7 +669,7 @@ export function mergeGraphSnapshot(
 }
 
 /**
- * Primary cost source (Metis 1.4). Reads token usage off the `response_completed` provider stream
+ * Primary cost source (design note 1.4). Reads token usage off the `response_completed` provider stream
  * chunk on a `model.call.completed` event. `costCents` is always absent here — pricing-derived cents
  * arrive via `policy.budget.accumulated` events emitted by `CostLedger.accumulate()` and folded in
  * by the dedicated branch in `projectAgentEvent`.
@@ -751,7 +751,7 @@ export function extractBlackboardMutation(event: AgentEvent): BlackboardMutation
  * External store factory (mirrors the `EventBus` subscribe pattern). `getSnapshot()` is
  * referentially stable until `update()` or `reset()` rebuilds it. `update` clones the current
  * snapshot into a mutable draft, applies the mutator, and publishes the draft so the previous
- * snapshot is never mutated. `reset()` returns every field to its default (Metis 5.3 no-leak).
+ * snapshot is never mutated. `reset()` returns every field to its default (design note 5.3 no-leak).
  */
 export function createAbgOverlayStore(): AbgOverlayStore {
     const listeners = new Set<() => void>();

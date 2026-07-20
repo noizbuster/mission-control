@@ -229,7 +229,7 @@ describe('AbgOverlayPanesB - ApprovalsPane', () => {
 });
 
 describe('AbgOverlayPanesB - CostPolicyPane', () => {
-    test('renders default config (Metis 1.4) with zeros', () => {
+    test('renders default config (design note 1.4) with zeros', () => {
         const store = createMockStore();
         const state = store.getSnapshot();
 

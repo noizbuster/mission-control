@@ -37,7 +37,7 @@ const TABS: readonly AbgOverlayTab[] = [
 /** Shared tab order so keyboard drivers map digits/cycle to the same tab rendered here (no drift). */
 export const ABG_OVERLAY_TABS: readonly AbgOverlayTab[] = TABS;
 
-/** Min terminal width (cols) for the full 8-tab layout (Metis 2.8). */
+/** Min terminal width (cols) for the full 8-tab layout (contract 2.8). */
 export const NARROW_THRESHOLD = 100;
 
 /**

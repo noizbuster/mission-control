@@ -105,7 +105,7 @@ describe('ABG overlay wiring — 33ms coalescing + non-throwing observer (Wave 2
         });
     });
 
-    describe('QA: Failure (Metis 4.1) — observer throws is swallowed', () => {
+    describe('QA: Failure (design note 4.1) — observer throws is swallowed', () => {
         it('completes the signal tap and logs observer Error failures', async () => {
             const output = bufferedOutput();
             const stderrWrite = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
@@ -171,7 +171,7 @@ describe('ABG overlay wiring — 33ms coalescing + non-throwing observer (Wave 2
         });
     });
 
-    describe('QA: Coalescing (Metis 2.2) — 100 deltas in one window = 1 update', () => {
+    describe('QA: Coalescing (contract 2.2) — 100 deltas in one window = 1 update', () => {
         it('fires 100 deltas then flushes exactly once on the next tick', () => {
             vi.useFakeTimers();
             const { store, getUpdateCount } = createCountingStore();
@@ -212,7 +212,7 @@ describe('ABG overlay wiring — 33ms coalescing + non-throwing observer (Wave 2
         });
     });
 
-    describe('QA: Run-end (Metis 2.6) — run.interrupted settles runState immediately', () => {
+    describe('QA: Run-end (contract 2.6) — run.interrupted settles runState immediately', () => {
         it('flips runState to interrupted and graphStatus to cancelled on run.interrupted', () => {
             const { store } = createCountingStore();
             const controller = createAbgOverlayController(store);

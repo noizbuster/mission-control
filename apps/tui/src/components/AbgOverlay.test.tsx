@@ -245,7 +245,7 @@ describe('AbgOverlay Store Integration', () => {
 });
 
 describe('AbgOverlay resize collapse behavior', () => {
-    test('NARROW_THRESHOLD is 100 cols (Metis 2.8 contract)', () => {
+    test('NARROW_THRESHOLD is 100 cols (contract 2.8)', () => {
         expect(NARROW_THRESHOLD).toBe(100);
     });
 
