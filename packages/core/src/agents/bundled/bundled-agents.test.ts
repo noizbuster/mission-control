@@ -39,12 +39,12 @@ describe('bundled agents — parse via parseAgentFile', () => {
         });
     }
 
-    it('planner carries the .omo/plans + .omo/notepads write allowlist and broad denies', () => {
+    it('planner carries the .mc/plans + .mc/notepads write allowlist and broad denies', () => {
         const parsed = parseAgentFile('/bundled/planner.md', planner, 'bundled');
         expect(parsed.pathPolicies).toEqual([
             { action: 'write', resource: '**', effect: 'deny' },
-            { action: 'write', resource: '.omo/plans/**', effect: 'allow' },
-            { action: 'write', resource: '.omo/notepads/**', effect: 'allow' },
+            { action: 'write', resource: '.mc/plans/**', effect: 'allow' },
+            { action: 'write', resource: '.mc/notepads/**', effect: 'allow' },
             { action: 'edit', resource: '**', effect: 'deny' },
             { action: 'patch', resource: '**', effect: 'deny' },
             { action: 'bash', resource: '**', effect: 'deny' },

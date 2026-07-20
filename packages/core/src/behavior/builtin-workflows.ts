@@ -23,14 +23,14 @@ export const BUILTIN_WORKFLOWS: readonly WorkflowSpec[] = [
         description:
             'Plain-prompt fallback: classify intent, then either answer, research read-only, route to #planner, ' +
             'or run todo-backed implementation with verify/evidence and a 3-strike supervisor. Does not force ' +
-            'full .omo/plans scaffolds — use #planner for strategic planning.',
+            'full .mc/plans scaffolds — use #planner for strategic planning.',
         graph: createDefaultWorkflowGraph(),
     },
     {
         name: 'planner',
         description:
             'Sticky read-only planning: explore before questions, draft/review/approval, write scaffold plans to ' +
-            '.omo/plans/. Never implements product code.',
+            '.mc/plans/. Never implements product code.',
         graph: createPlannerWorkflowGraph(),
         modes: [PLANNER_READONLY_MODE],
     },

@@ -199,12 +199,12 @@ describe('abg reference parity: planner workflow mode and readonly enforcement',
         expect(graph.entryNodeId).toBe('intake');
     });
 
-    it('planner-readonly policies deny source writes and allow .omo/plans and .omo/specs', () => {
+    it('planner-readonly policies deny source writes and allow .mc/plans and .mc/specs', () => {
         expect(evaluateRules('write', 'src/index.ts', [{ rules: [...PLANNER_READONLY_POLICIES] }]).effect).toBe('deny');
-        expect(evaluateRules('write', '.omo/plans/plan.md', [{ rules: [...PLANNER_READONLY_POLICIES] }]).effect).toBe(
+        expect(evaluateRules('write', '.mc/plans/plan.md', [{ rules: [...PLANNER_READONLY_POLICIES] }]).effect).toBe(
             'allow',
         );
-        expect(evaluateRules('write', '.omo/specs/spec.md', [{ rules: [...PLANNER_READONLY_POLICIES] }]).effect).toBe(
+        expect(evaluateRules('write', '.mc/specs/spec.md', [{ rules: [...PLANNER_READONLY_POLICIES] }]).effect).toBe(
             'allow',
         );
     });
@@ -339,7 +339,7 @@ describe('abg reference parity: executer workflow plan parsing and final gate', 
         const planPath = configValue(checkboxUpdate, 'planPath');
         // Desired: the node targets a concrete plan file path and only flips checkboxes
         // after per-task verification passes.
-        const targetsPlanPath = typeof planPath === 'string' || /\.omo\/plans\//.test(prompt);
+        const targetsPlanPath = typeof planPath === 'string' || /\.mc\/plans\//.test(prompt);
         const gatedOnVerify = /after.*verif|only.*verif/i.test(prompt);
         expect(targetsPlanPath && gatedOnVerify).toBe(true);
     });

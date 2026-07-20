@@ -5,8 +5,8 @@
  * Proves the behaviors ported from the reference strategic planner:
  *   1. Sticky plan mode — the planner produces a PLAN, never product code.
  *   2. Planner-readonly denies product writes on the EXECUTED (materialized)
- *      graph and allows only .omo/plans/**, .omo/specs/**, .omo/drafts/**.
- *   3. Draft state — draft-plan targets .omo/drafts/<slug>.md and carries the
+ *      graph and allows only .mc/plans/**, .mc/specs/**, .mc/drafts/**.
+ *   3. Draft state — draft-plan targets .mc/drafts/<slug>.md and carries the
  *      write capability, BEFORE the final plan handoff.
  *   4. Approval gate — write-plan is reachable ONLY via the plan-ready rule
  *      (plan.ready === true); approval-gate self-loops while awaiting.
@@ -126,13 +126,13 @@ describe('planner workflow parity: planner-readonly on the executed graph', () =
         expect(writeDeny).toBeDefined();
     });
 
-    it('planner-readonly policies deny src/** and allow the three .omo artifact roots', () => {
+    it('planner-readonly policies deny src/** and allow the three .mc artifact roots', () => {
         const ruleset = [{ rules: [...PLANNER_READONLY_POLICIES] }];
         expect(evaluateRules('write', 'src/index.ts', ruleset).effect).toBe('deny');
         expect(evaluateRules('write', 'packages/core/src/index.ts', ruleset).effect).toBe('deny');
-        expect(evaluateRules('write', '.omo/plans/plan.md', ruleset).effect).toBe('allow');
-        expect(evaluateRules('write', '.omo/specs/spec.md', ruleset).effect).toBe('allow');
-        expect(evaluateRules('write', '.omo/drafts/plan.md', ruleset).effect).toBe('allow');
+        expect(evaluateRules('write', '.mc/plans/plan.md', ruleset).effect).toBe('allow');
+        expect(evaluateRules('write', '.mc/specs/spec.md', ruleset).effect).toBe('allow');
+        expect(evaluateRules('write', '.mc/drafts/plan.md', ruleset).effect).toBe('allow');
     });
 
     it('applyMode converts every planner-readonly policy into graph-level policy entries', () => {
@@ -151,14 +151,14 @@ describe('planner workflow parity: planner-readonly on the executed graph', () =
 });
 
 describe('planner workflow parity: draft state before final plan', () => {
-    it('draft-plan writes to .omo/drafts and sets plan.drafted', () => {
+    it('draft-plan writes to .mc/drafts and sets plan.drafted', () => {
         const graph = createPlannerWorkflowGraph();
         const draftPlan = findNode(graph, 'draft-plan');
         expect(configString(draftPlan, 'outputKey')).toBe('plan.drafted');
         const prompt = configString(draftPlan, 'systemPrompt') ?? '';
-        expect(prompt).toMatch(/\.omo\/drafts/);
+        expect(prompt).toMatch(/\.mc\/drafts/);
         expect(prompt).toMatch(/DRAFT/i);
-        expect(prompt).toMatch(/do not.*\.omo\/plans/i);
+        expect(prompt).toMatch(/do not.*\.mc\/plans/i);
     });
 
     it('draft-plan carries the write capability needed to author the draft', () => {
@@ -231,12 +231,12 @@ describe('planner workflow parity: approval gate blocks the final plan write', (
         expect(configString(gate, 'outputKey')).toBe('plan.ready');
     });
 
-    it('write-plan runs AFTER approval and commits .omo/plans/<slug>.md', () => {
+    it('write-plan runs AFTER approval and commits .mc/plans/<slug>.md', () => {
         const graph = createPlannerWorkflowGraph();
         const writePlan = findNode(graph, 'write-plan');
         const prompt = configString(writePlan, 'systemPrompt') ?? '';
         expect(prompt).toMatch(/AFTER approval/i);
-        expect(prompt).toMatch(/\.omo\/plans/);
+        expect(prompt).toMatch(/\.mc\/plans/);
         expect(configString(writePlan, 'outputKey')).toBe('plan.written');
     });
 });

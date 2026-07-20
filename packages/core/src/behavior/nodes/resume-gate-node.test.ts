@@ -179,7 +179,7 @@ describe('runResumeGateNode', () => {
 
     async function setupWorkspace(): Promise<string> {
         workspaceRoot = await mkdtemp(join(tmpdir(), 'resume-gate-'));
-        await mkdir(join(workspaceRoot, '.omo', 'drafts'), { recursive: true });
+        await mkdir(join(workspaceRoot, '.mc', 'drafts'), { recursive: true });
         return workspaceRoot;
     }
 
@@ -187,7 +187,7 @@ describe('runResumeGateNode', () => {
         // Given
         const root = await setupWorkspace();
         await writeFile(
-            join(root, '.omo', 'drafts', 'my-feature.md'),
+            join(root, '.mc', 'drafts', 'my-feature.md'),
             draftMarkdown({
                 status: 'awaiting-approval',
                 intent: 'clear',
@@ -216,7 +216,7 @@ describe('runResumeGateNode', () => {
         // Given
         const root = await setupWorkspace();
         await writeFile(
-            join(root, '.omo', 'drafts', 'my-feature.md'),
+            join(root, '.mc', 'drafts', 'my-feature.md'),
             draftMarkdown({
                 status: 'drafting',
                 intent: 'unclear',
@@ -292,7 +292,7 @@ describe('runResumeGateNode', () => {
         // Given
         const root = await setupWorkspace();
         await writeFile(
-            join(root, '.omo', 'drafts', 'my-feature.md'),
+            join(root, '.mc', 'drafts', 'my-feature.md'),
             draftMarkdown({
                 status: 'awaiting-approval',
                 intent: 'clear',
@@ -317,7 +317,7 @@ describe('runResumeGateNode', () => {
     it('treats corrupt frontmatter as fresh and emits diagnostic', async () => {
         // Given
         const root = await setupWorkspace();
-        await writeFile(join(root, '.omo', 'drafts', 'my-feature.md'), 'not valid frontmatter', 'utf8');
+        await writeFile(join(root, '.mc', 'drafts', 'my-feature.md'), 'not valid frontmatter', 'utf8');
         const blackboard = createBlackboard();
         blackboard.appendMessages([{ role: 'user', content: 'continue slug:my-feature' }]);
 

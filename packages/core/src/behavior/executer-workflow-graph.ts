@@ -61,7 +61,7 @@ export const EXECUTER_WORKFLOW_MAX_NODE_RUNS = 64;
 export const EXECUTER_PLAN_ADMISSION_PROMPT =
     'You are the Mission Control executer workflow plan-admission conductor. BEFORE any task ' +
     'delegation, verify the plan is complete and approved. Read the plan from ' +
-    '.omo/plans/<slug>.md and check ALL of: ' +
+    '.mc/plans/<slug>.md and check ALL of: ' +
     '(1) the plan exists and is non-empty; (2) it carries the scaffold sections ## TL;DR, ' +
     '## Scope, ## Todos, ## Final Verification Wave; (3) ## Todos contains at least one ' +
     '"- [ ]" checkbox; (4) ## Final Verification Wave is present; (5) the plan is marked ' +
@@ -87,7 +87,7 @@ export const EXECUTER_PLAN_REJECTED_PROMPT =
  * `parsePlanSections` contract in `persistence/plan-store.ts`.
  */
 export const EXECUTER_PARSE_PLAN_PROMPT =
-    'Read the plan file from .omo/plans/{slug}.md and parse it with section-scoped counting: ' +
+    'Read the plan file from .mc/plans/{slug}.md and parse it with section-scoped counting: ' +
     'only column-0 checkboxes (`- [ ]` / `- [x]`) that fall under a `## Todos` / `## TODOs` or ' +
     '`## Final Verification Wave` heading are counted as actionable tasks. Ignore nested or ' +
     'indented checkboxes and ignore checkboxes under any other heading (Notes, Acceptance ' +
@@ -97,13 +97,13 @@ export const EXECUTER_PARSE_PLAN_PROMPT =
 
 /**
  * Append-only notepad initialization prompt (plan Task 9). The executer must
- * read `.omo/notepads/{plan}/learnings.md` BEFORE delegation so inherited
+ * read `.mc/notepads/{plan}/learnings.md` BEFORE delegation so inherited
  * wisdom flows into every child prompt, and must require delegated tasks to
  * APPEND findings (never overwrite). Mirrors the Mission Control append-only notepad protocol.
  */
 export const EXECUTER_INIT_NOTEPAD_PROMPT =
     'As the Mission Control executer workflow conductor, read the append-only notepad at ' +
-    '.omo/notepads/{plan}/learnings.md (create it if absent) BEFORE delegation. ' +
+    '.mc/notepads/{plan}/learnings.md (create it if absent) BEFORE delegation. ' +
     'Extract prior learnings, decisions, and issues to pass as Inherited Wisdom to every ' +
     'delegated task. The notepad is append-only: delegated tasks MUST append findings via ' +
     'appendNotepad / assertAppendOnly — never overwrite or truncate. Set notepad.ready when ' +
@@ -150,7 +150,7 @@ export const EXECUTER_CHECKBOX_UPDATE_PROMPT =
     'Independently verify each task BEFORE flipping: confirm tests pass (run the plan ' +
     'verification command), confirm the expected files exist and were modified, and confirm ' +
     'lsp_diagnostics is clean on changed files. Only after verification passes, edit ' +
-    '.omo/plans/{slug}.md to change the matching `- [ ]` to `- [x]` and write verification ' +
+    '.mc/plans/{slug}.md to change the matching `- [ ]` to `- [x]` and write verification ' +
     'evidence. After the edit, READ the plan file again to confirm the unchecked count ' +
     'decreased — this read-back is mandatory. If verification fails, leave the checkbox ' +
     'unchecked and route back to fix-loop. Set checkbox.updated only after the read-back ' +
@@ -318,7 +318,7 @@ export function createExecuterWorkflowGraph(options: ExecuterWorkflowGraphOption
                 config: {
                     systemPrompt: EXECUTER_INIT_NOTEPAD_PROMPT,
                     outputKey: 'notepad.ready',
-                    notepadPath: '.omo/notepads/{plan}/learnings.md',
+                    notepadPath: '.mc/notepads/{plan}/learnings.md',
                     notepadMode: 'append-only',
                 },
             },
@@ -376,7 +376,7 @@ export function createExecuterWorkflowGraph(options: ExecuterWorkflowGraphOption
                 config: {
                     systemPrompt: EXECUTER_CHECKBOX_UPDATE_PROMPT,
                     outputKey: 'checkbox.updated',
-                    planPath: '.omo/plans/{slug}.md',
+                    planPath: '.mc/plans/{slug}.md',
                     verifyBeforeCheckbox: true,
                     readBackAfterUpdate: true,
                 },
@@ -468,7 +468,7 @@ export function createExecuterWorkflowGraph(options: ExecuterWorkflowGraphOption
                 config: {
                     systemPrompt: EXECUTER_BLOCKED_ESCALATION_PROMPT,
                     outputKey: 'fix.blocked',
-                    evidencePath: '.omo/evidence/',
+                    evidencePath: '.mc/evidence/',
                     strikeBudget: EXECUTER_FINAL_STRIKE_BUDGET,
                 },
             },

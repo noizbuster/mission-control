@@ -74,7 +74,7 @@ describe('runDraftFrontmatterNode', () => {
         const signals = await collect(runDraftFrontmatterNode(draftingNode(), baseContext(blackboard, root)));
         // Then
         expect(signals.some((signal) => signal.type === 'success')).toBe(true);
-        const draft = await readFile(join(root, '.omo', 'drafts', 'auth-rewrite.md'), 'utf8');
+        const draft = await readFile(join(root, '.mc', 'drafts', 'auth-rewrite.md'), 'utf8');
         expect(draft).toContain('slug: auth-rewrite');
         expect(draft).toContain('status: drafting');
         expect(draft).toContain('intent: clear');
@@ -84,8 +84,8 @@ describe('runDraftFrontmatterNode', () => {
     it('preserves an existing draft body when updating frontmatter', async () => {
         // Given
         const root = await makeTempRoot();
-        await mkdir(join(root, '.omo', 'drafts'), { recursive: true });
-        const draftPath = join(root, '.omo', 'drafts', 'keep-body.md');
+        await mkdir(join(root, '.mc', 'drafts'), { recursive: true });
+        const draftPath = join(root, '.mc', 'drafts', 'keep-body.md');
         await writeFile(
             draftPath,
             ['---', 'slug: keep-body', 'status: drafting', 'intent: ""', 'review_required: false', '---', '', '# Body', ''].join(
@@ -119,7 +119,7 @@ describe('runDraftFrontmatterNode', () => {
         // When
         await collect(runDraftFrontmatterNode(awaitingNode(), baseContext(blackboard, root)));
         // Then
-        const draft = await readFile(join(root, '.omo', 'drafts', 'dual-receipts.md'), 'utf8');
+        const draft = await readFile(join(root, '.mc', 'drafts', 'dual-receipts.md'), 'utf8');
         expect(draft).toContain(DUAL_REVIEW_RECEIPTS_HEADING);
         expect(draft).toContain('reviewer=APPROVE');
         expect(draft).toContain('oracle=APPROVE');

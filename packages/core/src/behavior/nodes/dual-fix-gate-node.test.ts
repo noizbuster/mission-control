@@ -141,7 +141,7 @@ describe('runDualFixGateNode', () => {
         // When
         await collect(runDualFixGateNode(GATE_NODE, baseContext(blackboard, root)));
         // Then
-        const draft = await readFile(join(root, '.omo', 'drafts', 'receipt-slug.md'), 'utf8');
+        const draft = await readFile(join(root, '.mc', 'drafts', 'receipt-slug.md'), 'utf8');
         expect(draft).toContain(DUAL_REVIEW_RECEIPTS_HEADING);
         expect(draft).toContain('attempt 1: reviewer=REJECT, oracle=APPROVE, verdict=REJECT');
     });

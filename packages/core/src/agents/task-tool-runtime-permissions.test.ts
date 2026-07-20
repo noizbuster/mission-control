@@ -165,7 +165,7 @@ describe('ConcreteTaskToolRuntime child permission enforcement', () => {
         await runtime.runChildSession(
             makePermissionRequest([
                 { action: 'write', resource: '**', effect: 'deny' },
-                { action: 'write', resource: '.omo/plans/**', effect: 'allow' },
+                { action: 'write', resource: '.mc/plans/**', effect: 'allow' },
             ]),
         );
         const registry = contexts[0]?.childToolRegistry;
@@ -177,13 +177,13 @@ describe('ConcreteTaskToolRuntime child permission enforcement', () => {
             toolCallId: 'call-write-escape',
             toolName: 'file.write',
             advertisedVersion: advertisement.version,
-            argumentsJson: JSON.stringify({ path: '.omo/plans/../README.md', content: 'blocked' }),
+            argumentsJson: JSON.stringify({ path: '.mc/plans/../README.md', content: 'blocked' }),
         });
         const absoluteAllowed = await registry.invoke({
             toolCallId: 'call-write-absolute',
             toolName: 'file.write',
             advertisedVersion: advertisement.version,
-            argumentsJson: JSON.stringify({ path: '/tmp/workspace/.omo/plans/plan.md', content: 'allowed' }),
+            argumentsJson: JSON.stringify({ path: '/tmp/workspace/.mc/plans/plan.md', content: 'allowed' }),
         });
 
         expect(escaped.result.status).toBe('failed');

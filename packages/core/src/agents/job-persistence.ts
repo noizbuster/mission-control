@@ -2,7 +2,7 @@
  * Persists {@link BackgroundJobHandle} instances to disk so AsyncJobManager
  * background jobs survive process restarts. Each job is stored as a single JSON
  * file at `<jobsDir>/<jobId>.json`. Writes are atomic (temp-file-then-rename)
- * following the `.omo/` persistence convention from `boulder-store.ts`, so
+ * following the `.mc/` persistence convention from `boulder-store.ts`, so
  * concurrent writes never produce a partially-written file.
  */
 

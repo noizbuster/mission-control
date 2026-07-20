@@ -2,7 +2,7 @@
  * Default workflow parity — intent-gated plain-prompt implementer.
  *
  * Structural proofs that `#default` / plain prompt intent-gates and implements
- * (never forces .omo/plans full scaffolds). Full planning remains `#planner`.
+ * (never forces .mc/plans full scaffolds). Full planning remains `#planner`.
  */
 import { AbgGraphSpecSchema, WorkflowSpecSchema } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';

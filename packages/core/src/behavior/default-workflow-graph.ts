@@ -17,7 +17,7 @@
  *
  * Role:
  * - Default: implement, don't force a full plan scaffold.
- * - Multi-step work uses lightweight todos (`plan.todos`), not `.omo/plans` scaffolds.
+ * - Multi-step work uses lightweight todos (`plan.todos`), not `.mc/plans` scaffolds.
  * - Full strategic planning is `#planner`. Plan execution is `#executer`.
  * - `#fixer` is the explicit alias of the same implement/fix graph family.
  *

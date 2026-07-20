@@ -258,14 +258,14 @@ describe('PLANNER_READONLY_POLICIES', () => {
         expect(result.effect).toBe('deny');
     });
 
-    it('allows writes to .omo/plans/**', () => {
-        const result = evaluateRules('write', '.omo/plans/my-plan.md', [ruleset]);
+    it('allows writes to .mc/plans/**', () => {
+        const result = evaluateRules('write', '.mc/plans/my-plan.md', [ruleset]);
 
         expect(result.effect).toBe('allow');
     });
 
-    it('allows writes to .omo/specs/**', () => {
-        const result = evaluateRules('write', '.omo/specs/feature-spec.md', [ruleset]);
+    it('allows writes to .mc/specs/**', () => {
+        const result = evaluateRules('write', '.mc/specs/feature-spec.md', [ruleset]);
 
         expect(result.effect).toBe('allow');
     });

@@ -1,7 +1,7 @@
 /**
  * Deterministic planner resume-gate runner (plan T3).
  *
- * Reads `.omo/drafts/${plan.slug}.md` frontmatter and writes `resume_gate` ∈
+ * Reads `.mc/drafts/${plan.slug}.md` frontmatter and writes `resume_gate` ∈
  * `fresh` | `resume_approval` | `resume_drafting`. Never LLM-judged.
  *
  * Also applies intake-side pure fields when missing: `plan.slug` (kebab of goal
@@ -13,7 +13,7 @@
 import type { AbgNodeSpec, AbgSignal } from '@mission-control/protocol';
 import type { ModelMessage } from 'ai';
 import { isValidPlanSlug } from '../../persistence/plan-format';
-import { omoFilePath } from '../../persistence/paths';
+import { mcFilePath } from '../../persistence/paths';
 import { createAbgEmitSignal } from '../abg-emit';
 import type { AbgNodeRunContext, AbgNodeRunner } from '../node-registry';
 import {
@@ -85,7 +85,7 @@ export const runResumeGateNode: AbgNodeRunner = async function* (
     }
 
     const workspaceRoot = resolveWorkspaceRoot(context);
-    const draftPath = omoFilePath(workspaceRoot, 'drafts', `${planSlug}.md`);
+    const draftPath = mcFilePath(workspaceRoot, 'drafts', `${planSlug}.md`);
 
     let gate: ResumeGateValue = 'fresh';
     let diagnostic: { readonly code: string; readonly message: string } | undefined;

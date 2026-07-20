@@ -40,7 +40,7 @@ export type AbgNodeRunContext = {
      * Workflow mode policy-gate rules (Task 1.2 / 3.2) in the action/resource/effect vocabulary.
      * Threaded from the active {@linkcode Mode}'s `policies` at materialization. The
      * `mode-policy-gate` node evaluates these via `evaluateRules` to enforce e.g. the planner's
-     * read-only scope (deny writes except `.omo/plans/**` and `.omo/specs/**`). Distinct from
+     * read-only scope (deny writes except `.mc/plans/**` and `.mc/specs/**`). Distinct from
      * {@linkcode policies} (the graph-level `AbgPolicySpec` capability/decision model); both
      * coexist by design.
      */

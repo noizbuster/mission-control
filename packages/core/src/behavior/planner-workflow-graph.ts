@@ -19,7 +19,7 @@
  *       on-the-fence  -> ask-one-question -> assess-ambiguity (re-classify)
  *     }
  *   }
- *   draft-plan (writes .omo/drafts/<slug>.md, plan.drafted)
+ *   draft-plan (writes .mc/drafts/<slug>.md, plan.drafted)
  *     -> draft-frontmatter (status=drafting + intent/review_required)
  *     -> review-plan (deterministic critic floor) -> {
  *          rejected (critic.passed false) -> draft-plan
@@ -36,7 +36,7 @@
  *          }
  *        }
  *   approval-gate (blocks for explicit okay, plan.ready)
- *     -> write-plan (writes .omo/plans/<slug>.md scaffold) -> present
+ *     -> write-plan (writes .mc/plans/<slug>.md scaffold) -> present
  *
  * Deep planning semantics: goal-oriented (objectives not recipes), explore
  * hierarchy before any question (tools → explore agents via task → only then
@@ -102,15 +102,15 @@ export const PLANNER_READONLY_MODE_ID = 'planner-readonly';
  * `write **` deny fires first, then the specific allows override it for the
  * plan-artifact paths.
  *
- * `.omo/drafts/**` is allowed because the approval-gated draft state writes
- * `.omo/drafts/<slug>.md` before the final plan handoff (Task 7). It stays
- * inside `.omo/` and opens no product-source paths.
+ * `.mc/drafts/**` is allowed because the approval-gated draft state writes
+ * `.mc/drafts/<slug>.md` before the final plan handoff (Task 7). It stays
+ * inside `.mc/` and opens no product-source paths.
  */
 export const PLANNER_READONLY_POLICIES: readonly PolicyEffectRule[] = [
     { action: 'write', resource: '**', effect: 'deny' },
-    { action: 'write', resource: '.omo/plans/**', effect: 'allow' },
-    { action: 'write', resource: '.omo/specs/**', effect: 'allow' },
-    { action: 'write', resource: '.omo/drafts/**', effect: 'allow' },
+    { action: 'write', resource: '.mc/plans/**', effect: 'allow' },
+    { action: 'write', resource: '.mc/specs/**', effect: 'allow' },
+    { action: 'write', resource: '.mc/drafts/**', effect: 'allow' },
 ];
 
 /**
@@ -127,8 +127,8 @@ export const PLANNER_READONLY_MODE: Mode = {
         'STICKY: "do X" / "fix X" / "build X" / "just do it" all mean "plan X". You NEVER implement ' +
         'product code and NEVER begin execution — that belongs to #executer (or #executer) or an ' +
         'explicit start command. You are READ-ONLY: you must not edit source files. You may only write plan ' +
-        'artifacts to .omo/plans/, spec artifacts to .omo/specs/, and draft artifacts to ' +
-        '.omo/drafts/. Goal-oriented: optimize for objectives and outcomes, not recipe steps. ' +
+        'artifacts to .mc/plans/, spec artifacts to .mc/specs/, and draft artifacts to ' +
+        '.mc/drafts/. Goal-oriented: optimize for objectives and outcomes, not recipe steps. ' +
         'Explore hierarchy before any question: (1) use read tools yourself, (2) delegate ' +
         'explore/librarian agents via task when breadth is needed, (3) only then ask ONE ' +
         'high-signal clarifying question as a last resort. Never stop early — produce an ' +
@@ -189,7 +189,7 @@ export const PLANNER_PRESENT_BLOCKED_PROMPT =
     'Planning is blocked: either gap analysis exhausted metis.rejects, or dual-review ' +
     '(reviewer+oracle) exhausted dual.fixes after REJECT. Present a clear blocked summary: name ' +
     'which gate blocked (gap-analysis vs dual-review), the last critical gap or dual verdicts if known, ' +
-    'and tell the user what to change or how to resume. Do NOT write .omo/plans/, do NOT implement ' +
+    'and tell the user what to change or how to resume. Do NOT write .mc/plans/, do NOT implement ' +
     'product code, and do NOT loop back into draft-plan. This node is terminal.';
 
 /**
@@ -426,16 +426,16 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
             {
                 id: 'draft-plan',
                 kind: 'llm',
-                label: 'Draft the plan to .omo/drafts/{slug}.md',
+                label: 'Draft the plan to .mc/drafts/{slug}.md',
                 capabilities: ['read', 'write'],
                 config: {
                     systemPrompt:
-                        'Draft an execution-ready plan as .omo/drafts/<slug>.md. This is the DRAFT, ' +
+                        'Draft an execution-ready plan as .mc/drafts/<slug>.md. This is the DRAFT, ' +
                         'not the final plan — it is the durable, compaction-safe resume point. Goal-' +
                         'oriented: state objectives, topology ledger (1-6 independently-succeed/fail ' +
                         'components), verification strategy, adopted defaults, and the pending ' +
                         'approval gate. Never stop early — every todo must be agent-executable with ' +
-                        'references and acceptance criteria. Do NOT write .omo/plans/<slug>.md yet — ' +
+                        'references and acceptance criteria. Do NOT write .mc/plans/<slug>.md yet — ' +
                         'that is gated on explicit approval. Set plan.drafted when the draft is written.',
                     outputKey: 'plan.drafted',
                 },
@@ -590,12 +590,12 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
             {
                 id: 'write-plan',
                 kind: 'llm',
-                label: 'Write the scaffold-compatible final plan to .omo/plans/{slug}.md',
+                label: 'Write the scaffold-compatible final plan to .mc/plans/{slug}.md',
                 capabilities: ['read', 'write'],
                 config: {
                     systemPrompt:
                         'Only reached AFTER approval. Write the final execution-ready plan to ' +
-                        '.omo/plans/<slug>.md with the scaffold headers in order: ' +
+                        '.mc/plans/<slug>.md with the scaffold headers in order: ' +
                         PLANNER_SCAFFOLD_HEADERS.join(' | ') +
                         '. Under Scope state explicit Must have / Must NOT have. Under Verification ' +
                         'Strategy name how success is proven (tests, diagnostics, manual QA surface). ' +
@@ -854,7 +854,7 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
             },
             {
                 id: 'plan-drafted',
-                description: 'draft written to .omo/drafts/<slug>.md',
+                description: 'draft written to .mc/drafts/<slug>.md',
                 when: { kind: 'blackboard.key.exists', key: 'plan.drafted' },
             },
             {
@@ -933,7 +933,7 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
             },
             {
                 id: 'plan-written',
-                description: 'final plan written to .omo/plans/<slug>.md',
+                description: 'final plan written to .mc/plans/<slug>.md',
                 when: { kind: 'blackboard.key.exists', key: 'plan.written' },
             },
         ],

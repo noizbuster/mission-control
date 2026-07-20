@@ -133,7 +133,7 @@ describe('createSqlTaskRuntimeServices', () => {
     });
 
     it('reopens durable runtime_agents async_jobs and session_relations rows from production managers', async () => {
-        const omoRoot = await makeWorkspaceRoot();
+        const mcRoot = await makeWorkspaceRoot();
         const dataDir = await makeWorkspaceRoot();
         const services = await createSqlTaskRuntimeServices(dataDir, { maxConcurrency: 1 });
         services.runtimeRegistry.adopt({
@@ -197,7 +197,7 @@ describe('createSqlTaskRuntimeServices', () => {
         }
 
         expect(existsSync(join(dataDir, 'mission-control.db'))).toBe(true);
-        expect(existsSync(join(omoRoot, 'mission-control.db'))).toBe(false);
+        expect(existsSync(join(mcRoot, 'mission-control.db'))).toBe(false);
         const reopened = await createSqlTaskRuntimeServices(dataDir);
         try {
             expect(reopened.runtimeRegistry.lookup('child-session')?.sessionId).toBe('child-session');

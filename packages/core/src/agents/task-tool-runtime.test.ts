@@ -332,7 +332,7 @@ describe('ConcreteTaskToolRuntime', () => {
 
         it('(g) preserves child policies before parent denies', () => {
             const child = makeAgent({
-                pathPolicies: [{ action: 'write', resource: '.omo/**', effect: 'allow' }],
+                pathPolicies: [{ action: 'write', resource: '.mc/**', effect: 'allow' }],
             });
             const parent = makeParentAgent({
                 pathPolicies: [{ action: 'bash', resource: '**', effect: 'deny' }],
@@ -340,7 +340,7 @@ describe('ConcreteTaskToolRuntime', () => {
 
             const result = deriveChildPathPolicies(parent, child);
 
-            expect(result[0]).toEqual({ action: 'write', resource: '.omo/**', effect: 'allow' });
+            expect(result[0]).toEqual({ action: 'write', resource: '.mc/**', effect: 'allow' });
             expect(result[1]).toEqual({ action: 'bash', resource: '**', effect: 'deny' });
         });
 

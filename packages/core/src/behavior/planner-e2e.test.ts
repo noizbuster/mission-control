@@ -6,7 +6,7 @@
  *   2. Materialize a Mission from it via `materializeMission` (Task 1.4 factory).
  *   3. Verify the materialized mission carries the planner-readonly mode declaration.
  *   4. Evaluate the planner's read-only policies via `evaluateRules` (Task 1.2 algebra):
- *      writes to `src/**` are DENIED, writes to `.omo/plans/**` and `.omo/specs/**` are ALLOWED.
+ *      writes to `src/**` are DENIED, writes to `.mc/plans/**` and `.mc/specs/**` are ALLOWED.
  *
  * This is an INTEGRATION smoke test — it crosses three subsystems (workflow spec parsing,
  * mission materialization, policy rule algebra) that unit tests cover individually.
@@ -72,22 +72,22 @@ describe('planner workflow E2E: discover -> materialize -> policy enforcement', 
         expect(result.effect).toBe('deny');
     });
 
-    it('allows writes to .omo/plans/** (the planner output path)', async () => {
+    it('allows writes to .mc/plans/** (the planner output path)', async () => {
         const spec = await loadPlannerSpec();
         const readonlyMode = spec.modes?.find((mode) => mode.id === 'planner-readonly');
         const ruleset: PolicyEffectRuleSet = { rules: readonlyMode?.policies ?? [] };
 
-        const result = evaluateRules('write', '.omo/plans/my-feature-plan.md', [ruleset]);
+        const result = evaluateRules('write', '.mc/plans/my-feature-plan.md', [ruleset]);
 
         expect(result.effect).toBe('allow');
     });
 
-    it('allows writes to .omo/specs/** (the spec output path)', async () => {
+    it('allows writes to .mc/specs/** (the spec output path)', async () => {
         const spec = await loadPlannerSpec();
         const readonlyMode = spec.modes?.find((mode) => mode.id === 'planner-readonly');
         const ruleset: PolicyEffectRuleSet = { rules: readonlyMode?.policies ?? [] };
 
-        const result = evaluateRules('write', '.omo/specs/feature-spec.md', [ruleset]);
+        const result = evaluateRules('write', '.mc/specs/feature-spec.md', [ruleset]);
 
         expect(result.effect).toBe('allow');
     });

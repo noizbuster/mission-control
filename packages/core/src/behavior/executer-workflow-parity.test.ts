@@ -149,7 +149,7 @@ describe('executer workflow parity — verify-before-checkbox discipline', () =>
     const perTaskVerify = nodeById(graph, 'per-task-verify');
 
     it('checkbox-update declares a plan-path write target', () => {
-        expect(nodeConfig(checkboxUpdate, 'planPath')).toBe('.omo/plans/{slug}.md');
+        expect(nodeConfig(checkboxUpdate, 'planPath')).toBe('.mc/plans/{slug}.md');
     });
 
     it('checkbox-update config gates the flip on verification', () => {
@@ -188,7 +188,7 @@ describe('executer workflow parity — append-only notepad discipline', () => {
     const initNotepad = nodeById(graph, 'init-notepad');
 
     it('init-notepad declares the learnings notepad path and append-only mode', () => {
-        expect(nodeConfig(initNotepad, 'notepadPath')).toBe('.omo/notepads/{plan}/learnings.md');
+        expect(nodeConfig(initNotepad, 'notepadPath')).toBe('.mc/notepads/{plan}/learnings.md');
         expect(nodeConfig(initNotepad, 'notepadMode')).toBe('append-only');
     });
 
@@ -273,7 +273,7 @@ describe('executer workflow parity — exported prompt constants', () => {
     it('EXECUTER_CHECKBOX_UPDATE_PROMPT documents verify-before-checkbox', () => {
         expect(EXECUTER_CHECKBOX_UPDATE_PROMPT).toMatch(/MUST NOT.*based only.*done/i);
         expect(EXECUTER_CHECKBOX_UPDATE_PROMPT).toMatch(/independently verify/i);
-        expect(EXECUTER_CHECKBOX_UPDATE_PROMPT).toMatch(/\.omo\/plans/i);
+        expect(EXECUTER_CHECKBOX_UPDATE_PROMPT).toMatch(/\.mc\/plans/i);
     });
 
     it('EXECUTER_DELEGATE_WORKER_PROMPT lists all six sections', () => {

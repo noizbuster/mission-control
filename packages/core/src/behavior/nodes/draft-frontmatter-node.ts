@@ -1,7 +1,7 @@
 /**
  * Deterministic draft frontmatter writer (plan T3 / Must-have #4).
  *
- * Writes YAML frontmatter on `.omo/drafts/${plan.slug}.md` with status,
+ * Writes YAML frontmatter on `.mc/drafts/${plan.slug}.md` with status,
  * intent, and review_required from the blackboard. Optional dual-receipt
  * append when dual critic keys are present.
  */

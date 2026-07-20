@@ -28,7 +28,7 @@ const ROUTING_DEAD_END_CODE = 'routing_dead_end';
 const INVALID_STRUCTURED_OUTPUT_CODE = 'invalid_structured_output';
 
 export const LOCAL_PLANNING_RECOVERY_MESSAGE =
-    'Planning did not complete. The workflow hit a routing dead-end (often explore.complete stayed false under local/local-echo, which cannot tool-explore). No plan was written under .omo/plans/. Retry with a real tool-calling model via /model, or run #planner explicitly.';
+    'Planning did not complete. The workflow hit a routing dead-end (often explore.complete stayed false under local/local-echo, which cannot tool-explore). No plan was written under .mc/plans/. Retry with a real tool-calling model via /model, or run #planner explicitly.';
 
 export function localOutputForSystemContract(systemPrompt: string, userPrompt: string): string | undefined {
     if (isEscalationRecoveryContract(systemPrompt)) {

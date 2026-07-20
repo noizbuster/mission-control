@@ -98,9 +98,9 @@ describe('runModePolicyGateNode — planner read-only enforcement (Task 3.2)', (
         });
     });
 
-    it('allows the planner llm-actor to write .omo/plans/x.md', async () => {
+    it('allows the planner llm-actor to write .mc/plans/x.md', async () => {
         const signals = await collectSignals(
-            runModePolicyGateNode(makeNode('write', '.omo/plans/x.md'), makeContext(PLANNER_READONLY_POLICIES)),
+            runModePolicyGateNode(makeNode('write', '.mc/plans/x.md'), makeContext(PLANNER_READONLY_POLICIES)),
         );
 
         expect(signals.map((s) => s.type)).toEqual(['started', 'emit', 'success']);
@@ -118,9 +118,9 @@ describe('runModePolicyGateNode — planner read-only enforcement (Task 3.2)', (
         expect(result.effect).toBe('allow');
     });
 
-    it('allows the planner llm-actor to write .omo/specs/feature.md', async () => {
+    it('allows the planner llm-actor to write .mc/specs/feature.md', async () => {
         const signals = await collectSignals(
-            runModePolicyGateNode(makeNode('write', '.omo/specs/feature.md'), makeContext(PLANNER_READONLY_POLICIES)),
+            runModePolicyGateNode(makeNode('write', '.mc/specs/feature.md'), makeContext(PLANNER_READONLY_POLICIES)),
         );
 
         expect(signals.map((s) => s.type)).toEqual(['started', 'emit', 'success']);
