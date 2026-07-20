@@ -324,6 +324,86 @@ describe('bounded ABG graph coordinator', () => {
         expect(result.events.some((e) => e.type === 'node.completed' && e.abg?.nodeId === 'final')).toBe(true);
     });
 
+    it('hybrid outputKey+capabilities nodes soft-land at the hybrid loop cap', async () => {
+        // Given: hybrid sample node keeps setting loop_active without emitting explore.sampled
+        // When: attempts reach hybrid default cap (5)
+        // Then: soft-land force-completes the boolean key, marks llm.soft_landed, and advances
+        const registry = createAbgNodeRegistry();
+        let sampleRuns = 0;
+        registry.register(
+            'hybrid-sample',
+            async function* run(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
+                sampleRuns += 1;
+                yield { type: 'started', graphId: context.graphId, nodeId: node.id };
+                context.blackboard?.set('llm.loop_active', true);
+                yield createAbgEmitSignal({
+                    graphId: context.graphId,
+                    nodeId: node.id,
+                    eventType: 'tool.completed',
+                    timestamp: context.now(),
+                });
+                yield { type: 'success', graphId: context.graphId, nodeId: node.id };
+            },
+        );
+        registry.register(
+            'after-sample',
+            async function* run(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
+                yield { type: 'started', graphId: context.graphId, nodeId: node.id };
+                yield {
+                    type: 'success',
+                    graphId: context.graphId,
+                    nodeId: node.id,
+                    result: { text: 'classified' },
+                };
+            },
+        );
+
+        const result = await runAbgGraph({
+            ...baseInput,
+            registry,
+            graph: {
+                id: 'hybrid-soft-land',
+                entryNodeId: 'sample',
+                defaults: { retryLimit: 2, maxNodeRuns: 64 },
+                nodes: [
+                    {
+                        id: 'sample',
+                        kind: 'llm',
+                        implementation: 'hybrid-sample',
+                        capabilities: ['read'],
+                        config: { outputKey: 'explore.sampled', outputShape: 'boolean' },
+                    },
+                    { id: 'next', kind: 'llm', implementation: 'after-sample' },
+                ],
+                edges: [
+                    { source: 'sample', target: 'next', condition: 'sampled', priority: 10 },
+                    { source: 'sample', target: 'sample', condition: 'llm-loop-active', priority: 5 },
+                ],
+                rules: [
+                    {
+                        id: 'sampled',
+                        description: 'sample done',
+                        when: { kind: 'blackboard.value.equals', key: 'explore.sampled', value: true },
+                    },
+                    {
+                        id: 'llm-loop-active',
+                        description: 'llm loop active',
+                        when: { kind: 'blackboard.value.equals', key: 'llm.loop_active', value: true },
+                    },
+                ],
+                policies: [],
+            },
+        });
+
+        expect(result.status).toBe('completed');
+        expect(sampleRuns).toBe(5);
+        const softLand = result.events.find(
+            (e) => e.type === 'node.failed' && e.abg?.error?.code === 'node_loop_soft_landed',
+        );
+        expect(softLand?.message ?? '').toContain('cap 5');
+        expect(result.events.some((e) => e.type === 'node.completed' && e.abg?.nodeId === 'next')).toBe(true);
+    });
+
     it('soft-lands when the same tool turn fingerprint repeats', async () => {
         // Given: node always completes the same tool call
         // When: identical turn signature hits streak limit (3)

@@ -498,10 +498,35 @@ function nodeFailureSignature(signal: AbgSignal | undefined): string | undefined
 
 /**
  * Cap successful `llm.loop_active` re-entries on one node. Distinct from maxAttempts (failure
- * retries only). Without this, a chatty maturity-check-style node can re-enter dozens of times
- * and flood the event ledger before maxNodeRuns is hit.
+ * retries only). Hybrid nodes (outputKey + tool capabilities) default lower so sample/classify
+ * gates cannot burn dozens of turns before emitting structured close.
  */
 const LOOP_ACTIVE_SOFT_LAND_ATTEMPTS = 24;
+const HYBRID_LOOP_ACTIVE_SOFT_LAND_ATTEMPTS = 5;
+
+function readPositiveIntegerConfig(node: AbgNodeSpec, key: string): number | undefined {
+    const raw = node.config?.[key];
+    if (typeof raw !== 'number' || !Number.isInteger(raw) || raw <= 0) {
+        return undefined;
+    }
+    return raw;
+}
+
+function isHybridOutputKeyNode(node: AbgNodeSpec): boolean {
+    const outputKey = node.config?.['outputKey'];
+    if (typeof outputKey !== 'string' || outputKey.length === 0) {
+        return false;
+    }
+    return (node.capabilities ?? []).length > 0;
+}
+
+function loopActiveSoftLandAttempts(node: AbgNodeSpec): number {
+    const authored = readPositiveIntegerConfig(node, 'loopActiveSoftLandAttempts');
+    if (authored !== undefined) {
+        return authored;
+    }
+    return isHybridOutputKeyNode(node) ? HYBRID_LOOP_ACTIVE_SOFT_LAND_ATTEMPTS : LOOP_ACTIVE_SOFT_LAND_ATTEMPTS;
+}
 
 function softLandToolLoopIfNearMaxNodeRuns(
     node: AbgNodeSpec,
@@ -513,15 +538,16 @@ function softLandToolLoopIfNearMaxNodeRuns(
         return false;
     }
     const nodeAttempts = state.attemptsByNodeId.get(node.id) ?? 0;
+    const loopCap = loopActiveSoftLandAttempts(node);
     const nearGraphCap = state.totalNodeRuns >= state.maxNodeRuns - 1;
-    const nearLoopCap = nodeAttempts >= LOOP_ACTIVE_SOFT_LAND_ATTEMPTS;
+    const nearLoopCap = nodeAttempts >= loopCap;
     if (!nearGraphCap && !nearLoopCap) {
         return false;
     }
     softLandToolLoop(node, state, graphId, input, {
         eventCode: 'node_loop_soft_landed',
         message: nearLoopCap
-            ? `soft-landed after ${nodeAttempts} loop_active re-entries (cap ${LOOP_ACTIVE_SOFT_LAND_ATTEMPTS})`
+            ? `soft-landed after ${nodeAttempts} loop_active re-entries (cap ${loopCap})`
             : `soft-landed at maxNodeRuns ${state.maxNodeRuns}`,
     });
     return true;
@@ -535,7 +561,8 @@ function softLandToolLoop(
     trip: LoopSafetyTrip | { readonly eventCode: string; readonly message: string },
 ): void {
     state.blackboard.set('llm.loop_active', false);
-    forceCompleteBooleanOutputKey(node, state);
+    state.blackboard.set('llm.soft_landed', true);
+    forceCompleteOutputKeyOnSoftLand(node, state);
     const eventCode =
         'eventCode' in trip
             ? trip.eventCode
@@ -566,18 +593,35 @@ function softLandToolLoop(
     });
 }
 
-function forceCompleteBooleanOutputKey(node: AbgNodeSpec, state: CoordinatorState): void {
+function forceCompleteOutputKeyOnSoftLand(node: AbgNodeSpec, state: CoordinatorState): void {
     const outputKey = node.config?.['outputKey'];
     if (typeof outputKey !== 'string' || outputKey.length === 0) {
         return;
     }
-    if (node.config?.['outputShape'] !== 'boolean') {
+    if (state.blackboard.get(outputKey) !== undefined) {
         return;
     }
-    if (state.blackboard.get(outputKey) === true) {
+    const shape = node.config?.['outputShape'];
+    if (shape === 'boolean') {
+        state.blackboard.set(outputKey, true);
         return;
     }
-    state.blackboard.set(outputKey, true);
+    if (shape !== 'string') {
+        return;
+    }
+    const authoredDefault = node.config?.['outputSoftLandDefault'];
+    if (typeof authoredDefault === 'string' && authoredDefault.length > 0) {
+        state.blackboard.set(outputKey, authoredDefault);
+        return;
+    }
+    const outputEnum = node.config?.['outputEnum'];
+    if (!Array.isArray(outputEnum) || outputEnum.length === 0) {
+        return;
+    }
+    const first = outputEnum[0];
+    if (typeof first === 'string' && first.length > 0) {
+        state.blackboard.set(outputKey, first);
+    }
 }
 
 async function tryAgentNodeRunBudgetExtension(
