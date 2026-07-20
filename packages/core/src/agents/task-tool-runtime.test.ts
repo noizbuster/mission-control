@@ -507,6 +507,7 @@ describe('ConcreteTaskToolRuntime', () => {
 
             expect(result.status).toBe('failed');
             expect(result.sessionId).toBe('sess-test-1');
+            expect(result.failureKind).toBe('yield_missing');
             expect(result.output).toMatch(/^\[degraded salvage\] /);
             expect(result.output).toContain('child completed');
         });
@@ -552,6 +553,7 @@ describe('ConcreteTaskToolRuntime', () => {
 
             expect(callCount.value).toBeGreaterThanOrEqual(1);
             expect(result.status).toBe('failed');
+            expect(result.failureKind).toBe('yield_missing');
             expect(result.output).toMatch(/^\[degraded salvage\] /);
             expect(result.output.length).toBeLessThanOrEqual(64);
         });
@@ -572,6 +574,7 @@ describe('ConcreteTaskToolRuntime', () => {
 
             // Then
             expect(result.status).toBe('failed');
+            expect(result.failureKind).toBe('yield_missing');
             expect(result.output).toContain('keep-this-salvage');
             expect(result.output).toContain('[REDACTED_CREDENTIAL]');
             expect(result.output).not.toContain(knownCredential);

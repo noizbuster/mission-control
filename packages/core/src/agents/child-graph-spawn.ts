@@ -27,7 +27,8 @@ import type { ChildSpawnContext } from './task-tool-runtime';
  */
 const CHILD_HARD_DROPPED_CAPABILITY_KINDS = new Set<string>(['subagent', 'workflow', 'network', 'team']);
 const DEFAULT_CHILD_SUMMARY_LIMIT = 4000;
-const DEGRADED_SALVAGE_LABEL = '[degraded salvage] ';
+/** Prefix on salvage text when the child never called `yield`. Exported for settlement classifiers. */
+export const DEGRADED_SALVAGE_LABEL = '[degraded salvage] ';
 
 export function hasHardDroppedCapability(capabilities: readonly string[]): boolean {
     return capabilities.some((capability) => CHILD_HARD_DROPPED_CAPABILITY_KINDS.has(capability));
@@ -88,17 +89,24 @@ export function createChildGraphSpawnFn(
         });
 
         const observabilityRedactor = context.hostCallbacks?.observabilityRedactor ?? createObservabilityRedactor();
-        const rawOutput =
-            yieldedResult === undefined
-                ? boundedDegradedSalvage(
-                      observabilityRedactor.redactText(taskOutput.summary),
-                      deps.summaryLimit ?? DEFAULT_CHILD_SUMMARY_LIMIT,
-                  )
-                : stringifyYieldResult(yieldedResult.value);
+        if (yieldedResult !== undefined) {
+            return {
+                sessionId: context.sessionId,
+                status: taskOutput.status,
+                output: observabilityRedactor.redactText(stringifyYieldResult(yieldedResult.value)),
+            };
+        }
+
+        const salvage = boundedDegradedSalvage(
+            observabilityRedactor.redactText(taskOutput.summary),
+            deps.summaryLimit ?? DEFAULT_CHILD_SUMMARY_LIMIT,
+        );
+        const failureKind = taskOutput.status === 'failed' ? ('graph_failed' as const) : ('yield_missing' as const);
         return {
             sessionId: context.sessionId,
-            status: yieldedResult === undefined ? 'failed' : taskOutput.status,
-            output: observabilityRedactor.redactText(rawOutput),
+            status: 'failed',
+            output: observabilityRedactor.redactText(salvage),
+            failureKind,
         };
     };
 }

@@ -18,7 +18,10 @@ import type { AgentDefinition } from '@mission-control/protocol';
  * contract and instructs the child to submit results via the `yield` tool.
  */
 export const SUBAGENT_BASE_DIRECTIVE =
-    'You are a delegated subagent. Complete your assigned task and call the `yield` tool with your result when done.';
+    'You are a delegated subagent. Complete your assigned task, then you MUST call the `yield` tool ' +
+    'with your final result before stopping. Do not end with only assistant prose — without `yield`, ' +
+    'your parent receives a failed degraded salvage and may retry or drop your work. ' +
+    'When the work is done (or you must report a blocked/partial outcome), call `yield` immediately.';
 
 export interface BuildChildSystemPromptInput {
     readonly agent: AgentDefinition;
