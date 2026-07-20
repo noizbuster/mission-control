@@ -44,7 +44,12 @@ describe('createLocalCodingProvider structured workflow contracts', () => {
 });
 
 function requestWithGraph(
-    graph: { nodes: readonly { id: string; config?: Record<string, unknown> }[] },
+    graph: {
+        readonly nodes: readonly {
+            readonly id: string;
+            readonly config?: Record<string, unknown> | undefined;
+        }[];
+    },
     nodeId: string,
     userPrompt: string,
 ): ProviderTurnRequest {

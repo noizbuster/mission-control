@@ -38,7 +38,12 @@ describe('localOutputForSystemContract default + planner recovery', () => {
 });
 
 function systemPromptFrom(
-    graph: { nodes: readonly { id: string; config?: Record<string, unknown> }[] },
+    graph: {
+        readonly nodes: readonly {
+            readonly id: string;
+            readonly config?: Record<string, unknown> | undefined;
+        }[];
+    },
     nodeId: string,
 ): string {
     const node = graph.nodes.find((candidate) => candidate.id === nodeId);
