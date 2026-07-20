@@ -1,4 +1,9 @@
-import { GraphCheckpointSchema, type AbgNodeStatus, type AgentEvent, type GraphCheckpointReason } from '@mission-control/protocol';
+import {
+    type AbgNodeStatus,
+    type AgentEvent,
+    type GraphCheckpointReason,
+    GraphCheckpointSchema,
+} from '@mission-control/protocol';
 import { buildCheckpointBlackboardEntries } from './checkpoint-blackboard-snapshot';
 import type { CoordinatorState } from './graph-coordinator-helpers';
 import type { AbgGraphRunnerInput } from './graph-runner';

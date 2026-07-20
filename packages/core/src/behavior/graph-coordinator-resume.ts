@@ -35,9 +35,7 @@ export function assertResumeQueuedNodesExist(graph: AuthorableAbgGraph, checkpoi
 export function hydrateResumeFields(checkpoint: GraphCheckpoint): HydratedResumeFields {
     // Drop succeeded ids from the resume cursor only. Live runs may re-queue a just-succeeded
     // node (self-edge loop, dead-end re-admit); that path must keep scheduling.
-    const queuedNodeIds = checkpoint.queuedNodeIds.filter(
-        (nodeId) => checkpoint.nodeStatuses[nodeId] !== 'succeeded',
-    );
+    const queuedNodeIds = checkpoint.queuedNodeIds.filter((nodeId) => checkpoint.nodeStatuses[nodeId] !== 'succeeded');
     return {
         queuedNodeIds,
         nodeStatuses: { ...checkpoint.nodeStatuses },
