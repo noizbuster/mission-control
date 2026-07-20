@@ -138,6 +138,34 @@ describe('classifyFailure', () => {
         });
     });
 
+    it('maps task_yield_missing to rejected after_change', () => {
+        const classified = classifyFailure({
+            code: 'task_yield_missing',
+            message: '[degraded salvage] partial work',
+            retryable: true,
+        });
+        expect(classified).toEqual({
+            class: 'rejected',
+            code: 'task_yield_missing',
+            retryable: true,
+            retryDisposition: 'after_change',
+        });
+    });
+
+    it('maps task_child_failed to terminal', () => {
+        const classified = classifyFailure({
+            code: 'task_child_failed',
+            message: 'child graph failed',
+            retryable: false,
+        });
+        expect(classified).toEqual({
+            class: 'terminal',
+            code: 'task_child_failed',
+            retryable: false,
+            retryDisposition: 'never',
+        });
+    });
+
     it('unwraps nested FlatProviderBridgeError overload as transient', () => {
         const classified = classifyFailure({
             error: {

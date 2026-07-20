@@ -42,6 +42,8 @@ export const CANONICAL_FAILURE_CODES = {
     PROVIDER_CONTEXT_OVERFLOW: 'provider_context_overflow',
     TOOL_APPROVAL_BLOCKED: 'tool_approval_blocked',
     TOOL_SETTLEMENT_FAILED: 'tool_settlement_failed',
+    TASK_YIELD_MISSING: 'task_yield_missing',
+    TASK_CHILD_FAILED: 'task_child_failed',
     UNKNOWN: 'unknown',
 } as const;
 
@@ -135,6 +137,10 @@ function classifyKnownCode(code: string | undefined): FailureClassification | un
             return rejected(code, 'after_change');
         case CANONICAL_FAILURE_CODES.TOOL_APPROVAL_BLOCKED:
             return denied(code);
+        case CANONICAL_FAILURE_CODES.TASK_YIELD_MISSING:
+            return rejected(code, 'after_change');
+        case CANONICAL_FAILURE_CODES.TASK_CHILD_FAILED:
+            return terminal(code);
         case CANONICAL_FAILURE_CODES.TOOL_SETTLEMENT_FAILED:
             return terminal(code);
         default:
