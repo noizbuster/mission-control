@@ -5,6 +5,7 @@ import {
     DEFAULT_REFRESH_MS,
     extractBlackboardMutation,
     extractBudgetPayload,
+    extractContextTokensUsed,
     extractUsageFromModelCallCompleted,
     mergeGraphSnapshot,
     projectAbgSignal,
@@ -597,6 +598,76 @@ describe('abg overlay state', () => {
                 },
             };
             expect(extractUsageFromModelCallCompleted(event)).toBeUndefined();
+        });
+    });
+
+    describe('extractContextTokensUsed (status-bar context fill)', () => {
+        it('reads inputTokens from model.call.completed', () => {
+            expect(
+                extractContextTokensUsed(modelCallCompleted({ inputTokens: 12345, outputTokens: 50, totalTokens: 12395 })),
+            ).toBe(12345);
+        });
+
+        it('reads inputTokens from graph llm.turn.completed emit payload', () => {
+            const event: AgentEvent = {
+                type: 'log',
+                timestamp: TS,
+                abg: {
+                    graphId: 'g1',
+                    nodeId: 'llm-actor',
+                    signalType: 'emit',
+                    emit: {
+                        type: 'llm.turn.completed',
+                        payload: { text: 'ok', usage: { inputTokens: 4200, outputTokens: 80 } },
+                    },
+                },
+            };
+            expect(extractContextTokensUsed(event)).toBe(4200);
+        });
+
+        it('reads nested LanguageModelV3 inputTokens.total from llm.turn.completed', () => {
+            const event: AgentEvent = {
+                type: 'log',
+                timestamp: TS,
+                abg: {
+                    graphId: 'g1',
+                    nodeId: 'llm-actor',
+                    signalType: 'emit',
+                    emit: {
+                        type: 'llm.turn.completed',
+                        payload: {
+                            text: 'ok',
+                            usage: {
+                                inputTokens: { total: 8800, noCache: 8800, cacheRead: 0, cacheWrite: 0 },
+                                outputTokens: { total: 120, text: 120, reasoning: 0 },
+                            },
+                        },
+                    },
+                },
+            };
+            expect(extractContextTokensUsed(event)).toBe(8800);
+        });
+
+        it('ignores cumulative policy.budget.accumulated totals', () => {
+            const event: AgentEvent = {
+                type: 'policy.budget.accumulated',
+                timestamp: TS,
+                abg: {
+                    graphId: 'g1',
+                    nodeId: 'llm-actor',
+                    signalType: 'emit',
+                    emit: {
+                        type: 'policy.budget.accumulated',
+                        payload: { cents: 1, inputTokens: 99999, outputTokens: 1, modelCalls: 3 },
+                    },
+                },
+            };
+            expect(extractContextTokensUsed(event)).toBeUndefined();
+        });
+
+        it('returns undefined when usage is missing', () => {
+            expect(extractContextTokensUsed(modelCallCompleted(undefined))).toBeUndefined();
+            expect(extractContextTokensUsed(runEvent('run.completed'))).toBeUndefined();
         });
     });
 

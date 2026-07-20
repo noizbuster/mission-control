@@ -685,6 +685,58 @@ export function extractUsageFromModelCallCompleted(
     return { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens };
 }
 
+/**
+ * Latest per-turn context size for the TUI status bar.
+ *
+ * Prefers the flat-path `model.call.completed` usage, then the graph-path
+ * `llm.turn.completed` emit payload (durable `log` events with `abg.emit`).
+ * Returns the turn's `inputTokens` (current prompt/context size), never a
+ * session-cumulative sum — `policy.budget.accumulated` totals are intentionally
+ * excluded so the bar tracks window fill, not lifetime spend.
+ */
+export function extractContextTokensUsed(event: AgentEvent): number | undefined {
+    const flat = extractUsageFromModelCallCompleted(event);
+    if (flat !== undefined) {
+        return flat.inputTokens;
+    }
+    const emit = event.abg?.emit;
+    if (emit === undefined || emit.type !== 'llm.turn.completed') {
+        return undefined;
+    }
+    const payload = emit.payload;
+    if (payload === undefined || payload === null || typeof payload !== 'object') {
+        return undefined;
+    }
+    return readUsageInputTokens((payload as { readonly usage?: unknown }).usage);
+}
+
+/**
+ * Defensive read of prompt/context tokens from either the flat AI-SDK usage shape
+ * (`inputTokens: number`) or the LanguageModelV3 nested shape
+ * (`inputTokens: { total: number }`).
+ */
+function readUsageInputTokens(usage: unknown): number | undefined {
+    if (usage === undefined || usage === null || typeof usage !== 'object') {
+        return undefined;
+    }
+    const record = usage as Record<string, unknown>;
+    const direct = record['inputTokens'];
+    if (typeof direct === 'number' && Number.isFinite(direct) && direct >= 0) {
+        return Math.trunc(direct);
+    }
+    if (direct !== null && typeof direct === 'object') {
+        const total = (direct as Record<string, unknown>)['total'];
+        if (typeof total === 'number' && Number.isFinite(total) && total >= 0) {
+            return Math.trunc(total);
+        }
+    }
+    const totalTokens = record['totalTokens'];
+    if (typeof totalTokens === 'number' && Number.isFinite(totalTokens) && totalTokens >= 0) {
+        return Math.trunc(totalTokens);
+    }
+    return undefined;
+}
+
 type BudgetPayload = {
     readonly cents: number;
     readonly budgetCents?: number;
