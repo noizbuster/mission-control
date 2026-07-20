@@ -333,6 +333,7 @@ export {
     findResumableRun,
     type GraphCheckpointSearchOptions,
     type GraphResumeEvent,
+    latestGraphIdFromEvents,
     type ResumableRunSnapshot,
 } from './runtime/graph-resume-state';
 export { openCanonicalRuntimeDb } from './runtime/local-runtime-db';

@@ -45,6 +45,7 @@ export function NormalLayout(props: NormalLayoutProps): JSX.Element {
                     transcript={props.transcript}
                     showAbgMinimap={props.showAbgMinimap}
                     abgOverlayController={props.abgOverlayController}
+                    stickyNotice={props.snap.stickyNotice}
                 />
             </box>
             <box flexShrink={0} width="100%">

@@ -1,9 +1,13 @@
-import type { ModelProviderSelection } from '@mission-control/protocol';
+import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import { actionResult, type ChatActionResult } from './interactive-chat-action-result';
 import type { CodingActionContext } from './interactive-chat-actions';
 import type { ChatOutput } from './interactive-chat-io';
 import type { SessionNavigationResult } from './interactive-chat-session-navigation';
 import { isSessionNavigationError } from './interactive-chat-session-navigation-store';
+import {
+    applySessionAttachProjection,
+    projectSessionAttachFromEvents,
+} from './session-attach-projection';
 import { loadSessionTranscript } from './session-transcript-reconstruction';
 
 export function runBranchContinueAction(
@@ -50,6 +54,13 @@ export async function runSessionNavigationAction(
         if (result.sessionId !== undefined) {
             const transcript = await loadSessionTranscript(result.sessionId, coding.observabilityRedactor);
             coding.undoRedo?.replaceOutputText(transcript);
+            const events = await loadAttachEvents(result.sessionId, result.sessionStore ?? coding.sessionStore);
+            applySessionAttachProjection({
+                events,
+                projection: projectSessionAttachFromEvents(events),
+                abgOverlayController: coding.abgOverlayController,
+                chatOutput,
+            });
         }
         chatOutput.write(result.message);
         return actionResult(result.modelProviderSelection ?? modelProviderSelection, undefined, {
@@ -63,6 +74,14 @@ export async function runSessionNavigationAction(
         chatOutput.write(`${error.message}\n`);
         return actionResult(modelProviderSelection);
     }
+}
+
+async function loadAttachEvents(
+    sessionId: string,
+    sessionStore: CodingActionContext['sessionStore'],
+): Promise<readonly AgentEvent[]> {
+    if (sessionStore === undefined) return [];
+    return sessionStore.getEvents(sessionId);
 }
 
 export function emitPromptAdmission(

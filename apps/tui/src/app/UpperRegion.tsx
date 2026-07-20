@@ -18,6 +18,7 @@ export type UpperRegionProps = {
     readonly transcript: JSX.Element;
     readonly showAbgMinimap: boolean;
     readonly abgOverlayController: AbgOverlayController | undefined;
+    readonly stickyNotice?: string | null;
 };
 
 /** Upper output region: welcome or transcript, agent spinner, toast, ABG minimap. */
@@ -28,6 +29,7 @@ export function UpperRegion(props: UpperRegionProps): JSX.Element {
             columns: dimensions().width,
             rows: dimensions().height,
         }).transcript.rows;
+    const stickyNotice = () => props.stickyNotice ?? null;
 
     return (
         <box flexDirection="column" flexGrow={1} minHeight={0} width="100%">
@@ -51,6 +53,11 @@ export function UpperRegion(props: UpperRegionProps): JSX.Element {
                     props.transcript
                 )}
             </box>
+            {stickyNotice() !== null ? (
+                <box flexShrink={0} width="100%" paddingLeft={1} paddingRight={1}>
+                    <text fg="#fbbf24">{stickyNotice()}</text>
+                </box>
+            ) : null}
             <Toast />
             {props.showAbgMinimap && props.abgOverlayController !== undefined ? (
                 <AbgMinimap

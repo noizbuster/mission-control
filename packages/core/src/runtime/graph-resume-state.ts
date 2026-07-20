@@ -9,6 +9,7 @@ type GraphResumeRunMetadata = NonNullable<AgentEvent['run']>;
 
 type GraphResumeAbgMetadata = {
     readonly graphId?: string | undefined;
+    readonly nodeId?: string | undefined;
     readonly checkpoint?: unknown;
 };
 
@@ -41,6 +42,23 @@ export type ResumableRunSnapshot =
           readonly reason?: string;
           readonly errorCode?: ProtocolErrorCode;
       };
+
+export function latestGraphIdFromEvents(events: readonly GraphResumeEvent[]): string | undefined {
+    for (let index = events.length - 1; index >= 0; index -= 1) {
+        const event = events[index];
+        if (event === undefined) continue;
+        const directGraphId = event.abg?.graphId;
+        if (typeof directGraphId === 'string' && directGraphId.length > 0) {
+            return directGraphId;
+        }
+        if (event.type !== 'graph.checkpoint') continue;
+        const checkpoint = parseCheckpoint(event);
+        if (checkpoint !== undefined && checkpoint.graphId.length > 0) {
+            return checkpoint.graphId;
+        }
+    }
+    return undefined;
+}
 
 export function findLatestGraphCheckpoint(
     events: readonly GraphResumeEvent[],

@@ -89,6 +89,7 @@ const CHAT_TUI_HANDLE_METHODS = [
     'setAgentStatus',
     'clearAgentStatus',
     'showTransientNotice',
+    'setStickyNotice',
     'isShowThinking',
     'isToolOutputExpanded',
     'showApproval',

@@ -192,6 +192,7 @@ function AppMain(props: AppProps): JSX.Element {
                             }
                             showAbgMinimap={showAbgMinimap()}
                             abgOverlayController={abgOverlayController}
+                            stickyNotice={snapshot().stickyNotice}
                         />
                     </box>
                     <box flexShrink={0} width="100%">

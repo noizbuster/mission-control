@@ -12,6 +12,7 @@ import { actionResult, type ChatActionResult } from './interactive-chat-action-r
 import type { ChatOutput } from './interactive-chat-io';
 import { emitPromptAdmission, runSessionNavigationAction } from './interactive-chat-navigation-actions';
 import { startPromptTurn } from './interactive-chat-prompt-turn';
+import { clearStickyAttachBanner } from './session-attach-projection';
 import { graphForDefaultFallback } from './workflow-materialization';
 
 export async function runPromptAction(
@@ -25,6 +26,7 @@ export async function runPromptAction(
         emitPromptAdmission(chatOutput, coding, 'queue', prompt);
         return actionResult(selection, coding.activeTurn);
     }
+    clearStickyAttachBanner(chatOutput);
     const fallbackGraph =
         coding.graph === undefined && coding.plainPromptGraph !== 'coding-agent'
             ? graphForDefaultFallback(coding.workflowRegistry)

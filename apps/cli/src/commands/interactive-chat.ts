@@ -280,6 +280,7 @@ export async function runInteractiveChatSession(
                   setAgentStatus: (text) => tuiHandle.setAgentStatus(text),
                   clearAgentStatus: () => tuiHandle.clearAgentStatus(),
                   showNotice: (text) => tuiHandle.showTransientNotice(text),
+                  setStickyNotice: (message) => tuiHandle.setStickyNotice(message),
                   isShowThinking: () => tuiHandle.isShowThinking(),
                   isToolOutputExpanded: () => tuiHandle.isToolOutputExpanded(),
                   showApproval: (toolName, action) => tuiHandle.showApproval(toolName, action),

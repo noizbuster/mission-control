@@ -44,6 +44,7 @@ export type ChatOutput = {
     readonly setAgentStatus?: (text: string) => void;
     readonly clearAgentStatus?: () => void;
     readonly showNotice?: (message: string) => void;
+    readonly setStickyNotice?: (message: string | null) => void;
     readonly isShowThinking?: () => boolean;
     readonly isToolOutputExpanded?: () => boolean;
     readonly showApproval?: (toolName: string, action: string) => void;

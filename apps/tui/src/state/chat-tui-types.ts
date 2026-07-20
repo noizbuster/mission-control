@@ -49,6 +49,7 @@ export type ChatTuiHandle = {
     readonly setAgentStatus: (text: string) => void;
     readonly clearAgentStatus: () => void;
     readonly showTransientNotice: (message: string) => void;
+    readonly setStickyNotice: (message: string | null) => void;
     readonly isShowThinking: () => boolean;
     readonly isToolOutputExpanded: () => boolean;
     readonly showApproval: (toolName: string, action: string) => void;

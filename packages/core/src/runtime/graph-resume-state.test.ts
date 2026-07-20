@@ -1,6 +1,11 @@
 import type { AgentEvent, GraphCheckpoint } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { findLatestGraphCheckpoint, findResumableRun, type GraphResumeEvent } from './graph-resume-state';
+import {
+    findLatestGraphCheckpoint,
+    findResumableRun,
+    type GraphResumeEvent,
+    latestGraphIdFromEvents,
+} from './graph-resume-state';
 import { findResumableBlockedRun } from './run-coordinator-drain';
 
 const TIMESTAMP = '2026-07-20T00:00:00.000Z';
@@ -306,5 +311,48 @@ describe('findResumableRun', () => {
 
         // Then: the invalid payload is skipped and the valid checkpoint resumes the run.
         expect(resumable).toEqual({ kind: 'interrupted', runId: 'run-corrupt', checkpoint: validCheckpoint });
+    });
+});
+
+describe('latestGraphIdFromEvents', () => {
+    it('returns undefined when no graph id is present', () => {
+        // Given: only run lifecycle events without ABG metadata.
+        const events = [runEvent({ type: 'run.started', runId: 'run-1', state: 'running' })];
+
+        // When: the latest graph id is resolved.
+        const graphId = latestGraphIdFromEvents(events);
+
+        // Then: no graph id is available.
+        expect(graphId).toBeUndefined();
+    });
+
+    it('returns the newest abg.graphId when multiple graphs appear', () => {
+        // Given: two graph-started markers in chronological order.
+        const events: GraphResumeEvent[] = [
+            { type: 'graph.started', abg: { graphId: 'graph-old' } },
+            { type: 'node.started', abg: { graphId: 'graph-old', nodeId: 'a' } },
+            { type: 'graph.started', abg: { graphId: 'graph-new' } },
+        ];
+
+        // When: the latest graph id is resolved.
+        const graphId = latestGraphIdFromEvents(events);
+
+        // Then: the newest graph wins.
+        expect(graphId).toBe('graph-new');
+    });
+
+    it('falls back to checkpoint.graphId when abg.graphId is absent', () => {
+        // Given: a checkpoint event whose graph id lives only on the payload.
+        const events = [
+            checkpointEvent({
+                checkpoint: checkpoint({ graphId: 'graph-from-checkpoint' }),
+            }),
+        ];
+
+        // When: the latest graph id is resolved.
+        const graphId = latestGraphIdFromEvents(events);
+
+        // Then: the checkpoint graph id is used.
+        expect(graphId).toBe('graph-from-checkpoint');
     });
 });

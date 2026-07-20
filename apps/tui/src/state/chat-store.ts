@@ -232,6 +232,7 @@ export type ChatStoreState = {
     readonly contextTokensMax: number | undefined;
     readonly historyPickerView: HistoryPickerSnapshot;
     readonly transientNotice: { readonly id: number; readonly message: string } | null;
+    readonly stickyNotice: string | null;
 };
 
 type ChatStoreMutableState = {
@@ -430,6 +431,7 @@ export class ChatStore {
             contextTokensUsed: undefined,
             contextTokensMax: undefined,
             transientNotice: null,
+            stickyNotice: null,
         };
         this.snapshot = this.buildSnapshot();
     }
@@ -974,6 +976,12 @@ export class ChatStore {
     showTransientNotice(message: string): void {
         this.transientNoticeCounter += 1;
         this.state.transientNotice = { id: this.transientNoticeCounter, message };
+        this.publish();
+    }
+
+    setStickyNotice(message: string | null): void {
+        if (this.state.stickyNotice === message) return;
+        this.state.stickyNotice = message;
         this.publish();
     }
 

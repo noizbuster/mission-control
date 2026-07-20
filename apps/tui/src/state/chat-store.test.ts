@@ -2246,3 +2246,26 @@ describe('chat-store — history picker + timestamped entries', () => {
         expect(store.getSnapshot().historyPicker.open).toBe(true);
     });
 });
+
+describe('ChatStore sticky notice', () => {
+    it('sets and clears stickyNotice without touching transientNotice', () => {
+        // Given: a fresh store.
+        const store = createChatStore();
+        expect(store.getSnapshot().stickyNotice).toBeNull();
+
+        // When: a sticky attach banner is set.
+        store.setStickyNotice('Resumable run: interrupted. Type /continue to resume work.');
+
+        // Then: sticky is set and transient remains empty.
+        expect(store.getSnapshot().stickyNotice).toBe(
+            'Resumable run: interrupted. Type /continue to resume work.',
+        );
+        expect(store.getSnapshot().transientNotice).toBeNull();
+
+        // When: sticky is cleared.
+        store.setStickyNotice(null);
+
+        // Then: sticky is null again.
+        expect(store.getSnapshot().stickyNotice).toBeNull();
+    });
+});
