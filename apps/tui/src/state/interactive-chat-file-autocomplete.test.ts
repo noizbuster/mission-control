@@ -68,7 +68,7 @@ describe('interactive chat file autocomplete — denylist', () => {
 
     beforeEach(() => {
         tempRoot = mkdtempSync(join(tmpdir(), 'mctrl-file-ac-deny-'));
-        for (const name of ['node_modules', '.git', '.nx', 'dist', '.omo']) {
+        for (const name of ['node_modules', '.git', '.nx', 'dist', '.mc']) {
             mkdirSync(join(tempRoot, name), { recursive: true });
         }
         mkdirSync(join(tempRoot, 'temp', 'ref-repos'), { recursive: true });
@@ -85,7 +85,7 @@ describe('interactive chat file autocomplete — denylist', () => {
         expect(names).not.toContain('.git');
         expect(names).not.toContain('.nx');
         expect(names).not.toContain('dist');
-        expect(names).not.toContain('.omo');
+        expect(names).not.toContain('.mc');
     });
 
     it('never lists ref-repos inside temp/', () => {
@@ -214,7 +214,7 @@ describe('interactive chat file autocomplete — empty prefix shows top-level mi
 
     beforeEach(() => {
         tempRoot = mkdtempSync(join(tmpdir(), 'mctrl-file-ac-root-'));
-        for (const name of ['apps', 'packages', 'temp', 'node_modules', '.git', '.nx', 'dist', '.omo']) {
+        for (const name of ['apps', 'packages', 'temp', 'node_modules', '.git', '.nx', 'dist', '.mc']) {
             mkdirSync(join(tempRoot, name), { recursive: true });
         }
         writeFileSync(join(tempRoot, 'pack-file.txt'), 'x', 'utf-8');

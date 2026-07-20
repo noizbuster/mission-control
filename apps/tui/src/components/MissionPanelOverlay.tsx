@@ -36,12 +36,12 @@ async function loadContinuationState(
     services: MissionControlServicesLike | undefined,
 ): Promise<ContinuationState | null> {
     if (services === undefined) return null;
-    const omoRoot = services.getOmoRoot();
-    const boulder = await readBoulder(omoRoot);
+    const mcRoot = services.getMcRoot();
+    const boulder = await readBoulder(mcRoot);
     if (boulder === null) return null;
     const workId = boulder.active_work_id;
     if (workId === null) return null;
-    const runtime = new ContinuationRuntime({ boulderRoot: omoRoot, maxIterations: 0, workId });
+    const runtime = new ContinuationRuntime({ boulderRoot: mcRoot, maxIterations: 0, workId });
     return runtime.loadState();
 }
 

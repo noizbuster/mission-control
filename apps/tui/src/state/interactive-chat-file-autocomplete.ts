@@ -12,9 +12,9 @@
  * hint and can use `repo.read` itself. Files are never auto-read here.
  *
  * Denylist is aligned with `packages/core`'s
- * `defaultReadOnlyRepoToolDenylist` (`temp/ref-repos`, `.omo/evidence`, `.nx`,
+ * `defaultReadOnlyRepoToolDenylist` (`temp/ref-repos`, `.mc/evidence`, `.nx`,
  * `dist`, `build`, `target`, `coverage`, `node_modules`, `.git`) and extended
- * with `.omo` so the whole agent-state dir stays hidden from the picker.
+ * with `.mc` so the whole agent-state dir stays hidden from the picker.
  */
 
 import { type Dirent, readdirSync } from 'node:fs';
@@ -50,7 +50,7 @@ const deniedPathEntries = [
     'node_modules',
     '.git',
     '.nx',
-    '.omo',
+    '.mc',
     'dist',
     'build',
     'target',

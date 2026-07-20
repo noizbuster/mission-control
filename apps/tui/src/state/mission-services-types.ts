@@ -9,7 +9,7 @@
 import type { AsyncJobManager, RuntimeAgentRegistry } from '@mission-control/core';
 
 export interface MissionControlServicesLike {
-    getOmoRoot(): string;
+    getMcRoot(): string;
     getJobManager(): AsyncJobManager;
     getRuntimeRegistry(): RuntimeAgentRegistry;
 }

@@ -74,7 +74,7 @@ function makeAbgController() {
 
 function makeServices(): MissionControlServicesLike {
     return {
-        getOmoRoot: () => '/tmp/omo',
+        getMcRoot: () => '/tmp/omo',
         getJobManager: () => {
             throw new Error('not used');
         },
