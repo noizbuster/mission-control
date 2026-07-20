@@ -1,4 +1,4 @@
-// allow: SIZE_OK -- HEAD 581 -> current 586 pure LOC; explicit public API export barrel retained for compatibility review.
+// allow: SIZE_OK -- HEAD 581 -> current 598 pure LOC; explicit public API export barrel retained for compatibility review.
 export * from './abg-overlay/index';
 export type { AgentRuntimeOptions, RunGraphOptions } from './agent-runtime';
 export { AgentRuntime } from './agent-runtime';
@@ -328,6 +328,13 @@ export {
 export type { AgentExecutionContext, AgentTask, AgentTaskResult } from './runtime/execution-context';
 export type { AgentExecutor } from './runtime/executor';
 export { createGraphTurnRunner, type GraphTurnRunnerWiring } from './runtime/graph-coordinator-turn';
+export {
+    findLatestGraphCheckpoint,
+    findResumableRun,
+    type GraphCheckpointSearchOptions,
+    type GraphResumeEvent,
+    type ResumableRunSnapshot,
+} from './runtime/graph-resume-state';
 export { openCanonicalRuntimeDb } from './runtime/local-runtime-db';
 export {
     blockRun,

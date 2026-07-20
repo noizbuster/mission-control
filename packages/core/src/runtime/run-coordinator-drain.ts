@@ -1,9 +1,9 @@
 import type {
-    AgentEvent,
     RunCoordinatorCommand,
     RunCoordinatorEventMetadata,
     RunCoordinatorState,
 } from '@mission-control/protocol';
+import { findResumableRun, type GraphResumeEvent } from './graph-resume-state';
 import {
     finalizeProviderTurnResult,
     type RunCoordinatorProviderTurnResult,
@@ -106,29 +106,13 @@ export async function drainCoordinatorRun(input: {
     return { status, runId: input.runId, turns };
 }
 
-export function findResumableBlockedRun(events: readonly AgentEvent[]): BlockedRunSnapshot | undefined {
-    for (let index = events.length - 1; index >= 0; index -= 1) {
-        const event = events[index];
-        if (event === undefined || event.run?.runId === undefined) {
-            continue;
-        }
-        if (
-            event.type === 'run.completed' ||
-            event.type === 'run.failed' ||
-            event.type === 'run.interrupted' ||
-            event.type === 'run.idle'
-        ) {
-            return undefined;
-        }
-        if (event.type !== 'run.blocked' || event.run.state !== 'blocked_on_approval') {
-            continue;
-        }
-        return {
-            runId: event.run.runId,
-            ...(event.run.reason !== undefined ? { reason: event.run.reason } : {}),
-            ...(event.run.errorCode !== undefined ? { errorCode: event.run.errorCode } : {}),
-            ...(event.run.toolCallId !== undefined ? { toolCallId: event.run.toolCallId } : {}),
-        };
-    }
-    return undefined;
+export function findResumableBlockedRun(events: readonly GraphResumeEvent[]): BlockedRunSnapshot | undefined {
+    const resumable = findResumableRun(events);
+    if (resumable?.kind !== 'approval') return undefined;
+    return {
+        runId: resumable.runId,
+        ...(resumable.reason !== undefined ? { reason: resumable.reason } : {}),
+        ...(resumable.errorCode !== undefined ? { errorCode: resumable.errorCode } : {}),
+        ...(resumable.toolCallId !== undefined ? { toolCallId: resumable.toolCallId } : {}),
+    };
 }
