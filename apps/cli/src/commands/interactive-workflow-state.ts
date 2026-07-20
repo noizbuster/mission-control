@@ -4,14 +4,17 @@ import {
     listMissions,
     listRunsForMission,
     materializeMission,
+    materializeWorkflow,
     type NormalizedMissionRunStoreLocation,
     normalizeMissionRunStoreLocation,
     type ObservabilityRedactor,
     resolveMcRoot,
+    type SessionControlHost,
     startRun,
+    TERMINAL_RUN_STATUSES,
     type WorkflowRegistry,
 } from '@mission-control/core';
-import type { AbgGraphSpec, Mission, Run, WorkflowSpec } from '@mission-control/protocol';
+import type { AbgGraphSpec, GraphCheckpoint, Mission, Run, WorkflowSpec } from '@mission-control/protocol';
 import type { CodingActionContext } from './interactive-chat-action-context';
 import type { PromptTurnContext } from './interactive-chat-prompt-turn';
 import { settleNoninteractiveWorkflowRun, type WorkflowRunOutcome } from './run-agent-workflow-run';
@@ -25,6 +28,25 @@ export type WorkflowRunHandle = {
 export type ResumableWorkflowRun = {
     readonly handle: WorkflowRunHandle;
     readonly graph: AbgGraphSpec;
+};
+
+export type WorkflowSessionContinueBookkeeping = 'reuse_blocked' | 'started_new_run' | 'graph_only';
+
+export type WorkflowSessionContinue = {
+    readonly graph: AbgGraphSpec;
+    readonly handle?: WorkflowRunHandle;
+    readonly bookkeeping: WorkflowSessionContinueBookkeeping;
+};
+
+export type FindWorkflowGraphForSessionContinueInput = {
+    readonly workspaceRoot: string;
+    readonly sessionId: string;
+    readonly sessionRunId?: string;
+    readonly workflowRegistry?: WorkflowRegistry;
+    readonly observabilityRedactor?: ObservabilityRedactor;
+    readonly checkpoint?: GraphCheckpoint;
+    readonly prompt?: string;
+    readonly sessionControlHost?: SessionControlHost;
 };
 
 export async function tryCreateWorkflowRun(
@@ -74,6 +96,22 @@ export async function findResumableWorkflowRun(input: {
     readonly workflowRegistry?: WorkflowRegistry;
     readonly observabilityRedactor?: ObservabilityRedactor;
 }): Promise<ResumableWorkflowRun | undefined> {
+    const continued = await findWorkflowGraphForSessionContinue(input);
+    if (continued?.bookkeeping !== 'reuse_blocked' || continued.handle === undefined) return undefined;
+    return { handle: continued.handle, graph: continued.graph };
+}
+
+/**
+ * Recover the executable workflow graph for a cold `/continue` without requiring
+ * `run.status === 'blocked'` and without ever transitioning `cancelled → running`.
+ *
+ * Session events remain the source of truth for continuability; this helper only
+ * resolves graph identity (mission/run linkage and/or checkpoint metadata) and
+ * books a fresh SQL Run when the prior Mission Run is already terminal.
+ */
+export async function findWorkflowGraphForSessionContinue(
+    input: FindWorkflowGraphForSessionContinueInput,
+): Promise<WorkflowSessionContinue | undefined> {
     let mcRoot: string;
     try {
         mcRoot = await resolveMcRoot(input.workspaceRoot);
@@ -84,18 +122,31 @@ export async function findResumableWorkflowRun(input: {
         mcRoot,
         ...(input.observabilityRedactor !== undefined ? { observabilityRedactor: input.observabilityRedactor } : {}),
     });
-    let selected: { readonly mission: Mission; readonly run: Run } | undefined;
-    for (const mission of await listMissions(location)) {
-        for (const run of await listRunsForMission(location, mission.id)) {
-            if (!isMatchingBlockedRun(run, mission.id, input)) continue;
-            if (selected === undefined || (run.startedAt ?? '') > (selected.run.startedAt ?? ''))
-                selected = { mission, run };
-        }
+    const linked = await findLinkedMissionRun(location, input);
+    const graph = resolveContinueGraph(linked?.mission, input);
+    if (graph === undefined) return undefined;
+    if (linked === undefined) {
+        return { graph, bookkeeping: 'graph_only' };
     }
-    if (selected?.mission.graph === undefined) return undefined;
+    if (linked.run.status === 'blocked') {
+        return {
+            graph,
+            handle: { location, missionId: linked.mission.id, runId: linked.run.id },
+            bookkeeping: 'reuse_blocked',
+        };
+    }
+    if (!TERMINAL_RUN_STATUSES.has(linked.run.status)) {
+        return { graph, bookkeeping: 'graph_only' };
+    }
+    const prompt = input.prompt ?? linked.run.prompt ?? '';
+    const nextRun = await startRun(location, linked.mission.id, prompt, {
+        sessionId: input.sessionId,
+        ...(input.sessionControlHost !== undefined ? { sessionControlHost: input.sessionControlHost } : {}),
+    });
     return {
-        handle: { location, missionId: selected.mission.id, runId: selected.run.id },
-        graph: selected.mission.graph,
+        graph,
+        handle: { location, missionId: linked.mission.id, runId: nextRun.id },
+        bookkeeping: 'started_new_run',
     };
 }
 
@@ -116,16 +167,49 @@ export function seedOverlayForWorkflow(coding: CodingActionContext, graph: AbgGr
     });
 }
 
-function isMatchingBlockedRun(
+async function findLinkedMissionRun(
+    location: NormalizedMissionRunStoreLocation,
+    input: FindWorkflowGraphForSessionContinueInput,
+): Promise<{ readonly mission: Mission; readonly run: Run } | undefined> {
+    let selected: { readonly mission: Mission; readonly run: Run } | undefined;
+    for (const mission of await listMissions(location)) {
+        for (const run of await listRunsForMission(location, mission.id)) {
+            if (!isMatchingSessionRun(run, mission.id, input)) continue;
+            if (selected === undefined || (run.startedAt ?? '') > (selected.run.startedAt ?? '')) {
+                selected = { mission, run };
+            }
+        }
+    }
+    return selected;
+}
+
+function isMatchingSessionRun(
     run: Run,
     missionId: string,
-    input: { readonly sessionId: string; readonly sessionRunId: string },
+    input: { readonly sessionId: string; readonly sessionRunId?: string },
 ): boolean {
-    return (
-        run.missionId === missionId &&
-        run.status === 'blocked' &&
-        run.sessionId === input.sessionId &&
-        run.sessionRunId === input.sessionRunId &&
-        run.parentRunId === undefined
-    );
+    if (run.missionId !== missionId || run.sessionId !== input.sessionId || run.parentRunId !== undefined) {
+        return false;
+    }
+    if (input.sessionRunId === undefined) return true;
+    return run.sessionRunId === input.sessionRunId;
+}
+
+function resolveContinueGraph(
+    mission: Mission | undefined,
+    input: FindWorkflowGraphForSessionContinueInput,
+): AbgGraphSpec | undefined {
+    if (mission?.graph !== undefined) return mission.graph;
+    const workflowName = input.checkpoint?.workflowName ?? mission?.workflowName;
+    if (workflowName !== undefined && input.workflowRegistry !== undefined) {
+        const spec = input.workflowRegistry.lookup(workflowName);
+        if (spec !== undefined) return materializeWorkflow(spec);
+    }
+    const graphId = input.checkpoint?.graphId ?? mission?.graphId;
+    if (graphId !== undefined && input.workflowRegistry !== undefined) {
+        for (const spec of input.workflowRegistry.list()) {
+            if (spec.graph.id === graphId) return materializeWorkflow(spec);
+        }
+    }
+    return undefined;
 }

@@ -1,7 +1,6 @@
 import {
     type AgentRuntime,
     findMostRecentFailedRun,
-    findResumableBlockedRun,
     normalizeMissionRunStoreLocation,
     readMission,
     resolveMcRoot,
@@ -14,7 +13,13 @@ import type { ChatOutput } from './interactive-chat-io';
 import { type ActiveCodingAgentTurn, resumeCodingAgentTurn } from './interactive-coding-agent';
 import { runWorkflowAction } from './interactive-workflow-actions';
 import { createWorkflowRunOutcomeObserver, redactWorkflowError } from './interactive-workflow-run-outcome';
-import { findResumableWorkflowRun, settleWorkflowRun } from './interactive-workflow-state';
+import {
+    findWorkflowGraphForSessionContinue,
+    settleWorkflowRun,
+    type WorkflowSessionContinue,
+} from './interactive-workflow-state';
+import { clearStickyAttachBanner } from './session-attach-projection';
+import { decideWorkResume, formatWorkResumeStartMessage, isWorkResumeActionable } from './work-resume-decision';
 
 export async function runInterruptAction(
     chatOutput: ChatOutput,
@@ -30,7 +35,7 @@ export async function runInterruptAction(
     return actionResult(selection);
 }
 
-export async function runApprovalResumeAction(
+export async function runWorkResumeAction(
     chatOutput: ChatOutput,
     selection: ModelProviderSelection,
     coding: CodingActionContext,
@@ -48,38 +53,35 @@ export async function runApprovalResumeAction(
         chatOutput.write('Nothing to resume — no provider/session configured. Send a prompt to start a run.\n');
         return actionResult(selection);
     }
-    chatOutput.write(`Resuming run for ${coding.sessionId}\n`);
-    const blockedSessionRun = findResumableBlockedRun(await coding.sessionStore.getEvents(coding.sessionId));
-    const resumableWorkflow =
-        blockedSessionRun === undefined
-            ? undefined
-            : await findResumableWorkflowRun({
-                  workspaceRoot: coding.workspaceRoot,
-                  sessionId: coding.sessionId,
-                  sessionRunId: blockedSessionRun.runId,
-                  ...(coding.workflowRegistry !== undefined ? { workflowRegistry: coding.workflowRegistry } : {}),
-                  ...(coding.observabilityRedactor !== undefined
-                      ? { observabilityRedactor: coding.observabilityRedactor }
-                      : {}),
-              });
+    const sessionId = coding.sessionId;
+    const sessionEvents = await coding.sessionStore.getEvents(sessionId);
+    const decision = decideWorkResume(sessionEvents);
+    clearStickyAttachBanner(chatOutput);
+    chatOutput.write(formatWorkResumeStartMessage(decision, sessionId));
+    if (!isWorkResumeActionable(decision)) {
+        return actionResult(selection);
+    }
+    const resumableSessionRun = decision.snapshot;
+    const workflowContinue = await findWorkflowGraphForSessionContinue({
+        workspaceRoot: coding.workspaceRoot,
+        sessionId,
+        sessionRunId: resumableSessionRun.runId,
+        ...(resumableSessionRun.checkpoint !== undefined ? { checkpoint: resumableSessionRun.checkpoint } : {}),
+        ...(coding.workflowRegistry !== undefined ? { workflowRegistry: coding.workflowRegistry } : {}),
+        ...(coding.observabilityRedactor !== undefined ? { observabilityRedactor: coding.observabilityRedactor } : {}),
+        ...(coding.taskRuntimeServices?.sessionControlHost !== undefined
+            ? { sessionControlHost: coding.taskRuntimeServices.sessionControlHost }
+            : {}),
+    });
     const turnId = coding.nextTurnId();
-    const observer =
-        resumableWorkflow === undefined
-            ? undefined
-            : createWorkflowRunOutcomeObserver({
-                  expectedSessionId: coding.sessionId,
-                  expectedTaskId: turnId,
-                  requireOwnerRunIdentity: true,
-                  settleOutcome: (outcome, sessionRunId) =>
-                      settleWorkflowRun(resumableWorkflow.handle, outcome, coding.sessionId, sessionRunId),
-              });
-    if (resumableWorkflow !== undefined) {
-        await updateRunStatus(resumableWorkflow.handle.location, resumableWorkflow.handle.runId, 'running');
+    const observer = createContinueOutcomeObserver(sessionId, turnId, workflowContinue);
+    if (workflowContinue?.bookkeeping === 'reuse_blocked' && workflowContinue.handle !== undefined) {
+        await updateRunStatus(workflowContinue.handle.location, workflowContinue.handle.runId, 'running');
     }
     let activeTurn: ActiveCodingAgentTurn;
     try {
         activeTurn = await resumeCodingAgentTurn({
-            sessionId: coding.sessionId,
+            sessionId,
             turnId,
             store: coding.sessionStore,
             provider: coding.provider,
@@ -108,7 +110,7 @@ export async function runApprovalResumeAction(
             ...(coding.profileName !== undefined ? { profileName: coding.profileName } : {}),
             ...(coding.config !== undefined ? { config: coding.config } : {}),
             ...(coding.taskRuntimeServices !== undefined ? { taskRuntimeServices: coding.taskRuntimeServices } : {}),
-            ...(resumableWorkflow !== undefined ? { graph: resumableWorkflow.graph } : {}),
+            ...(workflowContinue !== undefined ? { graph: workflowContinue.graph } : {}),
         });
     } catch (error: unknown) {
         await observer?.settle({ status: 'failed', reason: 'workflow resume setup failed' });
@@ -120,6 +122,23 @@ export async function runApprovalResumeAction(
         done: activeTurn.done.then(() =>
             observer.settle({ status: 'failed', reason: 'workflow resume settled without a terminal event' }),
         ),
+    });
+}
+
+export const runApprovalResumeAction = runWorkResumeAction;
+
+function createContinueOutcomeObserver(
+    sessionId: string,
+    turnId: string,
+    workflowContinue: WorkflowSessionContinue | undefined,
+) {
+    if (workflowContinue?.handle === undefined) return undefined;
+    const handle = workflowContinue.handle;
+    return createWorkflowRunOutcomeObserver({
+        expectedSessionId: sessionId,
+        expectedTaskId: turnId,
+        requireOwnerRunIdentity: true,
+        settleOutcome: (outcome, sessionRunId) => settleWorkflowRun(handle, outcome, sessionId, sessionRunId),
     });
 }
 
