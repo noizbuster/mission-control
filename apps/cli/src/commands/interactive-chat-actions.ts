@@ -29,7 +29,7 @@ import {
     runSkillAction,
 } from './interactive-prompt-actions';
 import { runWorkflowAction } from './interactive-workflow-actions';
-import { runApprovalResumeAction, runInterruptAction, runRetryAction } from './interactive-workflow-resume-actions';
+import { runInterruptAction, runRetryAction, runWorkResumeAction } from './interactive-workflow-resume-actions';
 
 export { loadDashboardAgentEntries } from './interactive-agent-actions';
 export type { CodingActionContext } from './interactive-chat-action-context';
@@ -242,7 +242,7 @@ export async function runChatAction(
         case 'session-picker':
             return runSessionPickerAction(chatOutput, currentModelProviderSelection, coding);
         case 'continue':
-            return runApprovalResumeAction(chatOutput, currentModelProviderSelection, coding);
+            return runWorkResumeAction(chatOutput, currentModelProviderSelection, coding);
         case 'retry':
             return runRetryAction(runtime, chatOutput, currentModelProviderSelection, coding);
         default:

@@ -1020,7 +1020,7 @@ describe('interactive chat actions', () => {
             });
         });
 
-        describe('/continue approval-resume action', () => {
+        describe('/continue work-resume action', () => {
             it('emits a resume request while a run is active (parity with former /resume)', async () => {
                 const runtime = new AgentRuntime();
                 const output = createOutput();
