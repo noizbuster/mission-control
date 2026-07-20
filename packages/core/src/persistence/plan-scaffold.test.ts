@@ -27,11 +27,11 @@ function makeTempRoot(): string {
 }
 
 function draftPath(root: string, slug: string): string {
-    return join(root, '.omo', 'drafts', `${slug}.md`);
+    return join(root, '.mc', 'drafts', `${slug}.md`);
 }
 
 function planPath(root: string, slug: string): string {
-    return join(root, '.omo', 'plans', `${slug}.md`);
+    return join(root, '.mc', 'plans', `${slug}.md`);
 }
 
 describe('PLANNER_SCAFFOLD_HEADERS', () => {
@@ -51,7 +51,7 @@ describe('PLANNER_SCAFFOLD_HEADERS', () => {
 });
 
 describe('scaffoldPlanFiles', () => {
-    it('creates draft frontmatter stub and plan skeleton under .omo/', async () => {
+    it('creates draft frontmatter stub and plan skeleton under .mc/', async () => {
         // Given
         const root = makeTempRoot();
         const slug = 'demo-plan';
@@ -126,13 +126,13 @@ describe('scaffoldPlanFiles', () => {
             await expect(scaffoldPlanFiles(root, slug)).rejects.toMatchObject({
                 code: 'plan_scaffold_invalid_slug',
             });
-            expect(existsSync(join(root, '.omo', 'plans'))).toBe(false);
-            expect(existsSync(join(root, '.omo', 'drafts'))).toBe(false);
+            expect(existsSync(join(root, '.mc', 'plans'))).toBe(false);
+            expect(existsSync(join(root, '.mc', 'drafts'))).toBe(false);
         }
     });
 
     it('rejects workspace roots that would escape via non-directory targets', async () => {
-        // Given: a file where a directory is expected for .omo nesting
+        // Given: a file where a directory is expected for .mc nesting
         const root = makeTempRoot();
         const fileAsRoot = join(root, 'not-a-dir');
         writeFileSync(fileAsRoot, 'nope', 'utf8');
@@ -174,7 +174,7 @@ describe('scaffoldPlanFiles', () => {
         expect(readFileSync(result.draftPath, 'utf8')).toBe(draft);
     });
 
-    it('creates missing .omo/plans and .omo/drafts directories', async () => {
+    it('creates missing .mc/plans and .mc/drafts directories', async () => {
         // Given
         const root = makeTempRoot();
 
@@ -182,8 +182,8 @@ describe('scaffoldPlanFiles', () => {
         await scaffoldPlanFiles(root, 'mkdir-plan');
 
         // Then
-        expect(existsSync(join(root, '.omo', 'plans'))).toBe(true);
-        expect(existsSync(join(root, '.omo', 'drafts'))).toBe(true);
+        expect(existsSync(join(root, '.mc', 'plans'))).toBe(true);
+        expect(existsSync(join(root, '.mc', 'drafts'))).toBe(true);
     });
 
     it('writeDraftFrontmatter creates drafting frontmatter and preserves body on update', async () => {
@@ -239,8 +239,8 @@ describe('scaffoldPlanFiles', () => {
         // Given
         const root = makeTempRoot();
         const slug = 'hand-authored';
-        mkdirSync(join(root, '.omo', 'plans'), { recursive: true });
-        mkdirSync(join(root, '.omo', 'drafts'), { recursive: true });
+        mkdirSync(join(root, '.mc', 'plans'), { recursive: true });
+        mkdirSync(join(root, '.mc', 'drafts'), { recursive: true });
         const existingPlan = [
             `# ${slug} - Work Plan`,
             '',

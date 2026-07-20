@@ -1,21 +1,25 @@
 import { access, mkdir, readFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
-const OMO_DIR_NAME = '.omo';
+/**
+ * Workspace-local agent state directory for Mission Control.
+ * Distinct from `.mctrl/` (project config: agents, workflows, skills).
+ */
+export const MC_DIR_NAME = '.mc';
 
-export const OMO_SUBDIR_PLANS = 'plans';
-export const OMO_SUBDIR_NOTEPADS = 'notepads';
-export const OMO_SUBDIR_MISSIONS = 'missions';
-export const OMO_SUBDIR_RUNS = 'runs';
+export const MC_SUBDIR_PLANS = 'plans';
+export const MC_SUBDIR_NOTEPADS = 'notepads';
+export const MC_SUBDIR_MISSIONS = 'missions';
+export const MC_SUBDIR_RUNS = 'runs';
 
-export const DEFAULT_OMO_SUBDIRS: readonly string[] = [
-    OMO_SUBDIR_PLANS,
-    OMO_SUBDIR_NOTEPADS,
-    OMO_SUBDIR_MISSIONS,
-    OMO_SUBDIR_RUNS,
+export const DEFAULT_MC_SUBDIRS: readonly string[] = [
+    MC_SUBDIR_PLANS,
+    MC_SUBDIR_NOTEPADS,
+    MC_SUBDIR_MISSIONS,
+    MC_SUBDIR_RUNS,
 ];
 
-export class OmoPersistenceError extends Error {
+export class McPersistenceError extends Error {
     constructor(
         message: string,
         readonly code: string,
@@ -23,55 +27,55 @@ export class OmoPersistenceError extends Error {
         options?: { readonly cause?: unknown },
     ) {
         super(message, options);
-        this.name = 'OmoPersistenceError';
+        this.name = 'McPersistenceError';
     }
 }
 
-export function omoDirPath(root: string): string {
-    return join(root, OMO_DIR_NAME);
+export function mcDirPath(root: string): string {
+    return join(root, MC_DIR_NAME);
 }
 
-export function omoFilePath(root: string, ...segments: readonly string[]): string {
-    return join(root, OMO_DIR_NAME, ...segments);
+export function mcFilePath(root: string, ...segments: readonly string[]): string {
+    return join(root, MC_DIR_NAME, ...segments);
 }
 
 /**
- * Walk up from `startPath` until a `.omo/` directory is found.
- * Returns the project root that contains `.omo/` (not the `.omo/` path itself).
- * Throws `OmoPersistenceError` ({ code: 'omo_root_not_found' }) when no ancestor contains `.omo/`.
+ * Walk up from `startPath` until a `.mc/` directory is found.
+ * Returns the project root that contains `.mc/` (not the `.mc/` path itself).
+ * Throws `McPersistenceError` ({ code: 'mc_root_not_found' }) when no ancestor contains `.mc/`.
  */
-export async function resolveOmoRoot(startPath: string): Promise<string> {
+export async function resolveMcRoot(startPath: string): Promise<string> {
     const absoluteStart = isAbsolute(startPath) ? startPath : resolve(startPath);
     let current = absoluteStart;
     // Guard against infinite loops on degenerate paths.
     let previous = '';
     while (current !== previous) {
-        const candidate = omoDirPath(current);
+        const candidate = mcDirPath(current);
         if (await isDirectoryPresent(candidate)) {
             return current;
         }
         previous = current;
         current = dirname(current);
     }
-    throw new OmoPersistenceError(
-        `Could not resolve an '.omo/' directory starting from ${absoluteStart}`,
-        'omo_root_not_found',
+    throw new McPersistenceError(
+        `Could not resolve a '${MC_DIR_NAME}/' directory starting from ${absoluteStart}`,
+        'mc_root_not_found',
         absoluteStart,
     );
 }
 
 /**
- * Idempotently create the standard `.omo/` subdirectories under `root`.
+ * Idempotently create the standard `.mc/` subdirectories under `root`.
  * Pass an explicit `subdirs` list to create a subset; omit it for the default layout.
  */
-export async function ensureOmoDirs(
+export async function ensureMcDirs(
     root: string,
-    subdirs: readonly string[] = DEFAULT_OMO_SUBDIRS,
+    subdirs: readonly string[] = DEFAULT_MC_SUBDIRS,
 ): Promise<readonly string[]> {
     const created: string[] = [];
     for (const subdir of subdirs) {
         assertSafeSubdirName(subdir);
-        const target = omoFilePath(root, subdir);
+        const target = mcFilePath(root, subdir);
         await mkdir(target, { recursive: true });
         created.push(target);
     }
@@ -111,9 +115,9 @@ async function isDirectoryPresent(path: string): Promise<boolean> {
 
 function assertSafeSubdirName(name: string): void {
     if (name.length === 0 || name.includes('/') || name.includes('\\') || name.includes('..')) {
-        throw new OmoPersistenceError(
-            `Refusing to create .omo/ subdir with unsafe name ${JSON.stringify(name)}`,
-            'omo_unsafe_subdir',
+        throw new McPersistenceError(
+            `Refusing to create ${MC_DIR_NAME}/ subdir with unsafe name ${JSON.stringify(name)}`,
+            'mc_unsafe_subdir',
             name,
         );
     }

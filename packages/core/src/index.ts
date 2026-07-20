@@ -193,7 +193,12 @@ export {
 export { PermissionRuleStore, type PermissionRuleStoreOptions } from './permission/store';
 export { createAllowPermissionDecision, createDefaultPermissionDecision } from './permissions';
 export { readBoulder } from './persistence/boulder-store';
-export { ensureOmoDirs, resolveOmoRoot } from './persistence/paths';
+export {
+    ensureMcDirs,
+    MC_DIR_NAME,
+    McPersistenceError,
+    resolveMcRoot,
+} from './persistence/paths';
 export * from './plugins/index';
 export {
     FlatProviderBridgeError,

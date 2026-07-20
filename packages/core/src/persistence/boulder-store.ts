@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { OmoPersistenceError, omoFilePath } from './paths';
+import { McPersistenceError, mcFilePath } from './paths';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
@@ -71,7 +71,7 @@ export const BoulderWorkSchema = z
 export type BoulderWork = z.infer<typeof BoulderWorkSchema>;
 
 /**
- * Schema for the top-level `.omo/boulder.json` payload. Mirrors the real file:
+ * Schema for the top-level `.mc/boulder.json` payload. Mirrors the real file:
  * a version marker, an active work pointer (nullable), the works map, and a
  * denormalized projection of the active work at the top level.
  */
@@ -111,7 +111,7 @@ export type BoulderWorkPatch = {
     readonly elapsed_ms?: number;
 };
 
-export class BoulderStoreError extends OmoPersistenceError {
+export class BoulderStoreError extends McPersistenceError {
     constructor(message: string, code: string, path?: string, cause?: unknown) {
         super(message, code, path, cause !== undefined ? { cause } : undefined);
         this.name = 'BoulderStoreError';
@@ -119,11 +119,11 @@ export class BoulderStoreError extends OmoPersistenceError {
 }
 
 export function boulderFilePath(root: string): string {
-    return omoFilePath(root, BOULDER_FILE_NAME);
+    return mcFilePath(root, BOULDER_FILE_NAME);
 }
 
 /**
- * Read and validate `.omo/boulder.json`. Returns `null` when the file does not
+ * Read and validate `.mc/boulder.json`. Returns `null` when the file does not
  * exist yet. Throws `BoulderStoreError` ({ code: 'boulder_corrupt' }) when the
  * file exists but fails JSON or schema validation.
  */
@@ -170,7 +170,7 @@ export async function readBoulder(root: string): Promise<BoulderState | null> {
 }
 
 /**
- * Validate and persist `state` to `.omo/boulder.json` atomically
+ * Validate and persist `state` to `.mc/boulder.json` atomically
  * (temp-file-then-rename). The input is parsed through `BoulderStateSchema`
  * before writing so malformed state is rejected at the boundary.
  */

@@ -1,4 +1,4 @@
-import { OmoPersistenceError } from './paths';
+import { MC_DIR_NAME, McPersistenceError } from './paths';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -13,14 +13,14 @@ export type NotepadAppendOptions = {
     readonly root?: string;
 };
 
-export class NotepadAppendOnlyError extends OmoPersistenceError {
+export class NotepadAppendOnlyError extends McPersistenceError {
     constructor(message: string, path?: string, cause?: unknown) {
         super(message, 'notepad_truncation_rejected', path, cause !== undefined ? { cause } : undefined);
         this.name = 'NotepadAppendOnlyError';
     }
 }
 
-export class NotepadStoreError extends OmoPersistenceError {
+export class NotepadStoreError extends McPersistenceError {
     constructor(message: string, code: string, path?: string, cause?: unknown) {
         super(message, code, path, cause !== undefined ? { cause } : undefined);
         this.name = 'NotepadStoreError';
@@ -45,7 +45,7 @@ export function assertAppendOnly(existing: string, next: string): void {
 }
 
 /**
- * Append a timestamped entry to `.omo/notepads/{planName}/{file}.md`.
+ * Append a timestamped entry to `.mc/notepads/{planName}/{file}.md`.
  *
  * The write is append-only: existing content is read, the new content is
  * validated by `assertAppendOnly`, and the result is written atomically via a
@@ -66,7 +66,7 @@ export async function appendNotepad(
     const root = options.root;
     if (root === undefined) {
         throw new NotepadStoreError(
-            'appendNotepad requires an explicit .omo root via options.root',
+            'appendNotepad requires an explicit .mc root via options.root',
             'notepad_root_required',
         );
     }
@@ -81,7 +81,7 @@ export async function appendNotepad(
 }
 
 export function notepadFilePath(root: string, planName: string, file: NotepadFile): string {
-    return join(root, '.omo', NOTEPADS_DIR, planName, `${file}.md`);
+    return join(root, MC_DIR_NAME, NOTEPADS_DIR, planName, `${file}.md`);
 }
 
 /**

@@ -15,7 +15,7 @@ import {
     NotepadStoreError,
     readNotepad,
 } from './notepad-store';
-import { DEFAULT_OMO_SUBDIRS, ensureOmoDirs, isGitignored, OmoPersistenceError, resolveOmoRoot } from './paths';
+import { DEFAULT_MC_SUBDIRS, ensureMcDirs, isGitignored, McPersistenceError, resolveMcRoot } from './paths';
 import { PlanStoreError, parsePlanChecklist, parsePlanChecklistText, readPlan } from './plan-store';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -35,48 +35,48 @@ function makeTempRoot(): string {
     return root;
 }
 
-function seedOmoRoot(root: string): string {
-    mkdirSync(join(root, '.omo'), { recursive: true });
+function seedMcRoot(root: string): string {
+    mkdirSync(join(root, '.mc'), { recursive: true });
     return root;
 }
 
-describe('resolveOmoRoot', () => {
-    it('walks up from a deeper path to find the enclosing .omo directory', async () => {
+describe('resolveMcRoot', () => {
+    it('walks up from a deeper path to find the enclosing .mc directory', async () => {
         // Given
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const deeper = join(root, 'packages', 'core', 'src', 'persistence');
         mkdirSync(deeper, { recursive: true });
 
         // When
-        const resolved = await resolveOmoRoot(deeper);
+        const resolved = await resolveMcRoot(deeper);
 
         // Then
         expect(resolved).toBe(root);
     });
 
-    it('throws an OmoPersistenceError when no .omo directory exists in any ancestor', async () => {
+    it('throws an McPersistenceError when no .mc directory exists in any ancestor', async () => {
         // Given
         const root = makeTempRoot();
         const isolated = join(root, 'nope');
 
         // When / Then
-        await expect(resolveOmoRoot(isolated)).rejects.toBeInstanceOf(OmoPersistenceError);
-        await expect(resolveOmoRoot(isolated)).rejects.toMatchObject({ code: 'omo_root_not_found' });
+        await expect(resolveMcRoot(isolated)).rejects.toBeInstanceOf(McPersistenceError);
+        await expect(resolveMcRoot(isolated)).rejects.toMatchObject({ code: 'mc_root_not_found' });
     });
 });
 
-describe('ensureOmoDirs', () => {
-    it('creates the default .omo subdirectories under root', async () => {
+describe('ensureMcDirs', () => {
+    it('creates the default .mc subdirectories under root', async () => {
         // Given
         const root = makeTempRoot();
 
         // When
-        const created = await ensureOmoDirs(root);
+        const created = await ensureMcDirs(root);
 
         // Then
-        expect(created).toHaveLength(DEFAULT_OMO_SUBDIRS.length);
-        for (const subdir of DEFAULT_OMO_SUBDIRS) {
-            expect(existsSync(join(root, '.omo', subdir))).toBe(true);
+        expect(created).toHaveLength(DEFAULT_MC_SUBDIRS.length);
+        for (const subdir of DEFAULT_MC_SUBDIRS) {
+            expect(existsSync(join(root, '.mc', subdir))).toBe(true);
         }
     });
 
@@ -85,13 +85,13 @@ describe('ensureOmoDirs', () => {
         const root = makeTempRoot();
 
         // When
-        const created = await ensureOmoDirs(root, ['plans', 'missions']);
+        const created = await ensureMcDirs(root, ['plans', 'missions']);
 
         // Then
         expect(created).toHaveLength(2);
-        expect(existsSync(join(root, '.omo', 'plans'))).toBe(true);
-        expect(existsSync(join(root, '.omo', 'missions'))).toBe(true);
-        expect(existsSync(join(root, '.omo', 'notepads'))).toBe(false);
+        expect(existsSync(join(root, '.mc', 'plans'))).toBe(true);
+        expect(existsSync(join(root, '.mc', 'missions'))).toBe(true);
+        expect(existsSync(join(root, '.mc', 'notepads'))).toBe(false);
     });
 
     it('rejects unsafe subdir names', async () => {
@@ -99,8 +99,8 @@ describe('ensureOmoDirs', () => {
         const root = makeTempRoot();
 
         // When / Then
-        await expect(ensureOmoDirs(root, ['../escape'])).rejects.toMatchObject({
-            code: 'omo_unsafe_subdir',
+        await expect(ensureMcDirs(root, ['../escape'])).rejects.toMatchObject({
+            code: 'mc_unsafe_subdir',
         });
     });
 });
@@ -109,11 +109,11 @@ describe('isGitignored', () => {
     it('detects a directory covered by a trailing-slash pattern', async () => {
         // Given
         const root = makeTempRoot();
-        writeFileSync(join(root, '.gitignore'), ['.omo/', 'node_modules/'].join('\n'));
-        const omoPath = join(root, '.omo');
+        writeFileSync(join(root, '.gitignore'), ['.mc/', 'node_modules/'].join('\n'));
+        const mcPath = join(root, '.mc');
 
         // When
-        const ignored = await isGitignored(omoPath);
+        const ignored = await isGitignored(mcPath);
 
         // Then
         expect(ignored).toBe(true);
@@ -197,7 +197,7 @@ describe('boulder-store', () => {
 
     it('returns null when boulder.json is absent', async () => {
         // Given
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
 
         // When
         const state = await readBoulder(root);
@@ -208,7 +208,7 @@ describe('boulder-store', () => {
 
     it('round-trips a full boulder state through write then read', async () => {
         // Given
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const original = sampleState();
 
         // When
@@ -225,7 +225,7 @@ describe('boulder-store', () => {
 
     it('preserves passthrough fields the orchestrator may add', async () => {
         // Given
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const raw = {
             schema_version: BOULDER_SCHEMA_VERSION,
             active_work_id: 'work-x',
@@ -244,8 +244,8 @@ describe('boulder-store', () => {
             },
             top_level_extra: true,
         };
-        const file = join(root, '.omo', 'boulder.json');
-        mkdirSync(join(root, '.omo'), { recursive: true });
+        const file = join(root, '.mc', 'boulder.json');
+        mkdirSync(join(root, '.mc'), { recursive: true });
         writeFileSync(file, `${JSON.stringify(raw)}\n`);
 
         // When
@@ -260,8 +260,8 @@ describe('boulder-store', () => {
 
     it('throws BoulderStoreError on a corrupt boulder.json', async () => {
         // Given
-        const root = seedOmoRoot(makeTempRoot());
-        writeFileSync(join(root, '.omo', 'boulder.json'), '{ not valid json');
+        const root = seedMcRoot(makeTempRoot());
+        writeFileSync(join(root, '.mc', 'boulder.json'), '{ not valid json');
 
         // When / Then
         await expect(readBoulder(root)).rejects.toBeInstanceOf(BoulderStoreError);
@@ -270,7 +270,7 @@ describe('boulder-store', () => {
 
     it('updateBoulderWork merges patch fields and nested task_sessions', async () => {
         // Given
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         await writeBoulder(root, sampleState());
 
         // When
@@ -302,7 +302,7 @@ describe('boulder-store', () => {
 
     it('updateBoulderWork adds a new task_session without dropping existing ones', async () => {
         // Given
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         await writeBoulder(
             root,
             sampleState({
@@ -346,7 +346,7 @@ describe('boulder-store', () => {
 
     it('updateBoulderWork throws when the work id is unknown', async () => {
         // Given
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         await writeBoulder(root, sampleState());
 
         // When / Then
@@ -466,7 +466,7 @@ describe('notepad-store append-only guard', () => {
 describe('notepad-store appendNotepad', () => {
     it('appends a timestamped block and preserves previous content', async () => {
         // Given
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
 
         // When
         await appendNotepad('demo-plan', 'learnings', '- first learning', {
@@ -490,8 +490,8 @@ describe('notepad-store appendNotepad', () => {
 
     it('creates the notepad directory tree when it does not exist', async () => {
         // Given
-        const root = seedOmoRoot(makeTempRoot());
-        const expectedDir = join(root, '.omo', 'notepads', 'demo-plan');
+        const root = seedMcRoot(makeTempRoot());
+        const expectedDir = join(root, '.mc', 'notepads', 'demo-plan');
 
         // When
         await appendNotepad('demo-plan', 'decisions', '- chose X', { root });
@@ -503,7 +503,7 @@ describe('notepad-store appendNotepad', () => {
 
     it('rejects writes for an unknown notepad file', async () => {
         // Given
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
 
         // When / Then
         await expect(appendNotepad('demo-plan', 'secrets' as never, '- oops', { root })).rejects.toBeInstanceOf(
@@ -516,7 +516,7 @@ describe('notepad-store appendNotepad', () => {
 
     it('rejects an unsafe plan name', async () => {
         // Given
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
 
         // When / Then
         await expect(appendNotepad('../escape', 'learnings', 'x', { root })).rejects.toMatchObject({
@@ -526,19 +526,19 @@ describe('notepad-store appendNotepad', () => {
 
     it('never truncates: file size strictly grows across appends', async () => {
         // Given
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
 
         // When
         await appendNotepad('demo-plan', 'issues', 'first', {
             root,
             now: () => new Date('2026-06-21T10:00:00.000Z'),
         });
-        const firstSize = readFileSync(join(root, '.omo', 'notepads', 'demo-plan', 'issues.md'), 'utf8').length;
+        const firstSize = readFileSync(join(root, '.mc', 'notepads', 'demo-plan', 'issues.md'), 'utf8').length;
         await appendNotepad('demo-plan', 'issues', 'second', {
             root,
             now: () => new Date('2026-06-21T10:05:00.000Z'),
         });
-        const secondSize = readFileSync(join(root, '.omo', 'notepads', 'demo-plan', 'issues.md'), 'utf8').length;
+        const secondSize = readFileSync(join(root, '.mc', 'notepads', 'demo-plan', 'issues.md'), 'utf8').length;
 
         // Then
         expect(secondSize).toBeGreaterThan(firstSize);

@@ -1,4 +1,4 @@
-import { OmoPersistenceError } from './paths';
+import { McPersistenceError } from './paths';
 import { readFile } from 'node:fs/promises';
 
 /**
@@ -47,7 +47,7 @@ export type PlanChecklist = {
     readonly nextTaskLabel: string | null;
 };
 
-export class PlanStoreError extends OmoPersistenceError {
+export class PlanStoreError extends McPersistenceError {
     constructor(message: string, code: string, path?: string, cause?: unknown) {
         super(message, code, path, cause !== undefined ? { cause } : undefined);
         this.name = 'PlanStoreError';

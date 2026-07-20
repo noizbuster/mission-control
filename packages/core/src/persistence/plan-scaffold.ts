@@ -9,7 +9,7 @@ import {
     formatDraftFrontmatterBlock,
     writeDraftFrontmatter,
 } from './draft-frontmatter-io';
-import { OmoPersistenceError, ensureOmoDirs, omoFilePath } from './paths';
+import { McPersistenceError, ensureMcDirs, mcFilePath } from './paths';
 import { assertValidPlanSlug, PlanFormatError } from './plan-format';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
@@ -26,7 +26,7 @@ export {
     type WriteDraftFrontmatterResult,
 };
 
-/** Title Case scaffold headers for `.omo/plans/<slug>.md` (single source of truth). */
+/** Title Case scaffold headers for `.mc/plans/<slug>.md` (single source of truth). */
 export const PLANNER_SCAFFOLD_HEADERS: readonly string[] = [
     '# <slug> - Work Plan',
     '## TL;DR (For humans)',
@@ -54,7 +54,7 @@ export type ScaffoldPlanFilesResult = {
     readonly planPath: string;
 };
 
-export class PlanScaffoldError extends OmoPersistenceError {
+export class PlanScaffoldError extends McPersistenceError {
     constructor(message: string, code: string, path?: string, cause?: unknown) {
         super(message, code, path, cause !== undefined ? { cause } : undefined);
         this.name = 'PlanScaffoldError';
@@ -62,7 +62,7 @@ export class PlanScaffoldError extends OmoPersistenceError {
 }
 
 /**
- * Create `.omo/drafts/<slug>.md` frontmatter stub + `.omo/plans/<slug>.md` skeleton.
+ * Create `.mc/drafts/<slug>.md` frontmatter stub + `.mc/plans/<slug>.md` skeleton.
  * No-op when the plan already has MC scaffold markers. Rejects invalid/escaping slugs.
  */
 export async function scaffoldPlanFiles(
@@ -72,17 +72,17 @@ export async function scaffoldPlanFiles(
 ): Promise<ScaffoldPlanFilesResult> {
     assertScaffoldSlug(slug);
     const root = await resolveWorkspaceRoot(workspaceRoot);
-    const draftPath = omoFilePath(root, 'drafts', `${slug}.md`);
-    const planPath = omoFilePath(root, 'plans', `${slug}.md`);
-    assertInsideOmo(root, draftPath);
-    assertInsideOmo(root, planPath);
+    const draftPath = mcFilePath(root, 'drafts', `${slug}.md`);
+    const planPath = mcFilePath(root, 'plans', `${slug}.md`);
+    assertInsideMc(root, draftPath);
+    assertInsideMc(root, planPath);
 
     const existingPlan = await readOptionalUtf8(planPath);
     if (existingPlan !== undefined && hasScaffoldMarkers(existingPlan, slug)) {
         return { created: false, reason: 'already_scaffolded', draftPath, planPath };
     }
 
-    await ensureOmoDirs(root, ['plans', 'drafts']);
+    await ensureMcDirs(root, ['plans', 'drafts']);
     await atomicWrite(planPath, formatPlanSkeleton(slug));
     if ((await readOptionalUtf8(draftPath)) === undefined) {
         await atomicWrite(draftPath, formatDraftFrontmatterBlock(slug, options));
@@ -157,11 +157,11 @@ async function resolveWorkspaceRoot(workspaceRoot: string): Promise<string> {
     return absolute;
 }
 
-function assertInsideOmo(root: string, targetPath: string): void {
-    const relativeToOmo = relative(omoFilePath(root), targetPath);
-    if (relativeToOmo === '' || relativeToOmo === '..' || relativeToOmo.startsWith(`..${sep}`) || isAbsolute(relativeToOmo)) {
+function assertInsideMc(root: string, targetPath: string): void {
+    const relativeToMc = relative(mcFilePath(root), targetPath);
+    if (relativeToMc === '' || relativeToMc === '..' || relativeToMc.startsWith(`..${sep}`) || isAbsolute(relativeToMc)) {
         throw new PlanScaffoldError(
-            `Refusing plan scaffold path outside .omo/: ${targetPath}`,
+            `Refusing plan scaffold path outside .mc/: ${targetPath}`,
             'plan_scaffold_path_escape',
             targetPath,
         );

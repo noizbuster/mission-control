@@ -1,4 +1,4 @@
-import { omoDirPath, omoFilePath } from './paths';
+import { MC_DIR_NAME, mcDirPath, mcFilePath } from './paths';
 import type { Stats } from 'node:fs';
 import { type FileHandle, lstat, open, readdir, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -22,7 +22,7 @@ export class JsonCompatibilityFileError extends Error {
 
 export function compatibilityJsonFilePath(root: string, subdirectory: string, recordId: string): string {
     assertSafeRecordId(recordId, root);
-    return omoFilePath(root, subdirectory, `${recordId}${JSON_EXTENSION}`);
+    return mcFilePath(root, subdirectory, `${recordId}${JSON_EXTENSION}`);
 }
 
 export async function listCompatibilityJsonRecordIds(root: string, subdirectory: string): Promise<readonly string[]> {
@@ -92,12 +92,12 @@ async function safeCompatibilityDirectory(
     subdirectory: string,
     allowMissing: boolean,
 ): Promise<CompatibilityDirectory | undefined> {
-    const omoDirectory = omoDirPath(root);
-    const directory = omoFilePath(root, subdirectory);
+    const mcDirectory = mcDirPath(root);
+    const directory = mcFilePath(root, subdirectory);
     const canonicalRoot = await realpath(root);
     const candidates = [
-        { path: omoDirectory, canonicalPath: join(canonicalRoot, '.omo') },
-        { path: directory, canonicalPath: join(canonicalRoot, '.omo', subdirectory) },
+        { path: mcDirectory, canonicalPath: join(canonicalRoot, MC_DIR_NAME) },
+        { path: directory, canonicalPath: join(canonicalRoot, MC_DIR_NAME, subdirectory) },
     ] as const;
     for (const candidate of candidates) {
         try {

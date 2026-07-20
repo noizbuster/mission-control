@@ -7,7 +7,7 @@ import {
     completeRun,
     createMission,
     createRun,
-    ensureOmoDirs,
+    ensureMcDirs,
     failRun,
     listMissions,
     listRunsForMission,
@@ -15,7 +15,7 @@ import {
     normalizeMissionRunStoreLocation,
     readMission,
     readRun,
-    resolveOmoRoot,
+    resolveMcRoot,
     settleMissionRunSessionOwner,
     settleRunSessionOwner,
     startRun,
@@ -26,12 +26,12 @@ import {
 import { describe, expect, it } from 'vitest';
 
 /**
- * Import-contract test: the mission-run and `.omo` persistence APIs the CLI
+ * Import-contract test: the mission-run and `.mc` persistence APIs the CLI
  * consumes must be reachable as named imports from the `@mission-control/core`
  * package entry point. `RunCoordinatorV2` is intentionally out of scope and must
  * NOT be exported by this change.
  */
-describe('mission-run and .omo persistence public exports', () => {
+describe('mission-run and .mc persistence public exports', () => {
     const VALUES: ReadonlyArray<readonly [string, unknown]> = [
         ['createMission', createMission],
         ['readMission', readMission],
@@ -54,8 +54,8 @@ describe('mission-run and .omo persistence public exports', () => {
         ['cancelRun', cancelRun],
         ['completeRun', completeRun],
         ['failRun', failRun],
-        ['resolveOmoRoot', resolveOmoRoot],
-        ['ensureOmoDirs', ensureOmoDirs],
+        ['resolveMcRoot', resolveMcRoot],
+        ['ensureMcDirs', ensureMcDirs],
     ];
 
     it.each(VALUES)('%s is exported and defined', (_name, value) => {
@@ -82,7 +82,7 @@ describe('mission-run and .omo persistence public exports', () => {
         expect(typeof cancelRun).toBe('function');
         expect(typeof settleMissionRunSessionOwner).toBe('function');
         expect(typeof assertRunTransition).toBe('function');
-        expect(typeof resolveOmoRoot).toBe('function');
-        expect(typeof ensureOmoDirs).toBe('function');
+        expect(typeof resolveMcRoot).toBe('function');
+        expect(typeof ensureMcDirs).toBe('function');
     });
 });

@@ -1,9 +1,9 @@
-import { OmoPersistenceError } from './paths';
+import { McPersistenceError } from './paths';
 import { type PlanChecklist, parsePlanChecklistText } from './plan-store';
 
 /**
  * Slug must be lowercase alphanumeric with single-hyphen separators.
- * Matches the `.omo/plans/{slug}.md` filename convention: no leading/trailing
+ * Matches the `.mc/plans/{slug}.md` filename convention: no leading/trailing
  * hyphens, no consecutive hyphens, no uppercase, no underscores.
  */
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
@@ -23,7 +23,7 @@ export interface PlanContent {
     readonly finalWave: readonly string[];
 }
 
-export class PlanFormatError extends OmoPersistenceError {
+export class PlanFormatError extends McPersistenceError {
     constructor(message: string, code: string, slug?: string, cause?: unknown) {
         super(message, code, slug, cause !== undefined ? { cause } : undefined);
         this.name = 'PlanFormatError';

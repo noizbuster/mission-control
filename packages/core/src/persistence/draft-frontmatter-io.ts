@@ -1,4 +1,4 @@
-import { ensureOmoDirs, omoFilePath, OmoPersistenceError } from './paths';
+import { ensureMcDirs, mcFilePath, McPersistenceError } from './paths';
 import { assertValidPlanSlug, PlanFormatError } from './plan-format';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
@@ -34,7 +34,7 @@ export type AppendDualReviewReceiptsResult = {
 
 export const DUAL_REVIEW_RECEIPTS_HEADING = '## Dual review receipts';
 
-export class DraftFrontmatterError extends OmoPersistenceError {
+export class DraftFrontmatterError extends McPersistenceError {
     constructor(message: string, code: string, path?: string, cause?: unknown) {
         super(message, code, path, cause !== undefined ? { cause } : undefined);
         this.name = 'DraftFrontmatterError';
@@ -42,7 +42,7 @@ export class DraftFrontmatterError extends OmoPersistenceError {
 }
 
 /**
- * Deterministically write/update YAML frontmatter on `.omo/drafts/<slug>.md`.
+ * Deterministically write/update YAML frontmatter on `.mc/drafts/<slug>.md`.
  * Preserves any existing body. Creates the draft when missing.
  */
 export async function writeDraftFrontmatter(
@@ -52,13 +52,13 @@ export async function writeDraftFrontmatter(
 ): Promise<WriteDraftFrontmatterResult> {
     assertDraftSlug(slug);
     const root = await resolveWorkspaceRoot(workspaceRoot);
-    const draftPath = omoFilePath(root, 'drafts', `${slug}.md`);
-    assertInsideOmo(root, draftPath);
+    const draftPath = mcFilePath(root, 'drafts', `${slug}.md`);
+    assertInsideMc(root, draftPath);
 
     const existing = await readOptionalUtf8(draftPath);
     const body = existing === undefined ? '' : extractDraftBody(existing);
     const created = existing === undefined;
-    await ensureOmoDirs(root, ['drafts']);
+    await ensureMcDirs(root, ['drafts']);
     await atomicWrite(draftPath, `${formatDraftFrontmatterBlock(slug, fields)}${body}`);
     return { draftPath, created };
 }
@@ -74,8 +74,8 @@ export async function appendDualReviewReceipts(
 ): Promise<AppendDualReviewReceiptsResult> {
     assertDraftSlug(slug);
     const root = await resolveWorkspaceRoot(workspaceRoot);
-    const draftPath = omoFilePath(root, 'drafts', `${slug}.md`);
-    assertInsideOmo(root, draftPath);
+    const draftPath = mcFilePath(root, 'drafts', `${slug}.md`);
+    assertInsideMc(root, draftPath);
 
     const existing = await readOptionalUtf8(draftPath);
     const base =
@@ -88,7 +88,7 @@ export async function appendDualReviewReceipts(
     if (next === existing) {
         return { draftPath, appended: false };
     }
-    await ensureOmoDirs(root, ['drafts']);
+    await ensureMcDirs(root, ['drafts']);
     await atomicWrite(draftPath, next);
     return { draftPath, appended: true };
 }
@@ -198,10 +198,10 @@ async function resolveWorkspaceRoot(workspaceRoot: string): Promise<string> {
     return absolute;
 }
 
-function assertInsideOmo(root: string, targetPath: string): void {
-    const relativeToOmo = relative(omoFilePath(root), targetPath);
-    if (relativeToOmo === '' || relativeToOmo === '..' || relativeToOmo.startsWith(`..${sep}`) || isAbsolute(relativeToOmo)) {
-        throw new DraftFrontmatterError(`Refusing draft path outside .omo/: ${targetPath}`, 'plan_scaffold_path_escape', targetPath);
+function assertInsideMc(root: string, targetPath: string): void {
+    const relativeToMc = relative(mcFilePath(root), targetPath);
+    if (relativeToMc === '' || relativeToMc === '..' || relativeToMc.startsWith(`..${sep}`) || isAbsolute(relativeToMc)) {
+        throw new DraftFrontmatterError(`Refusing draft path outside .mc/: ${targetPath}`, 'plan_scaffold_path_escape', targetPath);
     }
 }
 
