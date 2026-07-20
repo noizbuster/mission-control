@@ -113,9 +113,13 @@ export async function createChatTui(options: ChatTuiOptions): Promise<ChatTuiHan
 
     const { useRenderer } = await import('@opentui/solid');
     const { mountOpenTui } = await import('@mission-control/tui/opentui-renderer');
+    const { bootstrapTreeSitter } = await import('./platform/tree-sitter-bootstrap');
     const { App } = await import('@mission-control/tui/app');
     const { createComponent } = await import('solid-js');
     const { MissionControlTuiProviders } = await import('@mission-control/tui/providers');
+
+    await bootstrapTreeSitter();
+
     const mountResult = await mountOpenTui(() =>
         createComponent(MissionControlTuiProviders, {
             useRenderer,
