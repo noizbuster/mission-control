@@ -1,15 +1,3 @@
-/**
- * Hybrid ABG session-resume regression pack — CLI surface (plan todo 12).
- *
- * Locks:
- * 2. attach banner no auto-run → continue remains actionable
- * 5. workflow interrupt cold continue recovers the same graph (no cancelled→running)
- * 6. CLI resume UX modules do not import ContinuationRuntime
- *
- * Core contracts 1/3/4/6 live in packages/core session-resume-abg-regression.test.ts.
- * Full /continue owner settlement remains in interactive-chat-actions.workflow-resume.test.ts.
- */
-
 import {
     createMission,
     listRunsForMission,
@@ -19,34 +7,30 @@ import {
     startRun,
     WorkflowRegistry,
 } from '@mission-control/core';
-import type { AgentEvent, GraphCheckpoint, WorkflowSpec } from '@mission-control/protocol';
+import type { WorkflowSpec } from '@mission-control/protocol';
 import { createAbgOverlayController, createAbgOverlayStore } from '@mission-control/tui/state';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ChatOutput } from './interactive-chat-io';
 import { findWorkflowGraphForSessionContinue } from './interactive-workflow-state';
 import {
     applySessionAttachProjection,
     projectSessionAttachFromEvents,
     RESUMABLE_ATTACH_BANNER,
 } from './session-attach-projection';
+import {
+    baseEvent,
+    CLI_RESUME_REGRESSION_SESSION_ID,
+    createChatOutput,
+    interruptedEvents,
+    makeCheckpoint,
+    readCliResumePathSourceTexts,
+    workflowSpec,
+} from './session-resume-abg-regression-test-support';
 import { decideWorkResume, formatWorkResumeStartMessage, isWorkResumeActionable } from './work-resume-decision';
-import { readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 
-const TIMESTAMP = '2026-07-20T12:00:00.000Z';
-const SESSION_ID = 'session_cli_resume_regression';
-const HERE = dirname(fileURLToPath(import.meta.url));
 const tempRoots: string[] = [];
-
-const CLI_RESUME_PATH_SOURCES = [
-    join(HERE, 'session-attach-projection.ts'),
-    join(HERE, 'work-resume-decision.ts'),
-    join(HERE, 'interactive-workflow-resume-actions.ts'),
-    join(HERE, 'interactive-workflow-state.ts'),
-] as const;
 
 afterEach(async () => {
     vi.unstubAllEnvs();
@@ -89,12 +73,14 @@ describe('session-resume ABG regression pack (cli)', () => {
             throw new Error('expected interrupted decision');
         }
         expect(decision.snapshot.checkpoint.queuedNodeIds).toEqual(['next-node']);
-        expect(formatWorkResumeStartMessage(decision, SESSION_ID)).toContain('queued node(s): next-node');
+        expect(formatWorkResumeStartMessage(decision, CLI_RESUME_REGRESSION_SESSION_ID)).toContain(
+            'queued node(s): next-node',
+        );
     });
 
     it('2b. attach approval banner is sticky and continue classifies as approval', () => {
         // Given: approval-blocked cold events.
-        const events: AgentEvent[] = [
+        const events = [
             baseEvent('graph.started', { abg: { graphId: 'graph-main' } }),
             baseEvent('run.blocked', {
                 run: {
@@ -182,96 +168,11 @@ describe('session-resume ABG regression pack (cli)', () => {
     });
 
     it('6. CLI resume UX modules do not import ContinuationRuntime', () => {
-        // Anti-scope lock: attach/continue UX must not wire C7 ContinuationRuntime.
-        for (const sourcePath of CLI_RESUME_PATH_SOURCES) {
-            const source = readFileSync(sourcePath, 'utf8');
+        // Given: attach/continue UX source modules.
+        for (const { sourcePath, source } of readCliResumePathSourceTexts()) {
+            // Then: attach/continue UX must not wire C7 ContinuationRuntime.
             expect(source, sourcePath).not.toMatch(/\bContinuationRuntime\b/);
             expect(source, sourcePath).not.toMatch(/\brunWithContinuation\b/);
         }
     });
 });
-
-function baseEvent(type: AgentEvent['type'], overrides: Partial<AgentEvent> = {}): AgentEvent {
-    return {
-        type,
-        timestamp: TIMESTAMP,
-        sessionId: SESSION_ID,
-        message: type,
-        ...overrides,
-    };
-}
-
-function interruptedEvents(checkpoint: GraphCheckpoint, runId: string): AgentEvent[] {
-    return [
-        baseEvent('graph.started', { abg: { graphId: checkpoint.graphId } }),
-        baseEvent('node.started', { abg: { graphId: checkpoint.graphId, nodeId: 'start' } }),
-        baseEvent('node.completed', { abg: { graphId: checkpoint.graphId, nodeId: 'start' } }),
-        baseEvent('graph.checkpoint', {
-            abg: { graphId: checkpoint.graphId, checkpoint },
-            run: { runId },
-        }),
-        baseEvent('run.interrupted', {
-            run: { runId, state: 'interrupted', reason: 'provider_aborted' },
-        }),
-    ];
-}
-
-function makeCheckpoint(input: {
-    readonly graphId?: string;
-    readonly sessionRunId: string;
-    readonly queuedNodeIds: readonly string[];
-    readonly completedNodeIds: readonly string[];
-    readonly workflowName?: string;
-}): GraphCheckpoint {
-    return {
-        schemaVersion: 1,
-        graphId: input.graphId ?? 'graph-main',
-        sessionRunId: input.sessionRunId,
-        ...(input.workflowName !== undefined ? { workflowName: input.workflowName } : {}),
-        reason: 'interrupt',
-        queuedNodeIds: [...input.queuedNodeIds],
-        completedNodeIds: [...input.completedNodeIds],
-        nodeStatuses: Object.fromEntries(input.completedNodeIds.map((nodeId) => [nodeId, 'succeeded' as const])),
-        attemptsByNodeId: Object.fromEntries(input.completedNodeIds.map((nodeId) => [nodeId, 1])),
-        consecutiveFailuresByNodeId: {},
-        consecutiveToolFailuresByNodeId: {},
-        totalNodeRuns: input.completedNodeIds.length,
-        budgetExtensionsUsed: 0,
-        maxNodeRuns: 64,
-        blackboardEntries: {},
-        activeParallelParentIds: [],
-        createdAt: TIMESTAMP,
-    };
-}
-
-function workflowSpec(name: string, graphId: string): WorkflowSpec {
-    return {
-        name,
-        graph: {
-            id: graphId,
-            entryNodeId: 'entry',
-            nodes: [{ id: 'entry', kind: 'llm' }],
-            edges: [],
-            rules: [],
-            policies: [],
-        },
-    };
-}
-
-function createChatOutput(): ChatOutput & {
-    readonly sticky: { value: string | null };
-    readonly writes: string[];
-} {
-    const sticky = { value: null as string | null };
-    const writes: string[] = [];
-    return {
-        writes,
-        sticky,
-        write: (text) => {
-            writes.push(text);
-        },
-        setStickyNotice: (message) => {
-            sticky.value = message;
-        },
-    };
-}
