@@ -335,34 +335,43 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): JSX.Element {
                 <box flexDirection="column" marginTop={1}>
                     <For each={snapshot().questionOptions}>
                         {(option, index) => {
-                            const isCursor = index() === snapshot().questionSelectedIndex;
-                            const marker = snapshot().questionMultiple
-                                ? `${snapshot().questionSelectedIndices.has(index()) ? '[x] ' : '[ ] '}`
-                                : `${index() + 1}. `;
-                            const rowBg = isCursor ? { backgroundColor: SELECTED_BG } : {};
-                            const labelStyle = isCursor
-                                ? { fg: QUESTION_SELECTED_FG, attributes: TextAttributes.BOLD }
-                                : {};
-                            const descStyle = isCursor
-                                ? { fg: QUESTION_SELECTED_FG }
-                                : { attributes: TextAttributes.DIM };
+                            const isCursor = () => index() === snapshot().questionSelectedIndex;
+                            const marker = () =>
+                                snapshot().questionMultiple
+                                    ? `${snapshot().questionSelectedIndices.has(index()) ? '[x] ' : '[ ] '}`
+                                    : `${index() + 1}. `;
+                            const labelStyle = () =>
+                                isCursor()
+                                    ? {
+                                          fg: QUESTION_SELECTED_FG,
+                                          attributes: TextAttributes.BOLD,
+                                          backgroundColor: SELECTED_BG,
+                                      }
+                                    : {};
+                            const descStyle = () =>
+                                isCursor()
+                                    ? { fg: QUESTION_SELECTED_FG, backgroundColor: SELECTED_BG }
+                                    : { attributes: TextAttributes.DIM };
                             return (
                                 // biome-ignore lint/a11y/noStaticElementInteractions: opentui <box> has no role concept; Up/Down/Enter/Space keyboard nav already exists, mouse is an enhancement
                                 <box
                                     flexDirection="column"
                                     onMouseDown={onOptionClick(index())}
                                     onMouseOver={onOptionHover(index())}
-                                    {...rowBg}
                                 >
                                     <box flexDirection="row">
-                                        <text {...(isCursor ? { fg: QUESTION_CURSOR_FG } : {})}>
-                                            {isCursor ? `${QUESTION_CURSOR} ` : '  '}
+                                        <text
+                                            {...(isCursor()
+                                                ? { fg: QUESTION_CURSOR_FG, backgroundColor: SELECTED_BG }
+                                                : {})}
+                                        >
+                                            {isCursor() ? `${QUESTION_CURSOR} ` : '  '}
                                         </text>
-                                        <text {...labelStyle}>{`${marker}${option.label}`}</text>
+                                        <text {...labelStyle()}>{`${marker()}${option.label}`}</text>
                                     </box>
                                     {option.description !== undefined ? (
                                         <box flexDirection="row" paddingLeft={2}>
-                                            <text {...descStyle}>{option.description}</text>
+                                            <text {...descStyle()}>{option.description}</text>
                                         </box>
                                     ) : null}
                                 </box>
