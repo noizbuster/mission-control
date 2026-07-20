@@ -202,7 +202,7 @@ describe('buildOsc8Hyperlink + link helpers', () => {
 describe('renderInlineToRuns', () => {
     it('styles a codespan with the theme code style', () => {
         const runs = inlineRuns('`x`');
-        const codespan = runs.find((run) => run.style.bg === '#808080');
+        const codespan = runs.find((run) => run.style.fg === '#7fd88f');
         expect(codespan).toBeDefined();
         expect(codespan?.text).toBe('x');
     });

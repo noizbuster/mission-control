@@ -18,12 +18,12 @@ describe('TerminalMarkdownTheme built-ins', () => {
         }
     });
 
-    it('darkTheme maps heading to bold cyan (hex)', () => {
-        expect(darkTheme.heading).toStrictEqual({ bold: true, fg: '#00ffff' });
+    it('darkTheme maps heading to bold OpenCode accent purple', () => {
+        expect(darkTheme.heading).toStrictEqual({ bold: true, fg: '#9d7cd8' });
     });
 
-    it('darkTheme marks inline code with a gray background (hex)', () => {
-        expect(darkTheme.code).toStrictEqual({ bg: '#808080' });
+    it('darkTheme marks inline code with OpenCode green foreground', () => {
+        expect(darkTheme.code).toStrictEqual({ fg: '#7fd88f' });
     });
 
     it('darkTheme exposes a non-empty codeBlockIndent prefix', () => {

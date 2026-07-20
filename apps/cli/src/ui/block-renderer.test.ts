@@ -80,14 +80,13 @@ describe('renderBlock - reasoning', () => {
         expect(out).toBe('');
     });
 
-    it('renders a dimmed+italic block when thinking is true', () => {
+    it('renders an italic OpenCode-yellow block when thinking is true', () => {
         const block: OutputBlock = { kind: 'reasoning', text: 'Step by step reasoning.' };
         const out = renderBlock(block, ttyOpts);
         expect(out).not.toBe('');
         expect(out).toContain('Step by step reasoning.');
-        // darkTheme.quote = { italic: true, dim: true }; dim=SGR2, italic=SGR3
-        expect(out).toContain('\x1b[2m');
         expect(out).toContain('\x1b[3m');
+        expect(out).toContain('\x1b[38;2;229;192;123m');
         expect(out).toContain(RESET);
     });
 });

@@ -35,10 +35,10 @@ afterEach(() => {
 describe('renderMarkdownAnsi - heading truecolor', () => {
     it('opens an h1 with theme.heading truecolor + bold (case a)', () => {
         const out = renderMarkdownAnsi('# Hi', 60, darkTheme, true);
-        // darkTheme.heading = { bold: true, fg: '#00ffff' } -> bold(1) then 38;2;0;255;255
+        // darkTheme.heading = { bold: true, fg: '#9d7cd8' } -> bold(1) then 38;2;157;124;216
         const joined = out.join('\n');
         expect(joined).toContain('\x1b[1m');
-        expect(joined).toContain('\x1b[38;2;0;255;255m');
+        expect(joined).toContain('\x1b[38;2;157;124;216m');
         expect(joined).toContain('Hi');
         expect(joined).toContain(RESET);
     });

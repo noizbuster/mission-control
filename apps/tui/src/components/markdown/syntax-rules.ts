@@ -9,49 +9,60 @@
  * still highlights well, so a dotted variant is only split out when it deserves
  * a DIFFERENT color than its base scope.
  *
- * Scope groups and colors are ported from opencode's `getSyntaxRules(theme)`
- * (sst/opencode `packages/tui/src/theme/index.ts`, commit 5f61d214) but
- * reference this module's {@link darkSyntaxPalette} instead of opencode's theme
- * object. This module imports only the `ThemeTokenStyle` TYPE (erased at
- * runtime), so importing it never touches the native Zig core or spawns the
- * parser worker.
+ * Scope groups and colors are aligned with OpenCode's default `opencode` theme
+ * (`ref/opencode/packages/tui/src/theme/assets/opencode.json` dark steps) and
+ * `getSyntaxRules(theme)` in `packages/tui/src/theme/index.ts`. OpenTUI's native
+ * `<markdown>` looks up `markup.*` scopes (not `markdown.*`); code fences use
+ * tree-sitter capture scopes via the same SyntaxStyle.
+ *
+ * This module imports only the `ThemeTokenStyle` TYPE (erased at runtime), so
+ * importing it never touches the native Zig core or spawns the parser worker.
  */
 
 import type { ThemeTokenStyle } from '@opentui/core';
 
 /**
- * Curated dark hex palette for the common tree-sitter capture buckets.
- * Frozen via `as const`; values are referenced directly by the rule table.
+ * OpenCode-aligned dark hex palette for syntax + markdown markup buckets.
+ * Values mirror `opencode.json` dark defs (darkStep*, darkAccent, darkRed, …).
  */
 export const darkSyntaxPalette = {
-    comment: '#637777',
-    keyword: '#c792ea',
-    function: '#82aaff',
-    variable: '#eeffff',
-    string: '#c3e88d',
-    number: '#f78c6c',
-    type: '#ffcb6b',
-    operator: '#89ddff',
-    punctuation: '#89ddff',
-    default: '#eeffff',
+    /** darkStep12 — body / punctuation / code-block base. */
+    default: '#eeeeee',
+    /** darkStep11 — comments / muted chrome. */
+    comment: '#808080',
+    /** darkAccent — keywords / markdown headings. */
+    keyword: '#9d7cd8',
+    /** darkStep9 (primary) — functions / links / list markers. */
+    function: '#fab283',
+    /** darkRed — variables. */
+    variable: '#e06c75',
+    /** darkGreen — strings / inline code. */
+    string: '#7fd88f',
+    /** darkOrange — numbers / strong. */
+    number: '#f5a742',
+    /** darkYellow — types / emphasis / block quotes. */
+    type: '#e5c07b',
+    /** darkCyan — operators / link labels. */
+    operator: '#56b6c2',
+    /** darkStep12 — punctuation (same as default text). */
+    punctuation: '#eeeeee',
 } as const;
 
-// Accent hex values outside the base palette. Builtins and tags map to a soft
-// red (#f07178) mirroring opencode's theme.error routing; markdown headings and
-// links reuse the function blue so they share a single source of truth.
-const builtinRed = '#f07178';
-const headingBlue = darkSyntaxPalette.function;
+/** darkRed — builtins/tags (OpenCode routes these through theme.error). */
+const builtinRed = '#e06c75';
+
+/** darkStep9 — markdown headings share the primary accent with functions. */
+const headingAccent = darkSyntaxPalette.function;
+
+/** darkAccent — keyword/heading purple from opencode.json. */
+const headingPurple = darkSyntaxPalette.keyword;
 
 /**
  * Build the scope -> style rule table for `SyntaxStyle.fromTheme`.
  *
- * Returns a grouped table: every scope sharing a color/style lives in one
- * {@link ThemeTokenStyle}, and dotted variants are split out only when their
- * color differs from the base scope (relying on opentui's base-scope fallback
- * for the rest). Covers the ~30 most impactful tree-sitter capture groups:
- * default, comments, strings/literals, numbers/constants, keywords, functions,
- * variables/properties, types/modules, operators/punctuation, attributes/tags,
- * markdown markup, and diff hunks.
+ * Covers tree-sitter capture groups plus every `markup.*` name OpenTUI's
+ * MarkdownRenderable looks up (`markup.heading`, `markup.strong`, `markup.raw`,
+ * `markup.link.label`, …) and a `conceal` style for fence/marker chrome.
  */
 export function buildSyntaxRules(): readonly ThemeTokenStyle[] {
     return [
@@ -92,10 +103,7 @@ export function buildSyntaxRules(): readonly ThemeTokenStyle[] {
         },
         { scope: ['constant.builtin'], style: { foreground: builtinRed } },
 
-        // Keywords. The base `keyword` rule (italic magenta) covers
-        // return/conditional/repeat/import/export/directive/modifier/exception
-        // via base-scope fallback; only keyword sub-scopes with a different
-        // color are split out below.
+        // Keywords
         {
             scope: ['keyword'],
             style: { foreground: darkSyntaxPalette.keyword, italic: true },
@@ -147,27 +155,65 @@ export function buildSyntaxRules(): readonly ThemeTokenStyle[] {
         { scope: ['tag'], style: { foreground: builtinRed } },
         { scope: ['tag.attribute'], style: { foreground: darkSyntaxPalette.keyword } },
 
-        // Markdown markup. `markup.heading` covers .1-.6 via base-scope fallback.
-        { scope: ['markup.heading'], style: { foreground: headingBlue, bold: true } },
+        // Markdown markup — names must match OpenTUI MarkdownRenderable lookups.
+        {
+            scope: ['markup.heading'],
+            style: { foreground: headingPurple, bold: true },
+        },
+        {
+            scope: ['markup.heading.1'],
+            style: { foreground: headingPurple, bold: true, underline: true },
+        },
+        {
+            scope: ['markup.heading.2', 'markup.heading.3', 'markup.heading.4', 'markup.heading.5', 'markup.heading.6'],
+            style: { foreground: headingPurple, bold: true },
+        },
         {
             scope: ['markup.bold', 'markup.strong'],
-            style: { foreground: darkSyntaxPalette.default, bold: true },
+            style: { foreground: darkSyntaxPalette.number, bold: true },
         },
-        { scope: ['markup.italic'], style: { foreground: darkSyntaxPalette.default, italic: true } },
+        {
+            scope: ['markup.italic'],
+            style: { foreground: darkSyntaxPalette.type, italic: true },
+        },
+        {
+            scope: ['markup.strikethrough'],
+            style: { foreground: darkSyntaxPalette.comment },
+        },
+        {
+            scope: ['markup.list'],
+            style: { foreground: headingAccent },
+        },
+        {
+            scope: ['markup.quote'],
+            style: { foreground: darkSyntaxPalette.type, italic: true },
+        },
         {
             scope: ['markup.raw', 'markup.raw.block', 'markup.raw.inline'],
             style: { foreground: darkSyntaxPalette.string },
         },
         {
-            scope: ['markup.link', 'markup.link.url'],
-            style: { foreground: headingBlue, underline: true },
+            scope: ['markup.link'],
+            style: { foreground: headingAccent, underline: true },
         },
-        { scope: ['markup.list'], style: { foreground: darkSyntaxPalette.number } },
-        { scope: ['markup.quote'], style: { foreground: darkSyntaxPalette.comment, italic: true } },
+        {
+            scope: ['markup.link.label'],
+            style: { foreground: darkSyntaxPalette.operator, underline: true },
+        },
+        {
+            scope: ['markup.link.url'],
+            style: { foreground: darkSyntaxPalette.comment, underline: true },
+        },
 
-        // Diff hunks
-        { scope: ['diff.plus'], style: { foreground: darkSyntaxPalette.string } },
-        { scope: ['diff.minus'], style: { foreground: builtinRed } },
+        // Fence/marker chrome color used by MarkdownRenderable for borders.
+        {
+            scope: ['conceal'],
+            style: { foreground: darkSyntaxPalette.comment },
+        },
+
+        // Diff hunks (tree-sitter diff grammar + Diff renderable base styles)
+        { scope: ['diff.plus'], style: { foreground: '#4fd6be' } },
+        { scope: ['diff.minus'], style: { foreground: '#c53b53' } },
         { scope: ['diff.delta'], style: { foreground: darkSyntaxPalette.type } },
     ];
 }

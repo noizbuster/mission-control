@@ -10,17 +10,17 @@ import { buildSyntaxRules, darkSyntaxPalette } from './syntax-rules';
 // test asserts the rule-table data shape only.
 
 describe('darkSyntaxPalette', () => {
-    it('pins the keyword bucket to #c792ea and exposes all ten buckets', () => {
-        expect(darkSyntaxPalette.keyword).toBe('#c792ea');
-        expect(darkSyntaxPalette.comment).toBe('#637777');
-        expect(darkSyntaxPalette.function).toBe('#82aaff');
-        expect(darkSyntaxPalette.variable).toBe('#eeffff');
-        expect(darkSyntaxPalette.string).toBe('#c3e88d');
-        expect(darkSyntaxPalette.number).toBe('#f78c6c');
-        expect(darkSyntaxPalette.type).toBe('#ffcb6b');
-        expect(darkSyntaxPalette.operator).toBe('#89ddff');
-        expect(darkSyntaxPalette.punctuation).toBe('#89ddff');
-        expect(darkSyntaxPalette.default).toBe('#eeffff');
+    it('pins OpenCode opencode.json dark buckets', () => {
+        expect(darkSyntaxPalette.keyword).toBe('#9d7cd8');
+        expect(darkSyntaxPalette.comment).toBe('#808080');
+        expect(darkSyntaxPalette.function).toBe('#fab283');
+        expect(darkSyntaxPalette.variable).toBe('#e06c75');
+        expect(darkSyntaxPalette.string).toBe('#7fd88f');
+        expect(darkSyntaxPalette.number).toBe('#f5a742');
+        expect(darkSyntaxPalette.type).toBe('#e5c07b');
+        expect(darkSyntaxPalette.operator).toBe('#56b6c2');
+        expect(darkSyntaxPalette.punctuation).toBe('#eeeeee');
+        expect(darkSyntaxPalette.default).toBe('#eeeeee');
     });
 });
 
@@ -31,10 +31,10 @@ describe('buildSyntaxRules', () => {
         expect(rules.length).toBeGreaterThan(0);
     });
 
-    it('maps the `keyword` scope to the #c792ea foreground', () => {
+    it('maps the `keyword` scope to the OpenCode accent foreground', () => {
         const keywordRule = rules.find((rule) => rule.scope.includes('keyword'));
         expect(keywordRule).toBeDefined();
-        expect(keywordRule?.style.foreground).toBe('#c792ea');
+        expect(keywordRule?.style.foreground).toBe('#9d7cd8');
     });
 
     const buckets = [
@@ -55,6 +55,26 @@ describe('buildSyntaxRules', () => {
         expect(covers, `no rule foreground equals palette.${bucket} (${hex})`).toBe(true);
     });
 
+    it('registers every markup scope OpenTUI MarkdownRenderable looks up', () => {
+        const scopes = new Set(rules.flatMap((rule) => rule.scope));
+        for (const required of [
+            'markup.heading',
+            'markup.strong',
+            'markup.italic',
+            'markup.strikethrough',
+            'markup.list',
+            'markup.quote',
+            'markup.raw',
+            'markup.link',
+            'markup.link.label',
+            'markup.link.url',
+            'conceal',
+            'default',
+        ]) {
+            expect(scopes.has(required), `missing scope ${required}`).toBe(true);
+        }
+    });
+
     it('gives every rule a non-empty array of non-empty scope strings', () => {
         for (const rule of rules) {
             expect(Array.isArray(rule.scope)).toBe(true);
@@ -67,8 +87,6 @@ describe('buildSyntaxRules', () => {
     });
 
     it('only carries foreground plus the style flags each entry uses', () => {
-        // Guards against accidental `bold: undefined` / `foreground: undefined`
-        // which exactOptionalPropertyTypes forbids and would muddle rendering.
         for (const rule of rules) {
             for (const value of Object.values(rule.style)) {
                 expect(value, `style had an undefined entry in ${JSON.stringify(rule.scope)}`).toBeDefined();

@@ -35,11 +35,11 @@ export const CHAT_WARNING = '#e5c07b';
 /** Success / completed affirmative. */
 export const CHAT_SUCCESS = '#7fd88f';
 
-/** Diff added. */
-export const CHAT_DIFF_ADDED = '#7fd88f';
+/** Diff added (OpenCode opencode.json dark `diffAdded`). */
+export const CHAT_DIFF_ADDED = '#4fd6be';
 
-/** Diff removed. */
-export const CHAT_DIFF_REMOVED = '#e06c75';
+/** Diff removed (OpenCode opencode.json dark `diffRemoved`). */
+export const CHAT_DIFF_REMOVED = '#c53b53';
 
 /** Placeholder text in the prompt. */
 export const CHAT_PLACEHOLDER = '#606060';
