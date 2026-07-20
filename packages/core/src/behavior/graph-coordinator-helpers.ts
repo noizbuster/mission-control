@@ -17,6 +17,7 @@ import { createAbgEmitSignal, resetEmitSequence } from './abg-emit';
 import type { AuthorableAbgGraph } from './authorable-graph';
 import type { CostLedger } from './budget/cost-ledger';
 import { createCostLedger } from './budget/cost-ledger';
+import { assertResumeQueuedNodesExist, hydrateResumeFields } from './graph-coordinator-resume';
 import type { AbgGraphRunnerInput } from './graph-runner';
 import type { LoopSafetyNodeState } from './loop-safety';
 import { projectAbgSignalToEvent } from './signals';
@@ -69,8 +70,7 @@ export type CoordinatorState = {
 };
 
 export function createCoordinatorState(graph: AuthorableAbgGraph, input: AbgGraphRunnerInput): CoordinatorState {
-    // Reset the node-level emit counter for this graph so each run begins the id sequence
-    // at 1 — making sequential runs of the same graph byte-identical (review #9).
+    // Always reset — including resume. Resume identity is checkpoint/runId, not emit-id continuity.
     resetEmitSequence(graph.id);
     // The blackboard mutation observer needs to push events into state.events, but state is
     // constructed from the blackboard. Deferred via a holder so the closure captures a stable
@@ -101,33 +101,39 @@ export function createCoordinatorState(graph: AuthorableAbgGraph, input: AbgGrap
     if (input.initialMessages !== undefined) {
         blackboard.setMessages(input.initialMessages);
     }
+    const resumeCheckpoint = input.resumeCheckpoint;
+    if (resumeCheckpoint !== undefined) {
+        assertResumeQueuedNodesExist(graph, resumeCheckpoint);
+        blackboard.seedEntries(resumeCheckpoint.blackboardEntries);
+    }
     const budgetCents = graph.defaults?.model?.budgetCents;
     const budgetLedger = createCostLedger({
         ...(input.pricingTable !== undefined ? { pricingTable: input.pricingTable } : {}),
         ...(budgetCents !== undefined ? { budget: { budgetCents } } : {}),
     });
     const initialMaxNodeRuns = graph.defaults?.maxNodeRuns ?? input.maxNodeRuns ?? defaultMaxNodeRuns;
+    const hydrated = resumeCheckpoint !== undefined ? hydrateResumeFields(resumeCheckpoint) : undefined;
     const state: CoordinatorState = {
         events: [],
-        nodeStatuses: {},
-        queuedNodeIds: [graph.entryNodeId],
+        nodeStatuses: hydrated?.nodeStatuses ?? {},
+        queuedNodeIds: hydrated?.queuedNodeIds ?? [graph.entryNodeId],
         activeNodeIds: new Set(),
-        activeParallelParentIds: new Set(),
-        attemptsByNodeId: new Map(),
-        consecutiveFailuresByNodeId: new Map(),
-        consecutiveToolFailuresByNodeId: new Map(),
+        activeParallelParentIds: hydrated?.activeParallelParentIds ?? new Set(),
+        attemptsByNodeId: hydrated?.attemptsByNodeId ?? new Map(),
+        consecutiveFailuresByNodeId: hydrated?.consecutiveFailuresByNodeId ?? new Map(),
+        consecutiveToolFailuresByNodeId: hydrated?.consecutiveToolFailuresByNodeId ?? new Map(),
         indefiniteProviderWaitByNodeId: new Map(),
         loopSafetyByNodeId: new Map(),
         correctionByNodeId: new Map(),
         maxAttempts: (graph.defaults?.retryLimit ?? defaultRetryLimit) + 1,
-        maxNodeRuns: initialMaxNodeRuns,
+        maxNodeRuns: hydrated?.maxNodeRuns ?? initialMaxNodeRuns,
         initialMaxNodeRuns,
-        budgetExtensionsUsed: 0,
+        budgetExtensionsUsed: hydrated?.budgetExtensionsUsed ?? 0,
         recentNodeIds: [],
         graphNodeConcurrency: input.graphNodeConcurrency ?? defaultGraphNodeConcurrency,
         providerToolCallConcurrency: input.providerToolCallConcurrency ?? defaultProviderToolCallConcurrency,
         shellConcurrency: input.shellConcurrency ?? defaultShellConcurrency,
-        totalNodeRuns: 0,
+        totalNodeRuns: hydrated?.totalNodeRuns ?? 0,
         blackboard,
         observabilityRedactor,
         ...(budgetLedger !== undefined ? { budgetLedger } : {}),

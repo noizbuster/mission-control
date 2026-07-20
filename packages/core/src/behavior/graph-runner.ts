@@ -4,6 +4,7 @@ import type {
     AbgNodeModelOptions,
     AbgSignal,
     AgentEvent,
+    GraphCheckpoint,
     ModelProviderSelection,
 } from '@mission-control/protocol';
 import type { ModelMessage } from 'ai';
@@ -61,6 +62,12 @@ export type AbgGraphRunnerInput = {
      * Observe→Decide→Act loop appends to this across re-entries.
      */
     readonly initialMessages?: readonly ModelMessage[];
+    /**
+     * Optional durable coordinator checkpoint. When present, `createCoordinatorState` hydrates
+     * queue/status/counters/blackboard entries from it and resumes from `queuedNodeIds` instead of
+     * the graph entry. Message history still comes only from `initialMessages`.
+     */
+    readonly resumeCheckpoint?: GraphCheckpoint;
     /**
      * Resolves an `AbgNodeModelOptions` (provider/model ids) into a Vercel AI SDK model
      * instance for `LLMActor`. Phase 5 wires the real provider registry; Phase 1 injects

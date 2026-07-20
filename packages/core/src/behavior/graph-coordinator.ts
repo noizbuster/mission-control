@@ -25,6 +25,10 @@ import {
     hasNode,
     nodeModel,
 } from './graph-coordinator-helpers';
+import {
+    RESUME_INVALID_CHECKPOINT_CODE,
+    ResumeInvalidCheckpointError,
+} from './graph-coordinator-resume';
 import { runQueuedNode } from './graph-coordinator-node-runner';
 import { failureCodeFromSignal, failureMessageFromSignal } from './graph-coordinator-node-signals';
 import {
@@ -51,7 +55,19 @@ import { projectAbgSignalToEvent } from './signals';
 export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<AbgGraphRunResult> {
     const graph = createAuthorableAbgGraph(input.graph, input.agentModelLookup);
     const registry = input.registry ?? createDefaultAbgNodeRegistry();
-    const state = createCoordinatorState(graph, input);
+    let state: CoordinatorState;
+    try {
+        state = createCoordinatorState(graph, input);
+    } catch (error) {
+        if (error instanceof ResumeInvalidCheckpointError) {
+            return failGraph(graph.id, input, [], RESUME_INVALID_CHECKPOINT_CODE, error.message, {
+                code: RESUME_INVALID_CHECKPOINT_CODE,
+                message: error.message,
+                retryable: false,
+            });
+        }
+        throw error;
+    }
 
     state.events.push(graphEvent('graph.started', graph.id, input, 'ABG graph started'));
     while (state.queuedNodeIds.length > 0) {
@@ -569,7 +585,7 @@ function readPositiveIntegerConfig(node: AbgNodeSpec, key: string): number | und
 }
 
 function isHybridOutputKeyNode(node: AbgNodeSpec): boolean {
-    const outputKey = node.config?.['outputKey'];
+    const outputKey = node.config?.outputKey;
     if (typeof outputKey !== 'string' || outputKey.length === 0) {
         return false;
     }
@@ -650,14 +666,14 @@ function softLandToolLoop(
 }
 
 function forceCompleteOutputKeyOnSoftLand(node: AbgNodeSpec, state: CoordinatorState): void {
-    const outputKey = node.config?.['outputKey'];
+    const outputKey = node.config?.outputKey;
     if (typeof outputKey !== 'string' || outputKey.length === 0) {
         return;
     }
     if (state.blackboard.get(outputKey) !== undefined) {
         return;
     }
-    const shape = node.config?.['outputShape'];
+    const shape = node.config?.outputShape;
     if (shape === 'boolean') {
         state.blackboard.set(outputKey, true);
         return;
@@ -665,12 +681,12 @@ function forceCompleteOutputKeyOnSoftLand(node: AbgNodeSpec, state: CoordinatorS
     if (shape !== 'string') {
         return;
     }
-    const authoredDefault = node.config?.['outputSoftLandDefault'];
+    const authoredDefault = node.config?.outputSoftLandDefault;
     if (typeof authoredDefault === 'string' && authoredDefault.length > 0) {
         state.blackboard.set(outputKey, authoredDefault);
         return;
     }
-    const outputEnum = node.config?.['outputEnum'];
+    const outputEnum = node.config?.outputEnum;
     if (!Array.isArray(outputEnum) || outputEnum.length === 0) {
         return;
     }
