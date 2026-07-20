@@ -2,7 +2,7 @@
  * Team-mode schemas and config.
  *
  * Clean-room reimplementation. Algorithm inspired by the team-mode feature of
- * oh-my-openagent (source-available license). No expression copied; the shapes here are derived
+ * upstream agent harness (source-available license). No expression copied; the shapes here are derived
  * fresh from the team-coordination problem (shared mailbox + task list + lead
  * lifecycle over a durable `.omo/teams/` directory).
  *

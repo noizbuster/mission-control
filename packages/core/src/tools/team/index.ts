@@ -2,7 +2,7 @@
  * Team-mode tool barrel (Task 24): 12 config-gated team_* tools.
  *
  * Clean-room reimplementation. Algorithm inspired by the team-mode feature of
- * oh-my-openagent (source-available license). No expression copied; the
+ * upstream agent harness (source-available license). No expression copied; the
  * mailbox, tasklist, state-store, lifecycle, and tool factories here are
  * reimplemented fresh against mission-control's persistence + tool-registration
  * surfaces.

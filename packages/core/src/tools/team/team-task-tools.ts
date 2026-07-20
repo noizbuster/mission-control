@@ -3,7 +3,7 @@
  * team_task_update, team_task_get.
  *
  * Clean-room reimplementation. Algorithm inspired by the team-mode task list
- * of oh-my-openagent (source-available license). No expression copied; the task model (a shared
+ * of upstream agent harness (source-available license). No expression copied; the task model (a shared
  * JSON list under an exclusive lockfile, atomic claim via read-modify-write
  * inside the lock, explicit open->claimed->completed/failed/deleted state
  * machine) is reimplemented fresh against mission-control's store helpers.

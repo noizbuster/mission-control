@@ -2,7 +2,7 @@
  * Shared team tool context: runtime seam + factory options.
  *
  * Clean-room reimplementation. Algorithm inspired by the team-mode tool wiring
- * of oh-my-openagent (source-available license). No expression copied. The injectable
+ * of upstream agent harness (source-available license). No expression copied. The injectable
  * `TeamToolRuntime` keeps every team_* tool free of real provider/session
  * calls so tests can mock member spawning; the live runtime wires this to the
  * agent/session layer (mirrors the `TaskToolRuntime` pattern).

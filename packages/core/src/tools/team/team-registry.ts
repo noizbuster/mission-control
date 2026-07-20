@@ -2,7 +2,7 @@
  * Team tool registry: builds all 12 team_* registrations behind the config gate.
  *
  * Clean-room reimplementation. Algorithm inspired by the team-mode tool
- * registration of oh-my-openagent (source-available license). No expression copied. When
+ * registration of upstream agent harness (source-available license). No expression copied. When
  * `team_mode.enabled` is false (the default) `buildTeamToolRegistrations`
  * returns an empty array and nothing is registered. Each factory also
  * self-gates on the same flag, so wiring is safe to call unconditionally.

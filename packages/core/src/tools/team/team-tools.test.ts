@@ -147,7 +147,7 @@ describe('team tools — full lifecycle (create -> send -> task_update -> status
                 name: 'research-squad',
                 leadAgentId: 'lead',
                 members: [
-                    { name: 'lead', kind: 'subagent_type', subagentType: 'sisyphus', role: 'orchestrator' },
+                    { name: 'lead', kind: 'subagent_type', subagentType: 'deep', role: 'orchestrator' },
                     { name: 'scout', kind: 'category', category: 'explore', prompt: 'Explore the repo.' },
                 ],
             },
@@ -313,7 +313,7 @@ describe('team tools — concurrent task_update is atomic', () => {
                 members: Array.from({ length: 4 }, (_, index) => ({
                     name: `worker_${index + 1}`,
                     kind: 'subagent_type' as const,
-                    subagentType: 'sisyphus',
+                    subagentType: 'deep',
                 })),
             },
         });

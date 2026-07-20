@@ -2,7 +2,7 @@
  * Team-core durable store: mailbox, task list, state, atomic locks, lifecycle.
  *
  * Clean-room reimplementation. Algorithm inspired by the team-mode domain
- * primitives of oh-my-openagent (source-available license). No expression copied; the durable
+ * primitives of upstream agent harness (source-available license). No expression copied; the durable
  * layout (one directory per team run under `.omo/teams/`, atomic
  * temp-file-then-rename writes, an exclusive lockfile around the shared task
  * list) is reimplemented fresh against mission-control's persistence helpers.

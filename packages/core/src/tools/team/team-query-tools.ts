@@ -2,7 +2,7 @@
  * Team query tools (24c, part 2): team_status, team_list.
  *
  * Clean-room reimplementation. Algorithm inspired by the team-mode query tools
- * of oh-my-openagent (source-available license). No expression copied; the read-only status
+ * of upstream agent harness (source-available license). No expression copied; the read-only status
  * projection (members + lifecycle + mailbox counts + task summary) and the
  * declared/active team listing are reimplemented fresh.
  */

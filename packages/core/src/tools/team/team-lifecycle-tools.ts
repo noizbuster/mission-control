@@ -3,7 +3,7 @@
  * team_approve_shutdown, team_reject_shutdown.
  *
  * Clean-room reimplementation. Algorithm inspired by the team-mode lifecycle
- * tools of oh-my-openagent (source-available license). No expression copied; the lifecycle
+ * tools of upstream agent harness (source-available license). No expression copied; the lifecycle
  * (create spawns members via an injectable seam, shutdown flows through a
  * requested -> approved/rejected state machine, delete tears down durable
  * state and worktrees) is reimplemented fresh against mission-control's

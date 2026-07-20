@@ -2,7 +2,7 @@
  * Team messaging tool (24b): team_send_message.
  *
  * Clean-room reimplementation. Algorithm inspired by the team-mode mailbox of
- * oh-my-openagent (source-available license). No expression copied; the delivery model (each
+ * upstream agent harness (source-available license). No expression copied; the delivery model (each
  * recipient has an append-only `.jsonl` mailbox, broadcasts fan out to every
  * active member, lead-only broadcasts enforced at execution, optional live
  * in-process bridge via the `irc` bus) is reimplemented fresh.
