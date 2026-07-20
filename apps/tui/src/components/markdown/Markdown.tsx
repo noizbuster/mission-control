@@ -1,10 +1,12 @@
 /** @jsxImportSource @opentui/solid */
 
-import { SyntaxStyle } from '@opentui/core';
-import { type Accessor, createMemo, type JSX } from 'solid-js';
+import type { StyleDefinitionInput } from '@opentui/core';
+import { type Accessor, type JSX } from 'solid-js';
 import { useSolidStoreSelector } from '../../platform/use-solid-store-selector';
-import { CHAT_TEXT } from '../chat-theme';
+import { CHAT_BG, CHAT_TEXT } from '../chat-theme';
 import { getHighlightVersion, subscribeHighlight } from './highlight';
+import { getSharedSyntaxStyle } from './shared-syntax-style';
+import { buildSyntaxRules } from './syntax-rules';
 import type { TerminalMarkdownTheme } from './theme';
 
 export * from '../../plain-markdown/ir-blocks';
@@ -26,35 +28,40 @@ export function useHighlightVersion(): Accessor<number> {
     );
 }
 
-export function markdownSyntaxStyles(theme: TerminalMarkdownTheme | undefined) {
-    return {
-        default: { fg: theme?.defaultTextStyle?.fg ?? CHAT_TEXT },
-        'markdown.bold': { bold: true },
-        'markdown.italic': { italic: true },
-        'markdown.heading': { bold: true, fg: theme?.heading?.fg ?? '#00ffff' },
-        'markdown.link': { underline: true, fg: theme?.link?.fg ?? '#58a6ff' },
-        'markdown.code': { fg: theme?.code?.fg ?? '#e0e0e0' },
-        'markdown.code.block': { fg: theme?.codeBlock?.fg ?? '#e0e0e0' },
-        'markdown.quote': { italic: true, dim: true },
-        'markdown.list': { fg: theme?.listBullet?.fg ?? '#ffff00' },
-    };
+export function markdownSyntaxStyles(theme: TerminalMarkdownTheme | undefined): Record<string, StyleDefinitionInput> {
+    const styles: Record<string, StyleDefinitionInput> = {};
+    for (const rule of buildSyntaxRules()) {
+        const def: StyleDefinitionInput = {};
+        if (rule.style.foreground !== undefined) def.fg = rule.style.foreground;
+        if (rule.style.background !== undefined) def.bg = rule.style.background;
+        if (rule.style.bold === true) def.bold = true;
+        if (rule.style.italic === true) def.italic = true;
+        if (rule.style.underline === true) def.underline = true;
+        if (rule.style.dim === true) def.dim = true;
+        for (const scope of rule.scope) {
+            styles[scope] = def;
+        }
+    }
+    const defaultFg = theme?.defaultTextStyle?.fg ?? CHAT_TEXT;
+    styles['default'] = { ...styles['default'], fg: defaultFg };
+    return styles;
 }
 
 export function Markdown(props: MarkdownProps): JSX.Element {
-    const syntaxStyle = createMemo(() => {
-        const theme = props.theme;
-        try {
-            return SyntaxStyle.fromStyles(markdownSyntaxStyles(theme));
-        } catch {
-            return SyntaxStyle.create();
-        }
-    });
+    useHighlightVersion();
+
+    const fg = () => props.theme?.defaultTextStyle?.fg ?? CHAT_TEXT;
+
     return (
         <markdown
             content={props.text}
             streaming={props.streaming ?? false}
-            syntaxStyle={syntaxStyle()}
+            syntaxStyle={getSharedSyntaxStyle()}
             conceal={true}
+            internalBlockMode="top-level"
+            tableOptions={{ style: 'grid' }}
+            fg={fg()}
+            bg={CHAT_BG}
             width={props.width ?? '100%'}
         />
     );
