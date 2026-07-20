@@ -4,7 +4,7 @@
 
 | Workflow | Role |
 | --- | --- |
-| `#default` | Plan-first plain-prompt fallback |
+| `#default` | intent-gated plain-prompt implementer (intent-gated) |
 | `#planner` | Deep autonomous planning craft |
 | `#executer` | Plan execution conductor |
 | `#fixer` | Intent-gated implement/fix |
@@ -22,7 +22,7 @@ Companion suite: `packages/core/src/behavior/abg-reference-parity.test.ts`.
 | 4 | Structured blackboard fail-closed | all | implemented |
 | 5 | Parallel `fanOutKey` fan-out | `#executer`, `#fixer` | implemented |
 | 6–7 | Child task identity | `task()` children | implemented |
-| 8 | Plan review critic + planner craft (floor, metis, dual-review, interview, resume-gate) | `#default`, `#planner` | implemented |
+| 8 | Plan review critic + planner craft (floor, gap-analysis, dual-review, interview, resume-gate) | `#default`, `#planner` | implemented |
 | 9–10 | Plan-readonly policies | `#default`, `#planner` | implemented |
 | 11–16 | Plan parse, checkbox, F1–F4, 3-strike | `#executer` | implemented |
 | 17–20 | Intent gate, anti-dup, evidence | `#fixer` | implemented (verbalization deferred) |
@@ -42,7 +42,7 @@ Shared with `#default`:
 | Plan scaffold headers | implemented | `PLANNER_SCAFFOLD_HEADERS` SoT in `plan-scaffold.ts`; factory re-exports |
 | `resume-gate` | implemented | Deterministic pure runner after intake; `fresh` / `resume_approval` / `resume_drafting`; frontmatter rehydrates `intent` + `review_required` |
 | Interview loop | implemented | `routeInterview` pure helper; `interview.route` enum `continue` / `clear` / `cap_adopt`; max 6 turns; CLEAR always interviews |
-| Metis gap analysis | implemented | LLM `metis-gap` → `metis.passed`; `routeMetisReject` budget 1 (`metis.rejects`) → revise once or `present-blocked` |
+| Strict plan gap analysis | implemented | LLM gap-analysis node (`metis-gap`) → `metis.passed`; `routeMetisReject` budget 1 (`metis.rejects`) → revise once or `present-blocked` |
 | Dual-review wave | implemented | `routeDualReview` → `dual.route` skip/run (fail-closed run on missing keys); wave = bundled `reviewer` + `oracle`; all-approve `dual.verdict`; `routeFixDual` budget 1 (`dual.fixes`) with `metis.rejects` reset on revise |
 
 Factory/fixture: `createPlannerWorkflowGraph()` is source of truth; `examples/abg/planner.workflow.json` byte-matches via parity `toEqual`.
@@ -54,9 +54,9 @@ None for row 8 craft seams above.
 Intentional non-claims (not partials):
 
 - `plan.approved` may appear as a declared critic-adjacent key; routing authority is `critic.passed` (floor) then `metis.passed` / `dual.route` / `dual.verdict` / `plan.ready`.
-- `#default` does not ship metis, dual-review, interview-loop, or resume-gate (planner-only depth).
+- `#default` does not ship gap-analysis depth, dual-review, interview-loop, or resume-gate (planner-only depth).
 - Intent verbalization before routing remains deferred (row 17–20 note).
-- Mid-run graph hot-patch, skill-as-planning-engine, and combining Metis + dual-review into one parallel batch remain out of scope.
+- Mid-run graph hot-patch, skill-as-planning-engine, and combining gap-analysis + dual-review into one parallel batch remain out of scope.
 
 ## Catalog
 

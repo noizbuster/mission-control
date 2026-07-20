@@ -24,17 +24,17 @@ Design references:
 
 ```text
 mission-control/
-|-- apps/cli/                 # mc CLI (argument parsing, command orchestration, noninteractive renderers)
-|-- apps/tui/                  # private OpenTUI app: React components, keymap platform, TUI mount/store seam (consumed by apps/cli)
-|-- apps/desktop/             # React/Vite UI plus Tauri shell
-|-- packages/protocol/        # shared Zod schemas and exported protocol types
-|-- packages/core/            # runtime, sessions, providers, tools, sidecar fallback, ABG scaffolding, MCP clients, skills
-|-- packages/config/          # product constants and vendored model catalog snapshot
-|-- native/sidecar/           # Rust JSON Lines sidecar binary
-|-- scripts/                  # install, packaging, catalog sync helpers, smoke tests
-|-- tests/                    # root workspace, README, workflow, integration, contract tests
-|-- examples/abg/             # valid and intentionally invalid authorable graph fixtures
-`-- .omo/plans/               # work plans and execution state (gitignored agent state)
+|-- apps/cli/ # mc CLI (argument parsing, command orchestration, noninteractive renderers)
+|-- apps/tui/ # private OpenTUI app: React components, keymap platform, TUI mount/store seam (consumed by apps/cli)
+|-- apps/desktop/ # React/Vite UI plus Tauri shell
+|-- packages/protocol/ # shared Zod schemas and exported protocol types
+|-- packages/core/ # runtime, sessions, providers, tools, sidecar fallback, ABG scaffolding, MCP clients, skills
+|-- packages/config/ # product constants and vendored model catalog snapshot
+|-- native/sidecar/ # Rust JSON Lines sidecar binary
+|-- scripts/ # install, packaging, catalog sync helpers, smoke tests
+|-- tests/ # root workspace, README, workflow, integration, contract tests
+|-- examples/abg/ # valid and intentionally invalid authorable graph fixtures
+`-- .omo/plans/ # work plans and execution state (gitignored agent state)
 ```
 
 Scoped guidance:
@@ -153,7 +153,7 @@ Beyond the Phase 1 foundations, the ABG reference alignment work added runtime s
 | Executer F1-F4 verdict aggregation | `packages/core/src/behavior/executer-workflow-graph.ts` | `aggregateFinalVerdict(verdicts)` is pure: `'APPROVE'` iff every critic output is `'APPROVE'`, else `'REJECT'` (fail-closed). The `final-verification-wave` parallel node declares `verdictStrategy: 'all-approve'` and aggregates F1-F4 into a single string `final.verdict`. |
 | Executer 3-strike escalation | `packages/core/src/behavior/executer-workflow-graph.ts` | `fix-loop` carries a bounded strike counter (`strikeBudget: 3`, `strikeKey: 'fix.strikes'`); under budget it reopens tasks and reuses the persisted child session id (`retryStateKey`) so the retried child resumes with full context; at budget it routes to a terminal `blocked-escalation` node. Pure contract `routeFixLoop(strikes, budget)`. |
 | Runner stop marker | `packages/core/src/persistence/boulder-store.ts`, `runtime/continuation/continuation-runtime.ts` | `RunnerStopMarkerSchema` (`runner_stop` typed field on boulder work, survives `.passthrough()` round-trips). `ContinuationRuntime.markStopped`/`clearStopped`/`isStopped` gate `shouldContinue`. Stopped work stays stopped across restarts; only `clearStopped()` (explicit resume) re-enables continuation. |
-| Executer checkbox discipline | `packages/core/src/behavior/executer-workflow-graph.ts` | `checkbox-update` node declares `planPath`, `verifyBeforeCheckbox: true`, `readBackAfterUpdate: true`: MUST NOT flip a checkbox on a child "done" claim, must independently verify (tests/files/diagnostics), then re-read the plan to confirm the unchecked count decreased. Mirrors the Atlas `<post_delegation_rule>`. |
+| Executer checkbox discipline | `packages/core/src/behavior/executer-workflow-graph.ts` | `checkbox-update` node declares `planPath`, `verifyBeforeCheckbox: true`, `readBackAfterUpdate: true`: MUST NOT flip a checkbox on a child "done" claim, must independently verify (tests/files/diagnostics), then re-read the plan to confirm the unchecked count decreased. Mirrors the post-delegation verify-before-checkbox rule. |
 
 ## Agent System
 
@@ -189,7 +189,7 @@ Key conventions:
 | Workflow | Source | Role |
 | --- | --- | --- |
 | `default` | `examples/abg/default.workflow.json` | No-`#` fallback. The intent gate requires exactly one of five class strings, then routes `trivial` (direct-respond), `exploratory-research` (read-only research-explore), `open-ended-planning` (route-planner; never implements), `explicit-implementation` (memory, maturity-check, anti-dup/delegation-bias guard, todo-plan, delegate-wave, per-task verify-wave critic, evidence-check, supervisor 3-strike retry loop, final-respond), or `ambiguous` (clarify loop). Intent verbalization is deferred. Declares no modes; `materializeWorkflow` returns the base graph unchanged. |
-| `planner` | `examples/abg/planner.workflow.json` | Sticky read-only planning (never implements). Ambiguity gate (`assess-ambiguity`) routes clear (explore-filter, optional explore, interview-loop, draft-plan), unclear (research, adopt-defaults, draft-plan), or on-the-fence (ask-one-question). Drafts to `.omo/drafts/`, deterministic `review-plan` critic floor, LLM `metis-gap` (`metis.passed`) with `metis-reject-gate` budget 1, `approval-gate` blocks on `plan.ready`, then `write-plan` commits the scaffold to `.omo/plans/<slug>.md` with `Status: Approved`. Ships the `planner-readonly` mode (applied via `materializeWorkflow`): deny all writes except `.omo/plans/**`, `.omo/specs/**`, and `.omo/drafts/**`. |
+| `planner` | `examples/abg/planner.workflow.json` | Sticky read-only planning (never implements). Ambiguity gate (`assess-ambiguity`) routes clear (explore-filter, optional explore, interview-loop, draft-plan), unclear (research, adopt-defaults, draft-plan), or on-the-fence (ask-one-question). Drafts to `.omo/drafts/`, deterministic `review-plan` critic floor, LLM gap-analysis node (`metis-gap`) (`metis.passed`) with `metis-reject-gate` budget 1, `approval-gate` blocks on `plan.ready`, then `write-plan` commits the scaffold to `.omo/plans/<slug>.md` with `Status: Approved`. Ships the `planner-readonly` mode (applied via `materializeWorkflow`): deny all writes except `.omo/plans/**`, `.omo/specs/**`, and `.omo/drafts/**`. |
 | `executer` | `examples/abg/executer.workflow.json` | Plan execution. Entry `admit-plan` is a plan-admission gate (rejects missing/malformed/unapproved plans to a terminal node). Section-scoped `parse-plan`, 6-section delegation via `fanOutKey` wave-bounded fan-out, `per-task-verify`, verify-before-checkbox `checkbox-update` with read-back confirmation, F1-F4 `final-verification-wave` with verdict aggregation (`aggregateFinalVerdict`, `verdictStrategy: 'all-approve'`), and a bounded 3-strike `fix-loop` escalating to terminal `blocked-escalation` at budget. Routes to complete or fix-loop. |
 | `autopilot` | `packages/core/src/behavior/modes/autopilot-mode.ts` | Mode overlay, not a standalone graph. Prepends six operating directives to every `llm` node and adds a hard `edit -> ask` policy-gate rule. Applied to any workflow via `modeDeclarations`. Not auto-applied to `default` (it declares no modes). |
 
