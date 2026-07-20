@@ -1,63 +1,54 @@
 import { describe, expect, it } from 'vitest';
 import { createDefaultWorkflowGraph } from '../behavior/default-workflow-graph';
+import { createFixerWorkflowGraph } from '../behavior/fixer-workflow-graph';
+import { createPlannerWorkflowGraph } from '../behavior/planner-workflow-graph';
 import { createLocalCodingProvider } from './local-coding-provider';
 import type { ProviderTurnRequest } from './provider-turn-types';
 
 const SYSTEM_PROMPT_KEY = 'systemPrompt';
 
 describe('createLocalCodingProvider structured workflow contracts', () => {
-    it('emits true for the plan-first intake request', async () => {
-        // Given
-        const request = requestWithSystem('intake', 'hello');
-
-        // When
+    it('emits trivial for the default intent gate on a greeting', async () => {
+        const request = requestWithGraph(createDefaultWorkflowGraph(), 'intent-gate', 'hello');
         const content = await completedContent(request);
+        expect(content).toBe('trivial');
+    });
 
-        // Then
+    it('emits explicit-implementation for a fix request at the default intent gate', async () => {
+        const request = requestWithGraph(
+            createDefaultWorkflowGraph(),
+            'intent-gate',
+            'fix the highlight on the select overlay',
+        );
+        const content = await completedContent(request);
+        expect(content).toBe('explicit-implementation');
+    });
+
+    it('emits true for the fixer research completion gate', async () => {
+        const request = requestWithGraph(createFixerWorkflowGraph(), 'research-explore', 'explain how the build works');
+        const content = await completedContent(request);
         expect(content).toBe('true');
     });
 
-    it('emits clear for a well-specified planning request at the ambiguity gate', async () => {
-        // Given
-        const request = requestWithSystem('assess-ambiguity', 'add rate limiting to the login endpoint');
-
-        // When
+    it('fails the delegation guard closed offline', async () => {
+        const request = requestWithGraph(createFixerWorkflowGraph(), 'anti-dup-guard', 'implement a tiny change');
         const content = await completedContent(request);
-
-        // Then
-        expect(content).toBe('clear');
-    });
-
-    it('routes local plan-first prompts through the bounded exploration gate', async () => {
-        const request = requestWithSystem('explore-filter', 'hello');
-
-        const content = await completedContent(request);
-
-        expect(content).toBe('needs-exploration');
-    });
-
-    it('emits false for the plan-first explore completion gate', async () => {
-        // Given
-        const request = requestWithSystem('explore', 'ground the plan in the codebase');
-
-        // When
-        const content = await completedContent(request);
-
-        // Then
         expect(content).toBe('false');
     });
 
-    it('keeps plan approval closed without an explicit user decision', async () => {
-        const request = requestWithSystem('approval-gate', 'explain how the build works');
-
+    it('keeps planner approval closed without an explicit user decision', async () => {
+        const request = requestWithGraph(createPlannerWorkflowGraph(), 'approval-gate', 'explain how the build works');
         const content = await completedContent(request);
-
         expect(content).toBe('false');
     });
 });
 
-function requestWithSystem(nodeId: string, userPrompt: string): ProviderTurnRequest {
-    const node = createDefaultWorkflowGraph().nodes.find((candidate) => candidate.id === nodeId);
+function requestWithGraph(
+    graph: { nodes: readonly { id: string; config?: Record<string, unknown> }[] },
+    nodeId: string,
+    userPrompt: string,
+): ProviderTurnRequest {
+    const node = graph.nodes.find((candidate) => candidate.id === nodeId);
     const systemPrompt = node?.config?.[SYSTEM_PROMPT_KEY];
     if (typeof systemPrompt !== 'string') {
         throw new TypeError(`expected system prompt for ${nodeId}`);

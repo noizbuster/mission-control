@@ -1,6 +1,7 @@
 import type { LanguageModelV3Message, LanguageModelV3StreamPart } from '@ai-sdk/provider';
 import { describe, expect, it } from 'vitest';
 import { createDefaultWorkflowGraph } from '../../behavior/default-workflow-graph';
+import { createPlannerWorkflowGraph } from '../../behavior/planner-workflow-graph';
 import { createFixerWorkflowGraph } from '../../behavior/fixer-workflow-graph';
 import { createLocalEchoSdkModel } from './local-echo-sdk-model';
 
@@ -49,30 +50,19 @@ describe('createLocalEchoSdkModel structured workflow contracts', () => {
         expect(text).toBe('false');
     });
 
-    it('emits a closed boolean at the default exploration gate so plan-first runs can terminate', async () => {
-        const systemPrompt = defaultSystemPromptForNode('explore');
+    it('emits explicit-implementation for a fix request on the default intent gate', async () => {
+        const systemPrompt = defaultSystemPromptForNode('intent-gate');
 
         const text = await streamText([
             { role: 'system', content: systemPrompt },
-            { role: 'user', content: [{ type: 'text', text: 'explain how the build works' }] },
+            { role: 'user', content: [{ type: 'text', text: 'fix the select highlight bug' }] },
         ]);
 
-        expect(text).toBe('false');
+        expect(text).toBe('explicit-implementation');
     });
 
-    it('routes local default prompts through the bounded exploration gate', async () => {
-        const systemPrompt = defaultSystemPromptForNode('explore-filter');
-
-        const text = await streamText([
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: [{ type: 'text', text: 'hello' }] },
-        ]);
-
-        expect(text).toBe('needs-exploration');
-    });
-
-    it('keeps default plan approval closed without an explicit user decision', async () => {
-        const systemPrompt = defaultSystemPromptForNode('approval-gate');
+    it('keeps planner approval closed without an explicit user decision', async () => {
+        const systemPrompt = plannerSystemPromptForNode('approval-gate');
 
         const text = await streamText([
             { role: 'system', content: systemPrompt },
@@ -122,6 +112,15 @@ function systemPromptForNode(nodeId: string): string {
 
 function defaultSystemPromptForNode(nodeId: string): string {
     const node = createDefaultWorkflowGraph().nodes.find((candidate) => candidate.id === nodeId);
+    const systemPrompt = node?.config?.[SYSTEM_PROMPT_KEY];
+    if (typeof systemPrompt !== 'string') {
+        throw new TypeError(`expected system prompt for ${nodeId}`);
+    }
+    return systemPrompt;
+}
+
+function plannerSystemPromptForNode(nodeId: string): string {
+    const node = createPlannerWorkflowGraph().nodes.find((candidate) => candidate.id === nodeId);
     const systemPrompt = node?.config?.[SYSTEM_PROMPT_KEY];
     if (typeof systemPrompt !== 'string') {
         throw new TypeError(`expected system prompt for ${nodeId}`);
