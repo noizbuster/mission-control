@@ -87,10 +87,19 @@ export interface ChildSpawnRequest {
     readonly controlEpoch?: SessionControlEpoch;
 }
 
+export const CHILD_SPAWN_FAILURE_KINDS = [
+    'yield_missing',
+    'graph_failed',
+    'tool_denied',
+    'aborted',
+] as const;
+export type ChildSpawnFailureKind = (typeof CHILD_SPAWN_FAILURE_KINDS)[number];
+
 export interface ChildSpawnResult {
     readonly sessionId: string;
     readonly status: 'completed' | 'failed';
     readonly output: string;
+    readonly failureKind?: ChildSpawnFailureKind;
 }
 
 export interface TaskToolBackgroundHandle {

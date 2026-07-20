@@ -42,6 +42,7 @@ import {
 export type {
     BatchResultItem,
     BatchTaskItem,
+    ChildSpawnFailureKind,
     ChildSpawnRequest,
     ChildSpawnResult,
     CreateFullParityTaskToolOptions,
@@ -50,7 +51,12 @@ export type {
     TaskToolResult,
     TaskToolRuntime,
 } from './task-tool-contract';
-export { batchTaskItemSchema, taskToolBaseObjectSchema, taskToolInputSchema } from './task-tool-contract';
+export {
+    batchTaskItemSchema,
+    CHILD_SPAWN_FAILURE_KINDS,
+    taskToolBaseObjectSchema,
+    taskToolInputSchema,
+} from './task-tool-contract';
 
 const OUTPUT_LIMIT = { maxModelOutputChars: 8000 } as const;
 
@@ -238,11 +244,42 @@ async function executeBatch(
 
 function toToolResult(result: ChildSpawnResult, signal?: AbortSignal): TaskToolResult {
     if (result.status === 'failed') {
+        if (signal?.aborted === true) {
+            throw new ToolExecutionError({
+                code: 'operator_aborted',
+                message: result.output,
+                retryable: false,
+            });
+        }
+        const failure = classifyChildSpawnFailure(result);
         throw new ToolExecutionError({
-            code: signal?.aborted === true ? 'operator_aborted' : 'tool_failed',
+            code: failure.code,
             message: result.output,
-            retryable: false,
+            retryable: failure.retryable,
         });
     }
     return { sessionId: result.sessionId, status: result.status, output: result.output };
+}
+
+export function classifyChildSpawnFailure(result: ChildSpawnResult): {
+    readonly code: 'task_yield_missing' | 'task_child_failed' | 'operator_aborted' | 'tool_failed';
+    readonly retryable: boolean;
+} {
+    const kind = result.failureKind;
+    if (kind === 'yield_missing') {
+        return { code: 'task_yield_missing', retryable: true };
+    }
+    if (kind === 'aborted') {
+        return { code: 'operator_aborted', retryable: false };
+    }
+    if (kind === 'tool_denied') {
+        return { code: 'tool_failed', retryable: false };
+    }
+    if (kind === 'graph_failed') {
+        return { code: 'task_child_failed', retryable: false };
+    }
+    if (result.output.startsWith('[degraded salvage]')) {
+        return { code: 'task_yield_missing', retryable: true };
+    }
+    return { code: 'tool_failed', retryable: false };
 }

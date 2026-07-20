@@ -4,7 +4,9 @@ import { discoverAgents } from '../../agents/agent-loader';
 import { AgentIndex } from '../../agents/agent-registry';
 import type { ToolExecutionContext } from '../tool-registry-types';
 import { getCategory } from './category-catalog';
+import { ToolExecutionError } from '../tool-registry-types';
 import {
+    classifyChildSpawnFailure,
     type ChildSpawnRequest,
     type CreateFullParityTaskToolOptions,
     createFullParityTaskToolRegistration,
@@ -22,7 +24,13 @@ interface MockCall {
 
 type RunResultOverride = (
     request: ChildSpawnRequest,
-) => { status: 'completed' | 'failed'; output: string } | Promise<{ status: 'completed' | 'failed'; output: string }>;
+) =>
+    | { status: 'completed' | 'failed'; output: string; failureKind?: 'yield_missing' | 'graph_failed' | 'tool_denied' | 'aborted' }
+    | Promise<{
+          status: 'completed' | 'failed';
+          output: string;
+          failureKind?: 'yield_missing' | 'graph_failed' | 'tool_denied' | 'aborted';
+      }>;
 
 function createMockRuntime(
     existingSessionIds: ReadonlySet<string> = new Set(['ses_existing']),
@@ -432,5 +440,58 @@ describe('task tool — batch mode', () => {
         expect(summary).toBeDefined();
         expect(summary).toContain('scout');
         expect(summary).toContain('completed');
+    });
+});
+
+describe('classifyChildSpawnFailure', () => {
+    it('marks yield_missing as retryable task_yield_missing', () => {
+        expect(
+            classifyChildSpawnFailure({
+                sessionId: 's1',
+                status: 'failed',
+                output: '[degraded salvage] mid work',
+                failureKind: 'yield_missing',
+            }),
+        ).toEqual({ code: 'task_yield_missing', retryable: true });
+    });
+
+    it('marks graph_failed as non-retryable task_child_failed', () => {
+        expect(
+            classifyChildSpawnFailure({
+                sessionId: 's1',
+                status: 'failed',
+                output: 'boom',
+                failureKind: 'graph_failed',
+            }),
+        ).toEqual({ code: 'task_child_failed', retryable: false });
+    });
+
+    it('infers yield_missing from degraded salvage prefix without failureKind', () => {
+        expect(
+            classifyChildSpawnFailure({
+                sessionId: 's1',
+                status: 'failed',
+                output: '[degraded salvage] leftover prose',
+            }),
+        ).toEqual({ code: 'task_yield_missing', retryable: true });
+    });
+});
+
+describe('task tool — yield_missing settlement', () => {
+    it('throws retryable task_yield_missing so parent settlement stays non-terminal', async () => {
+        const { tool } = buildTool(undefined, () => ({
+            status: 'failed',
+            output: '[degraded salvage] still investigating',
+            failureKind: 'yield_missing',
+        }));
+        try {
+            await tool.execute(taskToolInputSchema.parse(params({ category: 'deep' })), CTX);
+            expect.unreachable('expected ToolExecutionError');
+        } catch (error) {
+            expect(error).toBeInstanceOf(ToolExecutionError);
+            if (!(error instanceof ToolExecutionError)) return;
+            expect(error.error.code).toBe('task_yield_missing');
+            expect(error.error.retryable).toBe(true);
+        }
     });
 });

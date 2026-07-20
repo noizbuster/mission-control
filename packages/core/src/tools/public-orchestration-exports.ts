@@ -131,8 +131,11 @@ export {
 } from './task/category-catalog';
 export {
     batchTaskItemSchema,
+    CHILD_SPAWN_FAILURE_KINDS,
+    type ChildSpawnFailureKind,
     type ChildSpawnRequest,
     type ChildSpawnResult,
+    classifyChildSpawnFailure,
     type CreateFullParityTaskToolOptions,
     createFullParityTaskToolRegistration,
     type TaskToolBackgroundHandle,
