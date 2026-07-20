@@ -163,4 +163,57 @@ describe('Blackboard', () => {
             expect(blackboard.toRecord()).toEqual(before);
         });
     });
+
+    describe('seedEntries', () => {
+        const messages: readonly ModelMessage[] = [{ role: 'user', content: 'ping' }];
+
+        it('seeds entries so get and toRecord return the seeded values', () => {
+            const blackboard = new Blackboard();
+
+            blackboard.seedEntries({
+                'intent.classification': 'explicit',
+                'plan.ready': true,
+            });
+
+            expect(blackboard.get('intent.classification')).toBe('explicit');
+            expect(blackboard.get('plan.ready')).toBe(true);
+            expect(blackboard.toRecord()).toEqual({
+                'intent.classification': 'explicit',
+                'plan.ready': true,
+            });
+        });
+
+        it('does not fire onMutation when seeding entries', () => {
+            const onMutation = vi.fn();
+            const blackboard = new Blackboard({ onMutation });
+
+            blackboard.seedEntries({ 'final.verdict': 'APPROVE' });
+
+            expect(onMutation).not.toHaveBeenCalled();
+        });
+
+        it('replaces key/value entries without touching messages', () => {
+            const blackboard = new Blackboard();
+            blackboard.set('stale.key', 'stale');
+            blackboard.setMessages(messages);
+
+            blackboard.seedEntries({ 'fresh.key': 'fresh' });
+
+            expect(blackboard.has('stale.key')).toBe(false);
+            expect(blackboard.get('fresh.key')).toBe('fresh');
+            expect(blackboard.getMessages()).toEqual(messages);
+        });
+
+        it('invalidates the cached record when seeding entries', () => {
+            const blackboard = new Blackboard();
+            blackboard.set('plan.ready', false);
+            const beforeSeed = blackboard.toRecord();
+
+            blackboard.seedEntries({ 'plan.ready': true });
+            const afterSeed = blackboard.toRecord();
+
+            expect(afterSeed).not.toBe(beforeSeed);
+            expect(afterSeed).toEqual({ 'plan.ready': true });
+        });
+    });
 });

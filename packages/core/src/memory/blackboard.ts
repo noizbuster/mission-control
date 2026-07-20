@@ -80,6 +80,18 @@ export class Blackboard {
         this.onMutation?.('blackboard.set', { key, value });
     }
 
+    /**
+     * Replace key/value entries from a trusted snapshot without emitting mutation events.
+     * Running messages are left unchanged.
+     */
+    seedEntries(entries: Readonly<Record<string, unknown>>): void {
+        this.entries.clear();
+        for (const [key, value] of Object.entries(entries)) {
+            this.entries.set(key, value);
+        }
+        this.cachedRecord = undefined;
+    }
+
     has(key: string): boolean {
         return this.entries.has(key);
     }
