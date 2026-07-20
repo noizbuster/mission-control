@@ -344,6 +344,7 @@ export function createExecuterWorkflowGraph(options: ExecuterWorkflowGraphOption
                 config: {
                     fanOutKey: 'wave.tasks',
                     completionKey: 'delegate.complete',
+                    continueOnFailure: true,
                     parallelByDefault: true,
                     dependencyKey: 'plan.dependencies',
                     delegationSections: [...EXECUTER_DELEGATION_SECTIONS],

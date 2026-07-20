@@ -73,6 +73,7 @@
         "config": {
           "fanOutKey": "wave.tasks",
           "completionKey": "delegate.complete",
+          "continueOnFailure": true,
           "parallelByDefault": true,
           "dependencyKey": "plan.dependencies",
           "delegationSections": [

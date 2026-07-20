@@ -266,7 +266,11 @@ export function createFixerWorkflowGraph(options: FixerWorkflowGraphOptions = {}
                 kind: 'parallel',
                 label: 'Fan out task() delegation per todo',
                 children: ['delegate-worker'],
-                config: { fanOutKey: 'plan.todos', completionKey: 'delegate.complete' },
+                config: {
+                    fanOutKey: 'plan.todos',
+                    completionKey: 'delegate.complete',
+                    continueOnFailure: true,
+                },
             },
             {
                 id: 'delegate-worker',
@@ -276,7 +280,10 @@ export function createFixerWorkflowGraph(options: FixerWorkflowGraphOptions = {}
                 config: {
                     systemPrompt:
                         'Execute the delegated sub-task via the task tool. Frame the delegation with TASK, ' +
-                        'EXPECTED OUTCOME, REQUIRED TOOLS, MUST DO, MUST NOT DO, and CONTEXT.',
+                        'EXPECTED OUTCOME, REQUIRED TOOLS, MUST DO, MUST NOT DO, and CONTEXT. ' +
+                        'Prefer category routing (e.g. category: "quick" or "deep") with prompt/assignment. ' +
+                        'If a task call returns task_yield_missing or a degraded-salvage error, retry once with a ' +
+                        'tighter assignment that requires the child to call yield with a final result.',
                 },
             },
             {
