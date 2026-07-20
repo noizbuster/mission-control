@@ -4,7 +4,7 @@
 | --- | --- |
 | Status | draft |
 | Scope | Session lifecycle, run coordinator, provider error surfaces, approval application path |
-| Related plans | `.omo/plans/coding-agent-runtime-hardening.md` |
+| Related plans | `.mc/plans/coding-agent-runtime-hardening.md` |
 
 ## Background
 

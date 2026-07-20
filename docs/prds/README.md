@@ -1,6 +1,6 @@
 # Mission Control PRDs
 
-Product requirements distilled from the user's request history on this project. Each PRD captures the *what* and *why* of a coherent theme; execution plans live under `.omo/plans/*.md`.
+Product requirements distilled from the user's request history on this project. Each PRD captures the *what* and *why* of a coherent theme; execution plans live under `.mc/plans/*.md`.
 
 ## Index
 

@@ -46,6 +46,7 @@ temp/
 *.sqlite3
 
 # Agent and QA run artifacts
+.mc/
 .omo/
 .omc/
 evidence/

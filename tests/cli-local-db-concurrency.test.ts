@@ -172,7 +172,7 @@ async function createFixture(name: string): Promise<Task12Fixture> {
     const homeDir = join(root, 'home');
     await Promise.all([
         mkdir(dataDir, { recursive: true }),
-        mkdir(join(workspaceDir, '.omo'), { recursive: true }),
+        mkdir(join(workspaceDir, '.mc'), { recursive: true }),
         mkdir(join(workspaceDir, '.mctrl', 'workflows'), { recursive: true }),
         mkdir(configDir, { recursive: true }),
         mkdir(homeDir, { recursive: true }),

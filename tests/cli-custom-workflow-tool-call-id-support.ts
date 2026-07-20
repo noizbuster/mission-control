@@ -19,7 +19,7 @@ export async function createCustomWorkflowFixture(name: string): Promise<CustomW
     const workflowDirectory = join(workspaceDir, '.mctrl', 'workflows');
     await Promise.all([
         mkdir(dataDir, { recursive: true }),
-        mkdir(join(workspaceDir, '.omo'), { recursive: true }),
+        mkdir(join(workspaceDir, '.mc'), { recursive: true }),
         mkdir(workflowDirectory, { recursive: true }),
         mkdir(configDir, { recursive: true }),
         mkdir(homeDir, { recursive: true }),

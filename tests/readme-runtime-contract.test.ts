@@ -122,7 +122,7 @@ describe('README runtime contract', () => {
         }
 
         const forbiddenTerms = [
-            '`<workspace>/.omo/mission-control' + '.db`',
+            '`<workspace>/.mc/mission-control' + '.db`',
             'so migrations for memory, sessions, run state, input delivery, and subagent jobs share one `schema_' +
                 'migrations` ledger',
             'The same file also stores persistent memory rows',
@@ -142,7 +142,7 @@ describe('README runtime contract', () => {
         const dataModelContent = readDoc('docs/session-data-model.md');
         const readmeTerms = [
             'session-store opens automatically discover `sessions/*.jsonl`',
-            '`.omo/runs/*.json` files do not auto-import',
+            '`.mc/runs/*.json` files do not auto-import',
             'does not probe or automatically import prior SQL stores',
         ] as const;
         const dataModelPatterns = [
@@ -153,7 +153,7 @@ describe('README runtime contract', () => {
             /normal session-store open automatically discovers\s+`sessions\/\*\.jsonl`/u,
             /`legacy_session_imports` makes the JSONL import idempotent by source path and\s+checksum/u,
             /does not rewrite or delete the JSONL source/u,
-            /`includeRunSources: false`, so `\.omo\/runs\/\*\.json` files\s+are not auto-imported/u,
+            /`includeRunSources: false`, so `\.mc\/runs\/\*\.json` files\s+are not auto-imported/u,
             /`desktop_approval_effects`/u,
             /`desktop_tool_proposals`/u,
             /private execution authority, not event, replay,\s+or archive data/u,

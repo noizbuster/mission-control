@@ -4,7 +4,7 @@
 | --- | --- |
 | Status | draft |
 | Scope | `mctrl models` command output, interactive `/model` picker, model catalog resolution |
-| Related plans | `.omo/plans/model-picker-input-system-fix.md`, `.omo/plans/model-provider-selection.md`, `.omo/plans/slash-skill-model-commands.md` |
+| Related plans | `.mc/plans/model-picker-input-system-fix.md`, `.mc/plans/model-provider-selection.md`, `.mc/plans/slash-skill-model-commands.md` |
 
 ## Background
 

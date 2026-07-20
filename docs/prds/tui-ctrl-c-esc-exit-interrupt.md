@@ -4,7 +4,7 @@
 | --- | --- |
 | Status | active |
 | Scope | Keyboard router (`handleInput` and textarea handlers in the OpenTUI chat tree), the interrupt event flow into the main chat loop (`interactive-chat.ts`), and multi-line input triggers |
-| Related plans | `.omo/plans/ulw-input-korean-ctrlc.md` |
+| Related plans | `.mc/plans/ulw-input-korean-ctrlc.md` |
 
 ## Background
 

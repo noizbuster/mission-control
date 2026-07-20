@@ -4,7 +4,7 @@
 | --- | --- |
 | Status | draft |
 | Scope | Auth login interactive flow (`auth-prompts.ts`) |
-| Related plans | `.omo/plans/interactive-auth-logout.md` |
+| Related plans | `.mc/plans/interactive-auth-logout.md` |
 
 ## Background
 

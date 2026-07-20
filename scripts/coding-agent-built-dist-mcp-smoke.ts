@@ -35,7 +35,7 @@ import { fileURLToPath } from 'node:url';
 const fixtureServerPath = fileURLToPath(
     new URL('../packages/core/src/tools/mcp/fixtures/stdio-fixture-server.mjs', import.meta.url),
 );
-const evidenceDir = fileURLToPath(new URL('../.omo/evidence/', import.meta.url));
+const evidenceDir = fileURLToPath(new URL('../.mc/evidence/', import.meta.url));
 const evidencePath = join(evidenceDir, 'task-13-cli-coding-agent-skills-mcp.jsonl');
 
 const { parseArgs } = await import('@mission-control/cli/args');

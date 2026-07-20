@@ -61,13 +61,13 @@ Core `<MCTRL_DATA_DIR>/mission-control.db` tables:
 | `session_messages` | Transcript read projection by message. Used by CLI and desktop inspection without replaying all events. |
 | `session_parts` | Normalized message parts such as text, tool call, tool result, reasoning, file, and data parts. |
 | `session_awaits` | Wait projection rows for approval-blocked runs, blocking `user_input`, foreground `subagent` waits, and imported legacy awaiting metadata. |
-| `mission_runs` | Authoritative durable Mission/Run SQL storage in `mission-control.db`; `.omo/runs/*.json` remains a separate compatibility format. |
+| `mission_runs` | Authoritative durable Mission/Run SQL storage in `mission-control.db`; `.mc/runs/*.json` remains a separate compatibility format. |
 | `approvals` | Approval projection keyed by `approval_id`, including subject, status, request/decision timestamps, and decision metadata. |
 | `tool_calls` | Tool-call projection keyed by `tool_call_id`, including name, status, arguments, result, approval id, timestamps, errors, and applied files. |
 | `desktop_tool_proposals` | Private exact tool-call payloads used only to execute a later desktop approval. Public events and replay stay redacted. Reusing one tool-call id with different content marks the proposal conflicted and non-executable. |
 | `desktop_approval_effects` | At-most-once ledger for one approved desktop tool effect, separate from approval decision history. It records exact identity, `pending -> executing -> settled | unknown`, an opaque execution token and lease, known outcomes, and execution/recovery/resolution timestamps. |
 | `provider_failures` | Provider failure projection keyed by a failure id, with unique `(session_id, event_id)` rows for request/provider-turn diagnostics. |
-| `legacy_session_imports` | Idempotent compatibility-import ledger keyed by source path and checksum. Normal session-store opens use it for `sessions/*.jsonl`; callers that opt into Run sources can also record `.omo/runs/*.json` files. |
+| `legacy_session_imports` | Idempotent compatibility-import ledger keyed by source path and checksum. Normal session-store opens use it for `sessions/*.jsonl`; callers that opt into Run sources can also record `.mc/runs/*.json` files. |
 
 Shared local `mission-control.db` runtime tables:
 
@@ -328,8 +328,8 @@ importer on every normal session-store open. The importer discovers only
 `legacy_session_imports` makes the JSONL import idempotent by source path and
 checksum. It does not rewrite or delete the JSONL source.
 
-The normal opener passes `includeRunSources: false`, so `.omo/runs/*.json` files
-are not auto-imported. Mission and Run JSON records under `.omo/` remain owned
+The normal opener passes `includeRunSources: false`, so `.mc/runs/*.json` files
+are not auto-imported. Mission and Run JSON records under `.mc/` remain owned
 by their own persistence stores. A caller that explicitly opts into Run-source
 compatibility import may import those files, with `sessionRunId` stripped and a
 `session_owner_stripped` diagnostic recorded when it was present. Only the

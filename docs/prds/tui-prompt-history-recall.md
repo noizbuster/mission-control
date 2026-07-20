@@ -4,7 +4,7 @@
 | --- | --- |
 | Status | draft |
 | Scope | Input history navigation (`input-history-store.ts`, arrow-key handling in `handleInput`) |
-| Related plans | `.omo/plans/model-picker-input-system-fix.md` |
+| Related plans | `.mc/plans/model-picker-input-system-fix.md` |
 
 ## Background
 

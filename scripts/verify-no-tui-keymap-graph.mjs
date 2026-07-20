@@ -82,7 +82,7 @@ function runTraced(args) {
                 cwd: REPO_ROOT,
                 env: {
                     ...process.env,
-                    MCTRL_DATA_DIR: resolve(REPO_ROOT, '.omo/evidence/tmp-nottui-trace'),
+                    MCTRL_DATA_DIR: resolve(REPO_ROOT, '.mc/evidence/tmp-nottui-trace'),
                     MCTRL_FORCE_NO_TTY: '1',
                 },
                 stdio: ['ignore', 'pipe', 'pipe'],

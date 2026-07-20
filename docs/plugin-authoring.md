@@ -309,7 +309,7 @@ Mode policy rules use `PolicyEffectRuleSchema` from
 ```jsonc
 {
   "action": "write",   // capability verb: "edit", "write", "bash", "*", ...
-  "resource": "**",    // glob pattern: "src/*", "**", ".omo/plans/**"
+  "resource": "**",    // glob pattern: "src/*", "**", ".mc/plans/**"
   "effect": "deny"     // allow | deny | ask
 }
 ```
@@ -404,7 +404,7 @@ Discovery reuses the read-only repo tool denylist. A workflow file whose path
 touches any of these is skipped with a `denylisted` diagnostic:
 
 ```
-temp/ref-repos, .omo/evidence, .nx, dist, build, target,
+temp/ref-repos, .mc/evidence, .nx, dist, build, target,
 coverage, node_modules, .git
 ```
 
@@ -653,7 +653,7 @@ graphs into reusable components.
 further files are skipped with `limit_reached`.
 
 **Denylisted directories are skipped.** Placing workflows under `node_modules`,
-`dist`, `build`, `target`, `.git`, `coverage`, `.nx`, `.omo/evidence`, or
+`dist`, `build`, `target`, `.git`, `coverage`, `.nx`, `.mc/evidence`, or
 `temp/ref-repos` will not load them.
 
 **Graph policies and mode policies are different shapes.** Graph `policies`

@@ -8,7 +8,7 @@
 //! - macOS: APFS `clonefile(2)`, else `rcopy`.
 //! - Everything else (Windows, *BSD, ...): `unsupported`.
 //!
-//! Deferred backends (recorded in `.omo/evidence/task-18-deferred-backends.md`):
+//! Deferred backends (recorded in `.mc/evidence/task-18-deferred-backends.md`):
 //! `projfs`, `btrfs`, `zfs`, `windows_block_clone`, `linux_reflink`.
 //!
 //! The protocol only carries `iso.resolve` and `iso.diff` (no explicit

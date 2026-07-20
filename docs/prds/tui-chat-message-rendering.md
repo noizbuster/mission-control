@@ -4,7 +4,7 @@
 | --- | --- |
 | Status | draft |
 | Scope | Message block renderers (`apps/tui/src/components/*`) and the markdown pipeline (`apps/tui/src/components/markdown/`) |
-| Related plans | `.omo/plans/tui-rich-rendering.md` |
+| Related plans | `.mc/plans/tui-rich-rendering.md` |
 
 ## Background
 

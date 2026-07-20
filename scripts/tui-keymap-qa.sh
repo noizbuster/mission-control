@@ -39,7 +39,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CLI_DIST="$REPO_ROOT/apps/cli/dist/index.js"
 SESSION="mctrl-qa-$$"
 DATA_DIR="$(mktemp -d -t mctrl-qa-XXXXXXXX)"
-LOG_FILE="${MCTRL_QA_LOG:-$REPO_ROOT/.omo/evidence/task-18-tui-keymap-port.log}"
+LOG_FILE="${MCTRL_QA_LOG:-$REPO_ROOT/.mc/evidence/task-18-tui-keymap-port.log}"
 PANE_W=110
 PANE_H=44
 SETTLE_TRIES=15           # capture-pane retry attempts for an assertion
@@ -189,7 +189,7 @@ log "These are covered by the unit-test seam (createRecordingTextarea +"
 log "createTestKeymap host.press) in apps/tui/src/platform/keymap/*.test.ts."
 log "Race/timing invariants (double-Esc, IME-defer, double-Enter, Ctrl+C"
 log "double-enqueue) are unit-only by nature — see the race-index in"
-log ".omo/evidence/tui-keymap-port-parity-matrix.md section 17."
+log ".mc/evidence/tui-keymap-port-parity-matrix.md section 17."
 log "================================================================"
 
 log "ALL DETERMINISTIC PATHS PASSED"
