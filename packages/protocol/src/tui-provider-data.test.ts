@@ -48,6 +48,9 @@ describe('TUI provider data schemas', () => {
             variantCyclingHints: [{ modelId: 'openai/gpt-5.5', variantId: 'reasoning-high' }],
             sessionPins: ['session_1'],
             uiToggles: [{ key: 'show-graph', value: true }],
+            modelContextPrefs: [
+                { modelKey: 'openai/gpt-5.5', contextLimit: 200_000, autoCompactThreshold: 0.8 },
+            ],
         };
 
         // When
@@ -55,6 +58,12 @@ describe('TUI provider data schemas', () => {
 
         // Then
         expect(parsed.recentModels).toEqual(['openai/gpt-5.5']);
+        expect(parsed.modelContextPrefs).toEqual([
+            { modelKey: 'openai/gpt-5.5', contextLimit: 200_000, autoCompactThreshold: 0.8 },
+        ]);
+        expect(TuiLocalPreferencesSchema.parse({ ...preferences, modelContextPrefs: undefined }).modelContextPrefs).toEqual(
+            [],
+        );
         expect(TuiPromptHistoryEntrySchema.parse({ id: 'h1', text: 'prompt', timestamp: 1 }).text).toBe('prompt');
         expect(
             TuiPromptStashEntrySchema.parse({ id: 's1', text: '', cursorOffset: 0, timestamp: 1 }).cursorOffset,

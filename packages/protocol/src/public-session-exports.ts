@@ -72,6 +72,8 @@ export {
     TuiKvNamespaceSchema,
     type TuiKvValueSchemaKey,
     TuiKvValueSchemaKeySchema,
+    type ModelContextPreference,
+    ModelContextPreferenceSchema,
     type TuiLocalPreferences,
     TuiLocalPreferencesSchema,
     type TuiPluginCapability,

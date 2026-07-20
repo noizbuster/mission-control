@@ -136,6 +136,7 @@ describe('TUI local preferences provider', () => {
             variantCyclingHints: [{ modelId: 'openai/gpt-5.5', variantId: 'reasoning-high' }],
             sessionPins: ['session-quick-switch'],
             uiToggles: [{ key: 'show-graph-minimap', value: true }],
+            modelContextPrefs: [],
         });
         await expect(readStoredPreferences(rendered.roots.dataDir)).resolves.toEqual(rendered.local.preferences());
         expect(new TuiStores.TuiLocalPreferencesStore({ dataDir: rendered.roots.dataDir }).filePath).toBe(
@@ -189,6 +190,8 @@ describe('TUI local preferences provider', () => {
             'setFavoriteModel',
             'setUiToggle',
             'setVariantCyclingHint',
+            'stepModelAutoCompactThreshold',
+            'stepModelContextLimit',
             'unpinSession',
         ]);
 

@@ -38,6 +38,7 @@ export type ChatTuiHandle = {
     readonly setSessionId: (sessionId: string) => void;
     readonly setSessionDisplayName: (name: string | undefined) => void;
     readonly setContextTokensUsed: (used: number | undefined) => void;
+    readonly setContextTokensMax: (max: number | undefined) => void;
     readonly setModelCycleChoices: (choices: readonly ModelChoice[]) => void;
     /** Push a selection from any path; syncs the store's currentModelSelection and modelCycleIndex. */
     readonly setModelSelection: (selection: ModelProviderSelection) => void;

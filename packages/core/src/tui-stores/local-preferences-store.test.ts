@@ -58,6 +58,11 @@ describe('TuiLocalPreferencesStore', () => {
                 { key: 'b', value: false },
                 { key: 'c', value: true },
             ],
+            modelContextPrefs: [
+                { modelKey: 'p/m1', contextLimit: 8_000 },
+                { modelKey: 'p/m2', autoCompactThreshold: 0.8 },
+                { modelKey: 'p/m3', contextLimit: 128_000, autoCompactThreshold: 0.9 },
+            ],
         });
 
         // Then
@@ -72,6 +77,10 @@ describe('TuiLocalPreferencesStore', () => {
             uiToggles: [
                 { key: 'b', value: false },
                 { key: 'c', value: true },
+            ],
+            modelContextPrefs: [
+                { modelKey: 'p/m2', autoCompactThreshold: 0.8 },
+                { modelKey: 'p/m3', contextLimit: 128_000, autoCompactThreshold: 0.9 },
             ],
         });
     });

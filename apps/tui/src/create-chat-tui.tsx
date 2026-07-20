@@ -52,6 +52,7 @@ export function createChatTuiHandle(store: ChatStore, unmountFn: () => void): Ch
         setSessionId: (id) => store.setSessionId(id),
         setSessionDisplayName: (name) => store.setSessionDisplayName(name),
         setContextTokensUsed: (used) => store.setContextTokensUsed(used),
+        setContextTokensMax: (max) => store.setContextTokensMax(max),
         applyAbgOverlayPrefs: (prefs) => store.applyAbgOverlayPrefs(prefs),
         getAbgOverlayPrefsSnapshot: () => store.getAbgOverlayPrefsSnapshot(),
         get onModelCycleSelect(): ((selection: ModelProviderSelection) => void) | undefined {
@@ -98,6 +99,16 @@ export async function createChatTui(options: ChatTuiOptions): Promise<ChatTuiHan
         providerID: options.providerID,
         modelID: options.modelID,
         ...(options.variantID !== undefined ? { variantID: options.variantID } : {}),
+    });
+    void import('@mission-control/core').then(async ({ TuiStores }) => {
+        const prefs = await new TuiStores.TuiLocalPreferencesStore().getPreferences();
+        const { resolveEffectiveContextLimit } = await import('@mission-control/config');
+        store.setContextTokensMax(
+            resolveEffectiveContextLimit(
+                { providerID: options.providerID, modelID: options.modelID },
+                prefs.modelContextPrefs,
+            ),
+        );
     });
 
     const { useRenderer } = await import('@opentui/solid');

@@ -79,6 +79,7 @@ export function emptyTuiLocalPreferences(): TuiLocalPreferences {
         variantCyclingHints: [],
         sessionPins: [],
         uiToggles: [],
+        modelContextPrefs: [],
     };
 }
 
@@ -93,5 +94,6 @@ function trimPreferences(preferences: TuiLocalPreferences, maxEntries: number): 
         variantCyclingHints: preferences.variantCyclingHints.slice(-maxEntries),
         sessionPins: preferences.sessionPins.slice(-maxEntries),
         uiToggles: preferences.uiToggles.slice(-maxEntries),
+        modelContextPrefs: preferences.modelContextPrefs.slice(-maxEntries),
     });
 }

@@ -8,6 +8,21 @@ export { loadVariantOverrides, type VariantOverrideEntry, type VariantOverrides 
 export { variantsForReasoningOptions } from './model-variant-presets';
 export type { RawModelsDevReasoningOption } from './models-dev-runtime';
 export { getModelContextLimit } from './models-dev-runtime';
+export {
+    AUTO_COMPACT_THRESHOLD_STEPS,
+    findModelContextPreference,
+    formatAutoCompactThresholdLabel,
+    formatContextLimitLabel,
+    MODEL_CONTEXT_LIMIT_STEPS,
+    modelContextPreferenceKey,
+    renderSliderBar,
+    resolveAutoCompactThreshold,
+    resolveEffectiveContextLimit,
+    shouldAutoCompact,
+    stepAutoCompactThreshold,
+    stepContextLimit,
+    upsertModelContextPreference,
+} from './model-context-prefs';
 
 export const appName = 'mission-control';
 export const cliCommandName = 'mc';

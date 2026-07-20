@@ -1,10 +1,12 @@
 /** @jsxImportSource @opentui/solid */
-// allow: SIZE_OK -- HEAD 769 -> current ~769 pure LOC; pre-existing overlay collection touched for a line-neutral progress-count correction.
+// allow: SIZE_OK -- overlay collection hosts multiple modal panels; model-context pref lines added without splitting the mandated surface.
+import { getModelContextLimit } from '@mission-control/config';
 import { resolveUserConfigDir } from '@mission-control/core';
 import { padEndToDisplayWidth } from '@mission-control/tui';
 import { MouseButton, type MouseEvent, TextAttributes } from '@opentui/core';
 import { useKeyboard } from '@opentui/solid';
 import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
+import { useTuiLocalPreferences } from '../platform/providers/local-preferences-context';
 import { useSolidStoreSelector } from '../platform/use-solid-store-selector';
 import { createProviderPromptView } from '../state/auth-provider-keypress-view';
 import type { ChatAppActions } from '../state/chat-app-actions';
@@ -15,6 +17,8 @@ import {
     createAgentsDashboardView,
     createSessionPickerView,
 } from '../state/chat-store';
+import { parseModelSelection } from '../state/interactive-chat-model';
+import { buildModelContextPrefLines } from './model-context-pref-lines';
 import { OverlayFrame } from './OverlayFrame';
 import { printableCharFromKey } from './overlay-key-input';
 import {
@@ -425,6 +429,7 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): JSX.Element {
 export type ModelPickerOverlayProps = { readonly store: ChatStore };
 
 export function ModelPickerOverlay({ store }: ModelPickerOverlayProps): JSX.Element {
+    const localPreferences = useTuiLocalPreferences();
     const snapshot = useSolidStoreSelector(store, (snapshot) => snapshot);
     const promptChoices = createMemo(() =>
         snapshot().modelPickerChoices.map((choice) => ({
@@ -435,6 +440,17 @@ export function ModelPickerOverlay({ store }: ModelPickerOverlayProps): JSX.Elem
     const view = createMemo(() =>
         createProviderPromptView(snapshot().modelPickerKeypress, promptChoices(), MODEL_PICKER_MAX_VISIBLE),
     );
+    const focusedSelection = createMemo(() => {
+        const currentView = view();
+        const selectedChoice = currentView.visibleChoices[currentView.selectedIndex - currentView.startIndex];
+        if (selectedChoice === undefined) return undefined;
+        return snapshot().modelPickerChoices.find((choice) => choice.id === selectedChoice.id)?.selection;
+    });
+    const prefLines = createMemo(() => {
+        const selection = focusedSelection();
+        if (selection === undefined) return undefined;
+        return buildModelContextPrefLines(selection, localPreferences.preferences().modelContextPrefs);
+    });
 
     useKeyboard((key) => {
         if (key.name === 'return') {
@@ -450,6 +466,43 @@ export function ModelPickerOverlay({ store }: ModelPickerOverlayProps): JSX.Elem
             store.hideModelPicker(undefined);
             return;
         }
+        if (
+            key.name === 'left' ||
+            key.name === 'right' ||
+            key.name === '-' ||
+            key.name === '=' ||
+            key.name === '+' ||
+            key.name === '[' ||
+            key.name === ']'
+        ) {
+            const selection = focusedSelection();
+            if (selection !== undefined) {
+                key.preventDefault();
+                const catalogDefault = getModelContextLimit(selection.providerID, selection.modelID);
+                const isContext =
+                    key.name === 'left' ||
+                    key.name === 'right' ||
+                    key.name === '-' ||
+                    key.name === '=' ||
+                    key.name === '+';
+                if (isContext && key.name !== '[' && key.name !== ']') {
+                    const direction = key.name === 'left' || key.name === '-' ? -1 : 1;
+                    void localPreferences.stepModelContextLimit(selection, direction, catalogDefault).then(() => {
+                        const lines = buildModelContextPrefLines(
+                            selection,
+                            localPreferences.preferences().modelContextPrefs,
+                        );
+                        store.setContextTokensMax(lines.effectiveContextLimit);
+                    });
+                    return;
+                }
+                void localPreferences.stepModelAutoCompactThreshold(
+                    selection,
+                    key.name === '[' || key.name === 'left' ? -1 : 1,
+                );
+                return;
+            }
+        }
         store.updateModelPickerKeypress(key.sequence);
     });
 
@@ -457,7 +510,7 @@ export function ModelPickerOverlay({ store }: ModelPickerOverlayProps): JSX.Elem
         <OverlayFrame
             variant="modal"
             title="Select model"
-            footer="Up/Down to navigate, type to search, Backspace to delete, Enter to select, Ctrl+C to cancel"
+            footer="↑↓ navigate · ←→ context · [ ] compact · type search · Enter select · Esc cancel"
         >
             <text attributes={TextAttributes.DIM}>{`Search: ${view().searchQuery}`}</text>
             {view().totalCount === 0 ? (
@@ -479,6 +532,14 @@ export function ModelPickerOverlay({ store }: ModelPickerOverlayProps): JSX.Elem
                     );
                 }}
             </For>
+            <Show when={prefLines()}>
+                {(lines) => (
+                    <box flexDirection="column" marginTop={1}>
+                        <text attributes={TextAttributes.DIM}>{lines().contextLine}</text>
+                        <text attributes={TextAttributes.DIM}>{lines().compactLine}</text>
+                    </box>
+                )}
+            </Show>
         </OverlayFrame>
     );
 }
@@ -660,12 +721,25 @@ export type AgentsDashboardOverlayProps = {
 };
 
 export function AgentsDashboardOverlay({ store, workspaceRoot, actions }: AgentsDashboardOverlayProps): JSX.Element {
+    const localPreferences = useTuiLocalPreferences();
     const snapshot = useSolidStoreSelector(store, (snapshot) => snapshot);
     const [editBuffer, setEditBuffer] = createSignal('');
     const dashboard = createMemo(() => snapshot().agentsDashboard);
     const view = createMemo(() => createAgentsDashboardView(dashboard(), AGENTS_DASHBOARD_MAX_VISIBLE));
     const isEditing = createMemo(() => dashboard().editingName !== null);
     const inspector = createMemo(() => view().inspectorEntry);
+    const inspectorModelSelection = createMemo(() => {
+        const entry = inspector();
+        if (entry === null) return undefined;
+        const raw = entry.overrideModel ?? entry.model;
+        if (raw === undefined || raw.length === 0) return undefined;
+        return parseModelSelection(raw);
+    });
+    const inspectorPrefLines = createMemo(() => {
+        const selection = inspectorModelSelection();
+        if (selection === undefined) return undefined;
+        return buildModelContextPrefLines(selection, localPreferences.preferences().modelContextPrefs);
+    });
 
     useKeyboard((key) => {
         if (isEditing()) {
@@ -761,6 +835,19 @@ export function AgentsDashboardOverlay({ store, workspaceRoot, actions }: Agents
             }
             return;
         }
+        if (key.name === '-' || key.name === '=' || key.name === '+' || key.name === '[' || key.name === ']') {
+            const selection = inspectorModelSelection();
+            if (selection !== undefined) {
+                key.preventDefault();
+                const catalogDefault = getModelContextLimit(selection.providerID, selection.modelID);
+                if (key.name === '[' || key.name === ']') {
+                    void localPreferences.stepModelAutoCompactThreshold(selection, key.name === '[' ? -1 : 1);
+                    return;
+                }
+                void localPreferences.stepModelContextLimit(selection, key.name === '-' ? -1 : 1, catalogDefault);
+                return;
+            }
+        }
         if (key.name === 'escape' || (key.ctrl && key.name === 'c')) {
             store.hideAgentsDashboard();
         }
@@ -770,7 +857,7 @@ export function AgentsDashboardOverlay({ store, workspaceRoot, actions }: Agents
         <OverlayFrame
             variant="modal"
             title="Agents"
-            footer="Up/Dn navigate · Tab cycle source · Space toggle · Enter edit · Ctrl+R reload · Esc close"
+            footer="↑↓ · Tab source · Space toggle · Enter model · -/= context · [ ] compact · Ctrl+R · Esc"
         >
             <box flexDirection="row">
                 <For each={view().sourceTabs}>
@@ -839,6 +926,14 @@ export function AgentsDashboardOverlay({ store, workspaceRoot, actions }: Agents
                                             <text attributes={TextAttributes.DIM}>{`  ${MODEL_OVERRIDE_PREVIEW}`}</text>
                                         </box>
                                     ) : null}
+                                    <Show when={inspectorPrefLines()}>
+                                        {(lines) => (
+                                            <box flexDirection="column" marginTop={1}>
+                                                <text attributes={TextAttributes.DIM}>{lines().contextLine}</text>
+                                                <text attributes={TextAttributes.DIM}>{lines().compactLine}</text>
+                                            </box>
+                                        )}
+                                    </Show>
                                     {entry().filePath !== undefined ? (
                                         <text attributes={TextAttributes.DIM}>{`  File: ${entry().filePath}`}</text>
                                     ) : null}

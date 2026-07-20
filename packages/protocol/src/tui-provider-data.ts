@@ -77,6 +77,21 @@ export const TuiUiToggleSchema = z
     .strict();
 export type TuiUiToggle = z.infer<typeof TuiUiToggleSchema>;
 
+/**
+ * Per-model context window and auto-compaction preferences.
+ * `modelKey` is `providerID/modelID` (variant-agnostic).
+ * `autoCompactThreshold` is a fraction of the effective context limit in `[0, 1]`;
+ * `0` means auto-compaction is off.
+ */
+export const ModelContextPreferenceSchema = z
+    .object({
+        modelKey: z.string().min(1),
+        contextLimit: z.number().int().positive().optional(),
+        autoCompactThreshold: z.number().min(0).max(1).optional(),
+    })
+    .strict();
+export type ModelContextPreference = z.infer<typeof ModelContextPreferenceSchema>;
+
 export const TuiLocalPreferencesSchema = z
     .object({
         recentModels: z.array(z.string().min(1)).readonly(),
@@ -84,6 +99,7 @@ export const TuiLocalPreferencesSchema = z
         variantCyclingHints: z.array(TuiVariantCyclingHintSchema).readonly(),
         sessionPins: z.array(z.string().min(1)).readonly(),
         uiToggles: z.array(TuiUiToggleSchema).readonly(),
+        modelContextPrefs: z.array(ModelContextPreferenceSchema).readonly().default([]),
     })
     .strict();
 export type TuiLocalPreferences = z.infer<typeof TuiLocalPreferencesSchema>;

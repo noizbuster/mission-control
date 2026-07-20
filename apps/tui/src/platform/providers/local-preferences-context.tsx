@@ -2,6 +2,14 @@
 
 import { TuiStores } from '@mission-control/core';
 import {
+    findModelContextPreference,
+    modelContextPreferenceKey,
+    stepAutoCompactThreshold,
+    stepContextLimit,
+    upsertModelContextPreference,
+} from '@mission-control/config';
+import {
+    type ModelContextPreference,
     type ModelProviderSelection,
     type TuiLocalPreferences,
     TuiLocalPreferencesSchema,
@@ -27,6 +35,15 @@ export type TuiLocalPreferencesService = {
     readonly pinSession: (sessionID: string) => Promise<void>;
     readonly unpinSession: (sessionID: string) => Promise<void>;
     readonly setUiToggle: (toggle: TuiUiToggle) => Promise<void>;
+    readonly stepModelContextLimit: (
+        selection: Pick<ModelProviderSelection, 'providerID' | 'modelID'>,
+        direction: 1 | -1,
+        catalogDefault: number | undefined,
+    ) => Promise<ModelContextPreference | undefined>;
+    readonly stepModelAutoCompactThreshold: (
+        selection: Pick<ModelProviderSelection, 'providerID' | 'modelID'>,
+        direction: 1 | -1,
+    ) => Promise<ModelContextPreference | undefined>;
 };
 
 export type MissionControlLocalPreferencesProviderProps = {
@@ -133,6 +150,51 @@ function createTuiLocalPreferencesService(
         });
     }
 
+    async function stepModelContextLimit(
+        selection: Pick<ModelProviderSelection, 'providerID' | 'modelID'>,
+        direction: 1 | -1,
+        catalogDefault: number | undefined,
+    ): Promise<ModelContextPreference | undefined> {
+        const current = preferences();
+        const existing = findModelContextPreference(current.modelContextPrefs, selection);
+        const nextLimit = stepContextLimit({
+            current: existing?.contextLimit ?? catalogDefault,
+            catalogDefault,
+            direction,
+        });
+        const next: ModelContextPreference = {
+            modelKey: modelContextPreferenceKey(selection),
+            contextLimit: nextLimit,
+            ...(existing?.autoCompactThreshold !== undefined
+                ? { autoCompactThreshold: existing.autoCompactThreshold }
+                : {}),
+        };
+        await save({
+            ...current,
+            modelContextPrefs: upsertModelContextPreference(current.modelContextPrefs, next),
+        });
+        return findModelContextPreference(preferences().modelContextPrefs, selection);
+    }
+
+    async function stepModelAutoCompactThreshold(
+        selection: Pick<ModelProviderSelection, 'providerID' | 'modelID'>,
+        direction: 1 | -1,
+    ): Promise<ModelContextPreference | undefined> {
+        const current = preferences();
+        const existing = findModelContextPreference(current.modelContextPrefs, selection);
+        const nextThreshold = stepAutoCompactThreshold(existing?.autoCompactThreshold ?? 0, direction);
+        const next: ModelContextPreference = {
+            modelKey: modelContextPreferenceKey(selection),
+            ...(existing?.contextLimit !== undefined ? { contextLimit: existing.contextLimit } : {}),
+            ...(nextThreshold > 0 ? { autoCompactThreshold: nextThreshold } : {}),
+        };
+        await save({
+            ...current,
+            modelContextPrefs: upsertModelContextPreference(current.modelContextPrefs, next),
+        });
+        return findModelContextPreference(preferences().modelContextPrefs, selection);
+    }
+
     return Object.freeze({
         preferences,
         reload,
@@ -142,5 +204,7 @@ function createTuiLocalPreferencesService(
         pinSession,
         unpinSession,
         setUiToggle,
+        stepModelContextLimit,
+        stepModelAutoCompactThreshold,
     });
 }

@@ -88,6 +88,7 @@ import { createUndoRedoStack, type UndoRedoStack } from './interactive-chat-undo
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent';
 import { interactiveSessionCliStdout } from './interactive-session-cli-stdout';
 import { emitTranscriptFallback } from './interactive-transcript-emission';
+import { loadEffectiveContextLimit, maybeStartAutoCompaction } from './model-context-session';
 import {
     getOrCreateMissionControlServices,
     isMcRootNotFoundError,
@@ -351,6 +352,7 @@ export async function runInteractiveChatSession(
     let currentModelProviderSelection = options.modelProviderSelection;
     let pendingInterrupt = false;
     let activeTurn: ActiveCodingAgentTurn | undefined;
+    let lastContextTokensUsed: number | undefined;
     let lastCodingContext: CodingActionContext | undefined;
     let turnCounter = 0;
     const inputPump = new ChatInputPump(chatInput);
@@ -520,6 +522,9 @@ export async function runInteractiveChatSession(
                     delete tuiRuntimeOptions.variantID;
                 }
             }
+            void loadEffectiveContextLimit(selection).then((limit) => {
+                tuiHandle.setContextTokensMax(limit);
+            });
         };
         tuiHandle.onRenameSubmit = (name: string) => {
             sessionDisplayNameController.update(name);
@@ -643,6 +648,24 @@ export async function runInteractiveChatSession(
                             lastCodingContext,
                         );
                         activeTurn = workflowResult.activeTurn;
+                        continue;
+                    }
+                }
+                if (next.outcome === 'completed') {
+                    const autoCompactTurn = await maybeStartAutoCompaction({
+                        usedTokens: lastContextTokensUsed,
+                        selection: currentModelProviderSelection,
+                        sessionId: currentSessionId,
+                        sessionStore: currentSessionStore,
+                        provider: currentProvider,
+                        output: chatOutput,
+                        ...(options.workspaceRoot !== undefined ? { workspaceRoot: options.workspaceRoot } : {}),
+                        ...(options.authStore !== undefined ? { authStore: options.authStore } : {}),
+                    });
+                    if (autoCompactTurn !== undefined) {
+                        workflowChainDepth = 0;
+                        pendingWorkflowTurns.length = 0;
+                        activeTurn = autoCompactTurn;
                         continue;
                     }
                 }
@@ -801,7 +824,10 @@ export async function runInteractiveChatSession(
                         : {}),
                     ...(tuiHandle !== undefined
                         ? {
-                              onUsage: (inputTokens: number | undefined) => tuiHandle.setContextTokensUsed(inputTokens),
+                              onUsage: (inputTokens: number | undefined) => {
+                                  lastContextTokensUsed = inputTokens;
+                                  tuiHandle.setContextTokensUsed(inputTokens);
+                              },
                           }
                         : {}),
                     listWorkspaceSessions: async () => {
@@ -935,6 +961,9 @@ export async function runInteractiveChatSession(
                 }
                 // Sync store so Ctrl+V variant cycling targets the new base.
                 tuiHandle?.setModelSelection(result.modelProviderSelection);
+                void loadEffectiveContextLimit(result.modelProviderSelection).then((limit) => {
+                    tuiHandle?.setContextTokensMax(limit);
+                });
             }
             currentModelProviderSelection = result.modelProviderSelection;
             activeTurn = result.activeTurn;

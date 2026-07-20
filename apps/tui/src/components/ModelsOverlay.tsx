@@ -1,10 +1,12 @@
 /** @jsxImportSource @opentui/solid */
 
+import { getModelContextLimit } from '@mission-control/config';
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import { padEndToDisplayWidth } from '@mission-control/tui';
 import { TextAttributes } from '@opentui/core';
 import { useKeyboard } from '@opentui/solid';
 import { createMemo, For, type JSX, Show } from 'solid-js';
+import { useTuiLocalPreferences } from '../platform/providers/local-preferences-context';
 import { useSolidStoreSelector } from '../platform/use-solid-store-selector';
 import type { ChatStore } from '../state/chat-store';
 import {
@@ -13,6 +15,7 @@ import {
     type ModelsOverlayRoleRow,
     type ModelsOverlayState,
 } from '../state/models-overlay-state';
+import { buildModelContextPrefLines } from './model-context-pref-lines';
 import { OverlayFrame } from './OverlayFrame';
 import { SELECTED_BG } from './overlay-theme';
 
@@ -38,6 +41,7 @@ function formatSelection(selection: ModelProviderSelection): string {
 }
 
 export function ModelsOverlay({ store }: ModelsOverlayProps): JSX.Element {
+    const localPreferences = useTuiLocalPreferences();
     const slice = useSolidStoreSelector(store, (snapshot) => snapshot.modelsOverlay);
     const state = createMemo<ModelsOverlayState>(() => ({
         leftEntries: slice().entries,
@@ -50,6 +54,19 @@ export function ModelsOverlay({ store }: ModelsOverlayProps): JSX.Element {
         pendingAssignModel: slice().pendingAssignModel,
     }));
     const view = createMemo(() => createModelsOverlayView(state(), MODELS_OVERLAY_MAX_VISIBLE));
+    const focusedSelection = createMemo((): ModelProviderSelection | undefined => {
+        if (slice().focusedColumn === 'left') {
+            const offset = view().activeLeftIndex - view().startIndexLeft;
+            return view().leftVisible[offset];
+        }
+        const roleRow = slice().roleRows[view().activeRightIndex];
+        return roleRow?.assignment ?? roleRow?.fallback;
+    });
+    const prefLines = createMemo(() => {
+        const selection = focusedSelection();
+        if (selection === undefined) return undefined;
+        return buildModelContextPrefLines(selection, localPreferences.preferences().modelContextPrefs);
+    });
 
     useKeyboard((key) => {
         if (key.name === 'up') {
@@ -62,8 +79,51 @@ export function ModelsOverlay({ store }: ModelsOverlayProps): JSX.Element {
             store.navigateModelsOverlay(1);
             return;
         }
+        if (key.name === '-' || key.name === '=' || key.name === '+' || key.name === '[' || key.name === ']') {
+            const selection = focusedSelection();
+            if (selection === undefined) return;
+            key.preventDefault();
+            const catalogDefault = getModelContextLimit(selection.providerID, selection.modelID);
+            if (key.name === '-' || key.name === '=' || key.name === '+') {
+                void localPreferences.stepModelContextLimit(
+                    selection,
+                    key.name === '-' ? -1 : 1,
+                    catalogDefault,
+                ).then(() => {
+                    const lines = buildModelContextPrefLines(
+                        selection,
+                        localPreferences.preferences().modelContextPrefs,
+                    );
+                    store.setContextTokensMax(lines.effectiveContextLimit);
+                });
+                return;
+            }
+            void localPreferences.stepModelAutoCompactThreshold(selection, key.name === '[' ? -1 : 1);
+            return;
+        }
         if (key.name === 'left' || key.name === 'right') {
             key.preventDefault();
+            if (key.shift) {
+                const selection = focusedSelection();
+                if (selection === undefined) return;
+                const catalogDefault = getModelContextLimit(selection.providerID, selection.modelID);
+                void localPreferences
+                    .stepModelContextLimit(selection, key.name === 'left' ? -1 : 1, catalogDefault)
+                    .then(() => {
+                        const lines = buildModelContextPrefLines(
+                            selection,
+                            localPreferences.preferences().modelContextPrefs,
+                        );
+                        store.setContextTokensMax(lines.effectiveContextLimit);
+                    });
+                return;
+            }
+            if (key.ctrl) {
+                const selection = focusedSelection();
+                if (selection === undefined) return;
+                void localPreferences.stepModelAutoCompactThreshold(selection, key.name === 'left' ? -1 : 1);
+                return;
+            }
             const tabs = view().providerTabs;
             if (tabs.length <= 1) return;
             const currentIdx = tabs.findIndex((tab) => tab.id === slice().activeProviderTab);
@@ -125,7 +185,7 @@ export function ModelsOverlay({ store }: ModelsOverlayProps): JSX.Element {
     const footer = createMemo(() =>
         hasPending()
             ? '⏎ confirm assign · Tab/Esc/⌫ cancel · ↑↓ pick role'
-            : '← → provider · type to search · ↑↓ navigate · Tab column · ⏎ assign · ⌫ clear · Esc close',
+            : '← → provider · Shift+←→ context · Ctrl+←→ compact · -/= [ ] · ↑↓ · Tab · ⏎ assign · Esc',
     );
 
     return (
@@ -146,6 +206,14 @@ export function ModelsOverlay({ store }: ModelsOverlayProps): JSX.Element {
             <text {...(slice().searchQuery.length === 0 ? { attributes: TextAttributes.DIM } : {})}>
                 {`Search: ${searchDisplay()}`}
             </text>
+            <Show when={prefLines()}>
+                {(lines) => (
+                    <box flexDirection="column" marginTop={1}>
+                        <text attributes={TextAttributes.DIM}>{lines().contextLine}</text>
+                        <text attributes={TextAttributes.DIM}>{lines().compactLine}</text>
+                    </box>
+                )}
+            </Show>
             {view().totalLeft === 0 ? (
                 <text attributes={TextAttributes.DIM}>No models match</text>
             ) : (
