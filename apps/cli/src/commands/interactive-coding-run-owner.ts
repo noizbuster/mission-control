@@ -3,7 +3,7 @@ import {
     createAgentNodeRunBudgetGrantor,
     createCodingAgentNodeRegistry,
     createGraphTurnRunner,
-    extractUsageFromModelCallCompleted,
+    extractContextTokensUsed,
     type ObservabilityRedactor,
     ProjectTrustStore,
     projectApprovalContinuationMessages,
@@ -138,9 +138,9 @@ export async function createInteractiveRunOwner(
 
     const onDurableEventHandler = (event: AgentEvent) => {
         renderInteractiveGraphDurableEvent(options.output, renderState, event);
-        if (event.type === 'model.call.completed') {
-            const usage = extractUsageFromModelCallCompleted(event);
-            if (usage !== undefined) options.onUsage?.(usage.inputTokens);
+        const contextTokensUsed = extractContextTokensUsed(event);
+        if (contextTokensUsed !== undefined) {
+            options.onUsage?.(contextTokensUsed);
         }
         options.observeStoredEvent?.(event);
         overlayWiring?.onDurableEvent(event);

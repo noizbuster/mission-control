@@ -4,6 +4,7 @@ import { bottomDockPolicy } from './chat-bottom-dock-policy';
 import {
     approvalLevelColor,
     buildStatusDivider,
+    contextUsagePercent,
     formatBottomStatus,
     formatBottomStatusRow,
     formatTopStatus,
@@ -41,6 +42,25 @@ describe('humanizeTokens', () => {
     it('renders millions with one decimal', () => {
         expect(humanizeTokens(1_500_000)).toBe('1.5M');
         expect(humanizeTokens(2_000_000)).toBe('2M');
+    });
+});
+
+describe('contextUsagePercent', () => {
+    it('rounds to the nearest whole percent', () => {
+        expect(contextUsagePercent(12345, 200000)).toBe(6);
+        expect(contextUsagePercent(100000, 200000)).toBe(50);
+        expect(contextUsagePercent(0, 200000)).toBe(0);
+    });
+
+    it('allows values above 100 when used exceeds max', () => {
+        expect(contextUsagePercent(250000, 200000)).toBe(125);
+    });
+
+    it('returns undefined for non-positive max or invalid inputs', () => {
+        expect(contextUsagePercent(100, 0)).toBe(undefined);
+        expect(contextUsagePercent(100, -1)).toBe(undefined);
+        expect(contextUsagePercent(-1, 200000)).toBe(undefined);
+        expect(contextUsagePercent(Number.NaN, 200000)).toBe(undefined);
     });
 });
 
@@ -88,18 +108,18 @@ describe('formatTopStatus', () => {
         expect(out.contextLabel).toBe(undefined);
     });
 
-    it('humanizes used / max when the max is known', () => {
+    it('humanizes used / max with fill percent when the max is known', () => {
         const out = formatTopStatus({
             ...baseProps,
             contextTokensUsed: 12345,
             contextTokensMax: 200000,
         });
-        expect(out.contextLabel).toBe('12.3k / 200k');
+        expect(out.contextLabel).toBe('12.3k / 200k (6%)');
     });
 
-    it('shows 0 used before the first turn rather than undefined', () => {
+    it('shows 0 used and 0% before the first turn rather than undefined', () => {
         const out = formatTopStatus({ ...baseProps, contextTokensMax: 200000 });
-        expect(out.contextLabel).toBe('0 / 200k');
+        expect(out.contextLabel).toBe('0 / 200k (0%)');
     });
 });
 
@@ -236,7 +256,7 @@ describe('policy-derived status rows', () => {
         const bottom = formatBottomStatusRow(props);
 
         // Then: context/project/session follow the >=80 policy gate.
-        expect(top.contextLabel).toBe('12.3k / 200k');
+        expect(top.contextLabel).toBe('12.3k / 200k (6%)');
         expect(bottom.projectLabel).toBe('mission-control:feature-x');
         expect(bottom.sessionLabel).toBe('session_abc123');
         expect(top.fillCount).toBeGreaterThanOrEqual(0);

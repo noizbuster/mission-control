@@ -118,6 +118,18 @@ export function humanizeTokens(n: number | undefined): string | undefined {
     return `${trimmed}${suffix}`;
 }
 
+/**
+ * Whole-number fill percent for the context segment. Returns `undefined` when
+ * the max is unknown or non-positive so the caller can omit the suffix.
+ * Values above 100% are kept (context can exceed a configured soft limit).
+ */
+export function contextUsagePercent(used: number, max: number): number | undefined {
+    if (!(max > 0) || !Number.isFinite(max) || !Number.isFinite(used) || used < 0) {
+        return undefined;
+    }
+    return Math.round((used / max) * 100);
+}
+
 /** Resolve the ramp color for an approval level; `undefined` for an unknown level. */
 export function approvalLevelColor(level: ApprovalLevel | undefined): string | undefined {
     if (level === undefined) {
@@ -152,10 +164,17 @@ function buildProjectLabel(
 
 /** Pure view-model for the top status line. The context segment hides unless the max is known. */
 export function formatTopStatus(props: StatusBarProps): TopStatusShape {
-    const contextLabel =
-        props.contextTokensMax === undefined
-            ? undefined
-            : `${humanizeTokens(props.contextTokensUsed ?? 0)} / ${humanizeTokens(props.contextTokensMax)}`;
+    let contextLabel: string | undefined;
+    if (props.contextTokensMax !== undefined) {
+        const used = props.contextTokensUsed ?? 0;
+        const usedLabel = humanizeTokens(used);
+        const maxLabel = humanizeTokens(props.contextTokensMax);
+        const percent = contextUsagePercent(used, props.contextTokensMax);
+        contextLabel =
+            percent === undefined
+                ? `${usedLabel} / ${maxLabel}`
+                : `${usedLabel} / ${maxLabel} (${percent}%)`;
+    }
     return {
         provider: props.providerID,
         model: props.modelID,
