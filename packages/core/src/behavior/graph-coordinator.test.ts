@@ -1219,6 +1219,15 @@ describe('bounded ABG graph coordinator', () => {
             result.status === 'completed' ||
                 result.events.some((event) => event.abg?.nodeId === 'present' && event.type === 'node.completed'),
         ).toBe(true);
+        expect(blackboardValues(result.events, 'routing.escalated_from')).toContain('gate');
+        expect(blackboardValues(result.events, 'routing.escalation_code')).toContain('routing_dead_end');
+        expect(
+            result.events.some(
+                (event) =>
+                    event.abg?.emit?.type === 'routing.escalated' ||
+                    (typeof event.message === 'string' && event.message.includes('routing.escalated')),
+            ),
+        ).toBe(true);
     });
 
     it('progresses when a conditional equals edge matches after success', async () => {
@@ -1328,6 +1337,20 @@ function attemptsFor(events: readonly AgentEvent[], nodeId: string) {
         .filter((event) => event.abg?.nodeId === nodeId && event.abg.attempt !== undefined)
         .map((event) => event.abg?.attempt);
     return [...new Set(attempts)];
+}
+
+function blackboardValues(events: readonly AgentEvent[], key: string): readonly unknown[] {
+    return events.flatMap((event) => {
+        const emit = event.abg?.emit;
+        if (emit?.type !== 'blackboard.set') {
+            return [];
+        }
+        const payload = emit.payload;
+        if (typeof payload !== 'object' || payload === null || !('key' in payload)) {
+            return [];
+        }
+        return payload.key === key && 'value' in payload ? [payload.value] : [];
+    });
 }
 
 function attemptEventTypesFor(events: readonly AgentEvent[], nodeId: string) {
