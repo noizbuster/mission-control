@@ -7,7 +7,8 @@
 import type { AbgGraphSpec, WorkflowSpec } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import { createAuthorableAbgGraph } from './authorable-graph';
-import { createDefaultWorkflowGraph, DEFAULT_PLAN_READONLY_MODE } from './default-workflow-graph';
+import { createDefaultWorkflowGraph } from './default-workflow-graph';
+import { PLANNER_READONLY_MODE } from './planner-workflow-graph';
 import { createExecuterWorkflowGraph } from './executer-workflow-graph';
 import { createFixerWorkflowGraph } from './fixer-workflow-graph';
 import { createPlannerWorkflowGraph } from './planner-workflow-graph';
@@ -242,13 +243,22 @@ describe('assertRoutingKeyBiCoverage — built-in workflows green', () => {
         expect(() => materializeWorkflow({ name: _name, graph })).not.toThrow();
     });
 
-    it('default materialize with plan-readonly mode still passes bi-coverage', () => {
-        // Given / When / Then
+    it('default materialize with no modes still passes bi-coverage', () => {
         expect(() =>
             materializeWorkflow({
                 name: 'default',
                 graph: createDefaultWorkflowGraph(),
-                modes: [DEFAULT_PLAN_READONLY_MODE],
+            }),
+        ).not.toThrow();
+    });
+
+    it('planner materialize with plan-readonly mode still passes bi-coverage', async () => {
+        const { createPlannerWorkflowGraph } = await import('./planner-workflow-graph');
+        expect(() =>
+            materializeWorkflow({
+                name: 'planner',
+                graph: createPlannerWorkflowGraph(),
+                modes: [PLANNER_READONLY_MODE],
             }),
         ).not.toThrow();
     });

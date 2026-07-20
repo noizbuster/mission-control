@@ -34,6 +34,6 @@ describe('createExecuterWorkflowGraph', () => {
         const graph = createExecuterWorkflowGraph();
         const prompts = graph.nodes.map((n) => String(n.config?.['systemPrompt'] ?? '')).join('\n');
         expect(prompts).toMatch(/Mission Control|executer/i);
-        expect(prompts).not.toMatch(/Atlas|Sisyphus|OhMyOpenCode/);
+        expect(prompts).not.toMatch(/Atlas|Sisyphus|OhMyOpenCode|Hephaestus|Prometheus|Metis|Momus/);
     });
 });

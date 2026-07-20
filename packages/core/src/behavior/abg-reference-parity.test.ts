@@ -109,27 +109,29 @@ function mockTextModel(text: string): MockLanguageModelV3 {
     });
 }
 
-describe('abg reference parity: default workflow plan-first fallback', () => {
+describe('abg reference parity: default workflow intent-gated implementer fallback', () => {
     it('produces a schema-valid default graph used as the no-# fallback', () => {
         const graph = createDefaultWorkflowGraph();
         const result = AbgGraphSpecSchema.safeParse(graph);
         expect(result.success).toBe(true);
         expect(graph.id).toBe('default');
-        expect(graph.entryNodeId).toBe('intake');
+        expect(graph.entryNodeId).toBe('intent-gate');
     });
 
-    it('declares draft-plan → review-plan → approval-gate → write-plan path', () => {
+    it('declares intent-gate → todo-plan → delegate-wave → verify path', () => {
         const ids = new Set(createDefaultWorkflowGraph().nodes.map((node) => node.id));
-        expect(ids.has('draft-plan')).toBe(true);
-        expect(ids.has('review-plan')).toBe(true);
-        expect(ids.has('approval-gate')).toBe(true);
-        expect(ids.has('write-plan')).toBe(true);
+        expect(ids.has('intent-gate')).toBe(true);
+        expect(ids.has('todo-plan')).toBe(true);
+        expect(ids.has('delegate-wave')).toBe(true);
+        expect(ids.has('verify-wave')).toBe(true);
+        expect(ids.has('evidence-check')).toBe(true);
     });
 
-    it('does not implement via intent-gate / delegate-wave on the default path', () => {
+    it('does not force plan-scaffold nodes on the default path', () => {
         const ids = new Set(createDefaultWorkflowGraph().nodes.map((node) => node.id));
-        expect(ids.has('intent-gate')).toBe(false);
-        expect(ids.has('delegate-wave')).toBe(false);
+        expect(ids.has('draft-plan')).toBe(false);
+        expect(ids.has('write-plan')).toBe(false);
+        expect(ids.has('approval-gate')).toBe(false);
     });
 });
 
@@ -292,7 +294,7 @@ describe('abg reference parity: executer workflow plan parsing and final gate', 
     });
 
     it('parsePlanChecklistText counts only checkboxes under ## TODOs and ## Final Verification Wave headings', () => {
-        // Reference behavior (oh-my-openagent boulder-state): only checkboxes under
+        // Reference behavior (reference boulder-state): only checkboxes under
         // the counted section headings are tallied. The current parser counts every
         // column-0 checkbox regardless of section.
         const markdown = [
@@ -385,22 +387,22 @@ describe('abg reference parity: parallel fanOutKey and structured blackboard sta
 
     it('workflow llm node outputKey is persisted to the blackboard by a generic seam', async () => {
         const graph = createDefaultWorkflowGraph();
-        const assessAmbiguity = graph.nodes.find((node) => node.id === 'assess-ambiguity');
-        expect(configString(assessAmbiguity, 'outputKey')).toBe('ambiguity.classification');
-        if (assessAmbiguity === undefined) throw new Error('test setup: assess-ambiguity missing');
+        const intentGate = graph.nodes.find((node) => node.id === 'intent-gate');
+        expect(configString(intentGate, 'outputKey')).toBe('intent.classification');
+        if (intentGate === undefined) throw new Error('test setup: intent-gate missing');
 
         const blackboard = createBlackboard();
-        blackboard.appendMessages([{ role: 'user', content: 'classify' }] as readonly ModelMessage[]);
+        blackboard.appendMessages([{ role: 'user', content: 'hello' }] as readonly ModelMessage[]);
         const context: AbgNodeRunContext = {
             graphId: 'g_row4',
             now: () => '2026-06-20T00:00:00.000Z',
-            sdkModel: mockTextModel('clear'),
+            sdkModel: mockTextModel('trivial'),
             blackboard,
         };
 
-        await collectSignals(runLlmActorNode(assessAmbiguity, context));
+        await collectSignals(runLlmActorNode(intentGate, context));
 
-        expect(blackboard.get('ambiguity.classification')).toBe('clear');
+        expect(blackboard.get('intent.classification')).toBe('trivial');
     });
 });
 
