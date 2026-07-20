@@ -7,8 +7,9 @@
  *     trivial                  -> direct-respond
  *     exploratory-research     -> research-explore (read-only) -> final-respond
  *     open-ended-planning      -> route-planner (#planner or ONE question; NEVER implement)
- *     explicit-implementation  -> memory -> maturity-check -> anti-dup-guard ->
- *                                 todo-plan -> delegate-wave -> verify-wave -> {
+ *     explicit-implementation  -> memory -> maturity-sample -> maturity-classify ->
+ *                                 anti-dup-guard -> todo-plan -> delegate-wave ->
+ *                                 verify-wave -> {
  *                                     critic-passed -> evidence-check -> final-respond
  *                                   | critic-failed -> supervisor (3-strike) -> retry|final-respond
  *                                 }

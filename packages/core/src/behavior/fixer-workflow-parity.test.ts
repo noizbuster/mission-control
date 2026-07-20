@@ -283,8 +283,9 @@ describe('fixer workflow parity — explicit-implementation creates todos + dele
     it('declares the full explicit-implementation chain as edges', () => {
         const graph = createFixerWorkflowGraph();
         const chain = [
-            ['memory', 'maturity-check'],
-            ['maturity-check', 'anti-dup-guard'],
+            ['memory', 'maturity-sample'],
+            ['maturity-sample', 'maturity-classify'],
+            ['maturity-classify', 'anti-dup-guard'],
             ['anti-dup-guard', 'todo-plan'],
             ['todo-plan', 'delegate-wave'],
             ['delegate-wave', 'verify-wave'],
@@ -320,9 +321,22 @@ describe('fixer workflow parity — explicit-implementation creates todos + dele
         expect(/delegation-bias|delegation bias|delegation/i.test(text)).toBe(true);
     });
 
-    it('maturity-check assesses codebase maturity before implementing', () => {
+    it('maturity-sample is a short read-only hybrid gate before classify', () => {
         const graph = createFixerWorkflowGraph();
-        const node = findNode(graph, 'maturity-check');
+        const node = findNode(graph, 'maturity-sample');
+        expect(node.capabilities).toEqual(['read']);
+        expect(configString(node, 'outputKey')).toBe('explore.sampled');
+        expect(configString(node, 'outputShape')).toBe('boolean');
+        expect(configValue(node, 'loopActiveSoftLandAttempts')).toBe(5);
+        const prompt = configString(node, 'systemPrompt') ?? '';
+        expect(/sample/i.test(prompt)).toBe(true);
+        expect(/read-only|READ-ONLY/i.test(prompt)).toBe(true);
+    });
+
+    it('maturity-classify is a pure structured enum gate after sampling', () => {
+        const graph = createFixerWorkflowGraph();
+        const node = findNode(graph, 'maturity-classify');
+        expect(node.capabilities).toEqual([]);
         const prompt = configString(node, 'systemPrompt') ?? '';
         expect(/disciplined|transitional|legacy|greenfield/i.test(prompt)).toBe(true);
         expect(configString(node, 'outputKey')).toBe('explore.maturity');
@@ -333,6 +347,7 @@ describe('fixer workflow parity — explicit-implementation creates todos + dele
             'legacy',
             'greenfield',
         ]);
+        expect(configString(node, 'outputSoftLandDefault')).toBe('transitional');
     });
 });
 
@@ -432,8 +447,9 @@ const FIXER_EQUALS_ROUTED_LLM_GATES = [
     },
     { nodeId: 'research-explore', outputKey: 'explore.complete', kind: 'boolean' as const },
     { nodeId: 'route-planner', outputKey: 'planner.routed', kind: 'boolean' as const },
+    { nodeId: 'maturity-sample', outputKey: 'explore.sampled', kind: 'boolean' as const },
     {
-        nodeId: 'maturity-check',
+        nodeId: 'maturity-classify',
         outputKey: 'explore.maturity',
         kind: 'enum' as const,
         outputEnum: ['disciplined', 'transitional', 'legacy', 'greenfield'],

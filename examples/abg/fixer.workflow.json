@@ -40,7 +40,8 @@
         "config": {
           "systemPrompt": "Exploratory/research intent. Explore the codebase and/or external docs to answer the user's question, then synthesize a grounded answer. You are READ-ONLY: you must NOT edit, write, patch, or run effectful tools. Cite file:line evidence for every claim about the codebase. Do NOT begin implementation — if the exploration reveals the user actually wants implementation, say so and stop.\nPATH RESILIENCE: paths mentioned in project docs (AGENTS.md, CLAUDE.md) may be stale after refactors. If a documented path returns not_found, do NOT conclude the file or feature is missing — fall back to glob with the basename (e.g. \"**/<basename>\"), grep for a distinctive symbol from the docs, or list the parent directory. Only conclude \"not present\" after at least one alternative search has returned empty. A failed read is NOT explored ground — it tells you nothing about whether the file exists elsewhere.\nMulti-turn: keep calling tools until you have enough grounded evidence for a complete answer. While exploring, call tools and do NOT output true. When ready, synthesize the answer. Output ONLY the JSON boolean `true` when complete — no prose, no formatting, no extra text.",
           "outputKey": "explore.complete",
-          "outputShape": "boolean"
+          "outputShape": "boolean",
+          "loopActiveSoftLandAttempts": 16
         }
       },
       {
@@ -67,14 +68,26 @@
         }
       },
       {
-        "id": "maturity-check",
+        "id": "maturity-sample",
         "kind": "llm",
-        "label": "Assess codebase maturity and existing patterns before implementing",
+        "label": "Sample codebase maturity signals (read-only)",
         "capabilities": [
           "read"
         ],
         "config": {
-          "systemPrompt": "Before following existing patterns, assess whether they are worth following. Sample config files (linter, formatter, type config) and 2-3 similar files. Classify the codebase state and record it so downstream nodes follow the right discipline:\n- disciplined (consistent patterns, configs present, tests exist) -> follow existing style strictly.\n- transitional (mixed patterns, some structure) -> note which pattern to follow.\n- legacy (no consistency, outdated patterns) -> propose an approach, do not copy.\n- greenfield (new/empty) -> apply modern best practices.\nIf the codebase looks undisciplined, verify before assuming — different patterns may serve different purposes intentionally.\nWhile sampling, call read tools and do NOT emit the classification yet. When ready, Output ONLY one class name — no quotes, no formatting, no extra text:\n- disciplined\n- transitional\n- legacy\n- greenfield",
+          "systemPrompt": "Sample 2-3 representative files to assess codebase maturity before implementation. Look at config files (linter, formatter, type config) and 2-3 similar implementation files. You are READ-ONLY: do NOT edit, write, patch, or run effectful tools. This is a SAMPLE, not full bug investigation or exhaustive coverage — cap exploration at roughly 3 files. Do NOT classify maturity here and do NOT begin implementation. While sampling, call read tools and do NOT emit true. When you have enough signal to classify, Output ONLY the JSON boolean `true` — no prose, no formatting, no extra text.",
+          "outputKey": "explore.sampled",
+          "outputShape": "boolean",
+          "loopActiveSoftLandAttempts": 5
+        }
+      },
+      {
+        "id": "maturity-classify",
+        "kind": "llm",
+        "label": "Classify codebase maturity from sampled evidence",
+        "capabilities": [],
+        "config": {
+          "systemPrompt": "You are a pure structured gate. Do NOT explore, do NOT call tools, do NOT continue prior assistant turns. Judge the sampling results already in context and emit exactly one maturity class so downstream nodes follow the right discipline:\n- disciplined (consistent patterns, configs present, tests exist) -> follow existing style strictly.\n- transitional (mixed patterns, some structure) -> note which pattern to follow.\n- legacy (no consistency, outdated patterns) -> propose an approach, do not copy.\n- greenfield (new/empty) -> apply modern best practices.\nIf the sample is insufficient, default to transitional rather than guessing. Output ONLY one class name — no quotes, no formatting, no extra text:\n- disciplined\n- transitional\n- legacy\n- greenfield",
           "outputKey": "explore.maturity",
           "outputShape": "string",
           "outputEnum": [
@@ -82,7 +95,8 @@
             "transitional",
             "legacy",
             "greenfield"
-          ]
+          ],
+          "outputSoftLandDefault": "transitional"
         }
       },
       {
@@ -90,7 +104,7 @@
         "kind": "llm",
         "label": "Anti-dup exploration guard and delegation-bias check",
         "config": {
-          "systemPrompt": "You are a pure boolean gate. Do NOT explore, do NOT call tools, do NOT continue prior assistant turns. Judge the existing conversation only, then emit one token.\n\nTwo checks before delegation:\n1. ANTI-DUP: if the work was already SUCCESSFULLY explored (a read that returned content, a grep with matches — check prior exploration results in context), do NOT re-read the same files. Skip redundant exploration and proceed with what is already known. Re-running the same successful searches wastes tokens and can contradict earlier findings. A tool FAILURE (not_found, read_failed, empty glob) is NOT explored ground — it tells you nothing, so it must NOT count as prior exploration. If a documented path failed, switch tools (glob the basename, grep a symbol, list the parent) before treating the area as covered.\n2. DELEGATION-BIAS: assess whether delegation is appropriate. Is the task small enough to do directly with certainty? Is there an existing pattern to follow (per the maturity check)? Default bias is DELEGATE for non-trivial work, but trivial single-file work you can do correctly yourself should be done directly rather than over-delegated.\nOutput ONLY `true` or `false` — no prose, no formatting, no extra text. Output `true` when both checks pass and the plan may proceed to todo planning; output `false` otherwise.",
+          "systemPrompt": "You are a pure boolean gate. Do NOT explore, do NOT call tools, do NOT continue prior assistant turns. Judge the existing conversation only, then emit one token.\n\nTwo checks before delegation:\n1. ANTI-DUP: if the work was already SUCCESSFULLY explored (a read that returned content, a grep with matches — check prior exploration results in context), do NOT re-read the same files. Skip redundant exploration and proceed with what is already known. Re-running the same successful searches wastes tokens and can contradict earlier findings. A tool FAILURE (not_found, read_failed, empty glob) is NOT explored ground — it tells you nothing, so it must NOT count as prior exploration. If a documented path failed, switch tools (glob the basename, grep a symbol, list the parent) before treating the area as covered.\n2. DELEGATION-BIAS: assess whether delegation is appropriate. Is the task small enough to do directly with certainty? Is there an existing pattern to follow (per the maturity classification already in context)? Default bias is DELEGATE for non-trivial work, but trivial single-file work you can do correctly yourself should be done directly rather than over-delegated.\nOutput ONLY `true` or `false` — no prose, no formatting, no extra text. Output `true` when both checks pass and the plan may proceed to todo planning; output `false` otherwise.",
           "outputKey": "guard.cleared",
           "outputShape": "boolean"
         }
@@ -164,7 +178,7 @@
         "label": "Synthesize final answer citing evidence",
         "capabilities": [],
         "config": {
-          "systemPrompt": "Synthesize the final answer from verified results already in context. Cite the evidence that was checked (files changed, tests passing, build status, command output). Do not claim completion beyond what the evidence supports; surface pre-existing failures unrelated to this work as notes rather than fixing them. Do NOT call any tools — synthesize ONLY from what is already in the conversation."
+          "systemPrompt": "Synthesize the final answer from verified results already in context. Cite the evidence that was checked (files changed, tests passing, build status, command output). Do not claim completion beyond what the evidence supports; surface pre-existing failures unrelated to this work as notes rather than fixing them. If context indicates llm.soft_landed was set or a node soft-landed after a loop_active cap, begin with a clear note that the run hit a soft-land cap and evidence may be partial — do not present partial mid-exploration prose as a complete successful fix. Do NOT call any tools — synthesize ONLY from what is already in the conversation."
         }
       },
       {
@@ -247,12 +261,18 @@
       },
       {
         "source": "memory",
-        "target": "maturity-check",
+        "target": "maturity-sample",
         "condition": "memory-loaded",
         "priority": 10
       },
       {
-        "source": "maturity-check",
+        "source": "maturity-sample",
+        "target": "maturity-classify",
+        "condition": "maturity-sampled",
+        "priority": 10
+      },
+      {
+        "source": "maturity-classify",
         "target": "anti-dup-guard",
         "condition": "maturity-assessed",
         "priority": 10
@@ -336,8 +356,8 @@
         "priority": 5
       },
       {
-        "source": "maturity-check",
-        "target": "maturity-check",
+        "source": "maturity-sample",
+        "target": "maturity-sample",
         "condition": "llm-loop-active",
         "priority": 5
       },
@@ -421,6 +441,15 @@
         "when": {
           "kind": "blackboard.value.equals",
           "key": "memory.loaded",
+          "value": true
+        }
+      },
+      {
+        "id": "maturity-sampled",
+        "description": "maturity sampling complete",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "explore.sampled",
           "value": true
         }
       },

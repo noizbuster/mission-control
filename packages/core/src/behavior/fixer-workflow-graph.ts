@@ -9,8 +9,9 @@
  *     exploratory-research     -> research-explore (read-only, NO edits) -> final-respond
  *     open-ended-planning      -> route-planner (route to #planner or ask ONE question;
  *                                 NEVER implement) -> final-respond
- *     explicit-implementation  -> memory -> maturity-check -> anti-dup-guard ->
- *                                 todo-plan -> delegate-wave -> verify-wave -> {
+ *     explicit-implementation  -> memory -> maturity-sample -> maturity-classify ->
+ *                                 anti-dup-guard -> todo-plan -> delegate-wave ->
+ *                                 verify-wave -> {
  *                                     critic-passed -> evidence-check -> final-respond
  *                                   | critic-failed -> supervisor (3-strike) -> {
  *                                         retry     -> delegate-wave (bounded)
@@ -24,8 +25,8 @@
  *   - Intent verbalization is deferred: the gate emits one exact class without prose.
  *   - Richer intent classes: trivial / exploratory-research / open-ended-planning /
  *     explicit-implementation / ambiguous.
- *   - Codebase maturity assessment: before following patterns, classify the codebase as
- *     disciplined / transitional / legacy / greenfield.
+ *   - Codebase maturity is split: maturity-sample (read-only, short hybrid loop) then
+ *     maturity-classify (pure structured gate → explore.maturity enum).
  *   - Anti-dup exploration guard + delegation-bias check: before delegating, confirm prior
  *     exploration is not duplicated and delegation is the right move vs doing it directly.
  *   - Evidence requirements: after delegation, verify concrete evidence (test results, file
@@ -38,8 +39,8 @@
  * allow: SIZE_OK - indivisible declarative graph spec byte-identity-tested against the
  * fixture as one unit via `toEqual` (`fixer-workflow-graph.test.ts`). Sibling factories
  * (planner, runner, default) follow the same data-table pattern; this one grew because the
- * implement/fix richness adds nodes (research-explore, route-planner, maturity-check,
- * anti-dup-guard, evidence-check) and richer prompts.
+ * implement/fix richness adds nodes (research-explore, route-planner, maturity-sample,
+ * maturity-classify, anti-dup-guard, evidence-check) and richer prompts.
  */
 import type { AbgGraphSpec, AbgNodeModelOptions } from '@mission-control/protocol';
 
@@ -140,6 +141,7 @@ export function createFixerWorkflowGraph(options: FixerWorkflowGraphOptions = {}
                         'answer. Output ONLY the JSON boolean `true` when complete — no prose, no formatting, no extra text.',
                     outputKey: 'explore.complete',
                     outputShape: 'boolean',
+                    loopActiveSoftLandAttempts: 16,
                 },
             },
             {
@@ -170,23 +172,40 @@ export function createFixerWorkflowGraph(options: FixerWorkflowGraphOptions = {}
                 config: { op: 'set', key: 'memory.loaded', value: true },
             },
             {
-                id: 'maturity-check',
+                id: 'maturity-sample',
                 kind: 'llm',
-                label: 'Assess codebase maturity and existing patterns before implementing',
+                label: 'Sample codebase maturity signals (read-only)',
                 capabilities: ['read'],
                 config: {
                     systemPrompt:
-                        'Before following existing patterns, assess whether they are worth following. Sample ' +
-                        'config files (linter, formatter, type config) and 2-3 similar files. Classify the ' +
-                        'codebase state and record it so downstream nodes follow the right discipline:\n' +
+                        'Sample 2-3 representative files to assess codebase maturity before implementation. ' +
+                        'Look at config files (linter, formatter, type config) and 2-3 similar implementation ' +
+                        'files. You are READ-ONLY: do NOT edit, write, patch, or run effectful tools. ' +
+                        'This is a SAMPLE, not full bug investigation or exhaustive coverage — cap exploration ' +
+                        'at roughly 3 files. Do NOT classify maturity here and do NOT begin implementation. ' +
+                        'While sampling, call read tools and do NOT emit true. When you have enough signal to ' +
+                        'classify, Output ONLY the JSON boolean `true` — no prose, no formatting, no extra text.',
+                    outputKey: 'explore.sampled',
+                    outputShape: 'boolean',
+                    loopActiveSoftLandAttempts: 5,
+                },
+            },
+            {
+                id: 'maturity-classify',
+                kind: 'llm',
+                label: 'Classify codebase maturity from sampled evidence',
+                capabilities: [],
+                config: {
+                    systemPrompt:
+                        'You are a pure structured gate. Do NOT explore, do NOT call tools, do NOT continue ' +
+                        'prior assistant turns. Judge the sampling results already in context and emit exactly ' +
+                        'one maturity class so downstream nodes follow the right discipline:\n' +
                         '- disciplined (consistent patterns, configs present, tests exist) -> follow existing ' +
                         'style strictly.\n' +
                         '- transitional (mixed patterns, some structure) -> note which pattern to follow.\n' +
                         '- legacy (no consistency, outdated patterns) -> propose an approach, do not copy.\n' +
                         '- greenfield (new/empty) -> apply modern best practices.\n' +
-                        'If the codebase looks undisciplined, verify before assuming — different patterns may ' +
-                        'serve different purposes intentionally.\n' +
-                        'While sampling, call read tools and do NOT emit the classification yet. When ready, ' +
+                        'If the sample is insufficient, default to transitional rather than guessing. ' +
                         'Output ONLY one class name — no quotes, no formatting, no extra text:\n' +
                         '- disciplined\n' +
                         '- transitional\n' +
@@ -195,6 +214,7 @@ export function createFixerWorkflowGraph(options: FixerWorkflowGraphOptions = {}
                     outputKey: 'explore.maturity',
                     outputShape: 'string',
                     outputEnum: ['disciplined', 'transitional', 'legacy', 'greenfield'],
+                    outputSoftLandDefault: 'transitional',
                 },
             },
             {
@@ -216,8 +236,9 @@ export function createFixerWorkflowGraph(options: FixerWorkflowGraphOptions = {}
                         'parent) before treating the area as covered.\n' +
                         '2. DELEGATION-BIAS: assess whether delegation is appropriate. Is the task small enough ' +
                         'to do directly with certainty? Is there an existing pattern to follow (per the maturity ' +
-                        'check)? Default bias is DELEGATE for non-trivial work, but trivial single-file work ' +
-                        'you can do correctly yourself should be done directly rather than over-delegated.\n' +
+                        'classification already in context)? Default bias is DELEGATE for non-trivial work, but ' +
+                        'trivial single-file work you can do correctly yourself should be done directly rather ' +
+                        'than over-delegated.\n' +
                         'Output ONLY `true` or `false` — no prose, no formatting, no extra text. Output `true` ' +
                         'when both checks pass and the plan may proceed to todo planning; output `false` ' +
                         'otherwise.',
@@ -300,8 +321,11 @@ export function createFixerWorkflowGraph(options: FixerWorkflowGraphOptions = {}
                         'Cite the evidence that was checked (files changed, tests passing, build ' +
                         'status, command output). Do not claim completion beyond what the evidence ' +
                         'supports; surface pre-existing failures unrelated to this work as notes ' +
-                        'rather than fixing them. Do NOT call any tools — synthesize ONLY from ' +
-                        'what is already in the conversation.',
+                        'rather than fixing them. If context indicates llm.soft_landed was set or a ' +
+                        'node soft-landed after a loop_active cap, begin with a clear note that the ' +
+                        'run hit a soft-land cap and evidence may be partial — do not present ' +
+                        'partial mid-exploration prose as a complete successful fix. Do NOT call ' +
+                        'any tools — synthesize ONLY from what is already in the conversation.',
                 },
             },
             {
@@ -331,8 +355,9 @@ export function createFixerWorkflowGraph(options: FixerWorkflowGraphOptions = {}
             { source: 'research-explore', target: 'research-explore', condition: 'llm-loop-active', priority: 5 },
             { source: 'route-planner', target: 'final-respond', condition: 'planner-routed', priority: 10 },
             { source: 'route-planner', target: 'route-planner', condition: 'llm-loop-active', priority: 5 },
-            { source: 'memory', target: 'maturity-check', condition: 'memory-loaded', priority: 10 },
-            { source: 'maturity-check', target: 'anti-dup-guard', condition: 'maturity-assessed', priority: 10 },
+            { source: 'memory', target: 'maturity-sample', condition: 'memory-loaded', priority: 10 },
+            { source: 'maturity-sample', target: 'maturity-classify', condition: 'maturity-sampled', priority: 10 },
+            { source: 'maturity-classify', target: 'anti-dup-guard', condition: 'maturity-assessed', priority: 10 },
             { source: 'anti-dup-guard', target: 'todo-plan', condition: 'guard-cleared', priority: 10 },
             { source: 'todo-plan', target: 'delegate-wave', condition: 'plan-ready', priority: 10 },
             { source: 'delegate-wave', target: 'verify-wave', condition: 'wave-complete', priority: 10 },
@@ -346,7 +371,7 @@ export function createFixerWorkflowGraph(options: FixerWorkflowGraphOptions = {}
             { source: 'final-respond', target: 'final-respond', condition: 'llm-loop-active', priority: 5 },
             { source: 'clarify', target: 'intent-gate', condition: 'clarify-loop', priority: 10 },
             { source: 'clarify', target: 'clarify', condition: 'llm-loop-active', priority: 5 },
-            { source: 'maturity-check', target: 'maturity-check', condition: 'llm-loop-active', priority: 5 },
+            { source: 'maturity-sample', target: 'maturity-sample', condition: 'llm-loop-active', priority: 5 },
             { source: 'anti-dup-guard', target: 'anti-dup-guard', condition: 'llm-loop-active', priority: 5 },
             { source: 'todo-plan', target: 'todo-plan', condition: 'llm-loop-active', priority: 5 },
             { source: 'evidence-check', target: 'evidence-check', condition: 'llm-loop-active', priority: 5 },
@@ -398,6 +423,11 @@ export function createFixerWorkflowGraph(options: FixerWorkflowGraphOptions = {}
                 id: 'memory-loaded',
                 description: 'context memory loaded',
                 when: { kind: 'blackboard.value.equals', key: 'memory.loaded', value: true },
+            },
+            {
+                id: 'maturity-sampled',
+                description: 'maturity sampling complete',
+                when: { kind: 'blackboard.value.equals', key: 'explore.sampled', value: true },
             },
             {
                 id: 'maturity-assessed',
