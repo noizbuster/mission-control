@@ -1,5 +1,5 @@
 /**
- * Pure dual-review routing for the planner post-Metis high-accuracy path (plan T6).
+ * Pure dual-review routing for the planner post-gap-analysis high-accuracy path (plan T6).
  *
  * `routeDualReview` is the only authority for `dual.route` (`skip` | `run`).
  * `routeFixDual` is the only authority for `dual.fix_route` (`revise` | `escalate`)
@@ -7,7 +7,7 @@
  *
  * Fail-closed: missing `intent` or `review_required` → `run`.
  * On dual-fix revise, the dual-fix-gate runner resets `metis.rejects` to 0
- * so a dual-fix rewrite gets one fresh Metis chance (decision 18).
+ * so a dual-fix rewrite gets one fresh gap-analysis chance (decision 18).
  */
 
 /** Named dual-fix budget (first REJECT revises; second escalates). */

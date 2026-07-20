@@ -1,8 +1,8 @@
 // allow: SIZE_OK -- HEAD 336 -> current 336 pure LOC; one byte-parity and behavior contract for the declarative planner workflow graph.
 /**
- * Planner workflow Prometheus-mechanics parity suite (plan Task 7).
+ * Planner workflow planner-mechanics parity suite (plan Task 7).
  *
- * Proves the behaviors ported from the reference ulw-plan / Prometheus planner:
+ * Proves the behaviors ported from the reference strategic planner:
  *   1. Sticky plan mode — the planner produces a PLAN, never product code.
  *   2. Planner-readonly denies product writes on the EXECUTED (materialized)
  *      graph and allows only .omo/plans/**, .omo/specs/**, .omo/drafts/**.

@@ -1,7 +1,7 @@
 /**
  * Planner review + runner handoff gates (plan Task 8).
  *
- * Proves the Metis/Momus-style review semantics on the planner review-plan node
+ * Proves the strict gap-analysis / dual-review semantics on the planner review-plan node
  * and the runner handoff contract:
  *   1. review-plan documents gap analysis (references, QA, acceptance, scaffold)
  *      and is approve-biased; high-accuracy dual review is opt-in, not default.
@@ -50,7 +50,7 @@ function criticContext(draftText: string) {
     return { graphId: 'planner-review', now: () => '2026-07-03T00:00:00.000Z', blackboard };
 }
 
-describe('planner review-plan: Metis/Momus gap-analysis contract', () => {
+describe('planner review-plan: strict gap-analysis / dual-review contract', () => {
     it('exposes the gap-analysis prompt as an exported constant', () => {
         expect(PLANNER_REVIEW_GAP_ANALYSIS_PROMPT).toMatch(/GAP ANALYSIS/i);
         expect(PLANNER_REVIEW_GAP_ANALYSIS_PROMPT).toMatch(/APPROVE-BIAS|approve-bias/i);

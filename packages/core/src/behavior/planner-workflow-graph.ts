@@ -142,7 +142,7 @@ export const PLANNER_READONLY_MODE: Mode = {
  * executability floor only: the review-plan node runs the deterministic `critic`
  * implementation in draft-heuristic mode (no `evaluateKey`), so a draft is
  * rejected only when it is empty, cites no file:line evidence, or is a non-answer.
- * Stricter Metis gap analysis lives on the separate `metis-gap` LLM node.
+ * Stricter Strict plan gap analysis lives on the separate `metis-gap` LLM node.
  */
 export const PLANNER_REVIEW_GAP_ANALYSIS_PROMPT =
     'You are the plan review critic for deep autonomous planning. Review the latest draft for ' +
@@ -165,13 +165,13 @@ export const PLANNER_REVIEW_GAP_ANALYSIS_PROMPT =
     'draft that is non-empty, cites real references, and is a genuine plan passes.';
 
 /**
- * Metis-gap LLM prompt (plan T5). Stricter than the deterministic review-plan
+ * Gap-analysis LLM prompt. Stricter than the deterministic review-plan
  * floor: rejects drafts that pass the floor but still lack concrete refs, QA
  * scenarios, acceptance criteria, scaffold headers, or a verification strategy.
  * Output is the whole-output boolean for `metis.passed` only.
  */
 export const PLANNER_METIS_GAP_PROMPT =
-    'You are Metis, the strict plan gap-analysis critic for deep autonomous planning. The ' +
+    'You are the strict plan gap-analysis critic for deep autonomous planning. The ' +
     'deterministic floor already confirmed the draft is non-empty, cites file:line evidence, and ' +
     'is not a non-answer. Your job is STRICTER gap analysis. Reject (metis.passed=false) when ANY ' +
     'of these concrete gaps is present: (1) MISSING or weak REFERENCES — todos lack real file:line ' +
@@ -184,11 +184,11 @@ export const PLANNER_METIS_GAP_PROMPT =
     'critical gap so draft-plan can revise. Output ONLY the JSON boolean `true` if the draft ' +
     'passes every check, or `false` if any gap remains — no prose, no formatting, no extra text.';
 
-/** Terminal prompt when Metis reject budget or dual-fix budget is exhausted. */
+/** Terminal prompt when gap-analysis reject budget or dual-fix budget is exhausted. */
 export const PLANNER_PRESENT_BLOCKED_PROMPT =
-    'Planning is blocked: either Metis gap analysis exhausted metis.rejects, or dual-review ' +
+    'Planning is blocked: either gap analysis exhausted metis.rejects, or dual-review ' +
     '(reviewer+oracle) exhausted dual.fixes after REJECT. Present a clear blocked summary: name ' +
-    'which gate blocked (Metis vs dual-review), the last critical gap or dual verdicts if known, ' +
+    'which gate blocked (gap-analysis vs dual-review), the last critical gap or dual verdicts if known, ' +
     'and tell the user what to change or how to resume. Do NOT write .omo/plans/, do NOT implement ' +
     'product code, and do NOT loop back into draft-plan. This node is terminal.';
 
@@ -463,7 +463,7 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
             {
                 id: 'metis-gap',
                 kind: 'llm',
-                label: 'Metis gap analysis — stricter refs/QA/acceptance/headers/verification',
+                label: 'Strict plan gap analysis — stricter refs/QA/acceptance/headers/verification',
                 // Structured boolean writer (no custom implementation): bi-coverage applies.
                 capabilities: [],
                 config: {
@@ -476,7 +476,7 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
                 id: 'metis-reject-gate',
                 kind: 'llm',
                 implementation: 'metis-reject-gate',
-                label: 'Metis reject budget — revise once then escalate to present-blocked',
+                label: 'Gap-analysis reject budget — revise once then escalate to present-blocked',
                 // Deterministic pure runner: empty capabilities keep pureStructuredGate true.
                 capabilities: [],
                 config: {
@@ -489,7 +489,7 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
             {
                 id: 'present-blocked',
                 kind: 'llm',
-                label: 'Terminal — Metis or dual-fix budget exhausted; present blocked summary',
+                label: 'Terminal — gap-analysis or dual-review budget exhausted; present blocked summary',
                 capabilities: [],
                 config: {
                     systemPrompt: PLANNER_PRESENT_BLOCKED_PROMPT,

@@ -62,7 +62,7 @@ export const runDualFixGateNode: AbgNodeRunner = async function* (
     if (route === 'revise') {
         nextFixes = fixes + 1;
         blackboard.set(fixKey, nextFixes);
-        // Decision 18: dual-fix rewrite gets one fresh Metis chance.
+        // Decision 18: dual-fix rewrite gets one fresh gap-analysis chance.
         blackboard.set(metisRejectKey, 0);
     }
 

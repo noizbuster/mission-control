@@ -1,5 +1,5 @@
 /**
- * Pure Metis reject-budget routing for the planner post-floor gap analysis (plan T5).
+ * Pure gap-analysis reject-budget routing for the planner post-floor gap analysis.
  *
  * `routeMetisReject` is the only authority for `metis.reject_route`
  * (`revise` | `escalate_present`). Budget is a named counter (`metis.rejects`),
@@ -7,10 +7,10 @@
  * second reject escalates to present-blocked.
  *
  * Session-sticky for the planner run. T6 resets the counter to 0 when the
- * dual-fix revise path re-enters so a dual-fix rewrite gets one fresh Metis chance.
+ * dual-fix revise path re-enters so a dual-fix rewrite gets one fresh gap-analysis chance.
  */
 
-/** Named Metis reject budget (first reject revises; second escalates). */
+/** Named Gap-analysis reject budget (first reject revises; second escalates). */
 export const PLANNER_METIS_REJECT_BUDGET = 1;
 
 /** Equals-routed `metis.reject_route` labels (bi-coverage vocabulary). */

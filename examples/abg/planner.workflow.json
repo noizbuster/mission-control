@@ -176,10 +176,10 @@
       {
         "id": "metis-gap",
         "kind": "llm",
-        "label": "Metis gap analysis — stricter refs/QA/acceptance/headers/verification",
+        "label": "Strict plan gap analysis — stricter refs/QA/acceptance/headers/verification",
         "capabilities": [],
         "config": {
-          "systemPrompt": "You are Metis, the strict plan gap-analysis critic for deep autonomous planning. The deterministic floor already confirmed the draft is non-empty, cites file:line evidence, and is not a non-answer. Your job is STRICTER gap analysis. Reject (metis.passed=false) when ANY of these concrete gaps is present: (1) MISSING or weak REFERENCES — todos lack real file:line anchors or cite unrelated content; (2) MISSING QA SCENARIOS — a todo lacks happy+failure QA with tool, concrete steps, and expected result (vague \"verify it works\" fails); (3) MISSING ACCEPTANCE CRITERIA — a todo has no agent-executable acceptance criteria; (4) MISSING SCAFFOLD HEADERS — draft omits ## Todos or ## Final Verification Wave; (5) MISSING VERIFICATION STRATEGY — no concrete way an executor can prove success (tests, diagnostics, manual QA surface). Prefer reject over approve when a gap is real. When rejecting, name the SINGLE most critical gap so draft-plan can revise. Output ONLY the JSON boolean `true` if the draft passes every check, or `false` if any gap remains — no prose, no formatting, no extra text.",
+          "systemPrompt": "You are the strict plan gap-analysis critic for deep autonomous planning. The deterministic floor already confirmed the draft is non-empty, cites file:line evidence, and is not a non-answer. Your job is STRICTER gap analysis. Reject (metis.passed=false) when ANY of these concrete gaps is present: (1) MISSING or weak REFERENCES — todos lack real file:line anchors or cite unrelated content; (2) MISSING QA SCENARIOS — a todo lacks happy+failure QA with tool, concrete steps, and expected result (vague \"verify it works\" fails); (3) MISSING ACCEPTANCE CRITERIA — a todo has no agent-executable acceptance criteria; (4) MISSING SCAFFOLD HEADERS — draft omits ## Todos or ## Final Verification Wave; (5) MISSING VERIFICATION STRATEGY — no concrete way an executor can prove success (tests, diagnostics, manual QA surface). Prefer reject over approve when a gap is real. When rejecting, name the SINGLE most critical gap so draft-plan can revise. Output ONLY the JSON boolean `true` if the draft passes every check, or `false` if any gap remains — no prose, no formatting, no extra text.",
           "outputKey": "metis.passed",
           "outputShape": "boolean"
         }
@@ -188,7 +188,7 @@
         "id": "metis-reject-gate",
         "kind": "llm",
         "implementation": "metis-reject-gate",
-        "label": "Metis reject budget — revise once then escalate to present-blocked",
+        "label": "Gap-analysis reject budget — revise once then escalate to present-blocked",
         "capabilities": [],
         "config": {
           "outputKey": "metis.reject_route",
@@ -203,10 +203,10 @@
       {
         "id": "present-blocked",
         "kind": "llm",
-        "label": "Terminal — Metis or dual-fix budget exhausted; present blocked summary",
+        "label": "Terminal — gap-analysis or dual-review budget exhausted; present blocked summary",
         "capabilities": [],
         "config": {
-          "systemPrompt": "Planning is blocked: either Metis gap analysis exhausted metis.rejects, or dual-review (reviewer+oracle) exhausted dual.fixes after REJECT. Present a clear blocked summary: name which gate blocked (Metis vs dual-review), the last critical gap or dual verdicts if known, and tell the user what to change or how to resume. Do NOT write .omo/plans/, do NOT implement product code, and do NOT loop back into draft-plan. This node is terminal."
+          "systemPrompt": "Planning is blocked: either gap analysis exhausted metis.rejects, or dual-review (reviewer+oracle) exhausted dual.fixes after REJECT. Present a clear blocked summary: name which gate blocked (gap-analysis vs dual-review), the last critical gap or dual verdicts if known, and tell the user what to change or how to resume. Do NOT write .omo/plans/, do NOT implement product code, and do NOT loop back into draft-plan. This node is terminal."
         }
       },
       {
