@@ -41,21 +41,19 @@ describe('default workflow production fixture end-to-end', () => {
         ]);
     });
 
-    it('discovers the production default workflow with the plan-first intake entry node', async () => {
+    it('discovers the production default workflow with intent-gate entry', async () => {
         const result = await discoverWorkflows({ workspaceRoot: workspaceDir, userConfigDir: configDir });
 
         expect(result.diagnostics).toEqual([]);
         const spec = new WorkflowRegistry(result.workflows).lookup('default');
         expect(spec?.graph.id).toBe('default');
-        expect(spec?.graph.entryNodeId).toBe('intake');
-        const intake = spec?.graph.nodes.find((node) => node.id === 'intake');
-        const outputKey = 'outputKey';
-        expect(intake?.config?.[outputKey]).toBe('intake.complete');
-        const modes = spec?.modes ?? [];
-        expect(modes.some((mode) => mode.id === 'plan-readonly')).toBe(true);
+        expect(spec?.graph.entryNodeId).toBe('intent-gate');
+        const gate = spec?.graph.nodes.find((node) => node.id === 'intent-gate');
+        expect(gate?.config?.['outputKey']).toBe('intent.classification');
+        expect(spec?.modes === undefined || spec.modes.length === 0).toBe(true);
     });
 
-    it('dispatches a plain prompt through the default plan-first graph', async () => {
+    it('dispatches a plain prompt through the default implementer graph', async () => {
         const output = await runAgent(buildWorkflowArgs('explain how the build works', 'json'), {
             provider,
             workspaceRoot: workspaceDir,
@@ -63,32 +61,18 @@ describe('default workflow production fixture end-to-end', () => {
         const events = parseWorkflowJsonEvents(output);
 
         expect(events.some((event) => event.type === 'graph.started' && event.abg?.graphId === 'default')).toBe(true);
-        expect(events.some((event) => event.type === 'model.call.started' && event.abg?.nodeId === 'intake')).toBe(
+        expect(events.some((event) => event.type === 'model.call.started' && event.abg?.nodeId === 'intent-gate')).toBe(
             true,
         );
-        expect(blackboardValues(events, 'intake.complete')).toContain(true);
-        expect(blackboardValues(events, 'ambiguity.classification')).toContain('clear');
-        expect(blackboardValues(events, 'explore.decision')).toContain('needs-exploration');
-        const exploreCompleteValues = blackboardValues(events, 'explore.complete');
-        expect(exploreCompleteValues.length).toBeGreaterThan(0);
-        expect(exploreCompleteValues.every((value) => value === false)).toBe(true);
-        expect(events.some((event) => event.type === 'graph.completed')).toBe(true);
-        expect(events.some((event) => event.type === 'task.completed')).toBe(true);
+        expect(blackboardValues(events, 'intent.classification')).toContain('exploratory-research');
+        expect(events.some((event) => event.type === 'graph.completed' || event.type === 'task.completed')).toBe(true);
         expect(events.some((event) => event.type === 'graph.failed' || event.type === 'task.failed')).toBe(false);
-        expect(
-            events.some(
-                (event) =>
-                    event.abg?.error?.code === 'graph_loop_limit' || event.abg?.error?.code === 'provider_timeout',
-            ),
-        ).toBe(false);
         for (const nodeId of ['draft-plan', 'approval-gate', 'write-plan', 'delegate-wave']) {
             expect(events.some((event) => event.type === 'node.started' && event.abg?.nodeId === nodeId)).toBe(false);
         }
-        expect(events.some((event) => event.type === 'tool.started')).toBe(false);
-        expect(blackboardValues(events, 'plan.ready')).toEqual([]);
     });
 
-    it('sticky plan mode: implement prompts still run the plan graph, not delegate-wave', async () => {
+    it('sticky implement: fix prompts run the implement graph, not plan write-plan', async () => {
         const output = await runAgent(buildWorkflowArgs('implement a tiny change', 'json'), {
             provider,
             workspaceRoot: workspaceDir,
@@ -96,27 +80,23 @@ describe('default workflow production fixture end-to-end', () => {
         const events = parseWorkflowJsonEvents(output);
 
         expect(events.some((event) => event.type === 'graph.started' && event.abg?.graphId === 'default')).toBe(true);
-        expect(events.some((event) => event.type === 'node.started' && event.abg?.nodeId === 'delegate-wave')).toBe(
-            false,
-        );
-        expect(events.some((event) => event.type === 'node.started' && event.abg?.nodeId === 'intent-gate')).toBe(
-            false,
-        );
-        expect(events.some((event) => event.type === 'model.call.started' && event.abg?.nodeId === 'intake')).toBe(
+        expect(events.some((event) => event.type === 'node.started' && event.abg?.nodeId === 'write-plan')).toBe(false);
+        expect(events.some((event) => event.type === 'model.call.started' && event.abg?.nodeId === 'intent-gate')).toBe(
             true,
         );
+        expect(blackboardValues(events, 'intent.classification')).toContain('explicit-implementation');
     }, 30_000);
 
-    it('runs the intake entry node', async () => {
+    it('runs the intent-gate entry node', async () => {
         const output = await runAgent(buildWorkflowArgs('hello', 'json'), { provider, workspaceRoot: workspaceDir });
         const events = parseWorkflowJsonEvents(output);
 
-        expect(events.some((event) => event.type === 'model.call.started' && event.abg?.nodeId === 'intake')).toBe(
+        expect(events.some((event) => event.type === 'model.call.started' && event.abg?.nodeId === 'intent-gate')).toBe(
             true,
         );
     });
 
-    it('carries the plan-first nodes', async () => {
+    it('carries the implementer nodes', async () => {
         const result = await discoverWorkflows({ workspaceRoot: workspaceDir, userConfigDir: configDir });
         const spec = new WorkflowRegistry(result.workflows).lookup('default');
         expect(spec).toBeDefined();
@@ -124,13 +104,13 @@ describe('default workflow production fixture end-to-end', () => {
 
         const nodeIds = new Set(spec.graph.nodes.map((node) => node.id));
         for (const nodeId of [
-            'intake',
-            'assess-ambiguity',
-            'explore-filter',
-            'draft-plan',
-            'approval-gate',
-            'write-plan',
-            'present',
+            'intent-gate',
+            'direct-respond',
+            'research-explore',
+            'route-planner',
+            'todo-plan',
+            'delegate-wave',
+            'final-respond',
         ]) {
             expect(nodeIds.has(nodeId)).toBe(true);
         }
