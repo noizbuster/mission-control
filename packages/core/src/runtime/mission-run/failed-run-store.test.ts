@@ -19,11 +19,11 @@ afterEach(() => {
 function makeTempLocation(): NormalizedMissionRunStoreLocation {
     const root = mkdtempSync(join(tmpdir(), 'failed-run-store-test-'));
     tempRoots.push(root);
-    return { omoRoot: join(root, 'project'), dataDir: join(root, 'data') };
+    return { mcRoot: join(root, 'project'), dataDir: join(root, 'data') };
 }
 
 function writeLegacyRun(root: string, runId: string, contents: string): void {
-    const runsDir = join(root, '.omo', 'runs');
+    const runsDir = join(root, '.mc', 'runs');
     mkdirSync(runsDir, { recursive: true });
     writeFileSync(join(runsDir, `${runId}.json`), contents);
 }
@@ -32,7 +32,7 @@ describe('findMostRecentFailedRun', () => {
     it('fails closed when legacy failed run JSON is corrupt', async () => {
         // Given
         const location = makeTempLocation();
-        writeLegacyRun(location.omoRoot, 'invalid-json', '{ broken');
+        writeLegacyRun(location.mcRoot, 'invalid-json', '{ broken');
 
         // When
         await expect(findMostRecentFailedRun(location)).rejects.toMatchObject({ code: 'legacy_run_corrupt' });
@@ -41,7 +41,7 @@ describe('findMostRecentFailedRun', () => {
     it('fails closed when legacy failed run schema is invalid', async () => {
         // Given
         const location = makeTempLocation();
-        writeLegacyRun(location.omoRoot, 'invalid-schema', JSON.stringify({ id: 'invalid-schema', status: 'failed' }));
+        writeLegacyRun(location.mcRoot, 'invalid-schema', JSON.stringify({ id: 'invalid-schema', status: 'failed' }));
 
         // When
         await expect(findMostRecentFailedRun(location)).rejects.toMatchObject({ code: 'legacy_run_corrupt' });
@@ -51,7 +51,7 @@ describe('findMostRecentFailedRun', () => {
         // Given
         const location = makeTempLocation();
         writeLegacyRun(
-            location.omoRoot,
+            location.mcRoot,
             'unexpected-parser-error',
             JSON.stringify({
                 id: 'unexpected-parser-error',

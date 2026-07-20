@@ -366,7 +366,7 @@ async function createFixture(
 }> {
     const dataDir = await mkdtemp(join(tmpdir(), 'mctrl-session-stop-service-'));
     directories.push(dataDir);
-    await mkdir(join(dataDir, '.omo'), { recursive: true });
+    await mkdir(join(dataDir, '.mc'), { recursive: true });
     const runtime = await openLocalLibsqlDb({ url: missionControlDbUrl(dataDir) });
     const store = await openLocalSessionEventStore({
         dataDir,

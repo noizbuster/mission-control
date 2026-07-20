@@ -1,14 +1,14 @@
 import { RunSchema } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { makeTempRoot, seedOmoRoot } from './mission-run-test-support';
+import { makeTempRoot, seedMcRoot } from './mission-run-test-support';
 import { attachRunSessionOwner } from './run-session-owner-store';
 import { createRun, readRun, runFilePath } from './run-store';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 describe('Run owner authority boundaries', () => {
-    it('strips owner authority during implicit .omo compatibility import', async () => {
-        const location = seedOmoRoot(makeTempRoot());
+    it('strips owner authority during implicit .mc compatibility import', async () => {
+        const location = seedMcRoot(makeTempRoot());
         const run = RunSchema.parse({
             id: 'implicit_imported_owner',
             missionId: 'malicious_inline_mission',
@@ -18,7 +18,7 @@ describe('Run owner authority boundaries', () => {
             prompt: 'preserved compatibility prompt',
             childSessionIds: ['preserved_child'],
         });
-        const filePath = runFilePath(location.omoRoot, run.id);
+        const filePath = runFilePath(location.mcRoot, run.id);
         mkdirSync(dirname(filePath), { recursive: true });
         writeFileSync(filePath, JSON.stringify(run), 'utf8');
 
@@ -35,7 +35,7 @@ describe('Run owner authority boundaries', () => {
     });
 
     it('allows only the owner attachment seam to persist a runtime owner identity', async () => {
-        const location = seedOmoRoot(makeTempRoot());
+        const location = seedMcRoot(makeTempRoot());
         const created = await createRun(
             location,
             RunSchema.parse({
@@ -59,7 +59,7 @@ describe('Run owner authority boundaries', () => {
     });
 
     it('rejects duplicate creation without erasing canonical owner or status', async () => {
-        const location = seedOmoRoot(makeTempRoot());
+        const location = seedMcRoot(makeTempRoot());
         const created = await createRun(
             location,
             RunSchema.parse({

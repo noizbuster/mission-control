@@ -2,7 +2,7 @@
  * Mission store — SQL-backed CRUD for Mission state objects.
  *
  * New writes go to the shared local libSQL database at `<data-dir>/mission-control.db`.
- * Missing SQL rows may fall back to `.omo/missions/{missionId}.json` compatibility
+ * Missing SQL rows may fall back to `.mc/missions/{missionId}.json` compatibility
  * records owned by this store. Database startup never probes an older SQL file.
  */
 
@@ -13,14 +13,14 @@ import {
     listCompatibilityJsonRecordIds,
     readCompatibilityJsonFile,
 } from '../../persistence/json-compatibility-file';
-import { OmoPersistenceError } from '../../persistence/paths';
+import { McPersistenceError } from '../../persistence/paths';
 import type { ObservabilityRedactor } from '../../providers/observability-redactor';
 import { listMissionsFromDb, readMissionFromDb, writeMissionToDb } from './mission-run-db';
 import { type MissionRunStoreLocation, normalizeMissionRunStoreLocation } from './mission-run-store-location';
 
 const MISSIONS_DIR = 'missions';
 
-export class MissionStoreError extends OmoPersistenceError {
+export class MissionStoreError extends McPersistenceError {
     constructor(message: string, code: string, path?: string, cause?: unknown) {
         super(message, code, path, cause !== undefined ? { cause } : undefined);
         this.name = 'MissionStoreError';
@@ -75,7 +75,7 @@ export async function readMission(location: MissionRunStoreLocation, missionId: 
         return sanitizeMissionForPersistence(dbMission, normalized.observabilityRedactor);
     }
     const legacyMission = sanitizeMissionForPersistence(
-        await readMissionJson(normalized.omoRoot, missionId),
+        await readMissionJson(normalized.mcRoot, missionId),
         normalized.observabilityRedactor,
     );
     await writeMissionToDb(normalized.dataDir, legacyMission);
@@ -154,7 +154,7 @@ export async function listMissions(location: MissionRunStoreLocation): Promise<r
     const seenIds = new Set(missions.map((mission) => mission.id));
     let missionIds: readonly string[];
     try {
-        missionIds = await listCompatibilityJsonRecordIds(normalized.omoRoot, MISSIONS_DIR);
+        missionIds = await listCompatibilityJsonRecordIds(normalized.mcRoot, MISSIONS_DIR);
     } catch (error: unknown) {
         throw mapCompatibilityError(error, MISSIONS_DIR);
     }
@@ -164,7 +164,7 @@ export async function listMissions(location: MissionRunStoreLocation): Promise<r
             continue;
         }
         const mission = sanitizeMissionForPersistence(
-            await readMissionJson(normalized.omoRoot, missionId),
+            await readMissionJson(normalized.mcRoot, missionId),
             normalized.observabilityRedactor,
         );
         await writeMissionToDb(normalized.dataDir, mission);

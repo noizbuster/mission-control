@@ -46,7 +46,7 @@ describe('legacy session import detailed projections', () => {
             const whenResult = await importLegacySessionCompatibilityWindow({
                 ...runtime,
                 dataDir,
-                omoRoot: join(TMP_ROOT, 'detailed-import', '.omo'),
+                mcRoot: join(TMP_ROOT, 'detailed-import', '.mc'),
                 now: () => '2026-07-01T00:00:00.000Z',
             });
             const messages = await client.execute(

@@ -104,13 +104,13 @@ describe('runner stop state persistence', () => {
     });
 
     it('markStopped throws when the boulder is missing', async () => {
-        rmSync(join(tmpRoot, '.omo', 'boulder.json'), { force: true });
+        rmSync(join(tmpRoot, '.mc', 'boulder.json'), { force: true });
         const rt = makeRuntime();
         await expect(rt.markStopped('test')).rejects.toThrow(/boulder.json missing/);
     });
 
     it('clearStopped is safe when boulder is missing', async () => {
-        rmSync(join(tmpRoot, '.omo', 'boulder.json'), { force: true });
+        rmSync(join(tmpRoot, '.mc', 'boulder.json'), { force: true });
         const rt = makeRuntime();
         await expect(rt.clearStopped()).resolves.toBeUndefined();
     });

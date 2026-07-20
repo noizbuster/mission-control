@@ -20,7 +20,7 @@ afterEach(async () => {
 
 describe('SqlContextEpochStore', () => {
     it('persists context epoch rows and reads them after reopen', async () => {
-        const omoRoot = await makeTempRoot();
+        const mcRoot = await makeTempRoot();
         const dataDir = await makeTempRoot();
         const first = await SqlContextEpochStore.open({ dataDir });
         await first.recordEpoch({
@@ -46,7 +46,7 @@ describe('SqlContextEpochStore', () => {
             [1, 'test/source', undefined, 'Updated source text'],
         ]);
         expect(existsSync(localSessionDbPath(dataDir))).toBe(true);
-        expect(existsSync(localSessionDbPath(omoRoot))).toBe(false);
-        expect(existsSync(join(omoRoot, '.omo', 'mission-control.db'))).toBe(false);
+        expect(existsSync(localSessionDbPath(mcRoot))).toBe(false);
+        expect(existsSync(join(mcRoot, '.mc', 'mission-control.db'))).toBe(false);
     });
 });

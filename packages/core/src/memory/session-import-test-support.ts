@@ -15,7 +15,7 @@ export const SESSION_IMPORT_TEST_CREATED_AT = '2026-06-30T01:00:00.000Z';
 export type LegacyFixture = {
     readonly root: string;
     readonly dataDir: string;
-    readonly omoRoot: string;
+    readonly mcRoot: string;
     readonly jsonlPath: string;
     readonly runPath: string;
 };
@@ -35,8 +35,8 @@ export async function writeLegacyFixture(input: {
     const root = join(input.tmpRoot, input.name);
     const dataDir = join(root, 'data');
     const sessionsDir = join(dataDir, 'sessions');
-    const omoRoot = join(root, '.omo');
-    const runsDir = join(omoRoot, 'runs');
+    const mcRoot = join(root, '.mc');
+    const runsDir = join(mcRoot, 'runs');
     await mkdir(sessionsDir, { recursive: true });
     await mkdir(runsDir, { recursive: true });
 
@@ -45,7 +45,7 @@ export async function writeLegacyFixture(input: {
     await writeFile(jsonlPath, legacyJsonl(), 'utf8');
     await writeFile(runPath, `${JSON.stringify(runRecord())}\n`, 'utf8');
 
-    return { root, dataDir, omoRoot, jsonlPath, runPath };
+    return { root, dataDir, mcRoot, jsonlPath, runPath };
 }
 
 export async function readSourceBytes(fixture: LegacyFixture): Promise<Readonly<Record<string, string>>> {

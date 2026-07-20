@@ -92,7 +92,7 @@ describe('Phase 1 integration: workflow lifecycle', () => {
     });
 
     it('exercises all 7 foundations in a single end-to-end scenario', async () => {
-        const missionRunLocation = { omoRoot: tmpRoot, dataDir: join(tmpRoot, 'data') };
+        const missionRunLocation = { mcRoot: tmpRoot, dataDir: join(tmpRoot, 'data') };
         // Step 1 — Define a workflow via protocol schemas (Task 1.1).
         const workflowSpec = WorkflowSpecSchema.parse({
             name: 'demo-workflow',
@@ -104,7 +104,7 @@ describe('Phase 1 integration: workflow lifecycle', () => {
                     id: 'guarded',
                     policies: [
                         { action: 'write', resource: '**', effect: 'deny' },
-                        { action: 'write', resource: '.omo/**', effect: 'allow' },
+                        { action: 'write', resource: '.mc/**', effect: 'allow' },
                     ],
                 },
             ],
@@ -114,14 +114,14 @@ describe('Phase 1 integration: workflow lifecycle', () => {
         // Step 2 — Evaluate the workflow mode's policy-gate rules (Task 1.2).
         const guardedPolicies = workflowSpec.modes?.[0]?.policies ?? [];
         const rulesets = [{ rules: guardedPolicies }];
-        expect(evaluateRules('write', '.omo/plans/demo.md', rulesets).effect).toBe('allow');
+        expect(evaluateRules('write', '.mc/plans/demo.md', rulesets).effect).toBe('allow');
         expect(evaluateRules('write', 'src/index.ts', rulesets).effect).toBe('deny');
 
         // Step 3 — Persist boulder state + parse a plan checklist (Task 1.3).
         await writeBoulder(tmpRoot, makeBoulderState(WORK_ID));
         expect((await readBoulder(tmpRoot))?.active_work_id).toBe(WORK_ID);
 
-        const planPath = join(tmpRoot, '.omo', 'plans', 'demo.md');
+        const planPath = join(tmpRoot, '.mc', 'plans', 'demo.md');
         mkdirSync(dirname(planPath), { recursive: true });
         writeFileSync(planPath, '# Demo Plan\n\n- [ ] First step\n- [x] Second step\n- [ ] Third step\n');
         const checklist = await parsePlanChecklist(planPath);

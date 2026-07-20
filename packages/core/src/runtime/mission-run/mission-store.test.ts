@@ -34,7 +34,7 @@ describe('mission-store', () => {
 
     it('throws MissionStoreError(mission_corrupt) for invalid JSON', async () => {
         const location = makeMissionRunTestLocation();
-        const filePath = missionFilePath(location.omoRoot, 'bad');
+        const filePath = missionFilePath(location.mcRoot, 'bad');
         mkdirSync(join(filePath, '..'), { recursive: true });
         writeFileSync(filePath, '{ not valid json');
 
@@ -45,7 +45,7 @@ describe('mission-store', () => {
 
     it('throws MissionStoreError(mission_corrupt) for schema-invalid content', async () => {
         const location = makeMissionRunTestLocation();
-        const filePath = missionFilePath(location.omoRoot, 'bad-schema');
+        const filePath = missionFilePath(location.mcRoot, 'bad-schema');
         mkdirSync(join(filePath, '..'), { recursive: true });
         writeFileSync(filePath, JSON.stringify({ id: 'bad-schema', name: 'missing fields' }));
 
@@ -62,11 +62,11 @@ describe('mission-store', () => {
 
     it.skipIf(process.platform === 'win32')('rejects a symlinked compatible Missions directory', async () => {
         const location = makeMissionRunTestLocation();
-        const externalMissions = join(location.omoRoot, 'external-missions');
+        const externalMissions = join(location.mcRoot, 'external-missions');
         const mission = materializeMission(makeTestWorkflowSpec());
         mkdirSync(externalMissions, { recursive: true });
         writeFileSync(join(externalMissions, `${mission.id}.json`), JSON.stringify(mission));
-        symlinkSync(externalMissions, join(location.omoRoot, '.omo', 'missions'));
+        symlinkSync(externalMissions, join(location.mcRoot, '.mc', 'missions'));
 
         await expect(readMission(location, mission.id)).rejects.toMatchObject({ code: 'mission_unsafe_source' });
     });
@@ -74,7 +74,7 @@ describe('mission-store', () => {
     it('rejects a compatible Mission whose payload id differs from its filename', async () => {
         const location = makeMissionRunTestLocation();
         const mission = materializeMission(makeTestWorkflowSpec());
-        const filePath = missionFilePath(location.omoRoot, 'requested-mission');
+        const filePath = missionFilePath(location.mcRoot, 'requested-mission');
         mkdirSync(join(filePath, '..'), { recursive: true });
         writeFileSync(filePath, JSON.stringify(mission));
 
@@ -92,7 +92,7 @@ describe('mission-store', () => {
             ...makeTestWorkflowSpec(),
             description: `mission ${credential}`,
         });
-        const filePath = missionFilePath(location.omoRoot, mission.id);
+        const filePath = missionFilePath(location.mcRoot, mission.id);
         mkdirSync(join(filePath, '..'), { recursive: true });
         writeFileSync(filePath, JSON.stringify(mission));
 
@@ -141,7 +141,7 @@ describe('mission-store', () => {
 });
 
 describe('MissionStoreError', () => {
-    it('extends OmoPersistenceError', () => {
+    it('extends McPersistenceError', () => {
         const err = new MissionStoreError('test', 'test_code');
         expect(err).toBeInstanceOf(Error);
         expect(err.code).toBe('test_code');

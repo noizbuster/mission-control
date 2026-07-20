@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { SqliteSessionEventStore } from '../../memory/sqlite-session-event-store';
 import { localRuntimeDbUrl } from '../local-runtime-db';
-import { makeTempRoot, seedOmoRoot } from './mission-run-test-support';
+import { makeTempRoot, seedMcRoot } from './mission-run-test-support';
 import { createRun, updateRunStatus } from './run-store';
 
 const statusRowSchema = z.object({ status: z.string() });
@@ -12,7 +12,7 @@ const metadataRowSchema = z.object({ metadata_json: z.string() });
 
 describe('mission-run session lifecycle refresh', () => {
     it('converges idle(aborted) when the final mission run settles without another session event', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const sessionId = 'session_mission_survivor';
         const store = await SqliteSessionEventStore.open({
             dataDir: root.dataDir,

@@ -22,18 +22,18 @@ export function makeTempRoot(): string {
     return root;
 }
 
-export function seedOmoRoot(root: string): NormalizedMissionRunStoreLocation {
+export function seedMcRoot(root: string): NormalizedMissionRunStoreLocation {
     const dataDir = join(root, 'data');
-    mkdirSync(join(root, '.omo'), { recursive: true });
+    mkdirSync(join(root, '.mc'), { recursive: true });
     mkdirSync(dataDir, { recursive: true });
-    return { omoRoot: root, dataDir };
+    return { mcRoot: root, dataDir };
 }
 
 export function makeMissionRunTestLocation(): NormalizedMissionRunStoreLocation {
     const root = makeTempRoot();
     const projectRoot = join(root, 'project');
-    mkdirSync(join(projectRoot, '.omo'), { recursive: true });
-    return { omoRoot: projectRoot, dataDir: join(root, 'data') };
+    mkdirSync(join(projectRoot, '.mc'), { recursive: true });
+    return { mcRoot: projectRoot, dataDir: join(root, 'data') };
 }
 
 export function makeTestWorkflowSpec(): WorkflowSpec {

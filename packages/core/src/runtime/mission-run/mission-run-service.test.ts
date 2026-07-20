@@ -5,7 +5,7 @@ import { openMissionControlDb } from '../../db/mission-control-db';
 import { localSessionDbPath, localSessionDbUrl } from '../../memory/local-session-store-paths';
 import { TursoPersistentStore } from '../../memory/turso-persistent-store';
 import { blockRun, cancelRun, completeRun, failRun, materializeMission, startRun } from './mission-run-service';
-import { makeTempRoot, makeTestWorkflowSpec, seedOmoRoot } from './mission-run-test-support';
+import { makeTempRoot, makeTestWorkflowSpec, seedMcRoot } from './mission-run-test-support';
 import { createMission, missionFilePath, readMission } from './mission-store';
 import {
     createRun,
@@ -21,7 +21,7 @@ import { join } from 'node:path';
 
 describe('mission-run lifecycle', () => {
     it('transitions pending -> running -> completed with cost and terminal reason', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const mission = materializeMission(makeTestWorkflowSpec());
         await createMission(root, mission);
 
@@ -48,7 +48,7 @@ describe('mission-run lifecycle', () => {
     });
 
     it('transitions running -> failed with terminal reason', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const mission = materializeMission(makeTestWorkflowSpec());
         await createMission(root, mission);
         const runningRun = await startRun(root, mission.id, 'try and fail');
@@ -61,7 +61,7 @@ describe('mission-run lifecycle', () => {
     });
 
     it('redacts and bounds terminal reasons at the Run persistence boundary', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const mission = materializeMission(makeTestWorkflowSpec());
         await createMission(root, mission);
         const runningRun = await startRun(root, mission.id, 'try and fail safely');
@@ -74,7 +74,7 @@ describe('mission-run lifecycle', () => {
     });
 
     it('transitions running -> cancelled with terminal reason', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const mission = materializeMission(makeTestWorkflowSpec());
         await createMission(root, mission);
         const runningRun = await startRun(root, mission.id, 'start then cancel');
@@ -87,7 +87,7 @@ describe('mission-run lifecycle', () => {
     });
 
     it('persists the initiating prompt on the Run so retry can recover it', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const mission = materializeMission(makeTestWorkflowSpec());
         await createMission(root, mission);
 
@@ -97,7 +97,7 @@ describe('mission-run lifecycle', () => {
     });
 
     it('persists records in the shared local Mission Control DB across reopen', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const mission = materializeMission(makeTestWorkflowSpec());
         await createMission(root, mission);
         const runningRun = await startRun(root, mission.id, 'survive reopen');
@@ -125,9 +125,9 @@ describe('mission-run lifecycle', () => {
         sharedDb.close();
 
         expect(existsSync(localSessionDbPath(root.dataDir))).toBe(true);
-        expect(existsSync(join(root.omoRoot, '.omo', 'mission-control.db'))).toBe(false);
-        expect(existsSync(missionFilePath(root.omoRoot, mission.id))).toBe(false);
-        expect(existsSync(runFilePath(root.omoRoot, runningRun.id))).toBe(false);
+        expect(existsSync(join(root.mcRoot, '.mc', 'mission-control.db'))).toBe(false);
+        expect(existsSync(missionFilePath(root.mcRoot, mission.id))).toBe(false);
+        expect(existsSync(runFilePath(root.mcRoot, runningRun.id))).toBe(false);
         expect(memoryRows.rows).toEqual([{ value: '{"status":"shared-db"}' }]);
         expect(missionRows.rows).toEqual([{ mission_id: mission.id }]);
         expect(runRows.rows).toEqual([{ run_id: runningRun.id }]);
@@ -138,7 +138,7 @@ describe('mission-run lifecycle', () => {
     });
 
     it('finds the most recent failed Run and ignores completed Runs', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const mission = materializeMission(makeTestWorkflowSpec());
         await createMission(root, mission);
         expect(await findMostRecentFailedRun(root)).toBeUndefined();
@@ -157,7 +157,7 @@ describe('mission-run lifecycle', () => {
     });
 
     it('returns no recent failed Run when only completed Runs exist', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const mission = materializeMission(makeTestWorkflowSpec());
         await createMission(root, mission);
         const run = await startRun(root, mission.id, 'succeeds');
@@ -167,7 +167,7 @@ describe('mission-run lifecycle', () => {
     });
 
     it('rejects an invalid pending -> completed transition', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const mission = materializeMission(makeTestWorkflowSpec());
         await createMission(root, mission);
         const pending = RunSchema.parse({ id: crypto.randomUUID(), missionId: mission.id, status: 'pending' as const });
@@ -177,7 +177,7 @@ describe('mission-run lifecycle', () => {
     });
 
     it('rejects transitions from a terminal state', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const mission = materializeMission(makeTestWorkflowSpec());
         await createMission(root, mission);
         const running = await startRun(root, mission.id, 'complete then try to resume');
@@ -187,7 +187,7 @@ describe('mission-run lifecycle', () => {
     });
 
     it('supports blocked -> running transition', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const mission = materializeMission(makeTestWorkflowSpec());
         await createMission(root, mission);
         const runningRun = await startRun(root, mission.id, 'will block');
@@ -197,7 +197,7 @@ describe('mission-run lifecycle', () => {
     });
 
     it('links an explicitly supplied session and leaves a Run unlinked otherwise', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const mission = materializeMission(makeTestWorkflowSpec());
         await createMission(root, mission);
 
@@ -209,7 +209,7 @@ describe('mission-run lifecycle', () => {
     });
 
     it('blocks a running Run without terminal metadata', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const mission = materializeMission(makeTestWorkflowSpec());
         await createMission(root, mission);
         const running = await startRun(root, mission.id, 'await approval', { sessionId: 'session_blocked' });
@@ -222,7 +222,7 @@ describe('mission-run lifecycle', () => {
     });
 
     it('rejects a blocked transition that tries to replace the attached owner', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const mission = materializeMission(makeTestWorkflowSpec());
         await createMission(root, mission);
         const running = await startRun(root, mission.id, 'preserve owner', { sessionId: 'session_owner' });
@@ -239,7 +239,7 @@ describe('mission-run lifecycle', () => {
     });
 
     it('does not retain an approval reason after a blocked Run resumes and completes', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const mission = materializeMission(makeTestWorkflowSpec());
         await createMission(root, mission);
         const running = await startRun(root, mission.id, 'resume after approval');

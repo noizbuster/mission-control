@@ -1,6 +1,6 @@
 import { RunSchema } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { makeTempRoot, seedOmoRoot } from './mission-run-test-support';
+import { makeTempRoot, seedMcRoot } from './mission-run-test-support';
 import { attachRunSessionOwner, settleRunSessionOwner } from './run-session-owner-store';
 import { createRun, readRun, updateRunStatus } from './run-store';
 
@@ -133,7 +133,7 @@ describe('Run session owner attachment', () => {
 });
 
 async function runningRun(sessionId: string) {
-    const location = seedOmoRoot(makeTempRoot());
+    const location = seedMcRoot(makeTempRoot());
     const pending = await createRun(
         location,
         RunSchema.parse({

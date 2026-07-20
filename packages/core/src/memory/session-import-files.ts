@@ -70,8 +70,8 @@ export async function jsonlSourcePaths(dataDir: string): Promise<readonly string
         .sort();
 }
 
-export async function runSourcePaths(omoRoot: string): Promise<readonly string[]> {
-    const runsDir = join(omoRoot, 'runs');
+export async function runSourcePaths(mcRoot: string): Promise<readonly string[]> {
+    const runsDir = join(mcRoot, 'runs');
     const entries = await readDirOrEmpty(runsDir);
     return entries
         .filter((entry) => entry.endsWith('.json'))

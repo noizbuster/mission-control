@@ -47,7 +47,7 @@ describe('SessionInputDelivery', () => {
 describe('SqlSessionInputDelivery', () => {
     it('persists admitted and promoted queued input across reopen', async () => {
         // Given
-        const omoRoot = await makeTempRoot();
+        const mcRoot = await makeTempRoot();
         const dataDir = await makeTempRoot();
         const first = await SqlSessionInputDelivery.open({ dataDir });
         await first.admitInput('session_a', { inputId: 'queue_1', prompt: 'first queued' }, 'queue');
@@ -70,8 +70,8 @@ describe('SqlSessionInputDelivery', () => {
             ['queue_2', 'promoted'],
         ]);
         expect(existsSync(localSessionDbPath(dataDir))).toBe(true);
-        expect(existsSync(localSessionDbPath(omoRoot))).toBe(false);
-        expect(existsSync(join(omoRoot, '.omo', 'mission-control.db'))).toBe(false);
+        expect(existsSync(localSessionDbPath(mcRoot))).toBe(false);
+        expect(existsSync(join(mcRoot, '.mc', 'mission-control.db'))).toBe(false);
     });
 
     it('derives awaiting user_input from a pending blocking input wait after reopen', async () => {

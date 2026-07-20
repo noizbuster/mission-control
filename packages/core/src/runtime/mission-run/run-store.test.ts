@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { createObservabilityRedactor } from '../../providers/observability-redactor';
 import { readRunFromDb, writeRunToDb } from './mission-run-db';
 import type { MissionRunStoreLocation } from './mission-run-store-location';
-import { makeTempRoot, seedOmoRoot } from './mission-run-test-support';
+import { makeTempRoot, seedMcRoot } from './mission-run-test-support';
 import {
     ALLOWED_RUN_TRANSITIONS,
     createRun,
@@ -45,7 +45,7 @@ describe('run-store', () => {
     });
 
     it.each(['pending', 'blocked'] as const)('cancels a %s run with terminal timestamps and reason', async (status) => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const run = await seedRun(root, 'mission-cancel', 'pending');
         if (status === 'blocked') {
             await updateRunStatus(root, run.id, 'running');
@@ -68,7 +68,7 @@ describe('run-store', () => {
     });
 
     it('roundtrips a Run through create and read', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const run = await seedRun(root, 'mission-1');
 
         const read = await readRun(root, run.id);
@@ -77,7 +77,7 @@ describe('run-store', () => {
     });
 
     it('redacts terminal reasons at direct store boundaries and clears them from nonterminal Runs', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const pending = RunSchema.parse({
             id: crypto.randomUUID(),
             missionId: 'mission-safe-reason',
@@ -99,7 +99,7 @@ describe('run-store', () => {
 
     it('redacts configured credentials before persisting Run updates', async () => {
         const credential = ['run', 'update', 'credential'].join('_');
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const location = {
             ...root,
             observabilityRedactor: createObservabilityRedactor({ secrets: [credential] }),
@@ -117,7 +117,7 @@ describe('run-store', () => {
     });
 
     it('sanitizes canonical rows on read and same-status no-op returns', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const raw = RunSchema.parse({
             id: crypto.randomUUID(),
             missionId: 'mission-canonical-safe-reason',
@@ -135,15 +135,15 @@ describe('run-store', () => {
     });
 
     it('throws RunStoreError(run_missing) for unknown id', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         await expect(readRun(root, 'nonexistent')).rejects.toMatchObject({
             code: 'run_missing',
         });
     });
 
     it('fails closed on invalid legacy JSON', async () => {
-        const root = seedOmoRoot(makeTempRoot());
-        const filePath = runFilePath(root.omoRoot, 'bad');
+        const root = seedMcRoot(makeTempRoot());
+        const filePath = runFilePath(root.mcRoot, 'bad');
         mkdirSync(join(filePath, '..'), { recursive: true });
         writeFileSync(filePath, '{ broken');
 
@@ -154,8 +154,8 @@ describe('run-store', () => {
     });
 
     it('fails closed on invalid UTF-8 in compatible Run JSON', async () => {
-        const root = seedOmoRoot(makeTempRoot());
-        const filePath = runFilePath(root.omoRoot, 'invalid-utf8');
+        const root = seedMcRoot(makeTempRoot());
+        const filePath = runFilePath(root.mcRoot, 'invalid-utf8');
         mkdirSync(join(filePath, '..'), { recursive: true });
         writeFileSync(filePath, Buffer.from([0xff]));
 
@@ -163,15 +163,15 @@ describe('run-store', () => {
     });
 
     it('rejects traversal in compatible Run ids', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
 
         await expect(readRun(root, '../outside')).rejects.toMatchObject({ code: 'invalid_run_id' });
     });
 
     it.skipIf(process.platform === 'win32')('rejects symlinked compatible Run records', async () => {
-        const root = seedOmoRoot(makeTempRoot());
-        const filePath = runFilePath(root.omoRoot, 'symlinked-run');
-        const externalPath = join(root.omoRoot, 'external-run.json');
+        const root = seedMcRoot(makeTempRoot());
+        const filePath = runFilePath(root.mcRoot, 'symlinked-run');
+        const externalPath = join(root.mcRoot, 'external-run.json');
         mkdirSync(join(filePath, '..'), { recursive: true });
         writeFileSync(externalPath, JSON.stringify({ id: 'symlinked-run', missionId: 'mission-1' }));
         symlinkSync(externalPath, filePath);
@@ -180,21 +180,21 @@ describe('run-store', () => {
     });
 
     it.skipIf(process.platform === 'win32')('rejects a symlinked compatible Runs directory', async () => {
-        const root = seedOmoRoot(makeTempRoot());
-        const externalRuns = join(root.omoRoot, 'external-runs');
+        const root = seedMcRoot(makeTempRoot());
+        const externalRuns = join(root.mcRoot, 'external-runs');
         mkdirSync(externalRuns, { recursive: true });
         writeFileSync(
             join(externalRuns, 'outside-run.json'),
             JSON.stringify({ id: 'outside-run', missionId: 'mission-1' }),
         );
-        symlinkSync(externalRuns, join(root.omoRoot, '.omo', 'runs'));
+        symlinkSync(externalRuns, join(root.mcRoot, '.mc', 'runs'));
 
         await expect(readRun(root, 'outside-run')).rejects.toMatchObject({ code: 'legacy_run_unsafe_source' });
     });
 
     it('rejects a compatible Run whose payload id differs from its filename', async () => {
-        const root = seedOmoRoot(makeTempRoot());
-        const filePath = runFilePath(root.omoRoot, 'requested-run');
+        const root = seedMcRoot(makeTempRoot());
+        const filePath = runFilePath(root.mcRoot, 'requested-run');
         mkdirSync(join(filePath, '..'), { recursive: true });
         writeFileSync(filePath, JSON.stringify({ id: 'different-run', missionId: 'mission-1' }));
 
@@ -202,8 +202,8 @@ describe('run-store', () => {
     });
 
     it('imports an active JSON-only run before operational status updates and leaves the source untouched', async () => {
-        const root = seedOmoRoot(makeTempRoot());
-        const filePath = runFilePath(root.omoRoot, 'json-active');
+        const root = seedMcRoot(makeTempRoot());
+        const filePath = runFilePath(root.mcRoot, 'json-active');
         mkdirSync(join(filePath, '..'), { recursive: true });
         const source = JSON.stringify({
             id: 'json-active',
@@ -229,13 +229,13 @@ describe('run-store', () => {
     });
 
     it('redacts configured credentials while importing an on-demand compatible Run', async () => {
-        const baseLocation = seedOmoRoot(makeTempRoot());
+        const baseLocation = seedMcRoot(makeTempRoot());
         const credential = ['compatible', 'run', 'credential'].join('_');
         const location = {
             ...baseLocation,
             observabilityRedactor: createObservabilityRedactor({ secrets: [credential] }),
         };
-        const filePath = runFilePath(location.omoRoot, 'json-redacted');
+        const filePath = runFilePath(location.mcRoot, 'json-redacted');
         mkdirSync(join(filePath, '..'), { recursive: true });
         const source = JSON.stringify({
             id: 'json-redacted',
@@ -255,7 +255,7 @@ describe('run-store', () => {
     });
 
     it('does not overwrite a canonical row when a compatibility import loses a race', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const canonical = RunSchema.parse({
             id: 'json-import-race',
             missionId: 'mission-1',
@@ -277,7 +277,7 @@ describe('run-store', () => {
     });
 
     it('auto-sets startedAt on first running transition', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const run = await seedRun(root, 'mission-1', 'pending');
         expect(run.startedAt).toBeUndefined();
 
@@ -295,7 +295,7 @@ describe('run-store', () => {
     });
 
     it('does not overwrite startedAt on blocked to running resume', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const run = await seedRun(root, 'mission-1', 'pending');
         await updateRunStatus(root, run.id, 'running', {}, { now: () => '2026-01-01T00:00:00.000Z' });
         await updateRunStatus(root, run.id, 'blocked', {}, { now: () => '2026-01-01T01:00:00.000Z' });
@@ -306,7 +306,7 @@ describe('run-store', () => {
     });
 
     it('auto-sets endedAt on terminal transition', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const run = await seedRun(root, 'mission-1', 'pending');
         await updateRunStatus(root, run.id, 'running');
 
@@ -322,7 +322,7 @@ describe('run-store', () => {
     });
 
     it('keeps same-status terminal transitions as true idempotent no-ops', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const run = await seedRun(root, 'mission-1', 'pending');
         await updateRunStatus(root, run.id, 'running');
         const cancelled = await updateRunStatus(
@@ -347,7 +347,7 @@ describe('run-store', () => {
     });
 
     it('serializes concurrent terminal transitions without overwriting the winner', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const run = await seedRun(root, 'mission-1', 'pending');
         await updateRunStatus(root, run.id, 'running');
 
@@ -365,7 +365,7 @@ describe('run-store', () => {
     });
 
     it('applies patch fields during status transition', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const run = await seedRun(root, 'mission-1', 'pending');
         await updateRunStatus(root, run.id, 'running');
         const patch: RunPatch = {
@@ -381,7 +381,7 @@ describe('run-store', () => {
     });
 
     it('lists runs filtered by missionId', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         await seedRun(root, 'mission-a');
         await seedRun(root, 'mission-a');
         await seedRun(root, 'mission-b');
@@ -393,13 +393,13 @@ describe('run-store', () => {
     });
 
     it('listRunsForMission returns empty array when directory does not exist', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const runs = await listRunsForMission(root, 'any');
         expect(runs).toEqual([]);
     });
 
     it('persists parentRunId, childAgentId, and childKind on a child run', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const parent = await seedRun(root, 'mission-1');
         const childRun = RunSchema.parse({
             id: crypto.randomUUID(),
@@ -418,7 +418,7 @@ describe('run-store', () => {
     });
 
     it('omits parentRunId, childAgentId, and childKind when not provided', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
 
         const run = await seedRun(root, 'mission-1');
 
@@ -429,7 +429,7 @@ describe('run-store', () => {
     });
 
     it('listRunsForMission filters by parentId returning only matching children', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const parent = await seedRun(root, 'mission-1');
         await createRun(
             root,
@@ -469,7 +469,7 @@ describe('run-store', () => {
     });
 
     it('listRunsForMission without filter returns all runs including children', async () => {
-        const root = seedOmoRoot(makeTempRoot());
+        const root = seedMcRoot(makeTempRoot());
         const parent = await seedRun(root, 'mission-1');
         const child = await createRun(
             root,
@@ -515,7 +515,7 @@ describe('ALLOWED_RUN_TRANSITIONS', () => {
 });
 
 describe('run-store errors', () => {
-    it('RunStoreError extends OmoPersistenceError', () => {
+    it('RunStoreError extends McPersistenceError', () => {
         const err = new RunStoreError('test', 'test_code');
         expect(err).toBeInstanceOf(Error);
         expect(err.code).toBe('test_code');

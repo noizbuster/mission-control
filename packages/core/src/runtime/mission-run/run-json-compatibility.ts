@@ -6,12 +6,12 @@ import {
     listCompatibilityJsonRecordIds,
     readCompatibilityJsonFile,
 } from '../../persistence/json-compatibility-file';
-import { OmoPersistenceError } from '../../persistence/paths';
+import { McPersistenceError } from '../../persistence/paths';
 import { runWithoutSessionOwnerAuthority } from './run-session-owner-authority';
 
 const RUNS_DIR = 'runs';
 
-export class RunStoreError extends OmoPersistenceError {
+export class RunStoreError extends McPersistenceError {
     constructor(message: string, code: string, path?: string, cause?: unknown) {
         super(message, code, path, cause !== undefined ? { cause } : undefined);
         this.name = 'RunStoreError';

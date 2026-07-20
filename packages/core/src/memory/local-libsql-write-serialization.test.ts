@@ -81,7 +81,7 @@ describe('local libSQL write serialization', () => {
         const importing = importLegacySessionCompatibilityWindow({
             ...runtime,
             dataDir: fixture.dataDir,
-            omoRoot: fixture.omoRoot,
+            mcRoot: fixture.mcRoot,
             now: () => '2026-07-01T00:00:00.000Z',
         });
         await Promise.resolve();
@@ -106,7 +106,7 @@ describe('local libSQL write serialization', () => {
         await importLegacySessionCompatibilityWindow({
             ...runtime,
             dataDir: fixture.dataDir,
-            omoRoot: fixture.omoRoot,
+            mcRoot: fixture.mcRoot,
             now: () => '2026-07-01T00:00:00.000Z',
         });
         const releaseLane = deferred();

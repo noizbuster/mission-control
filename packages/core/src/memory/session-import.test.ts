@@ -35,7 +35,7 @@ describe('legacy session import compatibility window', () => {
             const whenResult = await importLegacySessionCompatibilityWindow({
                 ...runtime,
                 dataDir: givenFixture.dataDir,
-                omoRoot: givenFixture.omoRoot,
+                mcRoot: givenFixture.mcRoot,
                 now: () => '2026-07-01T00:00:00.000Z',
             });
             const after = await readSourceBytes(givenFixture);
@@ -77,14 +77,14 @@ describe('legacy session import compatibility window', () => {
             await importLegacySessionCompatibilityWindow({
                 ...runtime,
                 dataDir: givenFixture.dataDir,
-                omoRoot: givenFixture.omoRoot,
+                mcRoot: givenFixture.mcRoot,
                 now: () => '2026-07-01T00:00:00.000Z',
             });
 
             const whenSecondImport = await importLegacySessionCompatibilityWindow({
                 ...runtime,
                 dataDir: givenFixture.dataDir,
-                omoRoot: givenFixture.omoRoot,
+                mcRoot: givenFixture.mcRoot,
                 now: () => '2026-07-01T00:01:00.000Z',
             });
 
@@ -119,7 +119,7 @@ describe('legacy session import compatibility window', () => {
             const whenResult = await importLegacySessionCompatibilityWindow({
                 ...runtime,
                 dataDir: givenFixture.dataDir,
-                omoRoot: givenFixture.omoRoot,
+                mcRoot: givenFixture.mcRoot,
                 now: () => '2026-07-01T00:00:00.000Z',
             });
             const row = await readMissionRunDbRow(runtime.client, canonical.id);
@@ -147,7 +147,7 @@ describe('legacy session import compatibility window', () => {
             const whenResult = await importLegacySessionCompatibilityWindow({
                 ...runtime,
                 dataDir: givenFixture.dataDir,
-                omoRoot: givenFixture.omoRoot,
+                mcRoot: givenFixture.mcRoot,
                 now: () => '2026-07-01T00:00:00.000Z',
             });
 
@@ -172,7 +172,7 @@ describe('legacy session import compatibility window', () => {
         await importLegacySessionCompatibilityWindow({
             ...runtime,
             dataDir: givenFixture.dataDir,
-            omoRoot: givenFixture.omoRoot,
+            mcRoot: givenFixture.mcRoot,
             now: () => '2026-07-01T00:00:00.000Z',
         });
 
@@ -214,7 +214,7 @@ describe('legacy session import compatibility window', () => {
             await importLegacySessionCompatibilityWindow({
                 ...runtime,
                 dataDir: givenFixture.dataDir,
-                omoRoot: givenFixture.omoRoot,
+                mcRoot: givenFixture.mcRoot,
                 now: () => '2026-07-01T00:00:00.000Z',
             });
             const rows = await runtime.client.execute('SELECT payload_json FROM session_events ORDER BY seq');

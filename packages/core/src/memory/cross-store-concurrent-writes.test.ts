@@ -26,8 +26,8 @@ describe('cross-store concurrent writes', () => {
         const root = await mkdtemp(join(tmpdir(), 'mctrl-task-11-cross-store-'));
         tempRoots.push(root);
         const dataDir = join(root, 'data');
-        const omoRoot = join(root, 'workspace');
-        await Promise.all([mkdir(dataDir, { recursive: true }), mkdir(join(omoRoot, '.omo'), { recursive: true })]);
+        const mcRoot = join(root, 'workspace');
+        await Promise.all([mkdir(dataDir, { recursive: true }), mkdir(join(mcRoot, '.mc'), { recursive: true })]);
         const firstSessionId = 'session_task_11_first';
         const secondSessionId = 'session_task_11_second';
         const cleanups: Array<() => Promise<void> | void> = [];
@@ -89,8 +89,8 @@ describe('cross-store concurrent writes', () => {
                 secondStore.append(sessionStarted(secondSessionId)),
                 secondStore.append(taskCompleted(secondSessionId)),
                 memoryStore.set('shared-key', 'task-11', { value: 'shared-memory' }),
-                createMission({ omoRoot, dataDir }, mission),
-                createRun({ omoRoot, dataDir }, run),
+                createMission({ mcRoot, dataDir }, mission),
+                createRun({ mcRoot, dataDir }, run),
                 delivery.admitInput(
                     firstSessionId,
                     { inputId: 'input-task-11', prompt: 'continue concurrently' },

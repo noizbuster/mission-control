@@ -111,7 +111,7 @@ function boulderState(): BoulderState {
         works: {
             [workId]: {
                 work_id: workId,
-                active_plan: '.omo/plans/continuation-stop-race.md',
+                active_plan: '.mc/plans/continuation-stop-race.md',
                 plan_name: 'continuation-stop-race',
                 status: 'running',
                 started_at: '2026-07-12T00:00:00.000Z',

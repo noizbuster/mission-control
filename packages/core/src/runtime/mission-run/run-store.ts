@@ -2,7 +2,7 @@
  * Run store — SQL-backed CRUD for Run state objects with status-transition enforcement.
  *
  * New writes go to the shared local libSQL database at `<data-dir>/mission-control.db`.
- * Missing SQL rows may fall back to `.omo/runs/{runId}.json` compatibility records
+ * Missing SQL rows may fall back to `.mc/runs/{runId}.json` compatibility records
  * owned by this store. Database startup never probes an older SQL file.
  * The allowed-transition state machine is enforced inside `updateRunStatus`;
  * direct field mutation is intentionally not exposed.
@@ -87,7 +87,7 @@ export async function readRun(location: MissionRunStoreLocation, runId: string):
         return sanitizeRunForPersistence(dbRun, normalized.observabilityRedactor);
     }
     const jsonRun = sanitizeRunForPersistence(
-        await readCompatibleRunJsonRecord(normalized.omoRoot, runId),
+        await readCompatibleRunJsonRecord(normalized.mcRoot, runId),
         normalized.observabilityRedactor,
     );
     await writeRunToDb(normalized.dataDir, jsonRun, { conflict: 'ignore' });
@@ -96,7 +96,7 @@ export async function readRun(location: MissionRunStoreLocation, runId: string):
         throw new RunStoreError(
             `Run ${runId} could not be imported`,
             'run_missing',
-            runFilePath(normalized.omoRoot, runId),
+            runFilePath(normalized.mcRoot, runId),
         );
     }
     return sanitizeRunForPersistence(imported, normalized.observabilityRedactor);
@@ -209,13 +209,13 @@ export async function mutateStoredRun(
     let updated = await mutateRunInDb(normalized.dataDir, runId, sanitizeMutation);
     if (updated !== undefined) return sanitizeRunForPersistence(updated, normalized.observabilityRedactor);
     const jsonRun = sanitizeRunForPersistence(
-        await readCompatibleRunJsonRecord(normalized.omoRoot, runId),
+        await readCompatibleRunJsonRecord(normalized.mcRoot, runId),
         normalized.observabilityRedactor,
     );
     await writeRunToDb(normalized.dataDir, jsonRun, { conflict: 'ignore' });
     updated = await mutateRunInDb(normalized.dataDir, runId, sanitizeMutation);
     if (updated !== undefined) return sanitizeRunForPersistence(updated, normalized.observabilityRedactor);
-    throw new RunStoreError(`Run ${runId} could not be loaded`, 'run_missing', runFilePath(normalized.omoRoot, runId));
+    throw new RunStoreError(`Run ${runId} could not be loaded`, 'run_missing', runFilePath(normalized.mcRoot, runId));
 }
 
 async function listAllRuns(location: MissionRunStoreLocation): Promise<readonly Run[]> {
@@ -224,7 +224,7 @@ async function listAllRuns(location: MissionRunStoreLocation): Promise<readonly 
         sanitizeRunForPersistence(run, normalized.observabilityRedactor),
     );
     const seenIds = new Set(runs.map((run) => run.id));
-    for (const compatibleRun of await listCompatibleRunJsonRecords(normalized.omoRoot, seenIds)) {
+    for (const compatibleRun of await listCompatibleRunJsonRecords(normalized.mcRoot, seenIds)) {
         const run = sanitizeRunForPersistence(compatibleRun, normalized.observabilityRedactor);
         await writeRunToDb(normalized.dataDir, run, { conflict: 'ignore' });
         const imported = await readRunFromDb(normalized.dataDir, run.id);
@@ -232,7 +232,7 @@ async function listAllRuns(location: MissionRunStoreLocation): Promise<readonly 
             throw new RunStoreError(
                 `Run ${run.id} could not be imported`,
                 'run_missing',
-                runFilePath(normalized.omoRoot, run.id),
+                runFilePath(normalized.mcRoot, run.id),
             );
         }
         const canonical = sanitizeRunForPersistence(imported, normalized.observabilityRedactor);

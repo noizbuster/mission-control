@@ -9,7 +9,7 @@ import { basename, join } from 'node:path';
 // `drizzle-orm` is the typed query builder layered on top. Neither belongs on this list.
 const SQLITE_NODE_DEPENDENCIES = ['better-sqlite3', 'sqlite3', 'sql.js'] as const;
 const SQLITE_RUST_DEPENDENCIES = ['rusqlite', 'libsql'] as const;
-const SKIPPED_DIRS = new Set(['.git', '.nx', '.omo', 'dist', 'node_modules', 'target', 'temp']);
+const SKIPPED_DIRS = new Set(['.git', '.nx', '.mc', 'dist', 'node_modules', 'target', 'temp']);
 
 const PackageManifestSchema = z
     .object({

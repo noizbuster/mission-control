@@ -14,6 +14,7 @@ import { markSessionExported, readExportEnvelopes } from './session-import-event
 import { jsonlSourcePaths, runSourcePaths } from './session-import-files';
 import { type ImportAccumulator, importJsonlSource, importRunSource } from './session-import-sources';
 import type { LegacySessionImportDiagnostic } from './session-import-sql';
+import { MC_DIR_NAME } from '../persistence/paths';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -37,7 +38,7 @@ export type LegacySessionExportResult = {
 export async function importLegacySessionCompatibilityWindow(
     input: LocalLibsqlWriteTarget & {
         readonly dataDir: string;
-        readonly omoRoot?: string;
+        readonly mcRoot?: string;
         readonly includeRunSources?: boolean;
         readonly now?: () => string;
         readonly observabilityRedactor?: ObservabilityRedactor;
@@ -51,7 +52,7 @@ export async function importLegacySessionCompatibilityWindow(
         diagnostics: [],
     };
     const now = input.now ?? (() => new Date().toISOString());
-    const omoRoot = input.omoRoot ?? join(input.dataDir, '.omo');
+    const mcRoot = input.mcRoot ?? join(input.dataDir, MC_DIR_NAME);
 
     for (const sourcePath of await jsonlSourcePaths(input.dataDir)) {
         await importJsonlSource({
@@ -65,7 +66,7 @@ export async function importLegacySessionCompatibilityWindow(
         });
     }
     if (input.includeRunSources ?? true) {
-        for (const sourcePath of await runSourcePaths(omoRoot)) {
+        for (const sourcePath of await runSourcePaths(mcRoot)) {
             await importRunSource({
                 writeTarget: input,
                 sourcePath,

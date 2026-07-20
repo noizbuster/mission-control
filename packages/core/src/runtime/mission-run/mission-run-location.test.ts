@@ -3,7 +3,7 @@ import { openLocalLibsqlDb } from '../../db/local-libsql-db';
 import { localSessionDbPath } from '../../memory/local-session-store-paths';
 import { materializeMission } from './mission-run-service';
 import { normalizeMissionRunStoreLocation } from './mission-run-store-location';
-import { makeTempRoot, makeTestWorkflowSpec, seedOmoRoot } from './mission-run-test-support';
+import { makeTempRoot, makeTestWorkflowSpec, seedMcRoot } from './mission-run-test-support';
 import { createMission, listMissions } from './mission-store';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -19,34 +19,34 @@ describe('Mission/Run SQL location', () => {
 
         const location = normalizeMissionRunStoreLocation(join(tempRoot, 'project'));
 
-        expect(location).toEqual({ omoRoot: join(tempRoot, 'project'), dataDir });
+        expect(location).toEqual({ mcRoot: join(tempRoot, 'project'), dataDir });
     });
 
     it('writes only to an explicit data dir when the project root is separate', async () => {
         const tempRoot = makeTempRoot();
-        const omoRoot = join(tempRoot, 'workspace');
+        const mcRoot = join(tempRoot, 'workspace');
         const dataDir = join(tempRoot, 'product-data');
         const defaultDataDir = join(tempRoot, 'environment-data');
-        mkdirSync(omoRoot, { recursive: true });
-        seedOmoRoot(omoRoot);
+        mkdirSync(mcRoot, { recursive: true });
+        seedMcRoot(mcRoot);
         vi.stubEnv('MCTRL_DATA_DIR', defaultDataDir);
 
-        await createMission({ omoRoot, dataDir }, materializeMission(makeTestWorkflowSpec()));
+        await createMission({ mcRoot, dataDir }, materializeMission(makeTestWorkflowSpec()));
 
         expect(existsSync(localSessionDbPath(dataDir))).toBe(true);
         expect(existsSync(localSessionDbPath(defaultDataDir))).toBe(false);
-        expect(existsSync(join(omoRoot, retiredDatabaseFilename))).toBe(false);
-        expect(existsSync(join(omoRoot, '.omo', retiredDatabaseFilename))).toBe(false);
-        expect(existsSync(localSessionDbPath(omoRoot))).toBe(false);
+        expect(existsSync(join(mcRoot, retiredDatabaseFilename))).toBe(false);
+        expect(existsSync(join(mcRoot, '.mc', retiredDatabaseFilename))).toBe(false);
+        expect(existsSync(localSessionDbPath(mcRoot))).toBe(false);
     });
 
     it('does not probe a pre-existing workspace SQL file', async () => {
         const tempRoot = makeTempRoot();
-        const omoRoot = join(tempRoot, 'workspace');
+        const mcRoot = join(tempRoot, 'workspace');
         const dataDir = join(tempRoot, 'product-data');
-        mkdirSync(omoRoot, { recursive: true });
-        seedOmoRoot(omoRoot);
-        const retiredDatabasePath = join(omoRoot, retiredDatabaseFilename);
+        mkdirSync(mcRoot, { recursive: true });
+        seedMcRoot(mcRoot);
+        const retiredDatabasePath = join(mcRoot, retiredDatabaseFilename);
         const retiredMission = materializeMission(makeTestWorkflowSpec());
         const retiredDb = await openLocalLibsqlDb({ url: pathToFileURL(retiredDatabasePath).href });
         await retiredDb.client.execute({
@@ -66,7 +66,7 @@ describe('Mission/Run SQL location', () => {
         retiredDb.close();
         const retiredDatabaseBytes = readFileSync(retiredDatabasePath);
 
-        expect(await listMissions({ omoRoot, dataDir })).toEqual([]);
+        expect(await listMissions({ mcRoot, dataDir })).toEqual([]);
         expect(existsSync(localSessionDbPath(dataDir))).toBe(true);
         expect(readFileSync(retiredDatabasePath)).toEqual(retiredDatabaseBytes);
     });

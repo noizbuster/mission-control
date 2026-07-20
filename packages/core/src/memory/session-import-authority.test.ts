@@ -35,7 +35,7 @@ describe('legacy Run import continuation authority', () => {
             const imported = await importLegacySessionCompatibilityWindow({
                 ...opened.runtime,
                 dataDir: fixture.dataDir,
-                omoRoot: fixture.omoDir,
+                mcRoot: fixture.mcDir,
             });
             const canonical = await readRun(fixture.location, sourceRun.id);
 
@@ -93,7 +93,7 @@ describe('legacy Run import continuation authority', () => {
             const imported = await importLegacySessionCompatibilityWindow({
                 ...opened.runtime,
                 dataDir: fixture.dataDir,
-                omoRoot: fixture.omoDir,
+                mcRoot: fixture.mcDir,
             });
             const persisted = await readRun(fixture.location, canonical.id);
 
@@ -128,7 +128,7 @@ describe('legacy Run import continuation authority', () => {
             await importLegacySessionCompatibilityWindow({
                 ...opened.runtime,
                 dataDir: fixture.dataDir,
-                omoRoot: fixture.omoDir,
+                mcRoot: fixture.mcDir,
                 observabilityRedactor: createObservabilityRedactor({ secrets: [credential] }),
             });
             const row = await readMissionRunDbRow(opened.runtime.client, sourceRun.id);
@@ -149,13 +149,13 @@ async function createFixture(suffix: string) {
     const root = await mkdtemp(join(tmpdir(), `mission-control-import-authority-${suffix}-`));
     tempRoots.push(root);
     const dataDir = join(root, 'data');
-    const omoDir = join(root, '.omo');
-    const runsDir = join(omoDir, 'runs');
+    const mcDir = join(root, '.mc');
+    const runsDir = join(mcDir, 'runs');
     await mkdir(runsDir, { recursive: true });
     return {
         dataDir,
-        omoDir,
+        mcDir,
         runPath: join(runsDir, `run_import_${suffix.replaceAll('-', '_')}.json`),
-        location: { omoRoot: root, dataDir },
+        location: { mcRoot: root, dataDir },
     };
 }
