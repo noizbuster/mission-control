@@ -1,6 +1,6 @@
 /**
  * Skill metadata schema + types for the Agent Skills frontmatter format
- * (https://agentskills.io — used by opencode, oh-my-openagent, and pi).
+ * (https://agentskills.io — used by opencode, upstream agent harness, and pi).
  *
  * A SKILL.md file carries YAML frontmatter between `---` fences followed by a
  * markdown body. The frontmatter is operator-authored and parsed defensively:
@@ -27,7 +27,7 @@ export const SKILL_DESCRIPTION_MAX_LENGTH = 1024;
 const SKILL_NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /**
- * Zod schema for SKILL.md YAML frontmatter (opencode/omo format).
+ * Zod schema for SKILL.md YAML frontmatter (agent skill frontmatter format).
  *
  * Fields:
  * - `name`: required, validated against `SKILL_NAME_PATTERN` and length bounds.

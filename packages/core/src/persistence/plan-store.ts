@@ -22,7 +22,7 @@ const LEVEL_TWO_HEADING = /^## (?<heading>.+)$/u;
  * these headings contribute to the plan progress tally. `## Todos` / `## TODOs`
  * covers both the planner scaffold heading and the reference boulder-state
  * convention; `## Final Verification Wave` is the runner's final gate. Mirrors
- * the oh-my-openagent boulder-state `parsePlanChecklist` contract.
+ * the reference boulder-state `parsePlanChecklist` contract.
  */
 const COUNTED_TODOS_HEADING = /^todos$/iu;
 const COUNTED_FINAL_WAVE_HEADING = /^final verification wave$/iu;
@@ -84,7 +84,7 @@ export async function parsePlanChecklist(planPath: string): Promise<PlanChecklis
  * Parse plan markdown and count top-level checkboxes, scoped to actionable
  * sections.
  *
- * Section scoping (mirrors the oh-my-openagent boulder-state
+ * Section scoping (mirrors the reference boulder-state
  * `parsePlanChecklist`): only column-0 checkboxes (`- [ ]` / `- [x]`) that fall
  * under a `## Todos` / `## TODOs` or `## Final Verification Wave` heading are
  * counted. Checkboxes before any heading, under `## Notes`, `## Acceptance
