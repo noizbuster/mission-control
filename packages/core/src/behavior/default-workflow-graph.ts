@@ -1,418 +1,111 @@
-// allow: SIZE_OK -- plan-first default workflow graph; one declarative graph whose routing tables are reviewed together.
 /**
  * The default workflow graph: the no-`#` plain-prompt fallback.
  *
- * Plan-first sticky planning (same ABG scaffolding as the planner workflow):
+ * Intent-gated implementer (not a plan-scaffold workflow):
  *
- *   intake -> assess-ambiguity -> {
- *     clear         -> explore-filter -> {
- *                        needs-exploration -> explore -> draft-plan
- *                        direct-draft      -> draft-plan
- *                     }
- *     unclear       -> research -> adopt-defaults -> draft-plan
- *     on-the-fence  -> ask-one-question -> assess-ambiguity (re-classify)
+ *   intent-gate (5 classes) -> {
+ *     trivial                  -> direct-respond
+ *     exploratory-research     -> research-explore (read-only) -> final-respond
+ *     open-ended-planning      -> route-planner (#planner or ONE question; NEVER implement)
+ *     explicit-implementation  -> memory -> maturity-check -> anti-dup-guard ->
+ *                                 todo-plan -> delegate-wave -> verify-wave -> {
+ *                                     critic-passed -> evidence-check -> final-respond
+ *                                   | critic-failed -> supervisor (3-strike) -> retry|final-respond
+ *                                 }
+ *     ambiguous                -> clarify -> intent-gate
  *   }
- *   draft-plan (writes .omo/drafts/<slug>.md, plan.drafted)
- *     -> review-plan -> { approved -> approval-gate, rejected -> draft-plan }
- *   approval-gate (blocks for explicit okay, plan.ready)
- *     -> write-plan (writes .omo/plans/<slug>.md scaffold) -> present
  *
- * Sticky plan mode: "do X" / "fix X" / "build X" all mean "plan X". The graph
- * never implements product code. Mode `plan-readonly` denies all writes except
- * `.omo/plans/**`, `.omo/specs/**`, and `.omo/drafts/**`.
+ * Role:
+ * - Default: implement, don't force a full plan scaffold.
+ * - Multi-step work uses lightweight todos (`plan.todos`), not `.omo/plans` scaffolds.
+ * - Full strategic planning is `#planner`. Plan execution is `#executer`.
+ * - `#fixer` is the explicit alias of the same implement/fix graph family.
  *
- * allow: SIZE_OK — indivisible declarative graph spec. The factory returns one
- * object that `default-workflow-graph.test.ts` asserts is byte-identical to
- * `examples/abg/default.workflow.json` via `toEqual`.
+ * Built on {@link createFixerWorkflowGraph}: same nodes/edges/rules; graph id is `default`
+ * and the intent-gate prompt is action-default (goal first, implement unless pure question).
  */
-import type { AbgGraphSpec, AbgNodeModelOptions, Mode, PolicyEffectRule } from '@mission-control/protocol';
+import type { AbgGraphSpec, AbgNodeModelOptions, AbgNodeSpec } from '@mission-control/protocol';
 import {
-    PLANNER_READONLY_CHILD_CONTEXT,
-    PLANNER_READONLY_POLICIES,
-    PLANNER_SCAFFOLD_HEADERS,
-} from './planner-workflow-graph';
+    createFixerWorkflowGraph,
+    FIXER_WORKFLOW_MAX_NODE_RUNS,
+    type FixerWorkflowGraphOptions,
+} from './fixer-workflow-graph';
 
 export const DEFAULT_WORKFLOW_GRAPH_ID = 'default';
-/** Graph loop bound for plan-first default (intake through present). */
-export const DEFAULT_WORKFLOW_MAX_NODE_RUNS = 100;
-export const DEFAULT_PLAN_READONLY_MODE_ID = 'plan-readonly';
+/** Graph loop bound for the default implement path (shared with fixer research + synthesis budget). */
+export const DEFAULT_WORKFLOW_MAX_NODE_RUNS = FIXER_WORKFLOW_MAX_NODE_RUNS;
 
 /**
- * Read-only policies for the default plan-first mode. Same algebra as the
- * planner: broad write deny, then allow plan/spec/draft artifact roots.
+ * Default intent gate: surface form → true intent → route.
+ * Action-default; pure question only when the user clearly wants explanation-only.
  */
-export const DEFAULT_PLAN_READONLY_POLICIES: readonly PolicyEffectRule[] = [...PLANNER_READONLY_POLICIES];
+export const DEFAULT_INTENT_GATE_PROMPT =
+    'You are the intent gate for the default workflow. Map the user surface request ' +
+    'to its true intent, then classify. Default bias: the message implies ACTION unless the user ' +
+    'explicitly wants explanation-only.\n\n' +
+    'Intent routing map (surface form -> true intent -> routing):\n' +
+    '- "explain X", "how does Y work", "what is Z", "find Y" with no fix/implement ask -> ' +
+    'exploratory-research (read + synthesize, NEVER edit files).\n' +
+    '- "implement X", "add Y", "fix Z", "create W", "bug", "broken", "doesn\'t work", or any ' +
+    'clear scoped change -> explicit-implementation (todos + delegate/self-execute + verify).\n' +
+    '- "refactor", "improve", "make X better", "clean up", "optimize" with no clear target -> ' +
+    'open-ended-planning (route to #planner or ask exactly ONE question; NEVER implement silently).\n' +
+    '- greeting, thanks, simple factual one-liner needing no tools -> trivial.\n' +
+    '- vague, multiple plausible interpretations, or missing critical info -> ambiguous.\n\n' +
+    'Mis-routing open-ended to explicit-implementation silently implements when the user wanted ' +
+    'consultation first — when genuinely unsure between open-ended-planning and ' +
+    'explicit-implementation, prefer open-ended-planning.\n\n' +
+    'Output ONLY one class name — no quotes, no formatting, no extra text:\n' +
+    '- trivial\n' +
+    '- exploratory-research\n' +
+    '- open-ended-planning\n' +
+    '- explicit-implementation\n' +
+    '- ambiguous';
 
-/**
- * Sticky plan-readonly mode declared on the default `WorkflowSpec`. At
- * materialization its overlay and policies merge into llm-actor nodes and
- * policy-gate rules so plain prompts plan instead of implement.
- */
-export const DEFAULT_PLAN_READONLY_MODE: Mode = {
-    id: DEFAULT_PLAN_READONLY_MODE_ID,
-    systemPromptOverlay:
-        'You are the Mission Control plan workflow — a planning consultant. Plan mode is STICKY: ' +
-        '"do X" / "fix X" / "build X" / "just do it" all mean "plan X". You NEVER implement product ' +
-        'code and NEVER begin execution — that belongs to #executer (or #executer) or an explicit start. You ' +
-        'are READ-ONLY on product sources: you must not edit source files. You may only write plan ' +
-        'artifacts to .omo/plans/, spec artifacts to .omo/specs/, and draft artifacts to .omo/drafts/. ' +
-        'Explore the codebase before asking; when a request is ambiguous ask at most ONE high-signal ' +
-        'clarifying question; when intent is fuzzy research best practices and ANNOUNCE adopted ' +
-        'defaults instead of interrogating.',
-    policies: [...DEFAULT_PLAN_READONLY_POLICIES],
-};
-
-/** Scaffold headers write-plan emits into `.omo/plans/<slug>.md`. */
-export const DEFAULT_PLAN_SCAFFOLD_HEADERS: readonly string[] = [...PLANNER_SCAFFOLD_HEADERS];
-
-/**
- * Review-plan gap-analysis contract for the default plan workflow. Approve-biased
- * executability floor: approve unless a concrete blocker is present.
- */
-export const DEFAULT_PLAN_REVIEW_GAP_ANALYSIS_PROMPT =
-    'You are the plan review critic. Review the latest draft for EXECUTABILITY, not perfection. ' +
-    'APPROVE-BIAS: approve unless you find a concrete blocker (a plan that is 80% clear is good ' +
-    'enough; the user approver and the executer handle minor gaps). GAP ANALYSIS — reject ' +
-    '(critic.passed=false) ONLY when one of these concrete blockers is present: (1) MISSING ' +
-    'REFERENCES — a todo cites a file:line that does not exist or points at unrelated content; ' +
-    '(2) MISSING QA SCENARIOS — a todo lacks QA scenarios, or the scenarios are unexecutable ' +
-    '("verify it works", "check the page") with no tool, concrete steps, and expected result; ' +
-    '(3) MISSING ACCEPTANCE CRITERIA — a todo has no agent-executable acceptance criteria; ' +
-    '(4) MISSING SCAFFOLD HEADERS — the draft omits ## Todos or ## Final Verification Wave. When ' +
-    'rejecting, name the SINGLE most critical blocker concisely so draft-plan can revise. Do NOT ' +
-    'reject for stylistic preferences, edge-case completeness, or subjective "could be clearer" ' +
-    'notes — those are NOT blockers. HIGH-ACCURACY DUAL REVIEW is NOT run here by default; it is ' +
-    'an opt-in cross-check offered AFTER the plan is delivered. Do not block the handoff waiting ' +
-    'for it. The deterministic checks run alongside this prompt reject empty drafts, drafts that ' +
-    'cite no file:line evidence, and non-answers; a draft that is non-empty, cites real references, ' +
-    'and is a genuine plan passes.';
-
-export type DefaultWorkflowGraphOptions = {
-    /**
-     * Provider/model pin for the graph's `defaults.model`. When omitted, the
-     * graph does NOT declare a default model; the runtime resolves each LLM
-     * node's model from the session's `modelProviderSelection` at `runContext`
-     * time. Pass an explicit model only when a graph should override the
-     * session provider.
-     */
+export type DefaultWorkflowGraphOptions = FixerWorkflowGraphOptions & {
     readonly model?: AbgNodeModelOptions;
-    /** Graph loop bound. Default 100. */
     readonly maxNodeRuns?: number;
 };
 
+/**
+ * Build the default plain-prompt graph (intent-gated implementer).
+ * Structurally shares the fixer implement path; id is `default`.
+ */
 export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions = {}): AbgGraphSpec {
+    const fixer = createFixerWorkflowGraph({
+        ...(options.model !== undefined ? { model: options.model } : {}),
+        ...(options.maxNodeRuns !== undefined ? { maxNodeRuns: options.maxNodeRuns } : {}),
+    });
     return {
+        ...fixer,
         id: DEFAULT_WORKFLOW_GRAPH_ID,
-        version: '0.1.0',
-        entryNodeId: 'intake',
         defaults: {
-            ...(options.model !== undefined ? { model: options.model } : {}),
-            maxNodeRuns: options.maxNodeRuns ?? DEFAULT_WORKFLOW_MAX_NODE_RUNS,
-            // Progress-contract exhaust: pure conditional gates re-admit under budget, then
-            // escalate to present (never silent graph.completed). Recovery only — plan-first
-            // sticky policy is unchanged.
-            escalationTarget: 'present',
+            ...fixer.defaults,
+            // Soft-land / dead-end recovery lands on final-respond (user-visible).
+            escalationTarget: 'final-respond',
         },
-        nodes: [
-            {
-                id: 'intake',
-                kind: 'llm',
-                label: 'Capture the planning request and summarize the goal',
-                config: {
-                    systemPrompt:
-                        'You are a planning consultant. Summarize the user request into a concise goal ' +
-                        'statement. Even if the user says "do", "fix", or "build", you PLAN the work — ' +
-                        'you do not implement it. Set intake.complete when done.',
-                    outputKey: 'intake.complete',
-                },
-            },
-            {
-                id: 'assess-ambiguity',
-                kind: 'llm',
-                label: 'Ambiguity gate (filter 1) — clear | unclear | on-the-fence',
-                // Pure routing gate: empty capabilities keep pureStructuredGate true.
-                capabilities: [],
-                config: {
-                    systemPrompt:
-                        'Classify the request ambiguity. Write exactly one label to ' +
-                        'ambiguity.classification: "clear" (the desired outcome is well-specified; ' +
-                        'only preferences/tradeoffs remain), "unclear" (the outcome itself is fuzzy; ' +
-                        'research and adopt best-practice defaults), or "on-the-fence" (one ' +
-                        'clarifying question resolves it). Mis-routing a clear request to unclear ' +
-                        'silently overrides forks the user wanted to own — when genuinely unsure, ' +
-                        'prefer clear. Explore before asking.',
-                    outputKey: 'ambiguity.classification',
-                    outputEnum: ['clear', 'unclear', 'on-the-fence'],
-                },
-            },
-            {
-                id: 'explore-filter',
-                kind: 'llm',
-                label: 'Exploration gate (filter 2) — needs-exploration | direct-draft',
-                // Pure routing gate: empty capabilities keep pureStructuredGate true.
-                capabilities: [],
-                config: {
-                    systemPrompt:
-                        'Second filter within the clear branch. Decide whether the plan must be ' +
-                        'grounded in codebase exploration first, or whether the request is trivial ' +
-                        'enough to draft directly. Write exactly one label to explore.decision: ' +
-                        '"needs-exploration" (the plan touches real structure that must be cited) or ' +
-                        '"direct-draft" (the request is self-contained, e.g. a one-line change). ' +
-                        'Default to "needs-exploration" when in doubt — explore before asking.',
-                    outputKey: 'explore.decision',
-                    outputEnum: ['needs-exploration', 'direct-draft'],
-                },
-            },
-            {
-                id: 'explore',
-                kind: 'llm',
-                label: 'Explore the codebase to ground the plan',
-                capabilities: ['read'],
-                config: {
-                    systemPrompt:
-                        'Explore the relevant codebase areas to ground the plan in real structure. ' +
-                        'Cite file:line evidence for every claim. ' +
-                        PLANNER_READONLY_CHILD_CONTEXT +
-                        ' Multi-turn: keep calling tools until exploration is grounded. While exploring, ' +
-                        'call tools and do NOT output true. When ready, synthesize findings. Output ONLY the ' +
-                        'JSON boolean `true` when complete — no prose, no formatting, no extra text.',
-                    outputKey: 'explore.complete',
-                    outputShape: 'boolean',
-                },
-            },
-            {
-                id: 'research',
-                kind: 'llm',
-                label: 'Research best practices for an unclear request',
-                capabilities: ['read'],
-                config: {
-                    systemPrompt:
-                        'The request outcome is fuzzy. Research best practices and prior art to make ' +
-                        'it plannable WITHOUT interrogating the user — adopt and ANNOUNCE defensible ' +
-                        'defaults (industry standard or repo convention) with rationale. ' +
-                        PLANNER_READONLY_CHILD_CONTEXT +
-                        ' Multi-turn: keep calling tools until research is grounded. While researching, ' +
-                        'call tools and do NOT output true. When ready, synthesize findings. Output ONLY the ' +
-                        'JSON boolean `true` when complete — no prose, no formatting, no extra text.',
-                    outputKey: 'research.complete',
-                    outputShape: 'boolean',
-                },
-            },
-            {
-                id: 'adopt-defaults',
-                kind: 'llm',
-                label: 'Adopt documented defaults to resolve ambiguity',
-                config: {
-                    systemPrompt:
-                        'Record each adopted best-practice default with rationale and reversibility. ' +
-                        'The only default escalated to a question is one that is irreversible, ' +
-                        'destructive, or safety-critical and research cannot settle. Set ' +
-                        'defaults.adopted when complete.',
-                    outputKey: 'defaults.adopted',
-                },
-            },
-            {
-                id: 'ask-one-question',
-                kind: 'llm',
-                label: 'Ask exactly ONE high-signal clarifying question',
-                config: {
-                    systemPrompt:
-                        'Ask exactly ONE clarifying question whose answer disambiguates the request. ' +
-                        'Name what you explored, why it did not resolve, and which part of the plan ' +
-                        'forks on the answer. Provide 2-4 options with your recommended default first. ' +
-                        'Set clarify.answered when the user responds.',
-                    outputKey: 'clarify.answered',
-                },
-            },
-            {
-                id: 'draft-plan',
-                kind: 'llm',
-                label: 'Draft the plan to .omo/drafts/{slug}.md',
-                capabilities: ['read', 'write'],
-                config: {
-                    systemPrompt:
-                        'Draft the plan as .omo/drafts/<slug>.md. This is the DRAFT, not the final ' +
-                        'plan — it is the durable, compaction-safe resume point. Record the topology ' +
-                        'ledger (1-6 independently-succeed/fail components), adopted defaults, and the ' +
-                        'pending approval gate. Do NOT write .omo/plans/<slug>.md yet — that is gated ' +
-                        'on explicit approval. Set plan.drafted when the draft is written.',
-                    outputKey: 'plan.drafted',
-                },
-            },
-            {
-                id: 'review-plan',
-                kind: 'llm',
-                implementation: 'critic',
-                label: 'Critic — review draft completeness, references, and QA',
-                config: {
-                    systemPrompt: DEFAULT_PLAN_REVIEW_GAP_ANALYSIS_PROMPT,
-                    outputKey: 'plan.approved',
-                },
-            },
-            {
-                id: 'approval-gate',
-                kind: 'llm',
-                label: 'Approval gate — block for explicit okay before the final plan',
-                // Pure boolean gate: empty capabilities keep pureStructuredGate true.
-                capabilities: [],
-                config: {
-                    systemPrompt:
-                        'Present the approval brief ONCE: what you found (key facts with paths), the ' +
-                        'approach, and every surviving owner-decision with your recommended option. ' +
-                        "Then WAIT for the user's explicit okay. Approval authorizes writing the plan " +
-                        "ONLY — it is NEVER authorization to implement. Read the user's next reply as " +
-                        'a decision: approve, scope-change (revise the draft, re-present), or still-unclear ' +
-                        '(emit one short line, do not re-explore). Output ONLY the JSON boolean `true` when the ' +
-                        'user explicitly approves, or `false` otherwise — no prose, no formatting, no extra text.',
-                    outputKey: 'plan.ready',
-                    outputShape: 'boolean',
-                },
-            },
-            {
-                id: 'write-plan',
-                kind: 'llm',
-                label: 'Write the scaffold-compatible final plan to .omo/plans/{slug}.md',
-                capabilities: ['read', 'write'],
-                config: {
-                    systemPrompt:
-                        'Only reached AFTER approval. Write the final plan to .omo/plans/<slug>.md ' +
-                        'with the scaffold headers in order: ' +
-                        DEFAULT_PLAN_SCAFFOLD_HEADERS.join(' | ') +
-                        '. Under Scope state explicit Must have / Must NOT have. Under Todos use ' +
-                        '"- [ ]" checkboxes, one Implementation+Test unit per todo, each with ' +
-                        'References, agent-executable Acceptance criteria, happy+failure QA scenarios, ' +
-                        'and a Commit line. Under Final Verification Wave list F1 plan-compliance, ' +
-                        'F2 code-quality, F3 real manual QA, F4 scope-fidelity. Near the top emit a ' +
-                        '"Status: Approved" line so the executer admission gate can verify the plan was ' +
-                        'explicitly approved before any task delegation. Set plan.written when the ' +
-                        'final plan is committed.',
-                    outputKey: 'plan.written',
-                },
-            },
-            {
-                id: 'present',
-                kind: 'llm',
-                label: 'Present the finalized plan with file path and summary',
-                capabilities: [],
-            },
-        ],
-        edges: [
-            { source: 'intake', target: 'assess-ambiguity', priority: 10 },
-            { source: 'assess-ambiguity', target: 'explore-filter', condition: 'ambiguity-clear', priority: 30 },
-            { source: 'assess-ambiguity', target: 'research', condition: 'ambiguity-unclear', priority: 20 },
-            {
-                source: 'assess-ambiguity',
-                target: 'ask-one-question',
-                condition: 'ambiguity-on-the-fence',
-                priority: 10,
-            },
-            { source: 'explore-filter', target: 'explore', condition: 'exploration-needed', priority: 20 },
-            { source: 'explore-filter', target: 'draft-plan', condition: 'exploration-skippable', priority: 10 },
-            { source: 'explore', target: 'draft-plan', condition: 'explore-complete', priority: 10 },
-            { source: 'research', target: 'adopt-defaults', condition: 'research-complete', priority: 10 },
-            { source: 'adopt-defaults', target: 'draft-plan', condition: 'defaults-adopted', priority: 10 },
-            { source: 'ask-one-question', target: 'assess-ambiguity', condition: 'question-answered', priority: 10 },
-            { source: 'draft-plan', target: 'review-plan', condition: 'plan-drafted', priority: 10 },
-            { source: 'review-plan', target: 'approval-gate', condition: 'plan-approved', priority: 20 },
-            { source: 'review-plan', target: 'draft-plan', condition: 'plan-rejected', priority: 10 },
-            { source: 'approval-gate', target: 'write-plan', condition: 'plan-ready', priority: 20 },
-            { source: 'approval-gate', target: 'approval-gate', condition: 'plan-awaiting-approval', priority: 10 },
-            { source: 'write-plan', target: 'present', condition: 'plan-written', priority: 10 },
-            { source: 'intake', target: 'intake', condition: 'llm-loop-active', priority: 5 },
-            { source: 'assess-ambiguity', target: 'assess-ambiguity', condition: 'llm-loop-active', priority: 5 },
-            { source: 'explore-filter', target: 'explore-filter', condition: 'llm-loop-active', priority: 5 },
-            { source: 'explore', target: 'explore', condition: 'llm-loop-active', priority: 5 },
-            { source: 'research', target: 'research', condition: 'llm-loop-active', priority: 5 },
-            { source: 'adopt-defaults', target: 'adopt-defaults', condition: 'llm-loop-active', priority: 5 },
-            { source: 'ask-one-question', target: 'ask-one-question', condition: 'llm-loop-active', priority: 5 },
-            { source: 'draft-plan', target: 'draft-plan', condition: 'llm-loop-active', priority: 5 },
-            { source: 'review-plan', target: 'review-plan', condition: 'llm-loop-active', priority: 5 },
-            { source: 'approval-gate', target: 'approval-gate', condition: 'llm-loop-active', priority: 5 },
-            { source: 'write-plan', target: 'write-plan', condition: 'llm-loop-active', priority: 5 },
-            { source: 'present', target: 'present', condition: 'llm-loop-active', priority: 5 },
-        ],
-        rules: [
-            {
-                id: 'llm-loop-active',
-                description: 'LLM node re-enters while it proposes tool calls',
-                when: { kind: 'blackboard.value.equals', key: 'llm.loop_active', value: true },
-            },
-            {
-                id: 'ambiguity-clear',
-                description: 'ambiguity classified as clear',
-                when: { kind: 'blackboard.value.equals', key: 'ambiguity.classification', value: 'clear' },
-            },
-            {
-                id: 'ambiguity-unclear',
-                description: 'ambiguity classified as unclear',
-                when: { kind: 'blackboard.value.equals', key: 'ambiguity.classification', value: 'unclear' },
-            },
-            {
-                id: 'ambiguity-on-the-fence',
-                description: 'ambiguity classified as on-the-fence',
-                when: { kind: 'blackboard.value.equals', key: 'ambiguity.classification', value: 'on-the-fence' },
-            },
-            {
-                id: 'exploration-needed',
-                description: 'clear request needs codebase exploration before drafting',
-                when: { kind: 'blackboard.value.equals', key: 'explore.decision', value: 'needs-exploration' },
-            },
-            {
-                id: 'exploration-skippable',
-                description: 'clear request is trivial enough to draft directly',
-                when: { kind: 'blackboard.value.equals', key: 'explore.decision', value: 'direct-draft' },
-            },
-            {
-                id: 'explore-complete',
-                description: 'codebase exploration finished',
-                when: { kind: 'blackboard.value.equals', key: 'explore.complete', value: true },
-            },
-            {
-                id: 'research-complete',
-                description: 'best-practice research finished',
-                when: { kind: 'blackboard.value.equals', key: 'research.complete', value: true },
-            },
-            {
-                id: 'defaults-adopted',
-                description: 'documented defaults adopted',
-                when: { kind: 'blackboard.key.exists', key: 'defaults.adopted' },
-            },
-            {
-                id: 'question-answered',
-                description: 'clarifying question answered — re-classify',
-                when: { kind: 'blackboard.key.exists', key: 'clarify.answered' },
-            },
-            {
-                id: 'plan-drafted',
-                description: 'draft written to .omo/drafts/<slug>.md',
-                when: { kind: 'blackboard.key.exists', key: 'plan.drafted' },
-            },
-            {
-                id: 'plan-approved',
-                description: 'review-plan critic approved the draft',
-                when: { kind: 'blackboard.value.equals', key: 'critic.passed', value: true },
-            },
-            {
-                id: 'plan-rejected',
-                description: 'review-plan critic rejected the draft — revise',
-                when: { kind: 'blackboard.value.equals', key: 'critic.passed', value: false },
-            },
-            {
-                id: 'plan-ready',
-                description: 'user explicitly approved — write the final plan',
-                when: { kind: 'blackboard.value.equals', key: 'plan.ready', value: true },
-            },
-            {
-                id: 'plan-awaiting-approval',
-                description: 'approval gate waiting for explicit okay',
-                when: { kind: 'blackboard.value.equals', key: 'plan.ready', value: false },
-            },
-            {
-                id: 'plan-written',
-                description: 'final plan written to .omo/plans/<slug>.md',
-                when: { kind: 'blackboard.key.exists', key: 'plan.written' },
-            },
-        ],
-        policies: [],
+        nodes: fixer.nodes.map((node) => mapDefaultNode(node)),
+    };
+}
+
+function mapDefaultNode(node: AbgNodeSpec): AbgNodeSpec {
+    if (node.id !== 'intent-gate') {
+        return node;
+    }
+    return {
+        ...node,
+        label: 'Intent gate: classify into 5 classes',
+        config: {
+            ...node.config,
+            systemPrompt: DEFAULT_INTENT_GATE_PROMPT,
+            outputKey: 'intent.classification',
+            outputEnum: [
+                'trivial',
+                'exploratory-research',
+                'open-ended-planning',
+                'explicit-implementation',
+                'ambiguous',
+            ],
+        },
     };
 }

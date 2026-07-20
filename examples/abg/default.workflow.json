@@ -1,324 +1,415 @@
 {
   "name": "default",
-  "description": "Plan-first plain-prompt fallback.",
+  "description": "Plain-prompt fallback: classify intent, then either answer, research read-only, route to #planner, or run todo-backed implementation with verify/evidence and a 3-strike supervisor. Does not force full .omo/plans scaffolds — use #planner for strategic planning.",
   "graph": {
     "id": "default",
     "version": "0.1.0",
-    "entryNodeId": "intake",
+    "entryNodeId": "intent-gate",
     "defaults": {
-      "maxNodeRuns": 100,
-      "escalationTarget": "present"
+      "maxNodeRuns": 128,
+      "escalationTarget": "final-respond"
     },
     "nodes": [
       {
-        "id": "intake",
+        "id": "intent-gate",
         "kind": "llm",
-        "label": "Capture the planning request and summarize the goal",
+        "label": "Intent gate: classify into 5 classes",
         "config": {
-          "systemPrompt": "You are a planning consultant. Summarize the user request into a concise goal statement. Even if the user says \"do\", \"fix\", or \"build\", you PLAN the work — you do not implement it. Set intake.complete when done.",
-          "outputKey": "intake.complete"
-        }
-      },
-      {
-        "id": "assess-ambiguity",
-        "kind": "llm",
-        "label": "Ambiguity gate (filter 1) — clear | unclear | on-the-fence",
-        "capabilities": [],
-        "config": {
-          "systemPrompt": "Classify the request ambiguity. Write exactly one label to ambiguity.classification: \"clear\" (the desired outcome is well-specified; only preferences/tradeoffs remain), \"unclear\" (the outcome itself is fuzzy; research and adopt best-practice defaults), or \"on-the-fence\" (one clarifying question resolves it). Mis-routing a clear request to unclear silently overrides forks the user wanted to own — when genuinely unsure, prefer clear. Explore before asking.",
-          "outputKey": "ambiguity.classification",
+          "systemPrompt": "You are the intent gate for the default workflow. Map the user surface request to its true intent, then classify. Default bias: the message implies ACTION unless the user explicitly wants explanation-only.\n\nIntent routing map (surface form -> true intent -> routing):\n- \"explain X\", \"how does Y work\", \"what is Z\", \"find Y\" with no fix/implement ask -> exploratory-research (read + synthesize, NEVER edit files).\n- \"implement X\", \"add Y\", \"fix Z\", \"create W\", \"bug\", \"broken\", \"doesn't work\", or any clear scoped change -> explicit-implementation (todos + delegate/self-execute + verify).\n- \"refactor\", \"improve\", \"make X better\", \"clean up\", \"optimize\" with no clear target -> open-ended-planning (route to #planner or ask exactly ONE question; NEVER implement silently).\n- greeting, thanks, simple factual one-liner needing no tools -> trivial.\n- vague, multiple plausible interpretations, or missing critical info -> ambiguous.\n\nMis-routing open-ended to explicit-implementation silently implements when the user wanted consultation first — when genuinely unsure between open-ended-planning and explicit-implementation, prefer open-ended-planning.\n\nOutput ONLY one class name — no quotes, no formatting, no extra text:\n- trivial\n- exploratory-research\n- open-ended-planning\n- explicit-implementation\n- ambiguous",
+          "outputKey": "intent.classification",
           "outputEnum": [
-            "clear",
-            "unclear",
-            "on-the-fence"
+            "trivial",
+            "exploratory-research",
+            "open-ended-planning",
+            "explicit-implementation",
+            "ambiguous"
           ]
         }
       },
       {
-        "id": "explore-filter",
+        "id": "direct-respond",
         "kind": "llm",
-        "label": "Exploration gate (filter 2) — needs-exploration | direct-draft",
-        "capabilities": [],
-        "config": {
-          "systemPrompt": "Second filter within the clear branch. Decide whether the plan must be grounded in codebase exploration first, or whether the request is trivial enough to draft directly. Write exactly one label to explore.decision: \"needs-exploration\" (the plan touches real structure that must be cited) or \"direct-draft\" (the request is self-contained, e.g. a one-line change). Default to \"needs-exploration\" when in doubt — explore before asking.",
-          "outputKey": "explore.decision",
-          "outputEnum": [
-            "needs-exploration",
-            "direct-draft"
-          ]
-        }
+        "label": "Direct response — trivial prompts"
       },
       {
-        "id": "explore",
+        "id": "research-explore",
         "kind": "llm",
-        "label": "Explore the codebase to ground the plan",
+        "label": "Exploratory research — read-only, NO edits",
         "capabilities": [
           "read"
         ],
         "config": {
-          "systemPrompt": "Explore the relevant codebase areas to ground the plan in real structure. Cite file:line evidence for every claim. Planner-readonly applies to these workflow nodes after mode materialization. Spawned child agents do NOT inherit workflow PolicyEffectRule sets; their authority is independently constrained by the selected read-only category and AgentDefinition.pathPolicies. Delegate only to explore/librarian, frame child prompts as read-only research (TASK / DELIVERABLE / SCOPE / VERIFY), and treat subagent output as claims until verified. Multi-turn: keep calling tools until exploration is grounded. While exploring, call tools and do NOT output true. When ready, synthesize findings. Output ONLY the JSON boolean `true` when complete — no prose, no formatting, no extra text.",
+          "systemPrompt": "Exploratory/research intent. Explore the codebase and/or external docs to answer the user's question, then synthesize a grounded answer. You are READ-ONLY: you must NOT edit, write, patch, or run effectful tools. Cite file:line evidence for every claim about the codebase. Do NOT begin implementation — if the exploration reveals the user actually wants implementation, say so and stop.\nPATH RESILIENCE: paths mentioned in project docs (AGENTS.md, CLAUDE.md) may be stale after refactors. If a documented path returns not_found, do NOT conclude the file or feature is missing — fall back to glob with the basename (e.g. \"**/<basename>\"), grep for a distinctive symbol from the docs, or list the parent directory. Only conclude \"not present\" after at least one alternative search has returned empty. A failed read is NOT explored ground — it tells you nothing about whether the file exists elsewhere.\nMulti-turn: keep calling tools until you have enough grounded evidence for a complete answer. While exploring, call tools and do NOT output true. When ready, synthesize the answer. Output ONLY the JSON boolean `true` when complete — no prose, no formatting, no extra text.",
           "outputKey": "explore.complete",
           "outputShape": "boolean"
         }
       },
       {
-        "id": "research",
+        "id": "route-planner",
         "kind": "llm",
-        "label": "Research best practices for an unclear request",
+        "label": "Open-ended planning — route to #planner or ask ONE question, NEVER implement",
+        "capabilities": [
+          "workflow"
+        ],
+        "config": {
+          "systemPrompt": "Open-ended/planning intent (\"improve\", \"refactor\", \"make X better\"). You MUST NOT implement directly. Do exactly one of:\n1. Route to the planner workflow via the workflow tool: workflow(\"planner\", \"<the user's request>\"). Use this when the request needs a real plan before any code.\n2. Ask exactly ONE high-signal clarifying question (with 2-4 options and your recommended default first). Use this when one answer would unblock planning.\nNever implement, never edit files, never run effectful tools. Planning mode is STICKY: \"do/fix/build\" all mean \"plan X\" here, not \"implement X\". While calling the workflow tool, do NOT emit true. When you have routed to #planner or asked the question, Output ONLY the JSON boolean `true` — no prose, no formatting, no extra text.",
+          "outputKey": "planner.routed",
+          "outputShape": "boolean"
+        }
+      },
+      {
+        "id": "memory",
+        "kind": "memory",
+        "label": "Recall relevant session context",
+        "config": {
+          "op": "set",
+          "key": "memory.loaded",
+          "value": true
+        }
+      },
+      {
+        "id": "maturity-check",
+        "kind": "llm",
+        "label": "Assess codebase maturity and existing patterns before implementing",
         "capabilities": [
           "read"
         ],
         "config": {
-          "systemPrompt": "The request outcome is fuzzy. Research best practices and prior art to make it plannable WITHOUT interrogating the user — adopt and ANNOUNCE defensible defaults (industry standard or repo convention) with rationale. Planner-readonly applies to these workflow nodes after mode materialization. Spawned child agents do NOT inherit workflow PolicyEffectRule sets; their authority is independently constrained by the selected read-only category and AgentDefinition.pathPolicies. Delegate only to explore/librarian, frame child prompts as read-only research (TASK / DELIVERABLE / SCOPE / VERIFY), and treat subagent output as claims until verified. Multi-turn: keep calling tools until research is grounded. While researching, call tools and do NOT output true. When ready, synthesize findings. Output ONLY the JSON boolean `true` when complete — no prose, no formatting, no extra text.",
-          "outputKey": "research.complete",
+          "systemPrompt": "Before following existing patterns, assess whether they are worth following. Sample config files (linter, formatter, type config) and 2-3 similar files. Classify the codebase state and record it so downstream nodes follow the right discipline:\n- disciplined (consistent patterns, configs present, tests exist) -> follow existing style strictly.\n- transitional (mixed patterns, some structure) -> note which pattern to follow.\n- legacy (no consistency, outdated patterns) -> propose an approach, do not copy.\n- greenfield (new/empty) -> apply modern best practices.\nIf the codebase looks undisciplined, verify before assuming — different patterns may serve different purposes intentionally.\nWhile sampling, call read tools and do NOT emit the classification yet. When ready, Output ONLY one class name — no quotes, no formatting, no extra text:\n- disciplined\n- transitional\n- legacy\n- greenfield",
+          "outputKey": "explore.maturity",
+          "outputShape": "string",
+          "outputEnum": [
+            "disciplined",
+            "transitional",
+            "legacy",
+            "greenfield"
+          ]
+        }
+      },
+      {
+        "id": "anti-dup-guard",
+        "kind": "llm",
+        "label": "Anti-dup exploration guard and delegation-bias check",
+        "config": {
+          "systemPrompt": "You are a pure boolean gate. Do NOT explore, do NOT call tools, do NOT continue prior assistant turns. Judge the existing conversation only, then emit one token.\n\nTwo checks before delegation:\n1. ANTI-DUP: if the work was already SUCCESSFULLY explored (a read that returned content, a grep with matches — check prior exploration results in context), do NOT re-read the same files. Skip redundant exploration and proceed with what is already known. Re-running the same successful searches wastes tokens and can contradict earlier findings. A tool FAILURE (not_found, read_failed, empty glob) is NOT explored ground — it tells you nothing, so it must NOT count as prior exploration. If a documented path failed, switch tools (glob the basename, grep a symbol, list the parent) before treating the area as covered.\n2. DELEGATION-BIAS: assess whether delegation is appropriate. Is the task small enough to do directly with certainty? Is there an existing pattern to follow (per the maturity check)? Default bias is DELEGATE for non-trivial work, but trivial single-file work you can do correctly yourself should be done directly rather than over-delegated.\nOutput ONLY `true` or `false` — no prose, no formatting, no extra text. Output `true` when both checks pass and the plan may proceed to todo planning; output `false` otherwise.",
+          "outputKey": "guard.cleared",
           "outputShape": "boolean"
         }
       },
       {
-        "id": "adopt-defaults",
+        "id": "todo-plan",
         "kind": "llm",
-        "label": "Adopt documented defaults to resolve ambiguity",
+        "label": "Decompose explicit task into ordered todos",
         "config": {
-          "systemPrompt": "Record each adopted best-practice default with rationale and reversibility. The only default escalated to a question is one that is irreversible, destructive, or safety-critical and research cannot settle. Set defaults.adopted when complete.",
-          "outputKey": "defaults.adopted"
+          "systemPrompt": "Break the task into small ordered todo items (one implementation+test unit per todo). Each todo should be atomic enough to delegate as one sub-task.\nOutput the list as a JSON array of objects. Each object MUST have a \"description\" field (string). Output ONLY the JSON array — no prose, no markdown fences, no explanation. Example: [{\"description\":\"add input validation\"},{\"description\":\"write unit test\"}]",
+          "outputKey": "plan.todos",
+          "outputShape": "array"
         }
       },
       {
-        "id": "ask-one-question",
-        "kind": "llm",
-        "label": "Ask exactly ONE high-signal clarifying question",
-        "config": {
-          "systemPrompt": "Ask exactly ONE clarifying question whose answer disambiguates the request. Name what you explored, why it did not resolve, and which part of the plan forks on the answer. Provide 2-4 options with your recommended default first. Set clarify.answered when the user responds.",
-          "outputKey": "clarify.answered"
-        }
-      },
-      {
-        "id": "draft-plan",
-        "kind": "llm",
-        "label": "Draft the plan to .omo/drafts/{slug}.md",
-        "capabilities": [
-          "read",
-          "write"
+        "id": "delegate-wave",
+        "kind": "parallel",
+        "label": "Fan out task() delegation per todo",
+        "children": [
+          "delegate-worker"
         ],
         "config": {
-          "systemPrompt": "Draft the plan as .omo/drafts/<slug>.md. This is the DRAFT, not the final plan — it is the durable, compaction-safe resume point. Record the topology ledger (1-6 independently-succeed/fail components), adopted defaults, and the pending approval gate. Do NOT write .omo/plans/<slug>.md yet — that is gated on explicit approval. Set plan.drafted when the draft is written.",
-          "outputKey": "plan.drafted"
+          "fanOutKey": "plan.todos",
+          "completionKey": "delegate.complete"
         }
       },
       {
-        "id": "review-plan",
+        "id": "delegate-worker",
+        "kind": "llm",
+        "label": "Single task() delegation",
+        "capabilities": [
+          "subagent"
+        ],
+        "config": {
+          "systemPrompt": "Execute the delegated sub-task via the task tool. Frame the delegation with TASK, EXPECTED OUTCOME, REQUIRED TOOLS, MUST DO, MUST NOT DO, and CONTEXT."
+        }
+      },
+      {
+        "id": "verify-wave",
         "kind": "llm",
         "implementation": "critic",
-        "label": "Critic — review draft completeness, references, and QA",
+        "label": "Critic — verify delegate results against requirements",
         "config": {
-          "systemPrompt": "You are the plan review critic. Review the latest draft for EXECUTABILITY, not perfection. APPROVE-BIAS: approve unless you find a concrete blocker (a plan that is 80% clear is good enough; the user approver and the executer handle minor gaps). GAP ANALYSIS — reject (critic.passed=false) ONLY when one of these concrete blockers is present: (1) MISSING REFERENCES — a todo cites a file:line that does not exist or points at unrelated content; (2) MISSING QA SCENARIOS — a todo lacks QA scenarios, or the scenarios are unexecutable (\"verify it works\", \"check the page\") with no tool, concrete steps, and expected result; (3) MISSING ACCEPTANCE CRITERIA — a todo has no agent-executable acceptance criteria; (4) MISSING SCAFFOLD HEADERS — the draft omits ## Todos or ## Final Verification Wave. When rejecting, name the SINGLE most critical blocker concisely so draft-plan can revise. Do NOT reject for stylistic preferences, edge-case completeness, or subjective \"could be clearer\" notes — those are NOT blockers. HIGH-ACCURACY DUAL REVIEW is NOT run here by default; it is an opt-in cross-check offered AFTER the plan is delivered. Do not block the handoff waiting for it. The deterministic checks run alongside this prompt reject empty drafts, drafts that cite no file:line evidence, and non-answers; a draft that is non-empty, cites real references, and is a genuine plan passes.",
-          "outputKey": "plan.approved"
+          "evaluateKey": "delegate.results",
+          "outputKey": "critic.passed"
         }
       },
       {
-        "id": "approval-gate",
+        "id": "evidence-check",
         "kind": "llm",
-        "label": "Approval gate — block for explicit okay before the final plan",
-        "capabilities": [],
+        "label": "Evidence check — verify concrete evidence, not just child claims",
         "config": {
-          "systemPrompt": "Present the approval brief ONCE: what you found (key facts with paths), the approach, and every surviving owner-decision with your recommended option. Then WAIT for the user's explicit okay. Approval authorizes writing the plan ONLY — it is NEVER authorization to implement. Read the user's next reply as a decision: approve, scope-change (revise the draft, re-present), or still-unclear (emit one short line, do not re-explore). Output ONLY the JSON boolean `true` when the user explicitly approves, or `false` otherwise — no prose, no formatting, no extra text.",
-          "outputKey": "plan.ready",
+          "systemPrompt": "Personal verification after delegation. Do NOT trust the child's \"done\" claim alone. Verify concrete evidence: lsp_diagnostics clean on changed files, build exit code 0, test run passing, expected file changes present, command output matching. Confirm the work followed MUST DO / MUST NOT DO requirements and existing codebase patterns. NO EVIDENCE = NOT COMPLETE.\nOutput ONLY the JSON boolean `true` or `false` — no prose, no formatting, no extra text. Output `true` only when concrete evidence confirms the work; output `false` to trigger a bounded retry.",
+          "outputKey": "evidence.verified",
           "outputShape": "boolean"
         }
       },
       {
-        "id": "write-plan",
+        "id": "supervisor",
         "kind": "llm",
-        "label": "Write the scaffold-compatible final plan to .omo/plans/{slug}.md",
-        "capabilities": [
-          "read",
-          "write"
-        ],
+        "implementation": "supervisor",
+        "label": "3-strike failure recovery — retry under budget, else escalate",
         "config": {
-          "systemPrompt": "Only reached AFTER approval. Write the final plan to .omo/plans/<slug>.md with the scaffold headers in order: # <slug> - Work Plan | ## TL;DR (For humans) | ## Scope | ## Verification Strategy | ## Execution Strategy | ## Todos | ## Final Verification Wave | ## Commit Strategy | ## Success Criteria. Under Scope state explicit Must have / Must NOT have. Under Todos use \"- [ ]\" checkboxes, one Implementation+Test unit per todo, each with References, agent-executable Acceptance criteria, happy+failure QA scenarios, and a Commit line. Under Final Verification Wave list F1 plan-compliance, F2 code-quality, F3 real manual QA, F4 scope-fidelity. Near the top emit a \"Status: Approved\" line so the executer admission gate can verify the plan was explicitly approved before any task delegation. Set plan.written when the final plan is committed.",
-          "outputKey": "plan.written"
+          "maxAttempts": 3,
+          "strikeBudget": 3
         }
       },
       {
-        "id": "present",
+        "id": "final-respond",
         "kind": "llm",
-        "label": "Present the finalized plan with file path and summary",
-        "capabilities": []
+        "label": "Synthesize final answer citing evidence",
+        "capabilities": [],
+        "config": {
+          "systemPrompt": "Synthesize the final answer from verified results already in context. Cite the evidence that was checked (files changed, tests passing, build status, command output). Do not claim completion beyond what the evidence supports; surface pre-existing failures unrelated to this work as notes rather than fixing them. Do NOT call any tools — synthesize ONLY from what is already in the conversation."
+        }
+      },
+      {
+        "id": "clarify",
+        "kind": "llm",
+        "label": "Ask ONE clarifying question — ambiguous prompts",
+        "config": {
+          "systemPrompt": "Ask the user exactly ONE targeted clarifying question. Name what you understood, what you are unsure about, 2-4 options with effort/implications, and your recommendation. After the question is asked, Output ONLY the JSON boolean `true` — no prose, no formatting, no extra text.",
+          "outputKey": "clarify.active",
+          "outputShape": "boolean"
+        }
       }
     ],
     "edges": [
       {
-        "source": "intake",
-        "target": "assess-ambiguity",
-        "priority": 10
-      },
-      {
-        "source": "assess-ambiguity",
-        "target": "explore-filter",
-        "condition": "ambiguity-clear",
+        "source": "intent-gate",
+        "target": "direct-respond",
+        "condition": "intent-trivial",
         "priority": 30
       },
       {
-        "source": "assess-ambiguity",
-        "target": "research",
-        "condition": "ambiguity-unclear",
+        "source": "intent-gate",
+        "target": "research-explore",
+        "condition": "intent-exploratory",
+        "priority": 25
+      },
+      {
+        "source": "intent-gate",
+        "target": "route-planner",
+        "condition": "intent-open-ended",
+        "priority": 22
+      },
+      {
+        "source": "intent-gate",
+        "target": "memory",
+        "condition": "intent-explicit-implementation",
         "priority": 20
       },
       {
-        "source": "assess-ambiguity",
-        "target": "ask-one-question",
-        "condition": "ambiguity-on-the-fence",
+        "source": "intent-gate",
+        "target": "clarify",
+        "condition": "intent-ambiguous",
         "priority": 10
       },
       {
-        "source": "explore-filter",
-        "target": "explore",
-        "condition": "exploration-needed",
-        "priority": 20
+        "source": "intent-gate",
+        "target": "intent-gate",
+        "condition": "llm-loop-active",
+        "priority": 5
       },
       {
-        "source": "explore-filter",
-        "target": "draft-plan",
-        "condition": "exploration-skippable",
+        "source": "direct-respond",
+        "target": "direct-respond",
+        "condition": "llm-loop-active",
         "priority": 10
       },
       {
-        "source": "explore",
-        "target": "draft-plan",
-        "condition": "explore-complete",
-        "priority": 10
-      },
-      {
-        "source": "research",
-        "target": "adopt-defaults",
+        "source": "research-explore",
+        "target": "final-respond",
         "condition": "research-complete",
         "priority": 10
       },
       {
-        "source": "adopt-defaults",
-        "target": "draft-plan",
-        "condition": "defaults-adopted",
+        "source": "research-explore",
+        "target": "research-explore",
+        "condition": "llm-loop-active",
+        "priority": 5
+      },
+      {
+        "source": "route-planner",
+        "target": "final-respond",
+        "condition": "planner-routed",
         "priority": 10
       },
       {
-        "source": "ask-one-question",
-        "target": "assess-ambiguity",
-        "condition": "question-answered",
+        "source": "route-planner",
+        "target": "route-planner",
+        "condition": "llm-loop-active",
+        "priority": 5
+      },
+      {
+        "source": "memory",
+        "target": "maturity-check",
+        "condition": "memory-loaded",
         "priority": 10
       },
       {
-        "source": "draft-plan",
-        "target": "review-plan",
-        "condition": "plan-drafted",
+        "source": "maturity-check",
+        "target": "anti-dup-guard",
+        "condition": "maturity-assessed",
         "priority": 10
       },
       {
-        "source": "review-plan",
-        "target": "approval-gate",
-        "condition": "plan-approved",
-        "priority": 20
-      },
-      {
-        "source": "review-plan",
-        "target": "draft-plan",
-        "condition": "plan-rejected",
+        "source": "anti-dup-guard",
+        "target": "todo-plan",
+        "condition": "guard-cleared",
         "priority": 10
       },
       {
-        "source": "approval-gate",
-        "target": "write-plan",
+        "source": "todo-plan",
+        "target": "delegate-wave",
         "condition": "plan-ready",
+        "priority": 10
+      },
+      {
+        "source": "delegate-wave",
+        "target": "verify-wave",
+        "condition": "wave-complete",
+        "priority": 10
+      },
+      {
+        "source": "delegate-worker",
+        "target": "delegate-worker",
+        "condition": "llm-loop-active",
+        "priority": 5
+      },
+      {
+        "source": "verify-wave",
+        "target": "evidence-check",
+        "condition": "critic-passed",
         "priority": 20
       },
       {
-        "source": "approval-gate",
-        "target": "approval-gate",
-        "condition": "plan-awaiting-approval",
+        "source": "verify-wave",
+        "target": "supervisor",
+        "condition": "critic-failed",
         "priority": 10
       },
       {
-        "source": "write-plan",
-        "target": "present",
-        "condition": "plan-written",
+        "source": "evidence-check",
+        "target": "final-respond",
+        "condition": "evidence-verified",
+        "priority": 20
+      },
+      {
+        "source": "evidence-check",
+        "target": "supervisor",
+        "condition": "evidence-missing",
         "priority": 10
       },
       {
-        "source": "intake",
-        "target": "intake",
+        "source": "supervisor",
+        "target": "delegate-wave",
+        "condition": "supervisor-retry",
+        "priority": 10
+      },
+      {
+        "source": "supervisor",
+        "target": "final-respond",
+        "condition": "supervisor-escalated",
+        "priority": 20
+      },
+      {
+        "source": "final-respond",
+        "target": "final-respond",
         "condition": "llm-loop-active",
         "priority": 5
       },
       {
-        "source": "assess-ambiguity",
-        "target": "assess-ambiguity",
+        "source": "clarify",
+        "target": "intent-gate",
+        "condition": "clarify-loop",
+        "priority": 10
+      },
+      {
+        "source": "clarify",
+        "target": "clarify",
         "condition": "llm-loop-active",
         "priority": 5
       },
       {
-        "source": "explore-filter",
-        "target": "explore-filter",
+        "source": "maturity-check",
+        "target": "maturity-check",
         "condition": "llm-loop-active",
         "priority": 5
       },
       {
-        "source": "explore",
-        "target": "explore",
+        "source": "anti-dup-guard",
+        "target": "anti-dup-guard",
         "condition": "llm-loop-active",
         "priority": 5
       },
       {
-        "source": "research",
-        "target": "research",
+        "source": "todo-plan",
+        "target": "todo-plan",
         "condition": "llm-loop-active",
         "priority": 5
       },
       {
-        "source": "adopt-defaults",
-        "target": "adopt-defaults",
-        "condition": "llm-loop-active",
-        "priority": 5
-      },
-      {
-        "source": "ask-one-question",
-        "target": "ask-one-question",
-        "condition": "llm-loop-active",
-        "priority": 5
-      },
-      {
-        "source": "draft-plan",
-        "target": "draft-plan",
-        "condition": "llm-loop-active",
-        "priority": 5
-      },
-      {
-        "source": "review-plan",
-        "target": "review-plan",
-        "condition": "llm-loop-active",
-        "priority": 5
-      },
-      {
-        "source": "approval-gate",
-        "target": "approval-gate",
-        "condition": "llm-loop-active",
-        "priority": 5
-      },
-      {
-        "source": "write-plan",
-        "target": "write-plan",
-        "condition": "llm-loop-active",
-        "priority": 5
-      },
-      {
-        "source": "present",
-        "target": "present",
+        "source": "evidence-check",
+        "target": "evidence-check",
         "condition": "llm-loop-active",
         "priority": 5
       }
     ],
     "rules": [
       {
+        "id": "intent-trivial",
+        "description": "intent classified as trivial",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "intent.classification",
+          "value": "trivial"
+        }
+      },
+      {
+        "id": "intent-exploratory",
+        "description": "intent classified as exploratory-research",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "intent.classification",
+          "value": "exploratory-research"
+        }
+      },
+      {
+        "id": "intent-open-ended",
+        "description": "intent classified as open-ended-planning",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "intent.classification",
+          "value": "open-ended-planning"
+        }
+      },
+      {
+        "id": "intent-explicit-implementation",
+        "description": "intent classified as explicit-implementation",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "intent.classification",
+          "value": "explicit-implementation"
+        }
+      },
+      {
+        "id": "intent-ambiguous",
+        "description": "intent classified as ambiguous",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "intent.classification",
+          "value": "ambiguous"
+        }
+      },
+      {
         "id": "llm-loop-active",
-        "description": "LLM node re-enters while it proposes tool calls",
+        "description": "llm node re-enters while it proposes tool calls",
         "when": {
           "kind": "blackboard.value.equals",
           "key": "llm.loop_active",
@@ -326,53 +417,34 @@
         }
       },
       {
-        "id": "ambiguity-clear",
-        "description": "ambiguity classified as clear",
+        "id": "memory-loaded",
+        "description": "context memory loaded",
         "when": {
           "kind": "blackboard.value.equals",
-          "key": "ambiguity.classification",
-          "value": "clear"
+          "key": "memory.loaded",
+          "value": true
         }
       },
       {
-        "id": "ambiguity-unclear",
-        "description": "ambiguity classified as unclear",
+        "id": "maturity-assessed",
+        "description": "codebase maturity assessed",
         "when": {
-          "kind": "blackboard.value.equals",
-          "key": "ambiguity.classification",
-          "value": "unclear"
+          "kind": "blackboard.key.exists",
+          "key": "explore.maturity"
         }
       },
       {
-        "id": "ambiguity-on-the-fence",
-        "description": "ambiguity classified as on-the-fence",
+        "id": "guard-cleared",
+        "description": "anti-dup and delegation-bias checks passed",
         "when": {
           "kind": "blackboard.value.equals",
-          "key": "ambiguity.classification",
-          "value": "on-the-fence"
+          "key": "guard.cleared",
+          "value": true
         }
       },
       {
-        "id": "exploration-needed",
-        "description": "clear request needs codebase exploration before drafting",
-        "when": {
-          "kind": "blackboard.value.equals",
-          "key": "explore.decision",
-          "value": "needs-exploration"
-        }
-      },
-      {
-        "id": "exploration-skippable",
-        "description": "clear request is trivial enough to draft directly",
-        "when": {
-          "kind": "blackboard.value.equals",
-          "key": "explore.decision",
-          "value": "direct-draft"
-        }
-      },
-      {
-        "id": "explore-complete",
-        "description": "codebase exploration finished",
+        "id": "research-complete",
+        "description": "exploratory research synthesis ready",
         "when": {
           "kind": "blackboard.value.equals",
           "key": "explore.complete",
@@ -380,111 +452,93 @@
         }
       },
       {
-        "id": "research-complete",
-        "description": "best-practice research finished",
+        "id": "planner-routed",
+        "description": "routed to #planner or asked one question",
         "when": {
           "kind": "blackboard.value.equals",
-          "key": "research.complete",
+          "key": "planner.routed",
           "value": true
-        }
-      },
-      {
-        "id": "defaults-adopted",
-        "description": "documented defaults adopted",
-        "when": {
-          "kind": "blackboard.key.exists",
-          "key": "defaults.adopted"
-        }
-      },
-      {
-        "id": "question-answered",
-        "description": "clarifying question answered — re-classify",
-        "when": {
-          "kind": "blackboard.key.exists",
-          "key": "clarify.answered"
-        }
-      },
-      {
-        "id": "plan-drafted",
-        "description": "draft written to .omo/drafts/<slug>.md",
-        "when": {
-          "kind": "blackboard.key.exists",
-          "key": "plan.drafted"
-        }
-      },
-      {
-        "id": "plan-approved",
-        "description": "review-plan critic approved the draft",
-        "when": {
-          "kind": "blackboard.value.equals",
-          "key": "critic.passed",
-          "value": true
-        }
-      },
-      {
-        "id": "plan-rejected",
-        "description": "review-plan critic rejected the draft — revise",
-        "when": {
-          "kind": "blackboard.value.equals",
-          "key": "critic.passed",
-          "value": false
         }
       },
       {
         "id": "plan-ready",
-        "description": "user explicitly approved — write the final plan",
+        "description": "todo plan produced",
+        "when": {
+          "kind": "blackboard.key.exists",
+          "key": "plan.todos"
+        }
+      },
+      {
+        "id": "wave-complete",
+        "description": "delegation wave finished",
+        "when": {
+          "kind": "blackboard.key.exists",
+          "key": "delegate.complete"
+        }
+      },
+      {
+        "id": "critic-passed",
+        "description": "verify-wave critic approved results",
         "when": {
           "kind": "blackboard.value.equals",
-          "key": "plan.ready",
+          "key": "critic.passed",
           "value": true
         }
       },
       {
-        "id": "plan-awaiting-approval",
-        "description": "approval gate waiting for explicit okay",
+        "id": "critic-failed",
+        "description": "verify-wave critic rejected results",
         "when": {
           "kind": "blackboard.value.equals",
-          "key": "plan.ready",
+          "key": "critic.passed",
           "value": false
         }
       },
       {
-        "id": "plan-written",
-        "description": "final plan written to .omo/plans/<slug>.md",
+        "id": "evidence-verified",
+        "description": "concrete evidence confirmed the delegated work",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "evidence.verified",
+          "value": true
+        }
+      },
+      {
+        "id": "evidence-missing",
+        "description": "evidence check failed — trigger bounded retry",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "evidence.verified",
+          "value": false
+        }
+      },
+      {
+        "id": "supervisor-retry",
+        "description": "supervisor decided to retry delegation (under strike budget)",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "supervisor.action",
+          "value": "retry"
+        }
+      },
+      {
+        "id": "supervisor-escalated",
+        "description": "supervisor escalated after exhausting the 3-strike budget",
         "when": {
           "kind": "blackboard.key.exists",
-          "key": "plan.written"
+          "key": "supervisor.escalated"
+        }
+      },
+      {
+        "id": "clarify-loop",
+        "description": "clarification collected — re-classify intent",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "clarify.active",
+          "value": true
         }
       }
     ],
     "policies": []
-  },
-  "modes": [
-    {
-      "id": "plan-readonly",
-      "systemPromptOverlay": "You are the Mission Control plan workflow — a planning consultant. Plan mode is STICKY: \"do X\" / \"fix X\" / \"build X\" / \"just do it\" all mean \"plan X\". You NEVER implement product code and NEVER begin execution — that belongs to #executer (or #executer) or an explicit start. You are READ-ONLY on product sources: you must not edit source files. You may only write plan artifacts to .omo/plans/, spec artifacts to .omo/specs/, and draft artifacts to .omo/drafts/. Explore the codebase before asking; when a request is ambiguous ask at most ONE high-signal clarifying question; when intent is fuzzy research best practices and ANNOUNCE adopted defaults instead of interrogating.",
-      "policies": [
-        {
-          "action": "write",
-          "resource": "**",
-          "effect": "deny"
-        },
-        {
-          "action": "write",
-          "resource": ".omo/plans/**",
-          "effect": "allow"
-        },
-        {
-          "action": "write",
-          "resource": ".omo/specs/**",
-          "effect": "allow"
-        },
-        {
-          "action": "write",
-          "resource": ".omo/drafts/**",
-          "effect": "allow"
-        }
-      ]
-    }
-  ]
+  }
 }

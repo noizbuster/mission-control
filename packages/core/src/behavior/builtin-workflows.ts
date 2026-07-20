@@ -1,5 +1,5 @@
 import type { Mode, WorkflowSpec } from '@mission-control/protocol';
-import { createDefaultWorkflowGraph, DEFAULT_PLAN_READONLY_MODE } from './default-workflow-graph';
+import { createDefaultWorkflowGraph } from './default-workflow-graph';
 import { createExecuterWorkflowGraph } from './executer-workflow-graph';
 import { createFixerWorkflowGraph } from './fixer-workflow-graph';
 import { autopilotMode } from './modes/autopilot-mode';
@@ -10,10 +10,10 @@ import { createPlannerWorkflowGraph, PLANNER_READONLY_MODE } from './planner-wor
  *
  * | Name | Role |
  * | --- | --- |
- * | `default` | Plan-first plain-prompt fallback |
- * | `planner` | Deep autonomous planning craft |
- * | `executer` | Plan execution conductor |
- * | `fixer` | Intent-gated implement/fix path |
+ * | `default` | Plain-prompt fallback: intent-gated implement/fix path |
+ * | `planner` | Sticky read-only planning; writes plan scaffolds only |
+ * | `executer` | Executes an approved plan with verify-before-checkbox discipline |
+ * | `fixer` | Explicit intent-gated implement/fix path (same family as default) |
  *
  * Autopilot remains a mode overlay, not a standalone graph.
  */
@@ -21,27 +21,31 @@ export const BUILTIN_WORKFLOWS: readonly WorkflowSpec[] = [
     {
         name: 'default',
         description:
-            'Plan-first plain-prompt fallback: ambiguity assessment, explore/research, draft, review, approval, write plan scaffold. Never implements product code.',
+            'Plain-prompt fallback: classify intent, then either answer, research read-only, route to #planner, ' +
+            'or run todo-backed implementation with verify/evidence and a 3-strike supervisor. Does not force ' +
+            'full .omo/plans scaffolds — use #planner for strategic planning.',
         graph: createDefaultWorkflowGraph(),
-        modes: [DEFAULT_PLAN_READONLY_MODE],
     },
     {
         name: 'planner',
         description:
-            'Deep autonomous planning craft: explore hierarchy before questions, sticky plan mode, draft/review/approval, scaffold to .omo/plans/.',
+            'Sticky read-only planning: explore before questions, draft/review/approval, write scaffold plans to ' +
+            '.omo/plans/. Never implements product code.',
         graph: createPlannerWorkflowGraph(),
         modes: [PLANNER_READONLY_MODE],
     },
     {
         name: 'executer',
         description:
-            'Plan execution conductor: admit plan, parallel delegate waves, verify-before-checkbox, F1–F4 final wave, 3-strike fix loop.',
+            'Plan execution: admit approved plan, parallel delegate waves, verify-before-checkbox, F1–F4 final ' +
+            'wave, 3-strike fix loop.',
         graph: createExecuterWorkflowGraph(),
     },
     {
         name: 'fixer',
         description:
-            'Intent-gated implement/fix path: five-class intent gate, maturity check, anti-dup guard, delegate + verify + evidence, 3-strike supervisor.',
+            'Intent-gated implement/fix path: five-class intent gate, maturity check, anti-dup guard, ' +
+            'todo plan, delegate + verify + evidence, 3-strike supervisor.',
         graph: createFixerWorkflowGraph(),
     },
 ];

@@ -1,82 +1,63 @@
 import { AbgGraphSpecSchema, WorkflowSpecSchema } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
+import { readFile } from 'node:fs/promises';
 import {
     createDefaultWorkflowGraph,
-    DEFAULT_PLAN_READONLY_MODE_ID,
-    DEFAULT_PLAN_READONLY_POLICIES,
+    DEFAULT_INTENT_GATE_PROMPT,
     DEFAULT_WORKFLOW_GRAPH_ID,
+    DEFAULT_WORKFLOW_MAX_NODE_RUNS,
 } from './default-workflow-graph';
-import { readFile } from 'node:fs/promises';
+import { createFixerWorkflowGraph } from './fixer-workflow-graph';
 
 const workflowJsonPath = `${process.cwd()}/examples/abg/default.workflow.json`;
 
 describe('createDefaultWorkflowGraph', () => {
-    it('returns a schema-valid AbgGraphSpec', () => {
+    it('is schema-valid', () => {
         const graph = createDefaultWorkflowGraph();
         expect(AbgGraphSpecSchema.safeParse(graph).success).toBe(true);
     });
 
-    it('uses "default" as the graph id', () => {
+    it('uses the default graph id', () => {
         expect(createDefaultWorkflowGraph().id).toBe(DEFAULT_WORKFLOW_GRAPH_ID);
     });
 
-    it('has intake as the entry node (plan-first)', () => {
+    it('has intent-gate as the entry node', () => {
         const graph = createDefaultWorkflowGraph();
-        expect(graph.entryNodeId).toBe('intake');
-        expect(graph.nodes.map((node) => node.id)).toContain('intake');
+        expect(graph.entryNodeId).toBe('intent-gate');
     });
 
-    it('routes ambiguity to clear / unclear / on-the-fence branches', () => {
-        const graph = createDefaultWorkflowGraph();
-        const targets = new Set(
-            graph.edges.filter((edge) => edge.source === 'assess-ambiguity').map((edge) => edge.target),
-        );
-        expect(targets.has('explore-filter') || targets.has('research') || targets.has('ask-one-question')).toBe(true);
-        expect(targets.size).toBeGreaterThanOrEqual(2);
+    it('shares the fixer implement path node set', () => {
+        const defaultIds = new Set(createDefaultWorkflowGraph().nodes.map((node) => node.id));
+        const fixerIds = new Set(createFixerWorkflowGraph().nodes.map((node) => node.id));
+        expect(defaultIds).toEqual(fixerIds);
+        expect(defaultIds.has('todo-plan')).toBe(true);
+        expect(defaultIds.has('delegate-wave')).toBe(true);
+        expect(defaultIds.has('write-plan')).toBe(false);
     });
 
-    it('includes draft-plan, review-plan, approval-gate, and write-plan', () => {
-        const ids = new Set(createDefaultWorkflowGraph().nodes.map((node) => node.id));
-        expect(ids.has('draft-plan')).toBe(true);
-        expect(ids.has('review-plan')).toBe(true);
-        expect(ids.has('approval-gate')).toBe(true);
-        expect(ids.has('write-plan')).toBe(true);
+    it('uses the default intent-gate prompt', () => {
+        const gate = createDefaultWorkflowGraph().nodes.find((node) => node.id === 'intent-gate');
+        expect(gate?.config?.['systemPrompt']).toBe(DEFAULT_INTENT_GATE_PROMPT);
     });
 
-    it('does not include implementer-only nodes (intent-gate / delegate-wave)', () => {
-        const ids = new Set(createDefaultWorkflowGraph().nodes.map((node) => node.id));
-        expect(ids.has('intent-gate')).toBe(false);
-        expect(ids.has('delegate-wave')).toBe(false);
+    it('honors maxNodeRuns override', () => {
+        const graph = createDefaultWorkflowGraph({ maxNodeRuns: 42 });
+        expect(graph.defaults?.maxNodeRuns).toBe(42);
     });
 
-    it('accepts custom model and maxNodeRuns options', () => {
-        const graph = createDefaultWorkflowGraph({
-            model: { providerID: 'anthropic', modelID: 'claude-sonnet' },
-            maxNodeRuns: 12,
-        });
-        expect(graph.defaults?.model?.providerID).toBe('anthropic');
-        expect(graph.defaults?.maxNodeRuns).toBe(12);
+    it('defaults maxNodeRuns to the shared fixer budget', () => {
+        expect(createDefaultWorkflowGraph().defaults?.maxNodeRuns).toBe(DEFAULT_WORKFLOW_MAX_NODE_RUNS);
     });
 });
 
 describe('examples/abg/default.workflow.json', () => {
-    it('parses via WorkflowSpecSchema', async () => {
-        const contents = await readFile(workflowJsonPath, 'utf8');
-        expect(WorkflowSpecSchema.safeParse(JSON.parse(contents)).success).toBe(true);
-    });
-
-    it('has name "default" with intake entry node', async () => {
+    it('is a valid WorkflowSpec', async () => {
         const contents = await readFile(workflowJsonPath, 'utf8');
         const result = WorkflowSpecSchema.safeParse(JSON.parse(contents));
         expect(result.success).toBe(true);
-        if (!result.success) {
-            return;
-        }
-        expect(result.data.name).toBe('default');
-        expect(result.data.graph.entryNodeId).toBe('intake');
     });
 
-    it('produces a graph identical to createDefaultWorkflowGraph()', async () => {
+    it('matches createDefaultWorkflowGraph() on the graph', async () => {
         const contents = await readFile(workflowJsonPath, 'utf8');
         const result = WorkflowSpecSchema.safeParse(JSON.parse(contents));
         expect(result.success).toBe(true);
@@ -84,18 +65,7 @@ describe('examples/abg/default.workflow.json', () => {
             return;
         }
         expect(result.data.graph).toEqual(createDefaultWorkflowGraph());
-    });
-
-    it('declares the plan-readonly mode with deny-all-writes-except policies', async () => {
-        const contents = await readFile(workflowJsonPath, 'utf8');
-        const result = WorkflowSpecSchema.safeParse(JSON.parse(contents));
-        expect(result.success).toBe(true);
-        if (!result.success) {
-            return;
-        }
-        const modes = result.data.modes ?? [];
-        const readonlyMode = modes.find((mode) => mode.id === DEFAULT_PLAN_READONLY_MODE_ID);
-        expect(readonlyMode).toBeDefined();
-        expect(readonlyMode?.policies).toEqual([...DEFAULT_PLAN_READONLY_POLICIES]);
+        expect(result.data.name).toBe('default');
+        expect(result.data.modes === undefined || result.data.modes.length === 0).toBe(true);
     });
 });

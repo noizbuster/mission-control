@@ -14,10 +14,7 @@
  * (broad deny first, specific allow after) are preserved.
  */
 import type { AbgGraphSpec, Mode, WorkflowSpec } from '@mission-control/protocol';
-import {
-    createDefaultWorkflowGraph,
-    DEFAULT_PLAN_READONLY_MODE,
-} from '../behavior/default-workflow-graph';
+import { createDefaultWorkflowGraph } from '../behavior/default-workflow-graph';
 import { applyMode } from '../behavior/modes/mode-application';
 import { assertRoutingKeyBiCoverage } from '../behavior/routing-key-bi-coverage';
 
@@ -88,7 +85,6 @@ export function resolveDefaultWorkflowSpec(registry: WorkflowLookup): WorkflowSp
     return {
         name: DEFAULT_WORKFLOW_NAME,
         graph: createDefaultWorkflowGraph(),
-        modes: [DEFAULT_PLAN_READONLY_MODE],
     };
 }
 
