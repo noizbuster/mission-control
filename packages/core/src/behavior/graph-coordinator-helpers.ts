@@ -31,6 +31,8 @@ export type CoordinatorState = {
     readonly events: AgentEvent[];
     readonly nodeStatuses: Record<string, AbgNodeStatus | undefined>;
     readonly queuedNodeIds: string[];
+    readonly activeNodeIds: Set<string>;
+    readonly activeParallelParentIds: Set<string>;
     readonly attemptsByNodeId: Map<string, number>;
     readonly consecutiveFailuresByNodeId: Map<string, number>;
     readonly consecutiveToolFailuresByNodeId: Map<string, number>;
@@ -109,6 +111,8 @@ export function createCoordinatorState(graph: AuthorableAbgGraph, input: AbgGrap
         events: [],
         nodeStatuses: {},
         queuedNodeIds: [graph.entryNodeId],
+        activeNodeIds: new Set(),
+        activeParallelParentIds: new Set(),
         attemptsByNodeId: new Map(),
         consecutiveFailuresByNodeId: new Map(),
         consecutiveToolFailuresByNodeId: new Map(),

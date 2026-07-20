@@ -1,4 +1,4 @@
-import type { AbgNodeSpec, AbgPolicyDecision, AbgSignal } from '@mission-control/protocol';
+import type { AbgNodeSpec, AbgPolicyDecision, AbgSignal, AgentEvent } from '@mission-control/protocol';
 import type { AuthorableAbgGraph } from './authorable-graph';
 import { evaluateApprovalGate } from './graph-approval-gates';
 import { type CoordinatorState, findBlockingPolicy, nextAttempt, nodeModel } from './graph-coordinator-helpers';
@@ -28,7 +28,12 @@ export type QueuedNodeResult =
           readonly terminal?: boolean;
           readonly toolActions?: readonly ToolActionFingerprint[];
       }
-    | { readonly kind: 'blocked'; readonly lastSignal?: AbgSignal };
+    | {
+          readonly kind: 'blocked';
+          readonly node: AbgNodeSpec;
+          readonly lastSignal?: AbgSignal;
+          readonly trailingEvents?: readonly AgentEvent[];
+      };
 
 export async function runQueuedNode(
     graph: AuthorableAbgGraph,
@@ -39,8 +44,17 @@ export async function runQueuedNode(
 ): Promise<QueuedNodeResult> {
     const policy = findBlockingPolicy(node, graph.policies);
     const gate = evaluateApprovalGate({ graphId: graph.id, node, ...(policy !== undefined ? { policy } : {}), input });
+    if (gate.kind === 'blocked') {
+        state.nodeStatuses[node.id] = 'blocked';
+        const splitEvents = splitBlockedGateEvents(gate.events);
+        state.events.push(...splitEvents.immediateEvents);
+        return {
+            kind: 'blocked',
+            node,
+            ...(splitEvents.trailingEvents.length > 0 ? { trailingEvents: splitEvents.trailingEvents } : {}),
+        };
+    }
     state.events.push(...gate.events);
-    if (gate.kind === 'blocked') return { kind: 'blocked' };
 
     const attempt = nextAttempt(state.attemptsByNodeId, node.id);
     state.totalNodeRuns += 1;
@@ -75,8 +89,10 @@ export async function runQueuedNode(
         };
     }
     if (runResult.status === 'blocked') {
+        state.nodeStatuses[node.id] = 'blocked';
         return {
             kind: 'blocked',
+            node,
             ...(runResult.lastSignal !== undefined ? { lastSignal: runResult.lastSignal } : {}),
         };
     }
@@ -90,5 +106,15 @@ export async function runQueuedNode(
         ...(runResult.hadOnlyRetryableToolFailures === true ? { hadOnlyRetryableToolFailures: true } : {}),
         ...(runResult.hadProductiveToolUse === true ? { hadProductiveToolUse: true } : {}),
         ...(runResult.toolActions.length > 0 ? { toolActions: runResult.toolActions } : {}),
+    };
+}
+
+function splitBlockedGateEvents(events: readonly AgentEvent[]): {
+    readonly immediateEvents: readonly AgentEvent[];
+    readonly trailingEvents: readonly AgentEvent[];
+} {
+    return {
+        immediateEvents: events.filter((event) => event.type !== 'graph.failed'),
+        trailingEvents: events.filter((event) => event.type === 'graph.failed'),
     };
 }

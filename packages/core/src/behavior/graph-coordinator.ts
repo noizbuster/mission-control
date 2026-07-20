@@ -1,4 +1,4 @@
-// allow: SIZE_OK -- HEAD 604 -> current 609 pure LOC; one bounded graph execution state machine (progress-contract wire).
+// allow: SIZE_OK -- HEAD 604 -> current 702 pure LOC; one bounded graph execution state machine (checkpoint + progress-contract wire).
 import type { AbgNodeSpec, AbgPolicyDecision, AbgSignal, AgentEvent } from '@mission-control/protocol';
 import {
     abortableRetrySleep,
@@ -17,6 +17,7 @@ import {
     type NodeRunBudgetExtensionDecision,
 } from './budget/node-run-budget-extension';
 import { CANONICAL_FAILURE_CODES } from './failure-taxonomy';
+import { emitGraphCheckpoint, requeueInterruptedNodesForCheckpoint } from './graph-checkpoint-emit';
 import {
     type CoordinatorState,
     createCoordinatorState,
@@ -59,6 +60,8 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
         // turn runner maps any aborted run to `interrupted` regardless of how we settle here.
         if (isAbortRequested(input.abortSignal)) {
             clearAllCorrections(state);
+            requeueInterruptedNodesForCheckpoint(state);
+            emitGraphCheckpoint({ graphId: graph.id, input, state, reason: 'interrupt' });
             return failGraph(
                 graph.id,
                 input,
@@ -80,6 +83,7 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
             clearAllCorrections(state);
             return failGraph(graph.id, input, state.events, 'graph_loop_limit', 'ABG graph made no progress');
         }
+        markScheduledNodesActive(state, scheduledNodes);
         const results = await Promise.all(
             scheduledNodes.map((node) => runQueuedNode(graph, node, registry, input, state)),
         );
@@ -96,7 +100,10 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                         clearNodeCorrection(state, result.node.id);
                         if (target !== undefined && hasNode(graph, target)) {
                             state.queuedNodeIds.push(target);
+                            settleScheduledNode(state, result.node);
+                            emitGraphCheckpoint({ graphId: graph.id, input, state, reason: 'node_boundary' });
                         } else {
+                            settleScheduledNode(state, result.node);
                             clearAllCorrections(state);
                             return failGraph(
                                 graph.id,
@@ -187,9 +194,12 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                                 : {}),
                         });
                         if (routingOutcome.kind === 'fail') {
+                            settleScheduledNode(state, result.node);
                             return routingOutcome.result;
                         }
                     }
+                    settleScheduledNode(state, result.node);
+                    emitGraphCheckpoint({ graphId: graph.id, input, state, reason: 'node_boundary' });
                     break;
                 }
                 case 'failed': {
@@ -199,8 +209,15 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                     // toolCallId travels on the run's tool.failed event (set via the adapter), so it
                     // surfaces on `session.stopped` without threading it here.
                     if (result.terminal === true) {
-                        clearAllCorrections(state);
                         const terminalError = terminalErrorFromSignal(result.lastSignal);
+                        if (terminalError?.code === 'provider_aborted' || isAbortRequested(input.abortSignal)) {
+                            clearAllCorrections(state);
+                            requeueInterruptedNodesForCheckpoint(state);
+                            emitGraphCheckpoint({ graphId: graph.id, input, state, reason: 'interrupt' });
+                        } else {
+                            settleScheduledNode(state, result.node);
+                            clearAllCorrections(state);
+                        }
                         const isToolSettlement = terminalError?.code === 'tool_settlement_failed';
                         return failGraph(
                             graph.id,
@@ -231,6 +248,8 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                         await sleep(delayMs, input.abortSignal);
                         if (isAbortRequested(input.abortSignal)) {
                             clearAllCorrections(state);
+                            requeueInterruptedNodesForCheckpoint(state);
+                            emitGraphCheckpoint({ graphId: graph.id, input, state, reason: 'interrupt' });
                             return failGraph(
                                 graph.id,
                                 input,
@@ -245,6 +264,7 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                             );
                         }
                         state.queuedNodeIds.unshift(result.node.id);
+                        settleScheduledNode(state, result.node);
                         break;
                     }
 
@@ -265,6 +285,7 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                             );
                         }
                         state.queuedNodeIds.unshift(result.node.id);
+                        settleScheduledNode(state, result.node);
                         break;
                     }
                     const structuredExhaust = handleStructuredFailureExhaust({
@@ -276,11 +297,14 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                             failGraph(graph.id, input, state.events, code, message, terminalError),
                     });
                     if (structuredExhaust?.kind === 'continue') {
+                        settleScheduledNode(state, result.node);
                         break;
                     }
                     if (structuredExhaust?.kind === 'fail') {
+                        settleScheduledNode(state, result.node);
                         return structuredExhaust.result;
                     }
+                    settleScheduledNode(state, result.node);
                     clearAllCorrections(state);
                     return failGraph(
                         graph.id,
@@ -298,6 +322,12 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                     // can thread the toolCallId into the `blocked_on_approval` result (parity with
                     // the flat run coordinator).
                     const block = approvalBlockContext(result.lastSignal);
+                    settleScheduledNode(state, result.node);
+                    queueNodeIfMissing(state, result.node.id);
+                    emitGraphCheckpoint({ graphId: graph.id, input, state, reason: 'approval_block' });
+                    if (result.trailingEvents !== undefined) {
+                        state.events.push(...result.trailingEvents);
+                    }
                     return {
                         graphId: graph.id,
                         status: 'blocked',
@@ -374,6 +404,32 @@ function enqueueSelectedTargets(
         );
         state.queuedNodeIds.push(edge.target);
     }
+}
+
+function markScheduledNodesActive(state: CoordinatorState, nodes: readonly AbgNodeSpec[]): void {
+    for (const node of nodes) {
+        state.activeNodeIds.add(node.id);
+        if (isTrackedParallelParent(node)) {
+            state.activeParallelParentIds.add(node.id);
+        }
+    }
+}
+
+function settleScheduledNode(state: CoordinatorState, node: AbgNodeSpec): void {
+    state.activeNodeIds.delete(node.id);
+    if (isTrackedParallelParent(node)) {
+        state.activeParallelParentIds.delete(node.id);
+    }
+}
+
+function queueNodeIfMissing(state: CoordinatorState, nodeId: string): void {
+    if (!state.queuedNodeIds.includes(nodeId)) {
+        state.queuedNodeIds.unshift(nodeId);
+    }
+}
+
+function isTrackedParallelParent(node: AbgNodeSpec): boolean {
+    return node.kind === 'parallel' || node.kind === 'race';
 }
 
 function failGraph(

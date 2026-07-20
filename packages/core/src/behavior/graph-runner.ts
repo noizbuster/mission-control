@@ -24,6 +24,8 @@ export type AbgGraphRunnerInput = {
     readonly graph: unknown;
     readonly graphInput?: AbgGraphInput;
     readonly sessionId: string;
+    readonly sessionRunId?: string;
+    readonly workflowName?: string;
     readonly now: () => string;
     readonly modelProviderSelection: ModelProviderSelection;
     readonly registry?: AbgNodeRegistry;

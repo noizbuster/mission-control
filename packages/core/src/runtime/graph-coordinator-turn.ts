@@ -44,6 +44,8 @@ export { agentMessagesToSeedModelMessages } from './graph-coordinator-turn-messa
 export type GraphTurnRunnerWiring = {
     readonly graph: unknown;
     readonly sessionId: string;
+    readonly sessionRunId?: string;
+    readonly workflowName?: string;
     readonly now: () => string;
     readonly modelProviderSelection: ModelProviderSelection;
     readonly registry?: AbgNodeRegistry;

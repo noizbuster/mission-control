@@ -1,4 +1,4 @@
-// allow: SIZE_OK -- HEAD 343 -> current 373 pure LOC; one graph-turn adapter and coordinator-seam integration matrix.
+// allow: SIZE_OK -- HEAD 343 -> current 473 pure LOC; one graph-turn adapter and coordinator-seam integration matrix.
 /**
  * Tests for the graph turn runner + the coordinator's pluggable-turn-runner seam. This is the
  * headless proof that the session queue/steer/resume machinery can drive the ABG coding-agent
@@ -19,6 +19,7 @@ import type {
     AbgSignal,
     AgentEvent,
     AgentMessage,
+    GraphCheckpoint,
     ModelProviderSelection,
 } from '@mission-control/protocol';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
@@ -187,6 +188,34 @@ describe('flushGraphTurnEvents', () => {
         // Then
         expect(batches).toHaveLength(1);
         expect(batches[0]?.map((event) => event.type)).toEqual(['node.started', 'log']);
+    });
+
+    it('keeps graph checkpoint events during aborted flushes', () => {
+        const checkpoint: GraphCheckpoint = {
+            schemaVersion: 1,
+            graphId: 'graph-turn-checkpoint',
+            reason: 'interrupt',
+            queuedNodeIds: ['resume-node'],
+            completedNodeIds: [],
+            nodeStatuses: { resume: 'running' },
+            attemptsByNodeId: { resume: 1 },
+            consecutiveFailuresByNodeId: {},
+            consecutiveToolFailuresByNodeId: {},
+            totalNodeRuns: 1,
+            budgetExtensionsUsed: 0,
+            maxNodeRuns: 48,
+            blackboardEntries: {},
+            activeParallelParentIds: [],
+            createdAt: NOW,
+        };
+        const event: AgentEvent = {
+            type: 'graph.checkpoint',
+            timestamp: NOW,
+            sessionId: 'session_graph_turn',
+            abg: { graphId: checkpoint.graphId, checkpoint },
+        };
+
+        expect(isInterruptFlushEvent(event)).toBe(true);
     });
 });
 
