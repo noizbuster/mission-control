@@ -10,6 +10,8 @@ export const PROTOCOL_ERROR_CODES = [
     'operator_aborted',
     'provider_context_overflow',
     'tool_failed',
+    'task_yield_missing',
+    'task_child_failed',
     'schema_invalid',
     'unknown',
 ] as const;
