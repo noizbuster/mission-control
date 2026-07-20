@@ -248,8 +248,8 @@ function parseSlashCommand(line: string, options: ChatLineOptions): ChatLineActi
             return parsePromptCommand('steer', parts.tail);
         case 'resume':
             return parseNoArgumentCommand('resume', parts.tail);
-        // This top-level `kind: 'continue'` action (the /continue
-        // approval-resume command) is distinct from `branch.mode: 'continue'`
+        // This top-level `kind: 'continue'` action (the /continue work-resume
+        // command) is distinct from `branch.mode: 'continue'`
         // (chat-commands.ts branch arm). Different fields, not a collision.
         case 'continue':
             return parseNoArgumentCommand('continue', parts.tail);

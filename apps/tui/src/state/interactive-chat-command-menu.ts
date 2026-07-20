@@ -87,12 +87,12 @@ export const slashCommandChoices = [
     {
         id: '/resume',
         insertText: '/resume',
-        description: 'Resume the most recent session for this project',
+        description: 'Attach most recent session (transcript/ABG/banner); does not start work',
     },
     {
         id: '/continue',
         insertText: '/continue',
-        description: 'Resume a blocked approval run',
+        description: 'Resume approval-blocked or interrupted checkpoint work (not a session switch)',
     },
     {
         id: '/compact',

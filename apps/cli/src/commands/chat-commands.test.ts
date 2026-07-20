@@ -269,7 +269,7 @@ describe('chat command parser', () => {
         });
     });
 
-    it('parses /continue as a no-argument approval-resume command', () => {
+    it('parses /continue as a no-argument work-resume command', () => {
         expect(parseChatLine('/continue')).toEqual({ kind: 'continue' });
         expect(parseChatLine('/continue resume the run')).toEqual({
             kind: 'invalid',
@@ -285,7 +285,7 @@ describe('chat command parser', () => {
         });
     });
 
-    it('parses /resume unchanged (semantics move to last-session in T6)', () => {
+    it('parses /resume as a no-argument session attach command', () => {
         expect(parseChatLine('/resume')).toEqual({ kind: 'resume' });
     });
 

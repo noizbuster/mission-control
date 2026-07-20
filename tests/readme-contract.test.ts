@@ -121,8 +121,12 @@ describe('README stage-01 contract', () => {
             '`/clone [session-id]` clones the current durable session into a fresh one',
             '`/compact` summarizes older session history into a durable compaction boundary event',
             '`/session` with no argument opens a searchable picker of sessions previously opened in the current project',
-            '`/resume` resumes the most recent session for this project',
-            '`/continue` resumes a blocked run that is waiting on an approval decision',
+            '`/resume` attaches to the most recent session for this project without starting work',
+            'never auto-starts a run',
+            '`/continue` is not a session switch',
+            'approval-blocked runs and interrupted runs with a durable graph checkpoint',
+            '`/resume` only attaches to a session and never starts work by itself',
+            'Neither command claims mid-token resume or auto-run on attach',
             'Workspace trust is controlled interactively with `/trust`',
             '`/trust deny` (deny project-local resources for the workspace)',
             '`/trust reset` (clear the trust decision)',
@@ -146,15 +150,9 @@ describe('README stage-01 contract', () => {
             expect(content, `README missing ${term}`).toContain(term);
         }
 
-        expect(content, 'README must not claim slash is a skill equivalent').not.toContain(
-            'slash-command equivalent',
-        );
-        expect(content, 'README must not use dual-path $skill <name> wording').not.toContain(
-            '$skill <name>',
-        );
-        expect(content, 'README must not document /<skill-name> as skill chat input').not.toContain(
-            '/<skill-name>',
-        );
+        expect(content, 'README must not claim slash is a skill equivalent').not.toContain('slash-command equivalent');
+        expect(content, 'README must not use dual-path $skill <name> wording').not.toContain('$skill <name>');
+        expect(content, 'README must not document /<skill-name> as skill chat input').not.toContain('/<skill-name>');
     });
 
     it('documents mc agents CLI and /agents dashboard', () => {

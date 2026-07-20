@@ -57,6 +57,11 @@ export function slashBaseName(id: string): string {
  * `parseChatLine` via `parseNoArgumentCommand` (`exit`/`help`/`hotkeys`/
  * `interrupt`/`resume`/`continue`) or `resolveUnreservedSlash` -> `parseSessionSlashCommand`
  * (`sessions`/`tree`) or `parseCompactCommand` (`compact`).
+ * The palette description for `/resume` must stay attach-only (transcript + ABG
+ * projection + sticky banner when resumable; never auto-starts work). `/continue`
+ * is the work-resume command for approval-blocked runs and interrupted runs with
+ * a durable graph checkpoint; it is not a session switch and does not claim
+ * mid-token resume.
  *
  * `/compact` accepts OPTIONAL focus text and `/tree` accepts an OPTIONAL
  * session id, but both run bare, which is why they are palette-eligible. The

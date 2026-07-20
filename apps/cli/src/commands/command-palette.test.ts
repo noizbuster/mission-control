@@ -113,6 +113,19 @@ describe('T8 slash-command palette mapping table', () => {
         }
     });
 
+    it('keeps /resume attach-only and /continue as work-resume in palette copy', () => {
+        const entries = getPaletteSlashCommands();
+        const resume = entries.find((entry) => entry.slashName === 'resume');
+        const cont = entries.find((entry) => entry.slashName === 'continue');
+        expect(resume?.description).toMatch(/attach/i);
+        expect(resume?.description).toMatch(/does not start work/i);
+        expect(resume?.description.toLowerCase()).not.toMatch(/mid-token|auto-run|auto-start/);
+        expect(cont?.description).toMatch(/approval-blocked/i);
+        expect(cont?.description).toMatch(/checkpoint/i);
+        expect(cont?.description).toMatch(/not a session switch/i);
+        expect(cont?.description.toLowerCase()).not.toMatch(/mid-token|auto-run/);
+    });
+
     it('isPaletteSlashCommand is false for arg-taking commands and unknown names (malformed-input guard)', () => {
         // Arg-taking / subcommand / history bases stay parseChatLine-only.
         const argBases = [
