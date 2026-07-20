@@ -201,7 +201,8 @@ describe('TranscriptPartRenderer component topology', () => {
         );
         expect(rowsSource).toContain('isTranscriptPartStreaming(props.part.status)');
         expect(rowsSource).toContain('<Show when={props.showThinking}>');
-        expect(rowsSource).toContain('<DiffView lines={renderDiff(props.part.text)} />');
+        expect(rowsSource).toContain('<DiffView');
+        expect(rowsSource).toContain('diff={props.part.text}');
         expect(rowsSource).toContain('expanded={props.expanded}');
         expect(rowsSource).toContain('parseMessageBlocks(props.part.text)');
 
@@ -217,7 +218,7 @@ describe('TranscriptPartRenderer component topology', () => {
             rowsSource.indexOf('export function TypedDiffRow'),
             rowsSource.indexOf('export function TypedCodeRow'),
         );
-        expect(typedDiffRowSource).toContain('<DiffView lines={renderDiff(props.part.text)} />');
+        expect(typedDiffRowSource).toContain('diff={props.part.text}');
         expect(typedDiffRowSource).not.toContain('<ToolCard');
 
         const typedCommandRowSource = rowsSource.slice(

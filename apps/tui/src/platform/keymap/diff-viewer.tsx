@@ -43,6 +43,7 @@ import { hasDiffContent } from '../../components/ToolCard';
 /** One file's diff: a human title plus the rendered `DiffLine[]` to display. */
 export type DiffEntry = {
     readonly title: string;
+    readonly diff: string;
     readonly lines: readonly DiffLine[];
 };
 
@@ -153,9 +154,14 @@ export function collectDiffEntries(outputText: string): readonly DiffEntry[] {
         if (block.kind !== 'tool' || !hasDiffContent(block.lines)) continue;
         for (const segment of splitToolBlockIntoSegments(block.lines)) {
             if (!hasDiffContent(segment.body)) continue;
-            const diffLines = renderDiff(segment.body.join('\n'));
+            const rawDiff = segment.body.join('\n');
+            const diffLines = renderDiff(rawDiff);
             if (diffLines.length === 0) continue;
-            entries.push({ title: titleForSegment(segment, entries.length), lines: diffLines });
+            entries.push({
+                title: titleForSegment(segment, entries.length),
+                diff: rawDiff,
+                lines: diffLines,
+            });
         }
     }
     return entries;
@@ -291,7 +297,7 @@ export function DiffViewerOverlay(props: DiffViewerOverlayProps): JSX.Element {
                                         {isCurrent() ? '> ' : '  '}
                                         {entry.title}
                                     </text>
-                                    <DiffView lines={entry.lines} />
+                                    <DiffView diff={entry.diff} filePath={entry.title} />
                                 </box>
                             );
                         }}

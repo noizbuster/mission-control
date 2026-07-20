@@ -1,15 +1,20 @@
-import { For, type JSX } from 'solid-js';
+/** @jsxImportSource @opentui/solid */
+
+import { pathToFiletype } from '@opentui/core';
+import { useTerminalDimensions } from '@opentui/solid';
+import { For, type JSX, Show } from 'solid-js';
 import { CHAT_DIFF_ADDED, CHAT_DIFF_REMOVED, CHAT_SECONDARY, CHAT_TEXT_MUTED } from '../chat-theme';
+import { getSharedSyntaxStyle } from '../markdown/shared-syntax-style';
+import { DIFF_THEME } from './diff-theme';
 import type { DiffLine, DiffLineKind } from './render-diff';
 
 export type DiffViewProps = {
-    readonly lines: readonly DiffLine[];
+    readonly diff?: string;
+    readonly filetype?: string;
+    readonly filePath?: string;
+    readonly lines?: readonly DiffLine[];
 };
 
-/**
- * Per-kind opentui `<text>` style. `added` -> green, `removed` -> red,
- * `context` -> dim, `hunk`/`meta` -> cyan. Exposed for unit testing.
- */
 export type DiffKindStyle = {
     readonly fg?: string;
     readonly dim?: boolean;
@@ -27,22 +32,11 @@ export function kindStyle(kind: DiffLineKind): DiffKindStyle {
     return KIND_STYLE[kind];
 }
 
-/**
- * A contiguous run of text that shares a single styling decision: either inside
- * an `invertedSegment` (rendered inverse) or outside (rendered with the row's
- * kind style). Exposed for unit testing.
- */
 export type TextSpan = {
     readonly text: string;
     readonly inverse: boolean;
 };
 
-/**
- * Split a `DiffLine.text` into ordered spans at every `invertedSegment`
- * boundary. Spans covering an inverted range carry `inverse: true`; the gaps
- * between/around them carry `inverse: false`. opentui styling is per element, so
- * the `DiffView` renders each span as its own `<text>` element.
- */
 export function splitLineSpans(line: DiffLine): readonly TextSpan[] {
     const segments = line.invertedSegments;
     if (segments === undefined || segments.length === 0) {
@@ -64,9 +58,9 @@ export function splitLineSpans(line: DiffLine): readonly TextSpan[] {
     return spans;
 }
 
-function DiffRow({ line }: { readonly line: DiffLine }): JSX.Element {
-    const style = kindStyle(line.kind);
-    const spans = splitLineSpans(line);
+function LegacyDiffRow(props: { readonly line: DiffLine }): JSX.Element {
+    const style = kindStyle(props.line.kind);
+    const spans = splitLineSpans(props.line);
     const fg = style.fg;
     const rowStyle = {
         ...(fg !== undefined ? { fg } : {}),
@@ -85,10 +79,61 @@ function DiffRow({ line }: { readonly line: DiffLine }): JSX.Element {
     );
 }
 
+function resolveFiletype(props: DiffViewProps): string | undefined {
+    if (props.filetype !== undefined && props.filetype.length > 0) return props.filetype;
+    if (props.filePath !== undefined && props.filePath.length > 0) {
+        return pathToFiletype(props.filePath);
+    }
+    return undefined;
+}
+
+function resolveDiffText(props: DiffViewProps): string | undefined {
+    if (props.diff !== undefined) return props.diff;
+    if (props.lines !== undefined && props.lines.length > 0) {
+        return props.lines.map((line) => line.text).join('\n');
+    }
+    return undefined;
+}
+
 export function DiffView(props: DiffViewProps): JSX.Element {
+    const dimensions = useTerminalDimensions();
+    const diffText = () => resolveDiffText(props);
+    const filetype = () => resolveFiletype(props);
+    const view = () => (dimensions().width > 120 ? 'split' : 'unified');
+
     return (
-        <box flexDirection="column">
-            <For each={props.lines}>{(line) => <DiffRow line={line} />}</For>
-        </box>
+        <Show
+            when={diffText()}
+            fallback={
+                <box flexDirection="column">
+                    <For each={props.lines ?? []}>{(line) => <LegacyDiffRow line={line} />}</For>
+                </box>
+            }
+        >
+            {(text) => {
+                const ft = filetype();
+                return (
+                    <diff
+                        diff={text()}
+                        view={view()}
+                        {...(ft !== undefined ? { filetype: ft } : {})}
+                        syntaxStyle={getSharedSyntaxStyle()}
+                        showLineNumbers={true}
+                        width="100%"
+                        wrapMode="word"
+                        fg={DIFF_THEME.fg}
+                        addedBg={DIFF_THEME.addedBg}
+                        removedBg={DIFF_THEME.removedBg}
+                        contextBg={DIFF_THEME.contextBg}
+                        addedSignColor={DIFF_THEME.addedSignColor}
+                        removedSignColor={DIFF_THEME.removedSignColor}
+                        lineNumberFg={DIFF_THEME.lineNumberFg}
+                        lineNumberBg={DIFF_THEME.lineNumberBg}
+                        addedLineNumberBg={DIFF_THEME.addedLineNumberBg}
+                        removedLineNumberBg={DIFF_THEME.removedLineNumberBg}
+                    />
+                );
+            }}
+        </Show>
     );
 }

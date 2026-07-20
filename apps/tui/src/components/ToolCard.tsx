@@ -19,7 +19,6 @@ import {
     toolIconForTitle,
 } from './chat-theme';
 import { DiffView } from './diff/DiffView';
-import { renderDiff } from './diff/render-diff';
 import { LEFT_ACCENT_BORDER } from './overlay-theme';
 
 export type ToolCardProps = {
@@ -154,7 +153,7 @@ export function ToolCard(props: ToolCardProps): JSX.Element {
                     </text>
                 </box>
                 {shouldRenderToolBodyAsDiff(lines(), bodyMode()) ? (
-                    <DiffView lines={renderDiff(lines().join('\n'))} />
+                    <DiffView diff={lines().join('\n')} />
                 ) : (
                     <For each={lines()}>
                         {(line) => (

@@ -94,7 +94,7 @@ describe('ToolCard component', () => {
     it('routes expanded auto-mode diff content through DiffView', () => {
         expect(source).toContain('return hasDiffContent(lines);');
         expect(source).toContain('shouldRenderToolBodyAsDiff(lines(), bodyMode())');
-        expect(source).toContain('<DiffView lines={renderDiff(lines().join');
+        expect(source).toContain('<DiffView diff={lines().join');
     });
 
     it('keeps typed command literals as byte-preserving selectable plain rows', () => {

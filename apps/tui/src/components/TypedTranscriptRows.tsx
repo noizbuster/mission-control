@@ -20,7 +20,6 @@ import type {
 } from '../state/transcript-part';
 import { CHAT_ASSISTANT_PAD_LEFT, CHAT_TEXT_MUTED, CHAT_USER_MARGIN_TOP, CHAT_USER_PAD_X } from './chat-theme';
 import { DiffView } from './diff/DiffView';
-import { renderDiff } from './diff/render-diff';
 import {
     ErrorMessagePanel,
     LegacyMessageBlock,
@@ -122,7 +121,10 @@ export function TypedDiffRow(props: { readonly part: DiffTranscriptPart; readonl
             expanded={props.expanded}
             {...(props.part.status === undefined ? {} : { status: props.part.status })}
         >
-            <DiffView lines={renderDiff(props.part.text)} />
+            <DiffView
+                diff={props.part.text}
+                {...(props.part.filePath !== undefined ? { filePath: props.part.filePath } : {})}
+            />
         </TypedBlockPanel>
     );
 }

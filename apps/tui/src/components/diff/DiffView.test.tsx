@@ -1,10 +1,7 @@
-/** @jsxImportSource @opentui/solid */
-
-import { testRender } from '@opentui/solid';
-import { createSignal } from 'solid-js';
 import { describe, expect, it } from 'vitest';
 import { CHAT_DIFF_ADDED, CHAT_DIFF_REMOVED, CHAT_SECONDARY, CHAT_TEXT_MUTED } from '../chat-theme';
 import { type DiffKindStyle, DiffView, kindStyle, splitLineSpans, type TextSpan } from './DiffView';
+import { DIFF_THEME } from './diff-theme';
 import { type DiffLine, renderDiff } from './render-diff';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -95,36 +92,18 @@ describe('DiffView component export', () => {
         expect(typeof DiffView).toBe('function');
     });
 
-    it('renders rows through split spans and per-kind styles', () => {
-        expect(source).toContain('const style = kindStyle(line.kind);');
-        expect(source).toContain('const spans = splitLineSpans(line);');
-        expect(source).toContain('<For each={props.lines}>{(line) => <DiffRow line={line} />}</For>');
+    it('uses native OpenTUI diff with OpenCode chrome colors', () => {
+        expect(source).toContain('<diff');
+        expect(source).toContain('syntaxStyle={getSharedSyntaxStyle()}');
+        expect(source).toContain('showLineNumbers={true}');
+        expect(source).toContain('DIFF_THEME.addedBg');
+        expect(source).toContain('DIFF_THEME.removedBg');
     });
 
-    it('replaces mounted visible lines when the supplied diff lines change', async () => {
-        // Given: one mounted DiffView reading an initial reactive line collection.
-        const [lines, setLines] = createSignal<readonly DiffLine[]>(renderDiff('-obsolete diff line'));
-        const setup = await testRender(() => <DiffView lines={lines()} />, { width: 80, height: 4 });
-
-        try {
-            await setup.renderOnce();
-            const diffView = setup.renderer.root.getChildren().at(0);
-            if (diffView === undefined) {
-                throw new Error('Expected the mounted diff view');
-            }
-            expect(setup.captureCharFrame()).toContain('-obsolete diff line');
-
-            // When: the same mounted DiffView receives a replacement collection.
-            setLines(renderDiff('+current diff line'));
-            await setup.renderOnce();
-
-            // Then: the old line is removed, the new line is visible, and the view itself persists.
-            const frame = setup.captureCharFrame();
-            expect(setup.renderer.root.getChildren().at(0)).toBe(diffView);
-            expect(frame).not.toContain('-obsolete diff line');
-            expect(frame).toContain('+current diff line');
-        } finally {
-            setup.renderer.destroy();
-        }
+    it('pins OpenCode dark diff chrome tokens', () => {
+        expect(DIFF_THEME.addedBg).toBe('#20303b');
+        expect(DIFF_THEME.removedBg).toBe('#37222c');
+        expect(DIFF_THEME.addedSignColor).toBe('#b8db87');
+        expect(DIFF_THEME.removedSignColor).toBe('#e26a75');
     });
 });
