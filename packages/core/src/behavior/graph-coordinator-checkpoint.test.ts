@@ -1,14 +1,17 @@
 import type { AbgNodeSpec, AbgSignal, AgentEvent, GraphCheckpoint } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import { createAbgEmitSignal, resetEmitSequence } from './abg-emit';
+import { createAuthorableAbgGraph } from './authorable-graph';
 import { createCoordinatorState } from './graph-coordinator-helpers';
 import { approvalGraph } from './graph-coordinator-test-support';
 import { runAbgGraph } from './graph-runner';
 import type { AbgNodeRunContext } from './node-registry';
 import { createAbgNodeRegistry, createDefaultAbgNodeRegistry } from './node-registry';
-import { createAuthorableAbgGraph } from './authorable-graph';
 
 const NOW = '2026-07-20T00:00:00.000Z';
+const GATE_NODE_ID = 'gate';
+const APPROVE_NODE_ID = 'approve';
+const SLOW_NODE_ID = 'slow';
 
 const baseInput = {
     sessionId: 'session_graph_checkpoint',
@@ -57,8 +60,8 @@ describe('bounded ABG graph checkpoint emission', () => {
             (candidate) => candidate.reason === 'node_boundary' && candidate.completedNodeIds.includes('gate'),
         );
         expect(checkpoint?.queuedNodeIds).toContain('next');
-        expect(checkpoint?.nodeStatuses.gate).toBe('succeeded');
-        expect(checkpoint?.attemptsByNodeId.gate).toBe(1);
+        expect(checkpoint?.nodeStatuses[GATE_NODE_ID]).toBe('succeeded');
+        expect(checkpoint?.attemptsByNodeId[GATE_NODE_ID]).toBe(1);
         expect(checkpoint?.totalNodeRuns).toBe(1);
         expect(checkpoint?.blackboardEntries['plan.ready']).toBe(true);
         expect('llm.loop_active' in (checkpoint?.blackboardEntries ?? {})).toBe(false);
@@ -76,7 +79,7 @@ describe('bounded ABG graph checkpoint emission', () => {
         const checkpoint = checkpoints(result.events).find((candidate) => candidate.reason === 'approval_block');
         expect(checkpoint?.queuedNodeIds).toEqual(['approve']);
         expect(checkpoint?.completedNodeIds).not.toContain('approve');
-        expect(checkpoint?.nodeStatuses.approve).toBe('blocked');
+        expect(checkpoint?.nodeStatuses[APPROVE_NODE_ID]).toBe('blocked');
     });
 
     it('emits an interrupt checkpoint before returning provider_aborted from a mid-node abort', async () => {
@@ -110,7 +113,7 @@ describe('bounded ABG graph checkpoint emission', () => {
         const checkpoint = checkpoints(result.events).find((candidate) => candidate.reason === 'interrupt');
         expect(checkpoint?.queuedNodeIds).toEqual(['slow']);
         expect(checkpoint?.completedNodeIds).not.toContain('slow');
-        expect(checkpoint?.nodeStatuses.slow).not.toBe('succeeded');
+        expect(checkpoint?.nodeStatuses[SLOW_NODE_ID]).not.toBe('succeeded');
         expect(indexOfType(result.events, 'graph.checkpoint')).toBeLessThan(indexOfType(result.events, 'graph.failed'));
     });
 

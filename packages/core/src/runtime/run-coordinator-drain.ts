@@ -28,7 +28,11 @@ export async function drainCoordinatorRun(input: {
     readonly blocked?: BlockedRunSnapshot;
     readonly signal: AbortSignal;
     readonly promotionInput: () => RunCoordinatorPromotionInput;
-    readonly runProviderTurn: (signal: AbortSignal) => Promise<RunCoordinatorProviderTurnResult>;
+    /**
+     * Invokes the turn runner for one promoted input. Must forward `command` (not only `signal`) so
+     * resume-only checkpoint seeding survives the drain boundary.
+     */
+    readonly runProviderTurn: (signal: AbortSignal, command: DrainCommand) => Promise<RunCoordinatorProviderTurnResult>;
     readonly appendRunEvent: (
         type: RunCoordinatorRunEventType,
         command: RunCoordinatorCommand,
@@ -64,7 +68,7 @@ export async function drainCoordinatorRun(input: {
         if (promotion === 'idle' || (promotion === 'run_requested' && (turns > 0 || input.command === 'wake'))) {
             break;
         }
-        const result = await input.runProviderTurn(input.signal);
+        const result = await input.runProviderTurn(input.signal, input.command);
         turns += 1;
         const operatorStop = input.operatorStop();
         const finalized = await finalizeProviderTurnResult({

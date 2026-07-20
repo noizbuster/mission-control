@@ -25,10 +25,6 @@ import {
     hasNode,
     nodeModel,
 } from './graph-coordinator-helpers';
-import {
-    RESUME_INVALID_CHECKPOINT_CODE,
-    ResumeInvalidCheckpointError,
-} from './graph-coordinator-resume';
 import { runQueuedNode } from './graph-coordinator-node-runner';
 import { failureCodeFromSignal, failureMessageFromSignal } from './graph-coordinator-node-signals';
 import {
@@ -39,6 +35,7 @@ import {
     resolveEscalationTarget,
     setStructuredOutputCorrection,
 } from './graph-coordinator-progress-contract';
+import { RESUME_INVALID_CHECKPOINT_CODE, ResumeInvalidCheckpointError } from './graph-coordinator-resume';
 import { scheduleQueuedNodes } from './graph-coordinator-scheduler';
 import type { AbgGraphRunnerInput, AbgGraphRunResult, AbgGraphTerminalError } from './graph-runner';
 import { graphEvent } from './graph-runner-events';
@@ -575,6 +572,10 @@ function nodeFailureSignature(signal: AbgSignal | undefined): string | undefined
  */
 const LOOP_ACTIVE_SOFT_LAND_ATTEMPTS = 24;
 const HYBRID_LOOP_ACTIVE_SOFT_LAND_ATTEMPTS = 5;
+const CONFIG_OUTPUT_KEY = 'outputKey';
+const CONFIG_OUTPUT_SHAPE = 'outputShape';
+const CONFIG_OUTPUT_SOFT_LAND_DEFAULT = 'outputSoftLandDefault';
+const CONFIG_OUTPUT_ENUM = 'outputEnum';
 
 function readPositiveIntegerConfig(node: AbgNodeSpec, key: string): number | undefined {
     const raw = node.config?.[key];
@@ -585,7 +586,7 @@ function readPositiveIntegerConfig(node: AbgNodeSpec, key: string): number | und
 }
 
 function isHybridOutputKeyNode(node: AbgNodeSpec): boolean {
-    const outputKey = node.config?.outputKey;
+    const outputKey = node.config?.[CONFIG_OUTPUT_KEY];
     if (typeof outputKey !== 'string' || outputKey.length === 0) {
         return false;
     }
@@ -666,14 +667,14 @@ function softLandToolLoop(
 }
 
 function forceCompleteOutputKeyOnSoftLand(node: AbgNodeSpec, state: CoordinatorState): void {
-    const outputKey = node.config?.outputKey;
+    const outputKey = node.config?.[CONFIG_OUTPUT_KEY];
     if (typeof outputKey !== 'string' || outputKey.length === 0) {
         return;
     }
     if (state.blackboard.get(outputKey) !== undefined) {
         return;
     }
-    const shape = node.config?.outputShape;
+    const shape = node.config?.[CONFIG_OUTPUT_SHAPE];
     if (shape === 'boolean') {
         state.blackboard.set(outputKey, true);
         return;
@@ -681,12 +682,12 @@ function forceCompleteOutputKeyOnSoftLand(node: AbgNodeSpec, state: CoordinatorS
     if (shape !== 'string') {
         return;
     }
-    const authoredDefault = node.config?.outputSoftLandDefault;
+    const authoredDefault = node.config?.[CONFIG_OUTPUT_SOFT_LAND_DEFAULT];
     if (typeof authoredDefault === 'string' && authoredDefault.length > 0) {
         state.blackboard.set(outputKey, authoredDefault);
         return;
     }
-    const outputEnum = node.config?.outputEnum;
+    const outputEnum = node.config?.[CONFIG_OUTPUT_ENUM];
     if (!Array.isArray(outputEnum) || outputEnum.length === 0) {
         return;
     }

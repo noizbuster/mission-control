@@ -5,6 +5,7 @@ export type {
     RunCoordinatorPromptInput,
     RunCoordinatorReadMessages,
     RunCoordinatorStore,
+    RunCoordinatorTurnCommand,
     RunCoordinatorTurnContext,
     RunCoordinatorTurnRunner,
     SessionRunCoordinatorOptions,

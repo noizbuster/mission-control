@@ -37,6 +37,13 @@ export type RunCoordinatorToolCallObserver = (
 export type RunCoordinatorToolSettlementObserver = (settlement: ToolInvocationSettlement) => Promise<void> | void;
 
 /**
+ * Drain command that opened the current turn. The graph turn runner seeds a durable
+ * `resumeCheckpoint` only when this is `'resume'`; normal `'run'` / `'wake'` turns always start
+ * fresh even if the session ledger still holds an older checkpoint.
+ */
+export type RunCoordinatorTurnCommand = 'wake' | 'run' | 'resume';
+
+/**
  * The coordinator-facing context handed to a turn runner on each promoted input. Engine-agnostic:
  * the flat provider loop and the ABG graph runner both consume the same admitted-message source,
  * durability sinks, and observer hooks. The coordinator owns promotion/queue/resume; the runner
@@ -44,17 +51,21 @@ export type RunCoordinatorToolSettlementObserver = (settlement: ToolInvocationSe
  */
 export type RunCoordinatorTurnContext = {
     readonly signal: AbortSignal;
+    readonly command: RunCoordinatorTurnCommand;
     readonly readMessages: () => Promise<readonly AgentMessage[]>;
+    /**
+     * Cold session event ledger for resume loaders (`findResumableRun` / checkpoint parse). The
+     * engine always supplies this from the durable store; stub tests may omit it when not exercising
+     * resume seeding.
+     */
+    readonly readSessionEvents?: () => Promise<readonly AgentEvent[]>;
     readonly nextId: (prefix: string) => Promise<string>;
     readonly appendDurableEvent: (event: AgentEvent) => Promise<void>;
     /**
      * Optional batch durable append. Implementations should use a single write-lane transaction for
      * the whole batch and honor `signal` between items so interrupt can stop a multi-minute drain.
      */
-    readonly appendDurableEvents?: (
-        events: readonly AgentEvent[],
-        signal?: AbortSignal,
-    ) => Promise<void>;
+    readonly appendDurableEvents?: (events: readonly AgentEvent[], signal?: AbortSignal) => Promise<void>;
     readonly appendDurableEnvelope: (envelope: AgentEventEnvelope) => Promise<void>;
     readonly onProviderEnvelope?: RunCoordinatorEnvelopeObserver;
     readonly onToolCall?: RunCoordinatorToolCallObserver;

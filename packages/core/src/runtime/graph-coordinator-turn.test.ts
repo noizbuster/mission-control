@@ -1,4 +1,4 @@
-// allow: SIZE_OK -- HEAD 343 -> current 473 pure LOC; one graph-turn adapter and coordinator-seam integration matrix.
+// allow: SIZE_OK -- HEAD 343 -> current 753 pure LOC; one graph-turn adapter and coordinator-seam integration matrix.
 /**
  * Tests for the graph turn runner + the coordinator's pluggable-turn-runner seam. This is the
  * headless proof that the session queue/steer/resume machinery can drive the ABG coding-agent
@@ -16,6 +16,7 @@
 import type { LanguageModelV3StreamPart } from '@ai-sdk/provider';
 import type {
     AbgEmbeddedEvent,
+    AbgNodeSpec,
     AbgSignal,
     AgentEvent,
     AgentMessage,
@@ -27,6 +28,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createCodingAgentGraph } from '../behavior/coding-agent-graph';
 import { createCodingAgentNodeRegistry } from '../behavior/coding-agent-registry';
 import { approvalGraph } from '../behavior/graph-coordinator-test-support';
+import type { AbgNodeRunContext } from '../behavior/node-registry';
+import { createAbgNodeRegistry } from '../behavior/node-registry';
 import { createObservabilityRedactor } from '../providers/observability-redactor';
 import { ToolRegistry } from '../tools/tool-registry';
 import {
@@ -87,14 +90,23 @@ function buildGraphWiring(model: MockLanguageModelV3) {
     };
 }
 
-function buildStubContext(messages: readonly AgentMessage[]): {
+function buildStubContext(
+    messages: readonly AgentMessage[],
+    options: {
+        readonly command?: RunCoordinatorTurnContext['command'];
+        readonly sessionEvents?: readonly AgentEvent[];
+    } = {},
+): {
     readonly context: RunCoordinatorTurnContext;
     readonly persisted: AgentEvent[];
 } {
     const persisted: AgentEvent[] = [];
     let counter = 0;
+    const sessionEvents = options.sessionEvents;
     const context: RunCoordinatorTurnContext = {
         signal: new AbortController().signal,
+        command: options.command ?? 'run',
+        ...(sessionEvents !== undefined ? { readSessionEvents: async () => sessionEvents } : {}),
         readMessages: async () => messages,
         nextId: async (prefix) => {
             counter += 1;
@@ -106,6 +118,92 @@ function buildStubContext(messages: readonly AgentMessage[]): {
         appendDurableEnvelope: async () => {},
     };
     return { context, persisted };
+}
+
+function linearResumeCheckpoint(input: {
+    readonly graphId: string;
+    readonly runId: string;
+    readonly queuedNodeIds: readonly string[];
+    readonly completedNodeIds: readonly string[];
+}): GraphCheckpoint {
+    return {
+        schemaVersion: 1,
+        graphId: input.graphId,
+        sessionRunId: input.runId,
+        reason: 'interrupt',
+        queuedNodeIds: [...input.queuedNodeIds],
+        completedNodeIds: [...input.completedNodeIds],
+        nodeStatuses: Object.fromEntries(input.completedNodeIds.map((nodeId) => [nodeId, 'succeeded' as const])),
+        attemptsByNodeId: Object.fromEntries(input.completedNodeIds.map((nodeId) => [nodeId, 1])),
+        consecutiveFailuresByNodeId: {},
+        consecutiveToolFailuresByNodeId: {},
+        totalNodeRuns: input.completedNodeIds.length,
+        budgetExtensionsUsed: 0,
+        maxNodeRuns: 64,
+        blackboardEntries: { 'plan.ready': true },
+        activeParallelParentIds: [],
+        createdAt: NOW,
+    };
+}
+
+function interruptedSessionEvents(input: {
+    readonly runId: string;
+    readonly checkpoint: GraphCheckpoint;
+}): AgentEvent[] {
+    return [
+        {
+            type: 'run.started',
+            timestamp: NOW,
+            sessionId: 'session_graph_turn',
+            message: 'run started',
+            run: { runId: input.runId, command: 'run', state: 'running' },
+        },
+        {
+            type: 'graph.checkpoint',
+            timestamp: NOW,
+            sessionId: 'session_graph_turn',
+            run: { runId: input.runId },
+            abg: { graphId: input.checkpoint.graphId, checkpoint: input.checkpoint },
+        },
+        {
+            type: 'run.interrupted',
+            timestamp: NOW,
+            sessionId: 'session_graph_turn',
+            message: 'run interrupted',
+            run: {
+                runId: input.runId,
+                command: 'run',
+                state: 'interrupted',
+                reason: 'provider_aborted',
+            },
+        },
+    ];
+}
+
+function buildLinearProbeRegistry(executed: string[]) {
+    const registry = createAbgNodeRegistry();
+    const probe = async function* run(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
+        executed.push(node.id);
+        yield { type: 'started', graphId: context.graphId, nodeId: node.id };
+        yield { type: 'success', graphId: context.graphId, nodeId: node.id };
+    };
+    registry.register('probe-gate', probe);
+    registry.register('probe-next', probe);
+    return registry;
+}
+
+function linearProbeGraph(graphId: string) {
+    return {
+        id: graphId,
+        entryNodeId: 'gate',
+        nodes: [
+            { id: 'gate', kind: 'action' as const, implementation: 'probe-gate' },
+            { id: 'next', kind: 'action' as const, implementation: 'probe-next' },
+        ],
+        edges: [{ source: 'gate', target: 'next' }],
+        rules: [],
+        policies: [],
+    };
 }
 
 describe('flushGraphTurnEvents', () => {
@@ -136,6 +234,7 @@ describe('flushGraphTurnEvents', () => {
         ];
         const context: RunCoordinatorTurnContext = {
             signal: controller.signal,
+            command: 'run',
             readMessages: async () => [],
             nextId: async (prefix) => prefix,
             appendDurableEvent: async (event) => {
@@ -171,6 +270,7 @@ describe('flushGraphTurnEvents', () => {
         ];
         const context: RunCoordinatorTurnContext = {
             signal: new AbortController().signal,
+            command: 'run',
             readMessages: async () => [],
             nextId: async (prefix) => prefix,
             appendDurableEvent: async () => {
@@ -409,6 +509,7 @@ describe('createGraphTurnRunner', () => {
         const persisted: AgentEvent[] = [];
         const context: RunCoordinatorTurnContext = {
             signal: controller.signal,
+            command: 'run',
             readMessages: async () => [{ role: 'user', content: 'just answer' }],
             nextId: async () => 'id',
             appendDurableEvent: async (event) => {
@@ -421,6 +522,113 @@ describe('createGraphTurnRunner', () => {
         const result = await runner(context);
 
         expect(result.status).toBe('interrupted');
+    });
+});
+
+describe('createGraphTurnRunner checkpoint seed-only-on-resume', () => {
+    it('seeds resumeCheckpoint when command is resume and only runs queued successors', async () => {
+        // Given: interrupted session ledger with a checkpoint that already completed gate.
+        const graphId = 'turn-resume-seed';
+        const runId = 'run_resume_seed';
+        const checkpoint = linearResumeCheckpoint({
+            graphId,
+            runId,
+            queuedNodeIds: ['next'],
+            completedNodeIds: ['gate'],
+        });
+        const executed: string[] = [];
+        const runner = createGraphTurnRunner({
+            graph: linearProbeGraph(graphId),
+            sessionId: 'session_resume_seed',
+            now: () => NOW,
+            modelProviderSelection: MODEL_SELECTION,
+            registry: buildLinearProbeRegistry(executed),
+        });
+        const { context } = buildStubContext([{ role: 'user', content: 'continue work' }], {
+            command: 'resume',
+            sessionEvents: interruptedSessionEvents({ runId, checkpoint }),
+        });
+
+        // When: the turn runner is invoked with an explicit resume command.
+        const result = await runner(context);
+
+        // Then: only the queued successor runs; the completed gate is not re-executed.
+        expect(result.status).toBe('completed');
+        expect(executed).toEqual(['next']);
+    });
+
+    it('does not seed resumeCheckpoint on a normal run even when a checkpoint exists', async () => {
+        // Given: the same interrupted ledger, but the drain command is a normal run.
+        const graphId = 'turn-run-no-seed';
+        const runId = 'run_no_seed';
+        const checkpoint = linearResumeCheckpoint({
+            graphId,
+            runId,
+            queuedNodeIds: ['next'],
+            completedNodeIds: ['gate'],
+        });
+        const executed: string[] = [];
+        const runner = createGraphTurnRunner({
+            graph: linearProbeGraph(graphId),
+            sessionId: 'session_run_no_seed',
+            now: () => NOW,
+            modelProviderSelection: MODEL_SELECTION,
+            registry: buildLinearProbeRegistry(executed),
+        });
+        const { context } = buildStubContext([{ role: 'user', content: 'fresh prompt' }], {
+            command: 'run',
+            sessionEvents: interruptedSessionEvents({ runId, checkpoint }),
+        });
+
+        // When: the turn runner is invoked with run (not resume).
+        const result = await runner(context);
+
+        // Then: the graph starts at the entry and re-runs gate then next.
+        expect(result.status).toBe('completed');
+        expect(executed).toEqual(['gate', 'next']);
+    });
+
+    it('threads approval decisions on resume without double-executing a completed gate', async () => {
+        // Given: approval resume with a checkpoint that already completed the gate node.
+        const graphId = 'turn-approval-no-double';
+        const runId = 'run_approval_no_double';
+        const checkpoint = linearResumeCheckpoint({
+            graphId,
+            runId,
+            queuedNodeIds: ['next'],
+            completedNodeIds: ['gate'],
+        });
+        const executed: string[] = [];
+        const decision: AbgEmbeddedEvent = {
+            id: 'approval_decided_no_double',
+            type: 'approval.updated',
+            source: 'human',
+            timestamp: NOW,
+            payload: {
+                approvalId: `approval_permission_${graphId}_approve`,
+                state: 'approved',
+                reason: 'approved by reviewer',
+            },
+        };
+        const runner = createGraphTurnRunner({
+            graph: linearProbeGraph(graphId),
+            sessionId: 'session_approval_no_double',
+            now: () => NOW,
+            modelProviderSelection: MODEL_SELECTION,
+            registry: buildLinearProbeRegistry(executed),
+            readApprovalDecisions: async () => [decision],
+        });
+        const { context } = buildStubContext([{ role: 'user', content: 'continue after approval' }], {
+            command: 'resume',
+            sessionEvents: interruptedSessionEvents({ runId, checkpoint }),
+        });
+
+        // When
+        const result = await runner(context);
+
+        // Then: approval decisions are available and completed work is not re-run.
+        expect(result.status).toBe('completed');
+        expect(executed).toEqual(['next']);
     });
 });
 
@@ -539,6 +747,116 @@ describe('SessionRunCoordinator turn-runner seam', () => {
         expect(model.doStreamCalls.length).toBe(1);
         // Graph AgentEvents were persisted to the durable session store and replay as llm turns.
         expect(events.some((event) => (event.message ?? '').includes('llm.turn.completed'))).toBe(true);
+        await context.store.close();
+    });
+
+    it('forwards command=resume and reuses an interrupted run id with checkpoint', async () => {
+        // Given: durable interrupted run with a queued checkpoint and a pending steered prompt.
+        const context = await openCoordinatorContext('session_engine_resume_interrupt');
+        const runId = 'run_interrupted_engine';
+        const checkpoint = linearResumeCheckpoint({
+            graphId: 'engine-resume-graph',
+            runId,
+            queuedNodeIds: ['next'],
+            completedNodeIds: ['gate'],
+        });
+        for (const event of interruptedSessionEvents({ runId, checkpoint })) {
+            await context.store.append({ ...event, sessionId: context.sessionId });
+        }
+        const seen: Array<{ readonly command: string; readonly runIdFromEvents?: string }> = [];
+
+        const coordinator = new SessionRunCoordinator({
+            sessionId: context.sessionId,
+            store: context.store,
+            provider: providerFromRequests(() => Promise.resolve()),
+            modelProviderSelection: MODEL_SELECTION,
+            now: () => NOW,
+            createId: (prefix, index) => `${prefix}_${index}`,
+            runProviderTurn: async (turnContext) => {
+                const events = turnContext.readSessionEvents !== undefined ? await turnContext.readSessionEvents() : [];
+                const resumableCheckpoint = events
+                    .slice()
+                    .reverse()
+                    .find((event) => event.type === 'graph.checkpoint')?.abg?.checkpoint;
+                seen.push({
+                    command: turnContext.command,
+                    ...(typeof resumableCheckpoint === 'object' &&
+                    resumableCheckpoint !== null &&
+                    'sessionRunId' in resumableCheckpoint &&
+                    typeof resumableCheckpoint.sessionRunId === 'string'
+                        ? { runIdFromEvents: resumableCheckpoint.sessionRunId }
+                        : {}),
+                });
+                return { status: 'completed' };
+            },
+        });
+
+        await coordinator.steer({
+            inputId: 'input_resume_interrupt',
+            messageId: 'message_resume_interrupt',
+            prompt: 'resume interrupted work',
+        });
+
+        // When: cold resume after interrupt+checkpoint.
+        const result = await coordinator.resume();
+        const events = await context.events();
+
+        // Then: drain forwarded resume command and reused the interrupted run id (no new run.* start id).
+        expect(result.status).toBe('completed');
+        expect(result.runId).toBe(runId);
+        expect(seen).toEqual([{ command: 'resume', runIdFromEvents: runId }]);
+        expect(
+            events.some(
+                (event) =>
+                    event.type === 'run.command.received' &&
+                    event.run?.command === 'resume' &&
+                    event.run.runId === runId,
+            ),
+        ).toBe(true);
+        await context.store.close();
+    });
+
+    it('forwards command=run without treating an older checkpoint as a resume seed signal', async () => {
+        // Given: ledger still holds an older interrupt checkpoint, but the caller starts a normal run.
+        const context = await openCoordinatorContext('session_engine_run_no_resume');
+        const runId = 'run_old_interrupt';
+        const checkpoint = linearResumeCheckpoint({
+            graphId: 'engine-run-graph',
+            runId,
+            queuedNodeIds: ['next'],
+            completedNodeIds: ['gate'],
+        });
+        for (const event of interruptedSessionEvents({ runId, checkpoint })) {
+            await context.store.append({ ...event, sessionId: context.sessionId });
+        }
+        const seenCommands: string[] = [];
+
+        const coordinator = new SessionRunCoordinator({
+            sessionId: context.sessionId,
+            store: context.store,
+            provider: providerFromRequests(() => Promise.resolve()),
+            modelProviderSelection: MODEL_SELECTION,
+            now: () => NOW,
+            createId: (prefix, index) => `${prefix}_${index}`,
+            runProviderTurn: async (turnContext) => {
+                seenCommands.push(turnContext.command);
+                return { status: 'completed' };
+            },
+        });
+
+        await coordinator.steer({
+            inputId: 'input_run_no_resume',
+            messageId: 'message_run_no_resume',
+            prompt: 'new work',
+        });
+
+        // When
+        const result = await coordinator.run();
+
+        // Then: command stays run (seed-only-on-resume is the turn runner's job for this path).
+        expect(result.status).toBe('completed');
+        expect(seenCommands).toEqual(['run']);
+        expect(result.runId).not.toBe(runId);
         await context.store.close();
     });
 });

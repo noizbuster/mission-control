@@ -17,6 +17,7 @@ import type {
     AbgNodeModelOptions,
     AbgSignal,
     AgentEvent,
+    GraphCheckpoint,
     ModelProviderSelection,
     ProtocolErrorCode,
 } from '@mission-control/protocol';
@@ -31,6 +32,7 @@ import type { SystemPromptEnvironment } from '../context/system-prompt';
 import { createObservabilityRedactor, type ObservabilityRedactor } from '../providers/observability-redactor';
 import type { ToolRegistry } from '../tools/tool-registry';
 import { agentMessagesToSeedModelMessages } from './graph-coordinator-turn-messages';
+import { findResumableRun } from './graph-resume-state';
 import type { RunCoordinatorProviderTurnResult } from './run-coordinator-lifecycle';
 import type { RunCoordinatorTurnContext, RunCoordinatorTurnRunner } from './run-coordinator-types';
 
@@ -118,6 +120,7 @@ export function createGraphTurnRunner(wiring: GraphTurnRunnerWiring): RunCoordin
         // forwarded. Empty/absent decisions → no graphInput → the graph blocks as before.
         const { readApprovalDecisions, ...graphRunnerInput } = wiring;
         const approvalEvents = readApprovalDecisions !== undefined ? await readApprovalDecisions() : [];
+        const resumeCheckpoint = context.command === 'resume' ? await loadResumeCheckpoint(context) : undefined;
         const observabilityRedactor = wiring.observabilityRedactor ?? createObservabilityRedactor();
         const result = await runAbgGraph({
             ...graphRunnerInput,
@@ -125,6 +128,7 @@ export function createGraphTurnRunner(wiring: GraphTurnRunnerWiring): RunCoordin
             abortSignal: context.signal,
             observabilityRedactor,
             ...(approvalEvents.length > 0 ? { graphInput: { events: [...approvalEvents] } } : {}),
+            ...(resumeCheckpoint !== undefined ? { resumeCheckpoint } : {}),
         });
         // Persist graph events with abort awareness. A long post-run flush of thousands of rows
         // previously kept the turn (and chat loop) uninterruptible for minutes after ESC/Ctrl+C.
@@ -137,6 +141,15 @@ export function createGraphTurnRunner(wiring: GraphTurnRunnerWiring): RunCoordin
         }
         return mapGraphTurnResult(result);
     };
+}
+
+async function loadResumeCheckpoint(
+    context: Pick<RunCoordinatorTurnContext, 'readSessionEvents'>,
+): Promise<GraphCheckpoint | undefined> {
+    if (context.readSessionEvents === undefined) {
+        return undefined;
+    }
+    return findResumableRun(await context.readSessionEvents())?.checkpoint;
 }
 
 /**

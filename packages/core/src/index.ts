@@ -378,6 +378,7 @@ export {
     type RunCoordinatorPromptInput,
     type RunCoordinatorResult,
     type RunCoordinatorStore,
+    type RunCoordinatorTurnCommand,
     type RunCoordinatorTurnContext,
     type RunCoordinatorTurnRunner,
     SessionRunCoordinator,

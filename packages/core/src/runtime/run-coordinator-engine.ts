@@ -1,4 +1,4 @@
-// allow: SIZE_OK -- HEAD 349 -> current 352 pure LOC; one queue, steer, resume, and interrupt drain-loop state machine.
+// allow: SIZE_OK -- HEAD 349 -> current 396 pure LOC; one queue, steer, resume, and interrupt drain-loop state machine.
 import type { Client } from '@libsql/client';
 import type {
     AgentEvent,
@@ -8,14 +8,10 @@ import type {
     RunCoordinatorState,
 } from '@mission-control/protocol';
 import { SessionAdmissionService } from '../session-admission-service';
+import { findResumableRun } from './graph-resume-state';
 import { interruptActiveRun, statusFromActiveRun } from './run-coordinator-active-run';
 import * as runAdmission from './run-coordinator-admission';
-import {
-    type BlockedRunSnapshot,
-    type DrainCommand,
-    drainCoordinatorRun,
-    findResumableBlockedRun,
-} from './run-coordinator-drain';
+import { type BlockedRunSnapshot, type DrainCommand, drainCoordinatorRun } from './run-coordinator-drain';
 import { RunCoordinatorIdSequence } from './run-coordinator-ids';
 import {
     type RunCoordinatorActiveRun,
@@ -143,9 +139,20 @@ export class SessionRunCoordinator {
             });
         }
         if (command === 'resume') {
-            const resumable = findResumableBlockedRun(await this.options.store.getEvents(this.options.sessionId));
+            const resumable = findResumableRun(await this.options.store.getEvents(this.options.sessionId));
             if (resumable !== undefined) {
-                return this.startResumedDrain(command, resumable.runId, resumable);
+                switch (resumable.kind) {
+                    case 'approval':
+                        return this.startResumedDrain(command, resumable.runId, {
+                            runId: resumable.runId,
+                            ...(resumable.reason !== undefined ? { reason: resumable.reason } : {}),
+                            ...(resumable.errorCode !== undefined ? { errorCode: resumable.errorCode } : {}),
+                            ...(resumable.toolCallId !== undefined ? { toolCallId: resumable.toolCallId } : {}),
+                        });
+                    case 'interrupted':
+                        // Interrupted work is not approval-blocked; reuse runId without blocked metadata.
+                        return this.startResumedDrain(command, resumable.runId);
+                }
             }
         }
         const runId = await this.ids.next('run');
@@ -217,7 +224,7 @@ export class SessionRunCoordinator {
             runId,
             signal: controller.signal,
             promotionInput: () => this.promotionInput(),
-            runProviderTurn: (signal) => this.runProviderTurn(signal),
+            runProviderTurn: (signal, turnCommand) => this.runProviderTurn(signal, turnCommand),
             appendRunEvent: (...event) => this.appendRunEvent(...event),
             operatorStop: () => this.operatorStops.get(runId),
             suppressInterruptedEvent: () => this.fencedRuns.has(runId),
@@ -299,23 +306,27 @@ export class SessionRunCoordinator {
         await attachment?.then((value) => value.detach());
     }
 
-    private async runProviderTurn(signal: AbortSignal): Promise<RunCoordinatorProviderTurnResult> {
+    private async runProviderTurn(
+        signal: AbortSignal,
+        command: DrainCommand,
+    ): Promise<RunCoordinatorProviderTurnResult> {
         const injected = this.options.runProviderTurn;
         if (injected === undefined) {
             throw new TypeError(
                 `${this.options.sessionId}: SessionRunCoordinator requires runProviderTurn (the flat provider-turn loop has been removed). Inject a RunCoordinatorTurnRunner (e.g. createGraphTurnRunner) via SessionRunCoordinatorOptions or SessionRunOwnerRegistryOptions.createTurnRunner.`,
             );
         }
-        return injected(this.turnContext(signal));
+        return injected(this.turnContext(signal, command));
     }
 
-    private turnContext(signal: AbortSignal): RunCoordinatorTurnContext {
-        return { signal, ...this.turnContextFields() };
+    private turnContext(signal: AbortSignal, command: DrainCommand): RunCoordinatorTurnContext {
+        return { signal, command, ...this.turnContextFields() };
     }
 
-    private turnContextFields(): Omit<RunCoordinatorTurnContext, 'signal'> {
+    private turnContextFields(): Omit<RunCoordinatorTurnContext, 'signal' | 'command'> {
         return {
             readMessages: () => this.modelVisibleMessages(),
+            readSessionEvents: () => this.options.store.getEvents(this.options.sessionId),
             nextId: (prefix) => this.ids.next(prefix),
             appendDurableEvent: (event) => this.appendDurableEvent(event),
             appendDurableEvents: (events, signal) => this.appendDurableEvents(events, signal),
