@@ -1,4 +1,4 @@
-// allow: SIZE_OK -- HEAD 357 -> current 374 pure LOC; one protocol public-export contract matrix for every boundary schema.
+// allow: SIZE_OK -- HEAD 374 -> current 396 pure LOC; one protocol public-export contract matrix for every boundary schema.
 import {
     AbgGraphSnapshotSchema,
     AbgGraphSpecSchema,
@@ -25,6 +25,8 @@ import {
     DiffFileSchema,
     DiffHunkSchema,
     EventDurabilitySchema,
+    GRAPH_CHECKPOINT_REASONS,
+    GraphCheckpointSchema,
     McpConfigEntrySchema,
     McpConfigSchema,
     McpProjectConfigSchema,
@@ -112,6 +114,7 @@ import {
     WorkflowDiscoveryDiagnosticSchema,
     WorkflowSpecSchema,
 } from '@mission-control/protocol';
+import type { GraphCheckpoint } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 
 describe('protocol public exports', () => {
@@ -320,6 +323,25 @@ describe('protocol public exports', () => {
         expect(AbgGraphSnapshotSchema.shape.graphId).toBeDefined();
         expect(AbgToolOutcomeStatusSchema.parse('completed')).toBe('completed');
         expect(AbgToolOutcomeSnapshotSchema.shape.toolId).toBeDefined();
+        expect(GRAPH_CHECKPOINT_REASONS).toEqual(['node_boundary', 'interrupt', 'approval_block']);
+        const checkpoint: GraphCheckpoint = GraphCheckpointSchema.parse({
+            schemaVersion: 1,
+            graphId: 'exported-graph',
+            reason: 'interrupt',
+            queuedNodeIds: [],
+            completedNodeIds: ['start'],
+            nodeStatuses: { start: 'succeeded' },
+            attemptsByNodeId: { start: 1 },
+            consecutiveFailuresByNodeId: {},
+            consecutiveToolFailuresByNodeId: {},
+            totalNodeRuns: 1,
+            budgetExtensionsUsed: 0,
+            maxNodeRuns: 64,
+            blackboardEntries: {},
+            activeParallelParentIds: [],
+            createdAt: '2026-07-20T00:00:00.000Z',
+        });
+        expect(checkpoint.graphId).toBe('exported-graph');
     });
 
     it('exports plugin system schemas (PluginManifest, PluginDescriptor, PluginDiscoveryDiagnostic, PluginLspServer, PluginToolDefinition, PluginNodeDefinition, PluginContextSource, PluginSubAgent)', () => {

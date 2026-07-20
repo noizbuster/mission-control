@@ -1,7 +1,9 @@
+// allow: SIZE_OK -- HEAD 249 -> current 258 pure LOC; ABG schema hub intentionally re-exports boundary contracts.
 import { z } from 'zod';
 import { AbgNodeKindSchema, AbgNodeStatusSchema } from './abg-constants';
 import { AbgEmbeddedEventSchema, AbgSignalTypeSchema } from './abg-signal';
 import { ApprovalPolicyDecisionSchema } from './approval';
+import { GraphCheckpointSchema } from './graph-checkpoint';
 
 export {
     ABG_TOOL_OUTCOME_STATUSES,
@@ -16,6 +18,13 @@ export {
     type AbgToolOutcomeStatus,
     AbgToolOutcomeStatusSchema,
 } from './abg-snapshot';
+export {
+    GRAPH_CHECKPOINT_REASONS,
+    type GraphCheckpoint,
+    GraphCheckpointReasonSchema,
+    type GraphCheckpointReason,
+    GraphCheckpointSchema,
+} from './graph-checkpoint';
 
 const AuthorablePolicyDecisionSchema = z.preprocess(
     (value) => (value === 'requires-approval' ? 'requires_approval' : value),
@@ -240,6 +249,7 @@ export const AbgEventMetadataSchema = z.object({
     maxAttempts: z.number().int().positive().optional(),
     error: AbgRuntimeErrorSchema.optional(),
     emit: AbgEmitMetadataSchema.optional(),
+    checkpoint: GraphCheckpointSchema.optional(),
 });
 export type AbgEventMetadata = z.infer<typeof AbgEventMetadataSchema>;
 

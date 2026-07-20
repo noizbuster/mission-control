@@ -53,6 +53,7 @@ export const AGENT_EVENT_TYPES = [
     'graph.completed',
     'graph.failed',
     'graph.cancelled',
+    'graph.checkpoint',
     'attempt.started',
     'attempt.completed',
     'attempt.failed',

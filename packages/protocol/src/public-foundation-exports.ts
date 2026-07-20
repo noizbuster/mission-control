@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 248 -> current 253 pure LOC; Public protocol export barrel intentionally centralizes contracts.
 export {
     ABG_GRAPH_STATUSES,
     ABG_NODE_KINDS,
@@ -53,6 +54,11 @@ export {
     AbgToolOutcomeSnapshotSchema,
     type AbgToolOutcomeStatus,
     AbgToolOutcomeStatusSchema,
+    GRAPH_CHECKPOINT_REASONS,
+    type GraphCheckpoint,
+    GraphCheckpointReasonSchema,
+    type GraphCheckpointReason,
+    GraphCheckpointSchema,
 } from './abg';
 export { type AbgOverlayPrefs, AbgOverlayPrefsSchema } from './abg-overlay-prefs';
 export {

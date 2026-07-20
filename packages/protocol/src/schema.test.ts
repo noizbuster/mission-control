@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+    AGENT_EVENT_TYPES,
     AgentEventEnvelopeSchema,
     AgentEventLogSchema,
     AgentEventSchema,
@@ -26,6 +27,13 @@ describe('protocol schemas', () => {
         expect(event.type).toBe('task.completed');
         expect(AgentEventTypeSchema.parse('native.warning')).toBe('native.warning');
         expect(AgentEventTypeSchema.parse('model.call.failed')).toBe('model.call.failed');
+        expect(AgentEventTypeSchema.parse('graph.checkpoint')).toBe('graph.checkpoint');
+    });
+
+    it('keeps graph checkpoint immediately after graph cancelled in the event vocabulary', () => {
+        const eventTypes: readonly string[] = AGENT_EVENT_TYPES;
+
+        expect(eventTypes.indexOf('graph.checkpoint')).toBe(eventTypes.indexOf('graph.cancelled') + 1);
     });
 
     it('keeps existing protocol event baseline before ABG protocol expansion', () => {
