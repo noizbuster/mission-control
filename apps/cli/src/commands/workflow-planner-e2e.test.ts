@@ -154,14 +154,14 @@ describe('planner workflow CLI end-to-end', () => {
             (policy) =>
                 policy.capability === 'write' &&
                 policy.decision === 'allow' &&
-                policy.reason === 'resource:.omo/plans/**',
+                policy.reason === 'resource:.mc/plans/**',
         );
         expect(plansAllow).toBeDefined();
         const draftsAllow = executed.policies.find(
             (policy) =>
                 policy.capability === 'write' &&
                 policy.decision === 'allow' &&
-                policy.reason === 'resource:.omo/drafts/**',
+                policy.reason === 'resource:.mc/drafts/**',
         );
         expect(draftsAllow).toBeDefined();
     });

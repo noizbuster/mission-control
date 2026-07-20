@@ -129,7 +129,7 @@ describe('noninteractive workflow SessionControlHost attachment settlement', () 
 
 async function createOwnedRun(fixture: WorkflowPersistenceFixture, sessionId: string) {
     const location = normalizeMissionRunStoreLocation({
-        omoRoot: fixture.workspaceDir,
+        mcRoot: fixture.workspaceDir,
         dataDir: fixture.dataDir,
     });
     const mission = materializeMission(WorkflowSpecSchema.parse(WORKFLOW_PERSISTENCE_SPEC));

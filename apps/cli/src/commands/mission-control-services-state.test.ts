@@ -13,9 +13,9 @@ function makeWorkspace(): Promise<string> {
     return mkdtemp(join(tmpdir(), 'mc-services-'));
 }
 
-async function makeWorkspaceWithOmo(): Promise<string> {
+async function makeWorkspaceWithMc(): Promise<string> {
     const workspace = await makeWorkspace();
-    await mkdir(join(workspace, '.omo'), { recursive: true });
+    await mkdir(join(workspace, '.mc'), { recursive: true });
     return workspace;
 }
 
@@ -26,8 +26,8 @@ describe('MissionControlServices aggregate state', () => {
 
     beforeEach(async () => {
         resetMissionControlServicesCache();
-        workspaceA = await makeWorkspaceWithOmo();
-        workspaceB = await makeWorkspaceWithOmo();
+        workspaceA = await makeWorkspaceWithMc();
+        workspaceB = await makeWorkspaceWithMc();
         dataDir = await mkdtemp(join(tmpdir(), 'mc-services-data-'));
         process.env[missionControlDataDirEnvKey] = dataDir;
     });

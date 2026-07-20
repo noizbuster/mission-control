@@ -3,7 +3,7 @@
  *
  * Asserts that an explicit noninteractive workflow invocation
  * (`mctrl --workflow planner "x"` and the `#planner {x}` form) materializes a
- * Mission and starts a Run under `.omo/{missions,runs}/` before the turn, then
+ * Mission and starts a Run under `.mc/{missions,runs}/` before the turn, then
  * transitions the Run to `completed` (success) or `failed` (provider failure)
  * when the turn settles — without changing the plain/JSON output contract, and
  * without persisting anything for a plain (non-workflow) prompt.
@@ -64,7 +64,7 @@ describe('noninteractive workflow Mission/Run persistence', () => {
         // T8 streaming gate: plain mode returns '' (blocks streamed to stdout).
         expect(output).toBe('');
 
-        const location = { omoRoot: workspaceDir, dataDir };
+        const location = { mcRoot: workspaceDir, dataDir };
         const missions = await listMissions(location);
         expect(missions).toHaveLength(1);
         const mission = firstRecord(missions);
@@ -99,8 +99,8 @@ describe('noninteractive workflow Mission/Run persistence', () => {
             },
         );
 
-        const mission = firstRecord(await listMissions({ omoRoot: workspaceDir, dataDir }));
-        const run = firstRecord(await listRunsForMission({ omoRoot: workspaceDir, dataDir }, mission.id));
+        const mission = firstRecord(await listMissions({ mcRoot: workspaceDir, dataDir }));
+        const run = firstRecord(await listRunsForMission({ mcRoot: workspaceDir, dataDir }, mission.id));
         expect(run.sessionId).toBe('session_noninteractive_run');
     });
 
@@ -123,7 +123,7 @@ describe('noninteractive workflow Mission/Run persistence', () => {
             },
         );
 
-        const location = { omoRoot: workspaceDir, dataDir };
+        const location = { mcRoot: workspaceDir, dataDir };
         const missions = await listMissions(location);
         expect(missions).toHaveLength(1);
         const mission = firstRecord(missions);
@@ -153,7 +153,7 @@ describe('noninteractive workflow Mission/Run persistence', () => {
             },
         );
 
-        const location = { omoRoot: workspaceDir, dataDir };
+        const location = { mcRoot: workspaceDir, dataDir };
         const missions = await listMissions(location);
         expect(missions).toHaveLength(1);
         const mission = firstRecord(missions);
@@ -179,13 +179,13 @@ describe('noninteractive workflow Mission/Run persistence', () => {
             },
         );
 
-        const missions = await listMissions({ omoRoot: workspaceDir, dataDir });
+        const missions = await listMissions({ mcRoot: workspaceDir, dataDir });
         expect(missions).toHaveLength(0);
     });
 
-    it('runs without persisting when no .omo root resolves', async () => {
-        const noOmoDir = await mkdtemp(join(tmpdir(), 'mctrl-wf-no-omo-'));
-        const workflowsDir = join(noOmoDir, '.mctrl', 'workflows');
+    it('runs without persisting when no .mc root resolves', async () => {
+        const noMcDir = await mkdtemp(join(tmpdir(), 'mctrl-wf-no-mc-'));
+        const workflowsDir = join(noMcDir, '.mctrl', 'workflows');
         await mkdir(workflowsDir, { recursive: true });
         await writeFile(
             join(workflowsDir, 'persist-demo.workflow.json'),
@@ -206,17 +206,17 @@ describe('noninteractive workflow Mission/Run persistence', () => {
                     modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
                 },
                 {
-                    workspaceRoot: noOmoDir,
+                    workspaceRoot: noMcDir,
                     resolveSdkModel: () => createCompletingWorkflowModel(),
                 },
             );
 
             // T8 streaming gate: plain mode returns '' (blocks streamed to stdout).
             expect(output).toBe('');
-            const missions = await listMissions({ omoRoot: noOmoDir, dataDir });
+            const missions = await listMissions({ mcRoot: noMcDir, dataDir });
             expect(missions).toHaveLength(0);
         } finally {
-            await rm(noOmoDir, { recursive: true, force: true });
+            await rm(noMcDir, { recursive: true, force: true });
         }
     });
 });

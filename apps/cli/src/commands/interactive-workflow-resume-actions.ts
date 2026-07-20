@@ -4,7 +4,7 @@ import {
     findResumableBlockedRun,
     normalizeMissionRunStoreLocation,
     readMission,
-    resolveOmoRoot,
+    resolveMcRoot,
     updateRunStatus,
 } from '@mission-control/core';
 import type { ModelProviderSelection } from '@mission-control/protocol';
@@ -137,15 +137,15 @@ export async function runRetryAction(
         chatOutput.write('Retry unavailable: no workspace or workflow registry.\n');
         return actionResult(selection);
     }
-    let omoRoot: string;
+    let mcRoot: string;
     try {
-        omoRoot = await resolveOmoRoot(coding.workspaceRoot);
+        mcRoot = await resolveMcRoot(coding.workspaceRoot);
     } catch {
-        chatOutput.write('Retry unavailable: no .omo root for this workspace.\n');
+        chatOutput.write('Retry unavailable: no .mc root for this workspace.\n');
         return actionResult(selection);
     }
     const location = normalizeMissionRunStoreLocation({
-        omoRoot,
+        mcRoot,
         ...(coding.observabilityRedactor !== undefined ? { observabilityRedactor: coding.observabilityRedactor } : {}),
     });
     const failed = await findMostRecentFailedRun(location);

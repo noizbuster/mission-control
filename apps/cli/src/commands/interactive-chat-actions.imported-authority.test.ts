@@ -51,7 +51,7 @@ describe('imported continuation authority', () => {
             await importLegacySessionCompatibilityWindow({
                 ...opened.runtime,
                 dataDir: fixture.dataDir,
-                omoRoot: fixture.omoDir,
+                mcRoot: fixture.mcDir,
             });
         } finally {
             opened.runtime.close();
@@ -64,7 +64,7 @@ describe('imported continuation authority', () => {
         expect((await readRun(fixture.location, fixture.runId)).sessionRunId).toBeUndefined();
     });
 
-    it('does not execute a matching owner and inline graph lazily imported from .omo', async () => {
+    it('does not execute a matching owner and inline graph lazily imported from .mc', async () => {
         const fixture = await createImportedAttackFixture('implicit');
 
         await continueImportedSession(fixture);
@@ -78,11 +78,11 @@ describe('imported continuation authority', () => {
 type ImportedAttackFixture = {
     readonly workspace: string;
     readonly dataDir: string;
-    readonly omoDir: string;
+    readonly mcDir: string;
     readonly sessionId: string;
     readonly ownerRunId: string;
     readonly runId: string;
-    readonly location: { readonly omoRoot: string; readonly dataDir: string };
+    readonly location: { readonly mcRoot: string; readonly dataDir: string };
 };
 
 async function createImportedAttackFixture(suffix: string): Promise<ImportedAttackFixture> {
@@ -90,13 +90,13 @@ async function createImportedAttackFixture(suffix: string): Promise<ImportedAtta
     tempRoots.push(root);
     const workspace = join(root, 'workspace');
     const dataDir = join(root, 'data');
-    const omoDir = join(workspace, '.omo');
+    const mcDir = join(workspace, '.mc');
     const sessionId = `session_imported_authority_${suffix}`;
     const ownerRunId = `predictable_owner_${suffix}`;
     const runId = `malicious_run_${suffix}`;
     const archivePath = join(root, 'crafted.mctrl-session.json');
-    await mkdir(join(omoDir, 'missions'), { recursive: true });
-    await mkdir(join(omoDir, 'runs'), { recursive: true });
+    await mkdir(join(mcDir, 'missions'), { recursive: true });
+    await mkdir(join(mcDir, 'runs'), { recursive: true });
     await mkdir(join(dataDir, 'sessions'), { recursive: true });
     vi.stubEnv(missionControlDataDirEnvKey, dataDir);
     await new ProjectTrustStore({ dataDir, now: fixedNow }).setDecision(workspace, 'trusted');
@@ -111,12 +111,12 @@ async function createImportedAttackFixture(suffix: string): Promise<ImportedAtta
     );
     await withProcessCwd(workspace, () => runSessionCommand(parseArgs(['session', 'import', archivePath])));
     await writeFile(
-        join(omoDir, 'missions', `malicious_mission_${suffix}.json`),
+        join(mcDir, 'missions', `malicious_mission_${suffix}.json`),
         JSON.stringify(maliciousMission(suffix)),
         'utf8',
     );
     await writeFile(
-        join(omoDir, 'runs', `${runId}.json`),
+        join(mcDir, 'runs', `${runId}.json`),
         JSON.stringify({
             id: runId,
             missionId: `malicious_mission_${suffix}`,
@@ -128,7 +128,7 @@ async function createImportedAttackFixture(suffix: string): Promise<ImportedAtta
         }),
         'utf8',
     );
-    return { workspace, dataDir, omoDir, sessionId, ownerRunId, runId, location: { omoRoot: workspace, dataDir } };
+    return { workspace, dataDir, mcDir, sessionId, ownerRunId, runId, location: { mcRoot: workspace, dataDir } };
 }
 
 async function continueImportedSession(fixture: ImportedAttackFixture): Promise<void> {

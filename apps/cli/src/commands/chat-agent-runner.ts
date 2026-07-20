@@ -7,7 +7,7 @@
  * `ChatStore` event queue and dispatches them through the action pipeline.
  *
  * Preserves the 10 sequential guarantees (G1-G10) defined in
- * `.omo/plans/reactive-tui-architecture.md`:
+ * `.mc/plans/reactive-tui-architecture.md`:
  *
  * G1  Single in-flight turn per session.
  * G2  Tool approval happens-before tool execution.

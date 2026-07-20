@@ -13,9 +13,9 @@ function makeWorkspace(): Promise<string> {
     return mkdtemp(join(tmpdir(), 'mc-services-'));
 }
 
-async function makeWorkspaceWithOmo(): Promise<string> {
+async function makeWorkspaceWithMc(): Promise<string> {
     const workspace = await makeWorkspace();
-    await mkdir(join(workspace, '.omo'), { recursive: true });
+    await mkdir(join(workspace, '.mc'), { recursive: true });
     return workspace;
 }
 
@@ -26,8 +26,8 @@ describe('MissionControlServices cache', () => {
 
     beforeEach(async () => {
         resetMissionControlServicesCache();
-        workspaceA = await makeWorkspaceWithOmo();
-        workspaceB = await makeWorkspaceWithOmo();
+        workspaceA = await makeWorkspaceWithMc();
+        workspaceB = await makeWorkspaceWithMc();
         dataDir = await mkdtemp(join(tmpdir(), 'mc-services-data-'));
         process.env[missionControlDataDirEnvKey] = dataDir;
     });
@@ -59,7 +59,7 @@ describe('MissionControlServices cache', () => {
             const fromA = await getOrCreateMissionControlServices(workspaceA);
             const fromB = await getOrCreateMissionControlServices(workspaceB);
             expect(fromB).not.toBe(fromA);
-            expect(fromB.getOmoRoot()).toBe(workspaceB);
+            expect(fromB.getMcRoot()).toBe(workspaceB);
         });
 
         it('ignores options on a cache hit because first construction wins', async () => {
@@ -80,8 +80,8 @@ describe('MissionControlServices cache', () => {
         it('drops the cache entry when construction rejects', async () => {
             const bare = await makeWorkspace();
             try {
-                await expect(getOrCreateMissionControlServices(bare)).rejects.toThrow(/\.omo/);
-                await expect(getOrCreateMissionControlServices(bare)).rejects.toThrow(/\.omo/);
+                await expect(getOrCreateMissionControlServices(bare)).rejects.toThrow(/\.mc/);
+                await expect(getOrCreateMissionControlServices(bare)).rejects.toThrow(/\.mc/);
             } finally {
                 await rm(bare, { recursive: true, force: true });
             }

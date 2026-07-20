@@ -186,7 +186,7 @@ describe('noninteractive workflow session owner linkage', () => {
                     createCompletingWorkflowModel(async () => {
                         const run = await persistedWorkflowRun(fixture);
                         await attachRunSessionOwner(
-                            { omoRoot: fixture.workspaceDir, dataDir: fixture.dataDir },
+                            { mcRoot: fixture.workspaceDir, dataDir: fixture.dataDir },
                             run.id,
                             { sessionId, sessionRunId: 'owner_conflicting' },
                         );
@@ -205,7 +205,7 @@ describe('noninteractive workflow session owner linkage', () => {
 });
 
 async function persistedWorkflowRun(fixture: WorkflowPersistenceFixture) {
-    const location = { omoRoot: fixture.workspaceDir, dataDir: fixture.dataDir };
+    const location = { mcRoot: fixture.workspaceDir, dataDir: fixture.dataDir };
     const mission = firstRecord(await listMissions(location));
     return firstRecord(await listRunsForMission(location, mission.id));
 }

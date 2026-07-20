@@ -3,14 +3,14 @@ import {
     cancelRun,
     completeRun,
     createMission,
-    ensureOmoDirs,
+    ensureMcDirs,
     failRun,
     materializeMission,
     type NormalizedMissionRunStoreLocation,
     normalizeMissionRunStoreLocation,
     type ObservabilityRedactor,
     type RunSessionOwnerAttachment,
-    resolveOmoRoot,
+    resolveMcRoot,
     type SessionControlHost,
     settleMissionRunSessionOwner,
     startRun,
@@ -40,15 +40,15 @@ export async function beginNoninteractiveWorkflowRun(
     } = {},
 ): Promise<NoninteractiveWorkflowRunHandle | undefined> {
     if (workflowSpec === undefined) return undefined;
-    let omoRoot: string;
+    let mcRoot: string;
     try {
-        omoRoot = await resolveOmoRoot(workspaceRoot);
+        mcRoot = await resolveMcRoot(workspaceRoot);
     } catch {
         return undefined;
     }
-    await ensureOmoDirs(omoRoot);
+    await ensureMcDirs(mcRoot);
     const location = normalizeMissionRunStoreLocation({
-        omoRoot,
+        mcRoot,
         ...(options.observabilityRedactor !== undefined
             ? { observabilityRedactor: options.observabilityRedactor }
             : {}),

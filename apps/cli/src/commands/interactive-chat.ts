@@ -90,7 +90,7 @@ import { interactiveSessionCliStdout } from './interactive-session-cli-stdout';
 import { emitTranscriptFallback } from './interactive-transcript-emission';
 import {
     getOrCreateMissionControlServices,
-    isOmoRootNotFoundError,
+    isMcRootNotFoundError,
     type MissionControlServices,
 } from './mission-control-services';
 import { loadPricingTable } from './pricing-table-store';
@@ -986,7 +986,7 @@ async function resolveMissionControlServices(
             ...(observabilityRedactor !== undefined ? { observabilityRedactor } : {}),
         });
     } catch (error: unknown) {
-        if (isOmoRootNotFoundError(error)) {
+        if (isMcRootNotFoundError(error)) {
             return undefined;
         }
         throw error;

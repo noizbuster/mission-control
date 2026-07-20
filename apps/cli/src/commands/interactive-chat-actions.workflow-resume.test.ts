@@ -39,12 +39,12 @@ describe('interactive blocked workflow Run resume', () => {
     it('reattaches the original workflow graph and settles the blocked Run after /continue', async () => {
         const workspace = await mkdtemp(join(tmpdir(), 'wf-resume-run-'));
         tempRoots.push(workspace);
-        await mkdir(join(workspace, '.omo'), { recursive: true });
+        await mkdir(join(workspace, '.mc'), { recursive: true });
         const dataDir = join(workspace, 'data');
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
         const sessionId = 'session_workflow_resume';
         const spec = workflowSpec();
-        const location = { omoRoot: workspace, dataDir };
+        const location = { mcRoot: workspace, dataDir };
         const mission = materializeMission(spec);
         await createMission(location, mission);
         const running = await startRun(location, mission.id, 'resume me', { sessionId });
@@ -107,12 +107,12 @@ describe('interactive blocked workflow Run resume', () => {
     it('settles the resumed Run as failed when owner setup rejects', async () => {
         const workspace = await mkdtemp(join(tmpdir(), 'wf-resume-setup-failure-'));
         tempRoots.push(workspace);
-        await mkdir(join(workspace, '.omo'), { recursive: true });
+        await mkdir(join(workspace, '.mc'), { recursive: true });
         const dataDir = join(workspace, 'data');
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
         const sessionId = 'session_workflow_resume_failure';
         const spec = workflowSpec();
-        const location = { omoRoot: workspace, dataDir };
+        const location = { mcRoot: workspace, dataDir };
         const mission = materializeMission(spec);
         await createMission(location, mission);
         const running = await startRun(location, mission.id, 'resume me', { sessionId });
@@ -153,12 +153,12 @@ describe('interactive blocked workflow Run resume', () => {
     it('does not settle an older workflow Run when a newer plain owner Run is blocked', async () => {
         const workspace = await mkdtemp(join(tmpdir(), 'wf-resume-owner-binding-'));
         tempRoots.push(workspace);
-        await mkdir(join(workspace, '.omo'), { recursive: true });
+        await mkdir(join(workspace, '.mc'), { recursive: true });
         const dataDir = join(workspace, 'data');
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
         const sessionId = 'session_workflow_owner_binding';
         const spec = workflowSpec();
-        const location = { omoRoot: workspace, dataDir };
+        const location = { mcRoot: workspace, dataDir };
         const mission = materializeMission(spec);
         await createMission(location, mission);
         const running = await startRun(location, mission.id, 'older workflow', { sessionId });

@@ -1,6 +1,6 @@
 import {
     getOrCreateMissionControlServices,
-    isOmoRootNotFoundError,
+    isMcRootNotFoundError,
     type MissionControlServices,
     type MissionControlServicesOptions,
 } from './mission-control-services';
@@ -12,7 +12,7 @@ export async function resolveMissionControlServices(
     try {
         return await getOrCreateMissionControlServices(workspaceRoot, options);
     } catch (error: unknown) {
-        if (isOmoRootNotFoundError(error)) return undefined;
+        if (isMcRootNotFoundError(error)) return undefined;
         throw error;
     }
 }

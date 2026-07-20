@@ -29,9 +29,9 @@ afterEach(async () => {
 });
 
 describe('runInteractiveChatSession MissionControlServices error handling', () => {
-    it('degrades without task runtime services when .omo is missing', async () => {
-        const dataDir = await tempRoot('mctrl-interactive-no-omo-data-');
-        const workspaceRoot = await tempRoot('mctrl-interactive-no-omo-workspace-');
+    it('degrades without task runtime services when .mc is missing', async () => {
+        const dataDir = await tempRoot('mctrl-interactive-no-mc-data-');
+        const workspaceRoot = await tempRoot('mctrl-interactive-no-mc-workspace-');
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
         const actual = await vi.importActual<typeof import('./mission-control-services')>(
             './mission-control-services.js',
@@ -50,7 +50,7 @@ describe('runInteractiveChatSession MissionControlServices error handling', () =
         expect(output).toContain('Exiting mission-control chat');
     });
 
-    it('rejects when MissionControlServices creation fails after .omo resolves', async () => {
+    it('rejects when MissionControlServices creation fails after .mc resolves', async () => {
         const dataDir = await tempRoot('mctrl-interactive-bad-services-data-');
         const workspaceRoot = await tempRoot('mctrl-interactive-bad-services-workspace-');
         const serviceError = new Error('synthetic MissionControlServices failure');

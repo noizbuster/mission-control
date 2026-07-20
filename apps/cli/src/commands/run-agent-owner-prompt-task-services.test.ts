@@ -55,7 +55,7 @@ describe('runOwnerPrompt task services wiring', () => {
     it('wires MissionControlServices into the noninteractive task registry and shared data-dir DB', async () => {
         const dataDir = await tempRoot(roots, 'mctrl-owner-task-data-');
         const workspaceRoot = await tempRoot(roots, 'mctrl-owner-task-workspace-');
-        await mkdir(join(workspaceRoot, '.omo'), { recursive: true });
+        await mkdir(join(workspaceRoot, '.mc'), { recursive: true });
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
         const sessionId = 'session_owner_task_services';
         const store = await JsonlSessionEventStore.open({ sessionId, dataDir });
@@ -107,11 +107,11 @@ describe('runOwnerPrompt task services wiring', () => {
         expect(existsSync(join(workspaceRoot, 'mission-control.db'))).toBe(false);
     });
 
-    it('degrades without task runtime services when .omo is missing', async () => {
-        const dataDir = await tempRoot(roots, 'mctrl-owner-no-omo-data-');
-        const workspaceRoot = await tempRoot(roots, 'mctrl-owner-no-omo-workspace-');
+    it('degrades without task runtime services when .mc is missing', async () => {
+        const dataDir = await tempRoot(roots, 'mctrl-owner-no-mc-data-');
+        const workspaceRoot = await tempRoot(roots, 'mctrl-owner-no-mc-workspace-');
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
-        const sessionId = 'session_owner_no_omo';
+        const sessionId = 'session_owner_no_mc';
         const store = await JsonlSessionEventStore.open({ sessionId, dataDir });
         const emitted: string[] = [];
 
@@ -122,7 +122,7 @@ describe('runOwnerPrompt task services wiring', () => {
                 provider: captureSequentialProvider([], []),
                 modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
                 workspaceRoot,
-                prompt: 'complete without omo services',
+                prompt: 'complete without mc services',
                 emitEvent: (event) => {
                     emitted.push(event.type);
                 },
@@ -136,11 +136,11 @@ describe('runOwnerPrompt task services wiring', () => {
         expect(emitted).toEqual(['task.started', 'task.completed']);
     });
 
-    it('rejects when MissionControlServices creation fails after .omo resolves', async () => {
+    it('rejects when MissionControlServices creation fails after .mc resolves', async () => {
         const storeDataDir = await tempRoot(roots, 'mctrl-owner-store-data-');
         const workspaceRoot = await tempRoot(roots, 'mctrl-owner-bad-services-workspace-');
         const dataDirFile = join(await tempRoot(roots, 'mctrl-owner-bad-services-data-parent-'), 'not-a-directory');
-        await mkdir(join(workspaceRoot, '.omo'), { recursive: true });
+        await mkdir(join(workspaceRoot, '.mc'), { recursive: true });
         await writeFile(dataDirFile, 'not a directory', 'utf8');
         vi.stubEnv('MCTRL_DATA_DIR', dataDirFile);
         const sessionId = 'session_owner_bad_services';

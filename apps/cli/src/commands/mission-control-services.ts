@@ -22,7 +22,7 @@ import {
     type ObservabilityRedactor,
     type RuntimeAgentRegistry,
     resolveMissionControlDataDir,
-    resolveOmoRoot,
+    resolveMcRoot,
     type SqlTaskRuntimeServices,
     type TaskToolRuntimeServices,
 } from '@mission-control/core';
@@ -55,7 +55,7 @@ export interface AgentStatsSnapshot {
 }
 
 export interface MissionControlServicesSnapshot {
-    readonly omoRoot: string;
+    readonly mcRoot: string;
     readonly maxConcurrency: number;
     readonly defaultIdleTtlMs: number;
     readonly disposed: boolean;
@@ -64,32 +64,32 @@ export interface MissionControlServicesSnapshot {
 }
 
 /**
- * Construct and own the three runtime managers plus the resolved `.omo` root
+ * Construct and own the three runtime managers plus the resolved `.mc` root
  * for a single CLI session. Use {@link MissionControlServices.create} (or the
- * {@link getOrCreateMissionControlServices} factory) to resolve the omo root
+ * {@link getOrCreateMissionControlServices} factory) to resolve the .mc root
  * from a workspace; the private constructor takes an already-resolved root so
  * tests can build an instance without touching disk.
  */
 export class MissionControlServices {
     private readonly sqlServices: SqlTaskRuntimeServices;
-    private readonly omoRoot: string;
+    private readonly mcRoot: string;
     private readonly maxConcurrency: number;
     private readonly defaultIdleTtlMs: number;
     private disposed = false;
 
-    private constructor(omoRoot: string, options: MissionControlServicesOptions, sqlServices: SqlTaskRuntimeServices) {
-        this.omoRoot = omoRoot;
+    private constructor(mcRoot: string, options: MissionControlServicesOptions, sqlServices: SqlTaskRuntimeServices) {
+        this.mcRoot = mcRoot;
         this.maxConcurrency = options.maxConcurrency ?? DEFAULT_MAX_CONCURRENCY;
         this.defaultIdleTtlMs = options.defaultIdleTtlMs ?? DEFAULT_IDLE_TTL_MS;
         this.sqlServices = sqlServices;
     }
 
-    /** Resolve the `.omo` root from `workspaceRoot`, then construct. */
+    /** Resolve the `.mc` root from `workspaceRoot`, then construct. */
     static async create(
         workspaceRoot: string,
         options?: MissionControlServicesOptions,
     ): Promise<MissionControlServices> {
-        const omoRoot = await resolveOmoRoot(workspaceRoot);
+        const mcRoot = await resolveMcRoot(workspaceRoot);
         const resolvedOptions = options ?? {};
         const sqlServices = await createSqlTaskRuntimeServices(resolveMissionControlDataDir(), {
             maxConcurrency: resolvedOptions.maxConcurrency ?? DEFAULT_MAX_CONCURRENCY,
@@ -97,7 +97,7 @@ export class MissionControlServices {
                 ? { observabilityRedactor: resolvedOptions.observabilityRedactor }
                 : {}),
         });
-        return new MissionControlServices(omoRoot, resolvedOptions, sqlServices);
+        return new MissionControlServices(mcRoot, resolvedOptions, sqlServices);
     }
 
     getJobManager(): AsyncJobManager {
@@ -120,8 +120,8 @@ export class MissionControlServices {
         return this.sqlServices.sessionControlHost;
     }
 
-    getOmoRoot(): string {
-        return this.omoRoot;
+    getMcRoot(): string {
+        return this.mcRoot;
     }
 
     getMaxConcurrency(): number {
@@ -138,7 +138,7 @@ export class MissionControlServices {
 
     /**
      * Serializable view for the runtime panel: job stats (active, total,
-     * per-status), visible-agent stats (per-status), the omo root, and the
+     * per-status), visible-agent stats (per-status), the .mc root, and the
      * configured limits. Computed from the public manager surfaces so the
      * panel never reaches into manager internals.
      */
@@ -163,7 +163,7 @@ export class MissionControlServices {
         for (const ref of visible) agentByStatus[ref.status] += 1;
 
         return {
-            omoRoot: this.omoRoot,
+            mcRoot: this.mcRoot,
             maxConcurrency: this.maxConcurrency,
             defaultIdleTtlMs: this.defaultIdleTtlMs,
             disposed: this.disposed,
@@ -228,12 +228,12 @@ export async function getOrCreateMissionControlServices(
     return pending;
 }
 
-export function isOmoRootNotFoundError(error: unknown): boolean {
+export function isMcRootNotFoundError(error: unknown): boolean {
     return (
         error instanceof Error &&
-        error.name === 'OmoPersistenceError' &&
+        error.name === 'McPersistenceError' &&
         'code' in error &&
-        error.code === 'omo_root_not_found'
+        error.code === 'mc_root_not_found'
     );
 }
 

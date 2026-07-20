@@ -60,7 +60,7 @@ describe('noninteractive workflow Run lifecycle', () => {
             WorkflowSpecSchema.parse(WORKFLOW_PERSISTENCE_SPEC),
         );
 
-        expect(handle).toMatchObject({ location: { omoRoot: fixture.workspaceDir, dataDir: fixture.dataDir } });
+        expect(handle).toMatchObject({ location: { mcRoot: fixture.workspaceDir, dataDir: fixture.dataDir } });
     });
 
     it('links a Run to the actual session when supplied', async () => {

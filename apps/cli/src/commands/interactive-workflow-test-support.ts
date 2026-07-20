@@ -36,7 +36,7 @@ export async function cleanupWorkflowFixtures(): Promise<void> {
 export async function makeWorkflowFixture(suffix: string, spec: WorkflowSpec): Promise<WorkflowFixture> {
     const workspace = await mkdtemp(join(tmpdir(), `wf-owner-${suffix}-`));
     tempRoots.push(workspace);
-    await mkdir(join(workspace, '.omo'), { recursive: true });
+    await mkdir(join(workspace, '.mc'), { recursive: true });
     const dataDir = join(workspace, 'data');
     vi.stubEnv('MCTRL_DATA_DIR', dataDir);
     return {
@@ -90,7 +90,7 @@ export async function makeCodingContext(
 }
 
 export async function readOnlyRun(fixture: WorkflowFixture) {
-    const location = { omoRoot: fixture.workspace, dataDir: fixture.dataDir };
+    const location = { mcRoot: fixture.workspace, dataDir: fixture.dataDir };
     const missions = await listMissions(location);
     expect(missions).toHaveLength(1);
     const mission = missions[0];

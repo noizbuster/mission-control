@@ -208,7 +208,7 @@ function dumpEvidence(
     }
     const filename =
         mode === 'json' ? 'task-8-opencode-style-block-output-json.txt' : 'task-8-opencode-style-block-output.txt';
-    const evidencePath = `.omo/evidence/${filename}`;
+    const evidencePath = `.mc/evidence/${filename}`;
     mkdirSync(dirname(evidencePath), { recursive: true });
     writeFileSync(evidencePath, `${lines.join('\n')}\n`);
 }

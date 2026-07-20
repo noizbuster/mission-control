@@ -200,7 +200,7 @@ function dumpEvidence(
     lines.push('');
     lines.push('== getOutput() rendered (printable) ==');
     lines.push(output);
-    const evidencePath = '.omo/evidence/task-7-opencode-style-block-output.txt';
+    const evidencePath = '.mc/evidence/task-7-opencode-style-block-output.txt';
     mkdirSync(dirname(evidencePath), { recursive: true });
     writeFileSync(evidencePath, `${lines.join('\n')}\n`);
 }

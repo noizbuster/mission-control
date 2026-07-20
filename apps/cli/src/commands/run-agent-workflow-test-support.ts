@@ -27,7 +27,7 @@ export type WorkflowPersistenceFixture = {
 
 export async function createWorkflowPersistenceFixture(): Promise<WorkflowPersistenceFixture> {
     const workspaceDir = await mkdtemp(join(tmpdir(), 'mctrl-wf-persist-ws-'));
-    await mkdir(join(workspaceDir, '.omo'), { recursive: true });
+    await mkdir(join(workspaceDir, '.mc'), { recursive: true });
     const workflowsDir = join(workspaceDir, '.mctrl', 'workflows');
     await mkdir(workflowsDir, { recursive: true });
     await writeFile(

@@ -128,8 +128,8 @@ describe('workflow Mission/Run persistence', () => {
         expect(missions).toHaveLength(0);
     });
 
-    it('does NOT create records when the workspace has no .omo root', async () => {
-        const workspace = await mkdtemp(join(tmpdir(), 'no-omo-'));
+    it('does NOT create records when the workspace has no .mc root', async () => {
+        const workspace = await mkdtemp(join(tmpdir(), 'no-mc-'));
         tempRoots.push(workspace);
         const provider = createDeterministicProvider([{ kind: 'response_completed', content: 'ok' }]);
         const registry = new WorkflowRegistry([makeWorkflowSpec('planner')]);
@@ -146,7 +146,7 @@ describe('workflow Mission/Run persistence', () => {
         );
 
         const entries = await readdir(workspace);
-        expect(entries).not.toContain('.omo');
+        expect(entries).not.toContain('.mc');
     });
 
     it('creates unique Mission and Run records across multiple sequential workflow turns', async () => {
@@ -229,7 +229,7 @@ async function makeStartedRuntime(): Promise<AgentRuntime> {
 
 async function makeWorkspace(): Promise<string> {
     const root = await mkdtemp(join(tmpdir(), 'wf-mission-run-'));
-    await mkdir(join(root, '.omo'), { recursive: true });
+    await mkdir(join(root, '.mc'), { recursive: true });
     const dataDir = join(root, 'data');
     vi.stubEnv('MCTRL_DATA_DIR', dataDir);
     workspaceDataDirs.set(root, dataDir);
@@ -237,10 +237,10 @@ async function makeWorkspace(): Promise<string> {
     return root;
 }
 
-function locationForWorkspace(workspace: string): { readonly omoRoot: string; readonly dataDir: string } {
+function locationForWorkspace(workspace: string): { readonly mcRoot: string; readonly dataDir: string } {
     const dataDir = workspaceDataDirs.get(workspace);
     if (dataDir === undefined) throw new Error(`missing data dir for ${workspace}`);
-    return { omoRoot: workspace, dataDir };
+    return { mcRoot: workspace, dataDir };
 }
 
 function makeWorkflowSpec(name: string): WorkflowSpec {

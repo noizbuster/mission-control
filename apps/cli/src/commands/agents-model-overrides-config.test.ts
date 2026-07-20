@@ -22,7 +22,7 @@ afterEach(() => {
 });
 
 function makeTempWorkspace(): string {
-    const dir = mkdtempSync(join(tmpdir(), 'omo-overrides-'));
+    const dir = mkdtempSync(join(tmpdir(), 'mc-overrides-'));
     tempDirs.push(dir);
     return dir;
 }

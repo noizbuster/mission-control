@@ -39,7 +39,7 @@ describe('startPromptTurn task services wiring', () => {
     it('passes task runtime services into interactive coding-agent turns', async () => {
         const dataDir = await tempRoot('mctrl-interactive-task-data-');
         const workspaceRoot = await tempRoot('mctrl-interactive-task-workspace-');
-        await mkdir(join(workspaceRoot, '.omo'), { recursive: true });
+        await mkdir(join(workspaceRoot, '.mc'), { recursive: true });
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
         const sessionId = 'session_interactive_task_services';
         const store = await JsonlSessionEventStore.open({ sessionId, dataDir });

@@ -74,7 +74,7 @@ describe('noninteractive blocked workflow owner restart', () => {
             resolveSdkModel: () => createCompletingWorkflowModel(),
         });
 
-        const location = { omoRoot: fixture.workspaceDir, dataDir: fixture.dataDir };
+        const location = { mcRoot: fixture.workspaceDir, dataDir: fixture.dataDir };
         const mission = firstRecord(await listMissions(location));
         const run = firstRecord(await listRunsForMission(location, mission.id));
         expect(chatOutput.getOutput()).toContain(`Resuming run for ${sessionId}`);

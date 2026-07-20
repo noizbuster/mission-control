@@ -1,13 +1,13 @@
 import {
     createMission,
-    ensureOmoDirs,
+    ensureMcDirs,
     listMissions,
     listRunsForMission,
     materializeMission,
     type NormalizedMissionRunStoreLocation,
     normalizeMissionRunStoreLocation,
     type ObservabilityRedactor,
-    resolveOmoRoot,
+    resolveMcRoot,
     startRun,
     type WorkflowRegistry,
 } from '@mission-control/core';
@@ -37,15 +37,15 @@ export async function tryCreateWorkflowRun(
     observabilityRedactor?: ObservabilityRedactor,
 ): Promise<WorkflowRunHandle | undefined> {
     if (workspaceRoot === undefined) return undefined;
-    let omoRoot: string;
+    let mcRoot: string;
     try {
-        omoRoot = await resolveOmoRoot(workspaceRoot);
+        mcRoot = await resolveMcRoot(workspaceRoot);
     } catch {
         return undefined;
     }
-    await ensureOmoDirs(omoRoot);
+    await ensureMcDirs(mcRoot);
     const location = normalizeMissionRunStoreLocation({
-        omoRoot,
+        mcRoot,
         ...(observabilityRedactor !== undefined ? { observabilityRedactor } : {}),
     });
     const mission = materializeMission({ ...spec, graph: workflowGraph });
@@ -74,14 +74,14 @@ export async function findResumableWorkflowRun(input: {
     readonly workflowRegistry?: WorkflowRegistry;
     readonly observabilityRedactor?: ObservabilityRedactor;
 }): Promise<ResumableWorkflowRun | undefined> {
-    let omoRoot: string;
+    let mcRoot: string;
     try {
-        omoRoot = await resolveOmoRoot(input.workspaceRoot);
+        mcRoot = await resolveMcRoot(input.workspaceRoot);
     } catch {
         return undefined;
     }
     const location = normalizeMissionRunStoreLocation({
-        omoRoot,
+        mcRoot,
         ...(input.observabilityRedactor !== undefined ? { observabilityRedactor: input.observabilityRedactor } : {}),
     });
     let selected: { readonly mission: Mission; readonly run: Run } | undefined;

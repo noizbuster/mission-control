@@ -3,9 +3,9 @@ import {
     createAllowPermissionDecision,
     createMission,
     createRun,
-    ensureOmoDirs,
+    ensureMcDirs,
     materializeMission,
-    resolveOmoRoot,
+    resolveMcRoot,
     startRun,
 } from '@mission-control/core';
 import { MissionSchema, type ModelProviderSelection, RunSchema, type WorkflowSpec } from '@mission-control/protocol';
@@ -50,8 +50,8 @@ describe('/mission command action', () => {
         expect(openedRows!.some((row) => row.label.startsWith('planner'))).toBe(true);
     });
 
-    it('passes an empty row list when the workspace has no .omo root', async () => {
-        const workspace = await mkdtemp(join(tmpdir(), 'no-omo-'));
+    it('passes an empty row list when the workspace has no .mc root', async () => {
+        const workspace = await mkdtemp(join(tmpdir(), 'no-mc-'));
         tempRoots.push(workspace);
         let openedRows: readonly MissionPanelRow[] | undefined;
         const runtime = await makeStartedRuntime();
@@ -103,9 +103,9 @@ describe('loadMissionPanelRows', () => {
 
     it('surfaces a Mission with no Runs as a single row', async () => {
         const workspace = await makeWorkspace();
-        const omoRoot = await resolveOmoRoot(workspace);
+        const mcRoot = await resolveMcRoot(workspace);
         await createMission(
-            { omoRoot, dataDir: locationForWorkspace(workspace).dataDir },
+            { mcRoot, dataDir: locationForWorkspace(workspace).dataDir },
             materializeMission(makeWorkflowSpec('executer')),
         );
 
@@ -115,8 +115,8 @@ describe('loadMissionPanelRows', () => {
         expect(rows[0]?.label).toBe('executer');
     });
 
-    it('returns an empty array when the workspace has no .omo root', async () => {
-        const workspace = await mkdtemp(join(tmpdir(), 'no-omo-rows-'));
+    it('returns an empty array when the workspace has no .mc root', async () => {
+        const workspace = await mkdtemp(join(tmpdir(), 'no-mc-rows-'));
         tempRoots.push(workspace);
 
         const rows = await loadMissionPanelRows(workspace);
@@ -132,8 +132,8 @@ describe('loadMissionPanelRows', () => {
 
     it('produces one row per Run under a single Mission with unique row ids', async () => {
         const workspace = await makeWorkspace();
-        const omoRoot = await resolveOmoRoot(workspace);
-        const location = { omoRoot, dataDir: locationForWorkspace(workspace).dataDir };
+        const mcRoot = await resolveMcRoot(workspace);
+        const location = { mcRoot, dataDir: locationForWorkspace(workspace).dataDir };
         const mission = materializeMission(makeWorkflowSpec('planner'));
         await createMission(location, mission);
         await startRun(location, mission.id, 'first');
@@ -151,8 +151,8 @@ describe('loadMissionPanelRows', () => {
 
     it('produces rows for multiple Missions in deterministic projection order', async () => {
         const workspace = await makeWorkspace();
-        const omoRoot = await resolveOmoRoot(workspace);
-        const location = { omoRoot, dataDir: locationForWorkspace(workspace).dataDir };
+        const mcRoot = await resolveMcRoot(workspace);
+        const location = { mcRoot, dataDir: locationForWorkspace(workspace).dataDir };
         const missionWithoutRun = makeMissionRecord('mission-executer', 'executer', '2026-01-02T00:00:00.000Z');
         const missionWithRun = makeMissionRecord('mission-planner', 'planner', '2026-01-01T00:00:00.000Z');
         await createMission(location, missionWithRun);
@@ -168,8 +168,8 @@ describe('loadMissionPanelRows', () => {
 
     it('produces Run rows in deterministic projection order', async () => {
         const workspace = await makeWorkspace();
-        const omoRoot = await resolveOmoRoot(workspace);
-        const location = { omoRoot, dataDir: locationForWorkspace(workspace).dataDir };
+        const mcRoot = await resolveMcRoot(workspace);
+        const location = { mcRoot, dataDir: locationForWorkspace(workspace).dataDir };
         const mission = makeMissionRecord('mission-planner', 'planner', '2026-01-01T00:00:00.000Z');
         await createMission(location, mission);
         await createRun(location, makeRunRecord('run-second', mission.id, 'second', '2026-01-02T00:00:00.000Z'));
@@ -313,7 +313,7 @@ async function makeStartedRuntime(): Promise<AgentRuntime> {
 
 async function makeWorkspace(): Promise<string> {
     const root = await mkdtemp(join(tmpdir(), 'mission-panel-'));
-    await mkdir(join(root, '.omo'), { recursive: true });
+    await mkdir(join(root, '.mc'), { recursive: true });
     const dataDir = join(root, 'data');
     vi.stubEnv('MCTRL_DATA_DIR', dataDir);
     workspaceDataDirs.set(root, dataDir);
@@ -322,18 +322,18 @@ async function makeWorkspace(): Promise<string> {
 }
 
 async function seedRunRecord(workspace: string, workflowName: string): Promise<void> {
-    const omoRoot = await resolveOmoRoot(workspace);
-    await ensureOmoDirs(omoRoot);
-    const location = { omoRoot, dataDir: locationForWorkspace(workspace).dataDir };
+    const mcRoot = await resolveMcRoot(workspace);
+    await ensureMcDirs(mcRoot);
+    const location = { mcRoot, dataDir: locationForWorkspace(workspace).dataDir };
     const mission = materializeMission(makeWorkflowSpec(workflowName));
     await createMission(location, mission);
     await startRun(location, mission.id, 'test prompt');
 }
 
-function locationForWorkspace(workspace: string): { readonly omoRoot: string; readonly dataDir: string } {
+function locationForWorkspace(workspace: string): { readonly mcRoot: string; readonly dataDir: string } {
     const dataDir = workspaceDataDirs.get(workspace);
     if (dataDir === undefined) throw new Error(`missing data dir for ${workspace}`);
-    return { omoRoot: workspace, dataDir };
+    return { mcRoot: workspace, dataDir };
 }
 
 function makeWorkflowSpec(name: string): WorkflowSpec {

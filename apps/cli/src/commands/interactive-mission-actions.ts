@@ -3,7 +3,7 @@ import {
     listRunsForMission,
     normalizeMissionRunStoreLocation,
     type ObservabilityRedactor,
-    resolveOmoRoot,
+    resolveMcRoot,
 } from '@mission-control/core';
 import type { Mission, ModelProviderSelection, Run } from '@mission-control/protocol';
 import {
@@ -57,14 +57,14 @@ export async function loadMissionPanelRows(
     observabilityRedactor?: ObservabilityRedactor,
 ): Promise<MissionPanelRow[]> {
     if (workspaceRoot === undefined) return [];
-    let omoRoot: string;
+    let mcRoot: string;
     try {
-        omoRoot = await resolveOmoRoot(workspaceRoot);
+        mcRoot = await resolveMcRoot(workspaceRoot);
     } catch {
         return [];
     }
     const location = normalizeMissionRunStoreLocation({
-        omoRoot,
+        mcRoot,
         ...(observabilityRedactor !== undefined ? { observabilityRedactor } : {}),
     });
     const missions = [...(await listMissions(location))].sort(compareMissions);

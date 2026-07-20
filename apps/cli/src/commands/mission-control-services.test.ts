@@ -15,9 +15,9 @@ function makeWorkspace(): Promise<string> {
     return mkdtemp(join(tmpdir(), 'mc-services-'));
 }
 
-async function makeWorkspaceWithOmo(): Promise<string> {
+async function makeWorkspaceWithMc(): Promise<string> {
     const workspace = await makeWorkspace();
-    await mkdir(join(workspace, '.omo'), { recursive: true });
+    await mkdir(join(workspace, '.mc'), { recursive: true });
     return workspace;
 }
 
@@ -28,8 +28,8 @@ describe('MissionControlServices', () => {
 
     beforeEach(async () => {
         resetMissionControlServicesCache();
-        workspaceA = await makeWorkspaceWithOmo();
-        workspaceB = await makeWorkspaceWithOmo();
+        workspaceA = await makeWorkspaceWithMc();
+        workspaceB = await makeWorkspaceWithMc();
         dataDir = await mkdtemp(join(tmpdir(), 'mc-services-data-'));
         process.env[missionControlDataDirEnvKey] = dataDir;
     });
@@ -43,15 +43,15 @@ describe('MissionControlServices', () => {
     });
 
     describe('create', () => {
-        it('resolves the .omo root from the workspace', async () => {
+        it('resolves the .mc root from the workspace', async () => {
             const services = await MissionControlServices.create(workspaceA);
-            expect(services.getOmoRoot()).toBe(workspaceA);
+            expect(services.getMcRoot()).toBe(workspaceA);
         });
 
-        it('rejects when no .omo root is resolvable', async () => {
+        it('rejects when no .mc root is resolvable', async () => {
             const bare = await makeWorkspace();
             try {
-                await expect(MissionControlServices.create(bare)).rejects.toThrow(/\.omo/);
+                await expect(MissionControlServices.create(bare)).rejects.toThrow(/\.mc/);
             } finally {
                 await rm(bare, { recursive: true, force: true });
             }
@@ -101,7 +101,7 @@ describe('MissionControlServices', () => {
             expect(services.getJobManager()).toBe(services.getJobManager());
             expect(services.getLifecycleManager()).toBe(services.getLifecycleManager());
             expect(services.getRuntimeRegistry()).toBe(services.getRuntimeRegistry());
-            expect(services.getOmoRoot()).toBe(services.getOmoRoot());
+            expect(services.getMcRoot()).toBe(services.getMcRoot());
         });
 
         it('binds the lifecycle manager to the same registry it exposes', async () => {
@@ -126,7 +126,7 @@ describe('MissionControlServices', () => {
         it('exposes a serializable view with the expected shape', async () => {
             const services = await MissionControlServices.create(workspaceA, { maxConcurrency: 3 });
             const snapshot: MissionControlServicesSnapshot = services.snapshot();
-            expect(snapshot.omoRoot).toBe(workspaceA);
+            expect(snapshot.mcRoot).toBe(workspaceA);
             expect(snapshot.maxConcurrency).toBe(3);
             expect(snapshot.defaultIdleTtlMs).toBe(420_000);
             expect(snapshot.disposed).toBe(false);
