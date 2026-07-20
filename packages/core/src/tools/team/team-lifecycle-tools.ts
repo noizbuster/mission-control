@@ -75,7 +75,7 @@ export function createTeamCreateTool(
         name: TEAM_CREATE_TOOL_NAME,
         description:
             'Create a coordinated agent team from an inline spec. Spawns each declared member via ' +
-            'the task() runtime, initialises a shared mailbox and task list under .omo/teams/, and ' +
+            'the task() runtime, initialises a shared mailbox and task list under .mc/teams/, and ' +
             'returns the team run id. Config-gated: only registered when team_mode.enabled is on.',
         capabilityClasses: [...CAPABILITY_CLASSES],
         parametersJsonSchema: {
@@ -129,7 +129,7 @@ export function createTeamCreateTool(
         guideline:
             'Spawn a coordinated team. Declare members as subagent_type (direct agent) or category ' +
             '(category-routed worker). The lead is leadAgentId or the first member. Members share a ' +
-            'mailbox and task list under .omo/teams/. Nested team_create from a member is forbidden.',
+            'mailbox and task list under .mc/teams/. Nested team_create from a member is forbidden.',
     };
 }
 

@@ -2,7 +2,7 @@
 // (algorithm inspired by upstream agent harness hashline-core and oh-my-pi hashline;
 // reimplemented from scratch in fresh mission-control code, no source
 // expression copied). License classification is recorded in
-// .omo/evidence/license-matrix.md.
+// .mc/evidence/license-matrix.md.
 
 import { computeLegacyLineHash, computeLineHash, HASHLINE_REF_PATTERN } from './hash-computation';
 

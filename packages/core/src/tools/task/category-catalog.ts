@@ -41,8 +41,8 @@ const READ_ONLY_DENIES: readonly PolicyEffectRule[] = [
 
 const PLANNING_RULES: readonly PolicyEffectRule[] = [
     ...READ_ONLY_DENIES,
-    { action: 'write', resource: '.omo/plans/**', effect: 'allow' },
-    { action: 'write', resource: '.omo/notepads/**', effect: 'allow' },
+    { action: 'write', resource: '.mc/plans/**', effect: 'allow' },
+    { action: 'write', resource: '.mc/notepads/**', effect: 'allow' },
 ];
 
 // --- Built-in categories ---------------------------------------------------
@@ -104,7 +104,7 @@ const BUILTIN_CATEGORY_LIST: readonly CategoryDefinition[] = [
         permissions: PLANNING_RULES,
         tools: ['read', 'ls', 'grep', 'find', 'glob'],
         systemPromptAddendum:
-            'You are a planning specialist. Produce plans under .omo/plans/ and notes under .omo/notepads/. Read-only elsewhere.',
+            'You are a planning specialist. Produce plans under .mc/plans/ and notes under .mc/notepads/. Read-only elsewhere.',
     },
     {
         id: 'reviewer',

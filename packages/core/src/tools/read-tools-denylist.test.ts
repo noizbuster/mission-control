@@ -80,8 +80,8 @@ describe('read-only repo tool denylist', () => {
     it('generates ripgrep globs that exclude multi-segment deny entries for absolute targets', async () => {
         const workspaceRoot = await createWorkspace();
         await createDenylistFixture(workspaceRoot);
-        await mkdir(join(workspaceRoot, '.omo', 'evidence'), { recursive: true });
-        await writeFile(join(workspaceRoot, '.omo', 'evidence', 'log.txt'), 'hidden needle', 'utf8');
+        await mkdir(join(workspaceRoot, '.mc', 'evidence'), { recursive: true });
+        await writeFile(join(workspaceRoot, '.mc', 'evidence', 'log.txt'), 'hidden needle', 'utf8');
         const guard = await createWorkspaceGuard(workspaceRoot);
         const rgResult = await runRipgrep([
             '--json',
@@ -98,7 +98,7 @@ describe('read-only repo tool denylist', () => {
         expect(rgResult.code).toBe(0);
         expect(rgResult.stdout).toContain('visible.txt');
         expect(rgResult.stdout).not.toContain('temp/ref-repos');
-        expect(rgResult.stdout).not.toContain('.omo/evidence');
+        expect(rgResult.stdout).not.toContain('.mc/evidence');
     });
 
     it('rejects broad allow entries that would unlock unrelated denied paths', async () => {

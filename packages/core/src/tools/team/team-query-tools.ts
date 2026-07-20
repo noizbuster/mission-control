@@ -160,7 +160,7 @@ export function createTeamListTool(
 
     return {
         name: TEAM_LIST_TOOL_NAME,
-        description: 'List declared and active team runs under .omo/teams/. Read-only.',
+        description: 'List declared and active team runs under .mc/teams/. Read-only.',
         capabilityClasses: [...CAPABILITY_CLASSES],
         parametersJsonSchema: {
             type: 'object',

@@ -48,7 +48,7 @@ export function createTeamSendMessageTool(
         name: TEAM_SEND_MESSAGE_TOOL_NAME,
         description:
             'Send a message to a team member by name, or broadcast with to="*" (lead only). Messages are ' +
-            'appended to each recipient durable mailbox under .omo/teams/{id}/mailbox/. Returns the message ' +
+            'appended to each recipient durable mailbox under .mc/teams/{id}/mailbox/. Returns the message ' +
             'id and the list of recipients delivered to.',
         capabilityClasses: [...CAPABILITY_CLASSES],
         parametersJsonSchema: {

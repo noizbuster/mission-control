@@ -4,7 +4,7 @@
  * Clean-room reimplementation. Algorithm inspired by the team-mode feature of
  * upstream agent harness (source-available license). No expression copied; the shapes here are derived
  * fresh from the team-coordination problem (shared mailbox + task list + lead
- * lifecycle over a durable `.omo/teams/` directory).
+ * lifecycle over a durable `.mc/teams/` directory).
  *
  * The `team_mode.enabled` gate defaults to false: the 12 team_* tools are not
  * registered unless the caller opts in.

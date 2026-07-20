@@ -9,9 +9,9 @@
  */
 import type { MemberSpec, TeamModeConfig } from './team-schemas';
 
-/** The workspace root that backs the `.omo/teams/` directory. */
+/** The workspace root that backs the `.mc/teams/` directory. */
 export interface TeamToolContext {
-    /** Absolute workspace root containing `.omo/teams/`. */
+    /** Absolute workspace root containing `.mc/teams/`. */
     readonly root: string;
     /** Resolved team-mode config (the gate lives on `config.enabled`). */
     readonly config: TeamModeConfig;

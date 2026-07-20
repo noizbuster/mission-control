@@ -244,12 +244,12 @@ describe('bundled agent discovery via AgentIndex', () => {
         expect(reasoner?.tools).toBeUndefined();
     });
 
-    it('planner pathPolicies allow .omo/plans/ and .omo/notepads/ writes, deny elsewhere', () => {
+    it('planner pathPolicies allow .mc/plans/ and .mc/notepads/ writes, deny elsewhere', () => {
         const planner = agentIndex.lookup('planner');
         expect(planner?.pathPolicies).toBeDefined();
         const allows = planner?.pathPolicies?.filter((r) => r.effect === 'allow') ?? [];
-        expect(allows.map((r) => r.resource)).toContain('.omo/plans/**');
-        expect(allows.map((r) => r.resource)).toContain('.omo/notepads/**');
+        expect(allows.map((r) => r.resource)).toContain('.mc/plans/**');
+        expect(allows.map((r) => r.resource)).toContain('.mc/notepads/**');
         const denies = planner?.pathPolicies?.filter((r) => r.effect === 'deny') ?? [];
         expect(denies.some((r) => r.action === 'write' && r.resource === '**')).toBe(true);
     });

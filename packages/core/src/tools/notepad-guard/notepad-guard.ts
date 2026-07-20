@@ -1,12 +1,11 @@
-import { OmoPersistenceError } from '../../persistence/paths';
+import { MC_DIR_NAME, McPersistenceError } from '../../persistence/paths';
 import { isAbsolute, normalize, relative, resolve } from 'node:path';
 
-const OMO_DIR_NAME = '.omo';
 const NOTEPADS_DIR_NAME = 'notepads';
 
 /**
  * Write operations a tool might perform. Only {@link NotepadWriteOperationAppend}
- * is permitted inside `.omo/notepads/`; everything else is rejected by the guard.
+ * is permitted inside `.mc/notepads/`; everything else is rejected by the guard.
  */
 export type NotepadWriteOperation = NotepadWriteOperationAppend | NotepadWriteOperationForbidden;
 
@@ -27,7 +26,7 @@ export type NotepadGuardInput = {
 
 const APPEND_OPERATIONS: ReadonlySet<NotepadWriteOperation> = new Set<NotepadWriteOperation>(['append']);
 
-export class NotepadGuardError extends OmoPersistenceError {
+export class NotepadGuardError extends McPersistenceError {
     constructor(message: string, code: NotepadGuardErrorCode, path?: string) {
         super(message, code, path);
         this.name = 'NotepadGuardError';
@@ -35,8 +34,8 @@ export class NotepadGuardError extends OmoPersistenceError {
 }
 
 /**
- * Returns true when `targetPath` resolves under `<workspaceRoot>/.omo/notepads/`,
- * OR when the raw path string contains a `.omo/notepads` segment pair (which catches
+ * Returns true when `targetPath` resolves under `<workspaceRoot>/.mc/notepads/`,
+ * OR when the raw path string contains a `.mc/notepads` segment pair (which catches
  * traversal attempts that would otherwise normalize away). Pure (no I/O).
  */
 export function isNotepadPath(targetPath: string, workspaceRoot: string): boolean {
@@ -44,7 +43,7 @@ export function isNotepadPath(targetPath: string, workspaceRoot: string): boolea
 }
 
 /**
- * Throw {@link NotepadGuardError} when a write targets `.omo/notepads/` and is not
+ * Throw {@link NotepadGuardError} when a write targets `.mc/notepads/` and is not
  * an append-class operation, or when the raw path contains `..` traversal segments.
  * Pure (no I/O). Tools call this immediately before performing a write so the guard
  * can gate the effect.
@@ -73,7 +72,7 @@ export function assertNotepadWriteAllowed(input: NotepadGuardInput): void {
     }
     if (!APPEND_OPERATIONS.has(operation)) {
         throw new NotepadGuardError(
-            `Refusing notepad write: only append operations are permitted under .omo/notepads/ (got ${JSON.stringify(operation)})`,
+            `Refusing notepad write: only append operations are permitted under .mc/notepads/ (got ${JSON.stringify(operation)})`,
             'notepad_guard_non_append',
             targetPath,
         );
@@ -85,7 +84,7 @@ function pathTouchesNotepads(targetPath: string, workspaceRoot: string): boolean
         return true;
     }
     const resolved = resolveAbsolutePath(targetPath, workspaceRoot);
-    const notepadsRoot = resolve(workspaceRoot, OMO_DIR_NAME, NOTEPADS_DIR_NAME);
+    const notepadsRoot = resolve(workspaceRoot, MC_DIR_NAME, NOTEPADS_DIR_NAME);
     return pathContains(notepadsRoot, resolved);
 }
 
@@ -96,7 +95,7 @@ function resolveAbsolutePath(targetPath: string, workspaceRoot: string): string 
 function rawPathContainsNotepadsSegments(path: string): boolean {
     const segments = splitPathSegments(path);
     for (let i = 0; i < segments.length - 1; i += 1) {
-        if (segments[i] === OMO_DIR_NAME && segments[i + 1] === NOTEPADS_DIR_NAME) {
+        if (segments[i] === MC_DIR_NAME && segments[i + 1] === NOTEPADS_DIR_NAME) {
             return true;
         }
     }

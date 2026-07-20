@@ -4,7 +4,7 @@
  *
  * Clean-room test suite written against the public team tool surface. Drives
  * the 12 factories through a recording TeamToolRuntime double over a temp
- * `.omo/teams/` root.
+ * `.mc/teams/` root.
  */
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';

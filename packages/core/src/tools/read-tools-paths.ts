@@ -11,7 +11,7 @@ export type WorkspacePath = {
 
 export const defaultReadOnlyRepoToolDenylist = [
     'temp/ref-repos',
-    '.omo/evidence',
+    '.mc/evidence',
     '.nx',
     'dist',
     'build',

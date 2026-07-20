@@ -39,8 +39,8 @@ describe('wildcardMatch', () => {
         });
 
         it('matches a trailing recursive glob', () => {
-            expect(wildcardMatch('.omo/**', '.omo/plans/work.md')).toBe(true);
-            expect(wildcardMatch('.omo/**', '.omo/plans/sub/deep.md')).toBe(true);
+            expect(wildcardMatch('.mc/**', '.mc/plans/work.md')).toBe(true);
+            expect(wildcardMatch('.mc/**', '.mc/plans/sub/deep.md')).toBe(true);
         });
     });
 

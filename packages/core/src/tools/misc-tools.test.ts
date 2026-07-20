@@ -55,7 +55,7 @@ describe('plan_exit tool', () => {
     it('switches agent and injects the handoff message when the host approves', async () => {
         let captured: { planPath: string; message: string } | undefined;
         const tool = createPlanExitToolRegistration({
-            planPath: '.omo/plans/x.md',
+            planPath: '.mc/plans/x.md',
             onSwitch: (args) => {
                 captured = args;
                 return { approved: true };
@@ -64,7 +64,7 @@ describe('plan_exit tool', () => {
         const out = await tool.execute({}, CTX);
         expect((out as PlanExitOutput).status).toBe('switched');
         expect((out as PlanExitOutput).agent).toBe('build');
-        expect(captured?.planPath).toBe('.omo/plans/x.md');
+        expect(captured?.planPath).toBe('.mc/plans/x.md');
         expect(captured?.message).toContain('Execute the plan.');
     });
 

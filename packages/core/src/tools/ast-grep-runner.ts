@@ -290,7 +290,7 @@ const AST_SEARCH_DENYLIST: readonly string[] = [
     'target',
     '.nx',
     'coverage',
-    '.omo',
+    '.mc',
 ];
 
 async function runAstGrepWithNatives(

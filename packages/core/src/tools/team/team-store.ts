@@ -3,11 +3,11 @@
  *
  * Clean-room reimplementation. Algorithm inspired by the team-mode domain
  * primitives of upstream agent harness (source-available license). No expression copied; the durable
- * layout (one directory per team run under `.omo/teams/`, atomic
+ * layout (one directory per team run under `.mc/teams/`, atomic
  * temp-file-then-rename writes, an exclusive lockfile around the shared task
  * list) is reimplemented fresh against mission-control's persistence helpers.
  *
- * Storage layout (rooted at `.omo/teams/{teamRunId}/`):
+ * Storage layout (rooted at `.mc/teams/{teamRunId}/`):
  *   config.json          - declarative TeamSpec
  *   state.json           - runtime TeamState (members, lifecycle, lead)
  *   mailbox/{name}.jsonl - append-only inbox, one file per recipient
@@ -35,6 +35,7 @@ import {
     taskListSchema,
     teamStateSchema,
 } from './team-schemas';
+import { MC_DIR_NAME } from '../../persistence/paths';
 import { randomUUID } from 'node:crypto';
 import { mkdir, open, opendir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -64,7 +65,7 @@ export class TeamStoreError extends Error {
 
 /** Resolve the on-disk directory for one team run. */
 export function teamDir(root: string, teamRunId: string): string {
-    return join(root, '.omo', TEAMS_SUBDIR, teamRunId);
+    return join(root, MC_DIR_NAME, TEAMS_SUBDIR, teamRunId);
 }
 
 function mailboxPath(root: string, teamRunId: string, recipient: string): string {
@@ -479,7 +480,7 @@ export interface TeamListing {
 }
 
 export async function listTeams(root: string): Promise<TeamListing[]> {
-    const baseDir = join(root, '.omo', TEAMS_SUBDIR);
+    const baseDir = join(root, MC_DIR_NAME, TEAMS_SUBDIR);
     const listings: TeamListing[] = [];
     try {
         for await (const entry of await opendir(baseDir)) {

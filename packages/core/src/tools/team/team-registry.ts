@@ -33,7 +33,7 @@ import {
 } from './team-task-tools';
 
 export interface BuildTeamToolsOptions {
-    /** Workspace root backing `.omo/teams/`. Required when enabled. */
+    /** Workspace root backing `.mc/teams/`. Required when enabled. */
     readonly root: string;
     /** Resolved team-mode config (partial; schema defaults fill the rest). Defaults to disabled. */
     readonly config?: Partial<TeamModeConfig>;

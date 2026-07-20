@@ -277,7 +277,7 @@ describe('checkpoint / rewind — replay projections stay valid', () => {
 describe('checkpoint / rewind — boulder passthrough round-trip (readBoulder/writeBoulder direct)', () => {
     it('preserves a checkpoint report and unrelated orchestrator fields across a round-trip', async () => {
         const root = makeTempRoot();
-        mkdirSync(join(root, '.omo'), { recursive: true });
+        mkdirSync(join(root, '.mc'), { recursive: true });
 
         const raw = {
             schema_version: BOULDER_SCHEMA_VERSION,
@@ -297,7 +297,7 @@ describe('checkpoint / rewind — boulder passthrough round-trip (readBoulder/wr
             },
             top_level_orchestrator_field: 'keep-me',
         };
-        writeFileSync(join(root, '.omo', 'boulder.json'), `${JSON.stringify(raw)}\n`);
+        writeFileSync(join(root, '.mc', 'boulder.json'), `${JSON.stringify(raw)}\n`);
 
         const boulder = await readBoulder(root);
         expect(boulder).not.toBeNull();

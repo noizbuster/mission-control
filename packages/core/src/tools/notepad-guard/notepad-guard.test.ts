@@ -11,7 +11,7 @@ import { join } from 'node:path';
 const WORKSPACE = '/test-workspace';
 
 function notepadsTarget(relative: string): string {
-    return join(WORKSPACE, '.omo', 'notepads', relative);
+    return join(WORKSPACE, '.mc', 'notepads', relative);
 }
 
 function guardInput(
@@ -40,7 +40,7 @@ function captureGuardError(input: NotepadGuardInput): NotepadGuardError {
 }
 
 describe('isNotepadPath', () => {
-    it('returns true for a file under .omo/notepads/ in the workspace', () => {
+    it('returns true for a file under .mc/notepads/ in the workspace', () => {
         // Given
         const target = notepadsTarget('demo-plan/learnings.md');
 
@@ -51,9 +51,9 @@ describe('isNotepadPath', () => {
         expect(result).toBe(true);
     });
 
-    it('returns true for a relative path that resolves into .omo/notepads/', () => {
+    it('returns true for a relative path that resolves into .mc/notepads/', () => {
         // Given
-        const target = '.omo/notepads/demo-plan/learnings.md';
+        const target = '.mc/notepads/demo-plan/learnings.md';
 
         // When
         const result = isNotepadPath(target, WORKSPACE);
@@ -62,11 +62,11 @@ describe('isNotepadPath', () => {
         expect(result).toBe(true);
     });
 
-    it('returns false for a file outside .omo/notepads/', () => {
+    it('returns false for a file outside .mc/notepads/', () => {
         // Given / When / Then
         expect(isNotepadPath('/tmp/foo.txt', WORKSPACE)).toBe(false);
         expect(isNotepadPath(join(WORKSPACE, 'src', 'index.ts'), WORKSPACE)).toBe(false);
-        expect(isNotepadPath(join(WORKSPACE, '.omo', 'boulder.json'), WORKSPACE)).toBe(false);
+        expect(isNotepadPath(join(WORKSPACE, '.mc', 'boulder.json'), WORKSPACE)).toBe(false);
     });
 
     it('returns false for an unrelated absolute path that does not contain the segment pair', () => {
@@ -89,7 +89,7 @@ describe('assertNotepadWriteAllowed — append operations', () => {
 
     it('allows append operations via a relative path that resolves into notepads', () => {
         // Given
-        const input = guardInput('.omo/notepads/demo-plan/decisions.md', 'append');
+        const input = guardInput('.mc/notepads/demo-plan/decisions.md', 'append');
 
         // When / Then
         expect(() => assertNotepadWriteAllowed(input)).not.toThrow();
@@ -129,7 +129,7 @@ describe('assertNotepadWriteAllowed — non-append operations rejected', () => {
 describe('assertNotepadWriteAllowed — path traversal blocked', () => {
     it('rejects an append that contains a `..` traversal segment', () => {
         // Given — raw path touches notepads but tries to climb out of it.
-        const target = `${WORKSPACE}/.omo/notepads/demo-plan/../../../etc/passwd`;
+        const target = `${WORKSPACE}/.mc/notepads/demo-plan/../../../etc/passwd`;
 
         // When
         const error = captureGuardError(guardInput(target, 'append'));
@@ -141,7 +141,7 @@ describe('assertNotepadWriteAllowed — path traversal blocked', () => {
 
     it('reports traversal even when the operation is also non-append (traversal wins)', () => {
         // Given
-        const target = `${WORKSPACE}/.omo/notepads/../../boulder.json`;
+        const target = `${WORKSPACE}/.mc/notepads/../../boulder.json`;
 
         // When
         const error = captureGuardError(guardInput(target, 'truncate'));
@@ -152,7 +152,7 @@ describe('assertNotepadWriteAllowed — path traversal blocked', () => {
 
     it('rejects a relative path with a leading `..` that touches notepads', () => {
         // Given
-        const target = '../workspace/.omo/notepads/demo-plan/learnings.md';
+        const target = '../workspace/.mc/notepads/demo-plan/learnings.md';
 
         // When
         const error = captureGuardError(guardInput(target, 'append'));
@@ -167,7 +167,7 @@ describe('assertNotepadWriteAllowed — guard does not apply outside notepads', 
         'truncate',
         'overwrite',
         'delete',
-    ])('does NOT throw when %s targets a path outside .omo/notepads/', (operation) => {
+    ])('does NOT throw when %s targets a path outside .mc/notepads/', (operation) => {
         // Given
         const input = guardInput('/tmp/not-a-notepad.txt', operation);
 
@@ -175,9 +175,9 @@ describe('assertNotepadWriteAllowed — guard does not apply outside notepads', 
         expect(() => assertNotepadWriteAllowed(input)).not.toThrow();
     });
 
-    it('does not throw for a non-append on a sibling .omo file', () => {
-        // Given — boulder.json lives under .omo/ but NOT under .omo/notepads/.
-        const input = guardInput(join(WORKSPACE, '.omo', 'boulder.json'), 'overwrite');
+    it('does not throw for a non-append on a sibling .mc file', () => {
+        // Given — boulder.json lives under .mc/ but NOT under .mc/notepads/.
+        const input = guardInput(join(WORKSPACE, '.mc', 'boulder.json'), 'overwrite');
 
         // When / Then
         expect(() => assertNotepadWriteAllowed(input)).not.toThrow();
