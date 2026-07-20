@@ -1,6 +1,6 @@
 {
   "name": "default",
-  "description": "Plain-prompt fallback: classify intent, then either answer, research read-only, route to #planner, or run todo-backed implementation with verify/evidence and a 3-strike supervisor. Does not force full .omo/plans scaffolds — use #planner for strategic planning.",
+  "description": "Plain-prompt fallback: classify intent, then either answer, research read-only, route to #planner, or run todo-backed implementation with verify/evidence and a 3-strike supervisor. Does not force full .mc/plans scaffolds — use #planner for strategic planning.",
   "graph": {
     "id": "default",
     "version": "0.1.0",

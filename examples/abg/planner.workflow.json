@@ -143,13 +143,13 @@
       {
         "id": "draft-plan",
         "kind": "llm",
-        "label": "Draft the plan to .omo/drafts/{slug}.md",
+        "label": "Draft the plan to .mc/drafts/{slug}.md",
         "capabilities": [
           "read",
           "write"
         ],
         "config": {
-          "systemPrompt": "Draft an execution-ready plan as .omo/drafts/<slug>.md. This is the DRAFT, not the final plan — it is the durable, compaction-safe resume point. Goal-oriented: state objectives, topology ledger (1-6 independently-succeed/fail components), verification strategy, adopted defaults, and the pending approval gate. Never stop early — every todo must be agent-executable with references and acceptance criteria. Do NOT write .omo/plans/<slug>.md yet — that is gated on explicit approval. Set plan.drafted when the draft is written.",
+          "systemPrompt": "Draft an execution-ready plan as .mc/drafts/<slug>.md. This is the DRAFT, not the final plan — it is the durable, compaction-safe resume point. Goal-oriented: state objectives, topology ledger (1-6 independently-succeed/fail components), verification strategy, adopted defaults, and the pending approval gate. Never stop early — every todo must be agent-executable with references and acceptance criteria. Do NOT write .mc/plans/<slug>.md yet — that is gated on explicit approval. Set plan.drafted when the draft is written.",
           "outputKey": "plan.drafted"
         }
       },
@@ -206,7 +206,7 @@
         "label": "Terminal — gap-analysis or dual-review budget exhausted; present blocked summary",
         "capabilities": [],
         "config": {
-          "systemPrompt": "Planning is blocked: either gap analysis exhausted metis.rejects, or dual-review (reviewer+oracle) exhausted dual.fixes after REJECT. Present a clear blocked summary: name which gate blocked (gap-analysis vs dual-review), the last critical gap or dual verdicts if known, and tell the user what to change or how to resume. Do NOT write .omo/plans/, do NOT implement product code, and do NOT loop back into draft-plan. This node is terminal."
+          "systemPrompt": "Planning is blocked: either gap analysis exhausted metis.rejects, or dual-review (reviewer+oracle) exhausted dual.fixes after REJECT. Present a clear blocked summary: name which gate blocked (gap-analysis vs dual-review), the last critical gap or dual verdicts if known, and tell the user what to change or how to resume. Do NOT write .mc/plans/, do NOT implement product code, and do NOT loop back into draft-plan. This node is terminal."
         }
       },
       {
@@ -316,13 +316,13 @@
       {
         "id": "write-plan",
         "kind": "llm",
-        "label": "Write the scaffold-compatible final plan to .omo/plans/{slug}.md",
+        "label": "Write the scaffold-compatible final plan to .mc/plans/{slug}.md",
         "capabilities": [
           "read",
           "write"
         ],
         "config": {
-          "systemPrompt": "Only reached AFTER approval. Write the final execution-ready plan to .omo/plans/<slug>.md with the scaffold headers in order: # <slug> - Work Plan | ## TL;DR (For humans) | ## Scope | ## Verification Strategy | ## Execution Strategy | ## Todos | ## Final Verification Wave | ## Commit Strategy | ## Success Criteria. Under Scope state explicit Must have / Must NOT have. Under Verification Strategy name how success is proven (tests, diagnostics, manual QA surface). Under Todos use \"- [ ]\" checkboxes, one Implementation+Test unit per todo, each with References, agent-executable Acceptance criteria, happy+failure QA scenarios, and a Commit line. Under Final Verification Wave list F1 plan-compliance, F2 code-quality, F3 real manual QA, F4 scope-fidelity. Near the top emit a \"Status: Approved\" line so the executer admission gate can verify the plan was explicitly approved before any task delegation. Set plan.written when the final plan is committed.",
+          "systemPrompt": "Only reached AFTER approval. Write the final execution-ready plan to .mc/plans/<slug>.md with the scaffold headers in order: # <slug> - Work Plan | ## TL;DR (For humans) | ## Scope | ## Verification Strategy | ## Execution Strategy | ## Todos | ## Final Verification Wave | ## Commit Strategy | ## Success Criteria. Under Scope state explicit Must have / Must NOT have. Under Verification Strategy name how success is proven (tests, diagnostics, manual QA surface). Under Todos use \"- [ ]\" checkboxes, one Implementation+Test unit per todo, each with References, agent-executable Acceptance criteria, happy+failure QA scenarios, and a Commit line. Under Final Verification Wave list F1 plan-compliance, F2 code-quality, F3 real manual QA, F4 scope-fidelity. Near the top emit a \"Status: Approved\" line so the executer admission gate can verify the plan was explicitly approved before any task delegation. Set plan.written when the final plan is committed.",
           "outputKey": "plan.written"
         }
       },
@@ -809,7 +809,7 @@
       },
       {
         "id": "plan-drafted",
-        "description": "draft written to .omo/drafts/<slug>.md",
+        "description": "draft written to .mc/drafts/<slug>.md",
         "when": {
           "kind": "blackboard.key.exists",
           "key": "plan.drafted"
@@ -943,7 +943,7 @@
       },
       {
         "id": "plan-written",
-        "description": "final plan written to .omo/plans/<slug>.md",
+        "description": "final plan written to .mc/plans/<slug>.md",
         "when": {
           "kind": "blackboard.key.exists",
           "key": "plan.written"
@@ -955,7 +955,7 @@
   "modes": [
     {
       "id": "planner-readonly",
-      "systemPromptOverlay": "You are a senior staff engineer planning craft — deep autonomous planning. Plan mode is STICKY: \"do X\" / \"fix X\" / \"build X\" / \"just do it\" all mean \"plan X\". You NEVER implement product code and NEVER begin execution — that belongs to #executer (or #executer) or an explicit start command. You are READ-ONLY: you must not edit source files. You may only write plan artifacts to .omo/plans/, spec artifacts to .omo/specs/, and draft artifacts to .omo/drafts/. Goal-oriented: optimize for objectives and outcomes, not recipe steps. Explore hierarchy before any question: (1) use read tools yourself, (2) delegate explore/librarian agents via task when breadth is needed, (3) only then ask ONE high-signal clarifying question as a last resort. Never stop early — produce an execution-ready plan with verification strategy. When intent is fuzzy research best practices and ANNOUNCE adopted defaults instead of interrogating.",
+      "systemPromptOverlay": "You are a senior staff engineer planning craft — deep autonomous planning. Plan mode is STICKY: \"do X\" / \"fix X\" / \"build X\" / \"just do it\" all mean \"plan X\". You NEVER implement product code and NEVER begin execution — that belongs to #executer (or #executer) or an explicit start command. You are READ-ONLY: you must not edit source files. You may only write plan artifacts to .mc/plans/, spec artifacts to .mc/specs/, and draft artifacts to .mc/drafts/. Goal-oriented: optimize for objectives and outcomes, not recipe steps. Explore hierarchy before any question: (1) use read tools yourself, (2) delegate explore/librarian agents via task when breadth is needed, (3) only then ask ONE high-signal clarifying question as a last resort. Never stop early — produce an execution-ready plan with verification strategy. When intent is fuzzy research best practices and ANNOUNCE adopted defaults instead of interrogating.",
       "policies": [
         {
           "action": "write",
@@ -964,17 +964,17 @@
         },
         {
           "action": "write",
-          "resource": ".omo/plans/**",
+          "resource": ".mc/plans/**",
           "effect": "allow"
         },
         {
           "action": "write",
-          "resource": ".omo/specs/**",
+          "resource": ".mc/specs/**",
           "effect": "allow"
         },
         {
           "action": "write",
-          "resource": ".omo/drafts/**",
+          "resource": ".mc/drafts/**",
           "effect": "allow"
         }
       ]

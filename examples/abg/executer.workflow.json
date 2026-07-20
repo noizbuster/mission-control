@@ -14,7 +14,7 @@
         "kind": "llm",
         "label": "Plan admission gate — reject missing/malformed/unapproved plans",
         "config": {
-          "systemPrompt": "You are the Mission Control executer workflow plan-admission conductor. BEFORE any task delegation, verify the plan is complete and approved. Read the plan from .omo/plans/<slug>.md and check ALL of: (1) the plan exists and is non-empty; (2) it carries the scaffold sections ## TL;DR, ## Scope, ## Todos, ## Final Verification Wave; (3) ## Todos contains at least one \"- [ ]\" checkbox; (4) ## Final Verification Wave is present; (5) the plan is marked approved/ready (a \"Status: Approved\" | \"Status: Ready\" | \"Status: Accepted\" line). A missing, malformed, or unapproved plan must never reach delegate-wave — the graph routes a rejected plan to plan-rejected-terminal which emits a clear failure event and stops.\nOutput ONLY the JSON boolean `true` if every check passes, or `false` if any check fails — no prose, no formatting, no extra text.",
+          "systemPrompt": "You are the Mission Control executer workflow plan-admission conductor. BEFORE any task delegation, verify the plan is complete and approved. Read the plan from .mc/plans/<slug>.md and check ALL of: (1) the plan exists and is non-empty; (2) it carries the scaffold sections ## TL;DR, ## Scope, ## Todos, ## Final Verification Wave; (3) ## Todos contains at least one \"- [ ]\" checkbox; (4) ## Final Verification Wave is present; (5) the plan is marked approved/ready (a \"Status: Approved\" | \"Status: Ready\" | \"Status: Accepted\" line). A missing, malformed, or unapproved plan must never reach delegate-wave — the graph routes a rejected plan to plan-rejected-terminal which emits a clear failure event and stops.\nOutput ONLY the JSON boolean `true` if every check passes, or `false` if any check fails — no prose, no formatting, no extra text.",
           "outputKey": "plan.admitted",
           "outputShape": "boolean"
         }
@@ -33,7 +33,7 @@
         "kind": "llm",
         "label": "Parse plan checklist (section-scoped: Todos + Final Verification Wave only)",
         "config": {
-          "systemPrompt": "Read the plan file from .omo/plans/{slug}.md and parse it with section-scoped counting: only column-0 checkboxes (`- [ ]` / `- [x]`) that fall under a `## Todos` / `## TODOs` or `## Final Verification Wave` heading are counted as actionable tasks. Ignore nested or indented checkboxes and ignore checkboxes under any other heading (Notes, Acceptance Criteria, Evidence, Definition of Done, etc.). Store the ordered task list under plan.todos and surface nextTaskLabel = the label of the first unchecked todo so the delegate-wave can name it. Set plan.parsed when complete.",
+          "systemPrompt": "Read the plan file from .mc/plans/{slug}.md and parse it with section-scoped counting: only column-0 checkboxes (`- [ ]` / `- [x]`) that fall under a `## Todos` / `## TODOs` or `## Final Verification Wave` heading are counted as actionable tasks. Ignore nested or indented checkboxes and ignore checkboxes under any other heading (Notes, Acceptance Criteria, Evidence, Definition of Done, etc.). Store the ordered task list under plan.todos and surface nextTaskLabel = the label of the first unchecked todo so the delegate-wave can name it. Set plan.parsed when complete.",
           "outputKey": "plan.parsed",
           "parser": "parsePlanSections",
           "countedSections": [
@@ -47,9 +47,9 @@
         "kind": "llm",
         "label": "Initialize append-only notepad and extract inherited wisdom",
         "config": {
-          "systemPrompt": "As the Mission Control executer workflow conductor, read the append-only notepad at .omo/notepads/{plan}/learnings.md (create it if absent) BEFORE delegation. Extract prior learnings, decisions, and issues to pass as Inherited Wisdom to every delegated task. The notepad is append-only: delegated tasks MUST append findings via appendNotepad / assertAppendOnly — never overwrite or truncate. Set notepad.ready when the notepad is read and the inherited-wisdom block is prepared.",
+          "systemPrompt": "As the Mission Control executer workflow conductor, read the append-only notepad at .mc/notepads/{plan}/learnings.md (create it if absent) BEFORE delegation. Extract prior learnings, decisions, and issues to pass as Inherited Wisdom to every delegated task. The notepad is append-only: delegated tasks MUST append findings via appendNotepad / assertAppendOnly — never overwrite or truncate. Set notepad.ready when the notepad is read and the inherited-wisdom block is prepared.",
           "outputKey": "notepad.ready",
-          "notepadPath": ".omo/notepads/{plan}/learnings.md",
+          "notepadPath": ".mc/notepads/{plan}/learnings.md",
           "notepadMode": "append-only"
         }
       },
@@ -112,9 +112,9 @@
         "kind": "llm",
         "label": "Update plan checkboxes only after independent verification passes",
         "config": {
-          "systemPrompt": "You are the Mission Control executer workflow checkbox-update conductor. You MUST NOT flip a plan checkbox (`- [ ]` to `- [x]`) based only on a child agent claiming \"done\". Independently verify each task BEFORE flipping: confirm tests pass (run the plan verification command), confirm the expected files exist and were modified, and confirm lsp_diagnostics is clean on changed files. Only after verification passes, edit .omo/plans/{slug}.md to change the matching `- [ ]` to `- [x]` and write verification evidence. After the edit, READ the plan file again to confirm the unchecked count decreased — this read-back is mandatory. If verification fails, leave the checkbox unchecked and route back to fix-loop. Set checkbox.updated only after the read-back confirms the flip landed.",
+          "systemPrompt": "You are the Mission Control executer workflow checkbox-update conductor. You MUST NOT flip a plan checkbox (`- [ ]` to `- [x]`) based only on a child agent claiming \"done\". Independently verify each task BEFORE flipping: confirm tests pass (run the plan verification command), confirm the expected files exist and were modified, and confirm lsp_diagnostics is clean on changed files. Only after verification passes, edit .mc/plans/{slug}.md to change the matching `- [ ]` to `- [x]` and write verification evidence. After the edit, READ the plan file again to confirm the unchecked count decreased — this read-back is mandatory. If verification fails, leave the checkbox unchecked and route back to fix-loop. Set checkbox.updated only after the read-back confirms the flip landed.",
           "outputKey": "checkbox.updated",
-          "planPath": ".omo/plans/{slug}.md",
+          "planPath": ".mc/plans/{slug}.md",
           "verifyBeforeCheckbox": true,
           "readBackAfterUpdate": true
         }
@@ -209,7 +209,7 @@
         "config": {
           "systemPrompt": "The Mission Control executer workflow exhausted its 3-strike fix budget (fix.strikes reached the ceiling) without all four final critics (F1-F4) approving. Emit a single blocked-escalation event: record the current state (which critics rejected and why, which plan tasks remain open, the last child session ids attempted) and write verifiable evidence to the run record and the evidence directory. Set fix.blocked=true. Do NOT retry, do NOT reopen tasks, do NOT route back to next-wave. Signal for human intervention: the executer workflow cannot proceed autonomously past the final approval gate. A user must review the evidence, fix the root cause, and explicitly resume (clearing the stop marker) before the executer may attempt another fix cycle.",
           "outputKey": "fix.blocked",
-          "evidencePath": ".omo/evidence/",
+          "evidencePath": ".mc/evidence/",
           "strikeBudget": 3
         }
       }

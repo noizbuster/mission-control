@@ -18,7 +18,7 @@ export type PolicyEffect = z.infer<typeof PolicyEffectSchema>;
  * A single declarative rule: "when `action` targets `resource`, resolve to `effect`".
  *
  * `action` is a capability-style verb (`'edit'`, `'write'`, `'bash'`, `'*'`). `resource` is a
- * glob-style pattern (`'src/*'`, `'**'`, `'.omo/plans/**'`). Evaluation is last-match-wins with
+ * glob-style pattern (`'src/*'`, `'**'`, `'.mc/plans/**'`). Evaluation is last-match-wins with
  * wildcard matching (see Task 1.2 `rule-evaluator.ts`).
  */
 export const PolicyEffectRuleSchema = z
