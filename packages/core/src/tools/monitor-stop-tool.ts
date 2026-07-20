@@ -1,5 +1,5 @@
 // Clean-room reimplementation of a background command monitor stop tool.
-// Origin: oh-my-openagent (Sustainable Use License) monitor_stop tool. Reimplemented
+// Origin: upstream agent harness (Sustainable Use License) monitor_stop tool. Reimplemented
 // from scratch in mission-control's types; nothing copied. Attribution only.
 //
 // Config-gated: returns null when `config.enabled === false`. A monitor may only be

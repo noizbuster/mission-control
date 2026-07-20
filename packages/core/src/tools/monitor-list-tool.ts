@@ -1,5 +1,5 @@
 // Clean-room reimplementation of a background command monitor list tool.
-// Origin: oh-my-openagent (Sustainable Use License) monitor_list tool. Reimplemented
+// Origin: upstream agent harness (Sustainable Use License) monitor_list tool. Reimplemented
 // from scratch in mission-control's types; nothing copied. Attribution only.
 //
 // Config-gated: returns null when `config.enabled === false`. Lists monitors owned by

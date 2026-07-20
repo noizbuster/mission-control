@@ -9,7 +9,7 @@
  * session store records the mutation.
  *
  * The tool-definition shape is clean-room reimplemented from the
- * oh-my-openagent lsp-core rename tool surface: same input fields
+ * upstream agent harness lsp-core rename tool surface: same input fields
  * (filePath/line/character/newName) and same effectful contract (apply the
  * returned workspace edit), but fresh Zod schemas and mission-control's own
  * diff-event types.

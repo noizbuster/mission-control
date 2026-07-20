@@ -1,8 +1,8 @@
 // Clean-room reimplementation of LSP workspace-edit application.
 // The tool-definition shapes and the rename workflow are informed by the
-// oh-my-openagent lsp-core tool surface (clean-room: no source copied,
+// upstream agent harness lsp-core tool surface (clean-room: no source copied,
 // reimplemented fresh). The diff-generation uses mission-control's existing
-// DiffFile/DiffHunk protocol types, not the oh-my-openagent formatters.
+// DiffFile/DiffHunk protocol types, not the upstream agent harness formatters.
 
 import type { DiffFile, DiffHunk, DiffLine } from '@mission-control/protocol';
 import type { LspPosition, LspRange, LspTextEdit, LspWorkspaceEdit } from './lsp-tool';

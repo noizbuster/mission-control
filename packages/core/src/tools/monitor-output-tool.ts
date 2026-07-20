@@ -1,5 +1,5 @@
 // Clean-room reimplementation of a background command monitor output tool.
-// Origin: oh-my-openagent (Sustainable Use License) monitor_output tool. Reimplemented
+// Origin: upstream agent harness (Sustainable Use License) monitor_output tool. Reimplemented
 // from scratch in mission-control's types; nothing copied. Attribution only.
 //
 // Config-gated: returns null when `config.enabled === false`. Returns retained output

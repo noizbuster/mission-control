@@ -1,5 +1,5 @@
 // Clean-room reimplementation of a non-interactive background command monitor.
-// Origin: oh-my-openagent (Sustainable Use License) monitor feature. The upstream
+// Origin: upstream agent harness (Sustainable Use License) monitor feature. The upstream
 // is source-visible but not permissively licensed, so nothing here is copied from
 // it; the background-monitor pattern (spawn a long-running command, retain its
 // output in a bounded ring buffer keyed by sequence number, classify lines against

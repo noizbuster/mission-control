@@ -1,5 +1,5 @@
 // Clean-room reimplementation of a background command monitor start tool.
-// Origin: oh-my-openagent (Sustainable Use License) monitor_start tool. Reimplemented
+// Origin: upstream agent harness (Sustainable Use License) monitor_start tool. Reimplemented
 // from scratch in mission-control's types; nothing copied. Attribution only.
 //
 // Config-gated: `createMonitorStartToolRegistration` returns null when

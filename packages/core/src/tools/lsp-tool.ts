@@ -228,7 +228,7 @@ export function createLspToolRegistration(input: CreateLspToolInput): ToolRegist
             'Query a Language Server for code intelligence: diagnostics, hover, definition, references, ' +
             'documentSymbol, workspaceSymbol, implementation, typeDefinition, incoming call hierarchy, ' +
             'prepareRename, status, and installDecision. The 8 canonical lsp_* operations map to the ' +
-            'standard opencode/oh-my-openagent surface. Use for type errors, symbol docs, go-to-definition, ' +
+            'standard opencode/upstream agent harness surface. Use for type errors, symbol docs, go-to-definition, ' +
             'find-references, symbol outlines, caller discovery, and rename validation backed by the real compiler.',
         capabilityClasses: ['read'],
         parametersJsonSchema: {

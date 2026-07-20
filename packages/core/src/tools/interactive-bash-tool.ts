@@ -1,5 +1,5 @@
 // Clean-room reimplementation of an interactive tmux-control tool. Origin:
-// oh-my-openagent (Sustainable Use License) interactive_bash tool. The upstream
+// upstream agent harness (Sustainable Use License) interactive_bash tool. The upstream
 // is source-visible but not permissively licensed, so nothing here is copied
 // from it; the tmux session-control pattern (tokenize a tmux subcommand, locate
 // the subcommand past global options, refuse dangerous subcommands, spawn the
