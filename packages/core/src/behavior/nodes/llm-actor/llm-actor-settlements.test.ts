@@ -59,7 +59,8 @@ describe('classifyProviderStreamError', () => {
         const classified = classifyProviderStreamError({
             name: 'AI_RetryError',
             reason: 'maxRetriesExceeded',
-            message: 'Failed after 3 attempts. Last error: The service may be temporarily overloaded, please try again later',
+            message:
+                'Failed after 3 attempts. Last error: The service may be temporarily overloaded, please try again later',
             lastError: {
                 message: 'The service may be temporarily overloaded, please try again later',
                 statusCode: 503,
@@ -81,6 +82,15 @@ describe('classifyProviderStreamError', () => {
             name: 'AI_APICallError',
             message: 'TypeError: fetch failed',
             isRetryable: false,
+        });
+        expect(classified).toEqual({ code: 'provider_timeout', retryable: true });
+    });
+
+    it('maps AI SDK chunk timeout marked non-retryable to retryable provider_timeout', () => {
+        const classified = classifyProviderStreamError({
+            code: 'unknown',
+            message: 'Chunk timeout of 120000ms exceeded',
+            retryable: false,
         });
         expect(classified).toEqual({ code: 'provider_timeout', retryable: true });
     });

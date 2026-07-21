@@ -184,6 +184,7 @@ export function isNetworkProviderFailure(input: {
         message.includes('connect timeout') ||
         message.includes('headers timeout') ||
         message.includes('body timeout') ||
+        message.includes('chunk timeout') ||
         message.includes('getaddrinfo') ||
         message.includes('failed to fetch')
     );
