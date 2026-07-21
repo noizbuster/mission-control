@@ -94,6 +94,10 @@ export function createFullParityTaskToolRegistration(
                 },
                 run_in_background: { type: 'boolean', description: 'Return a background id immediately.' },
                 task_id: { type: 'string', description: 'Existing session id (ses_...) to resume.' },
+                title: {
+                    type: 'string',
+                    description: 'Optional human title for the child session (1-200 chars).',
+                },
                 tasks: {
                     type: 'array',
                     description: 'Batch fan-out: one child per item. Mutually exclusive with prompt/assignment.',
@@ -103,6 +107,10 @@ export function createFullParityTaskToolRegistration(
                             agent: { type: 'string', description: 'Category id or subagent type for this child.' },
                             assignment: { type: 'string', description: 'Instruction for this child.' },
                             role: { type: 'string', description: 'Optional label surfaced in the batch summary.' },
+                            title: {
+                                type: 'string',
+                                description: 'Optional human title for this child session (1-200 chars).',
+                            },
                         },
                         required: ['agent', 'assignment'],
                         additionalProperties: false,

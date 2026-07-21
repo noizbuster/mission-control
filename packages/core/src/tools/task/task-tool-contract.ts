@@ -8,6 +8,7 @@ export const batchTaskItemSchema = z
         agent: z.string().min(1),
         assignment: z.string().min(1),
         role: z.string().optional(),
+        title: z.string().min(1).max(200).optional(),
     })
     .strict();
 
@@ -23,6 +24,7 @@ export const taskToolBaseObjectSchema = z
         task_id: z.string().min(1).optional(),
         tasks: z.array(batchTaskItemSchema).optional(),
         context: z.string().optional(),
+        title: z.string().min(1).max(200).optional(),
     })
     .strict();
 
@@ -89,6 +91,8 @@ export interface ChildSpawnRequest {
      */
     readonly taskDepth?: number;
     readonly parentContext?: string;
+    /** Optional short title for child ask_user overlay source labeling. */
+    readonly title?: string;
     readonly signal?: AbortSignal;
     readonly controlEpoch?: SessionControlEpoch;
 }

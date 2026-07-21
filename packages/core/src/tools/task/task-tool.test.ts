@@ -171,6 +171,29 @@ describe('task tool — category routing', () => {
             /unknown category: nonexistent/,
         );
     });
+
+    it('threads optional title onto the child spawn request', async () => {
+        const { tool, mock } = buildTool();
+        await tool.execute(
+            taskToolInputSchema.parse(params({ category: 'deep', title: 'Investigate auth' })),
+            CTX,
+        );
+        expect(mock.calls[0]?.request?.title).toBe('Investigate auth');
+        expect(mock.calls[0]?.request?.category?.id).toBe('deep');
+    });
+
+    it('threads batch item title onto each child spawn request', async () => {
+        const { tool, mock } = buildTool();
+        await tool.execute(
+            taskToolInputSchema.parse({
+                load_skills: [],
+                tasks: [{ agent: 'explore', assignment: 'scan repo', title: 'Scan workspace' }],
+            }),
+            CTX,
+        );
+        const run = mock.calls.find((call) => call.kind === 'run');
+        expect(run?.request?.title).toBe('Scan workspace');
+    });
 });
 
 describe('task tool — validation', () => {
