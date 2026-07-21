@@ -18,6 +18,11 @@ import {
 } from './chat-store';
 import type { ModelChoice } from './interactive-chat-model';
 import type { TranscriptPart as RichTranscriptPart } from './transcript-part';
+import {
+    attributionKeyForAssistantPart,
+    getVisibleTranscriptParts,
+    shouldHideToolPart,
+} from './transcript-visibility';
 
 const hostileDisplayPayload =
     'credential sk-displayblocker123 OSC:\u001b]52;c;UE9D\u0007 C0:\u0001 C1:\u009b DEL:\u007f CR:\r TAB:\t BIDI:\u202e\n한국어 가족\u200D그림';
@@ -57,6 +62,8 @@ describe('chat-store — subscribe / getSnapshot', () => {
         expect(snapshot.inputMirror).toBe('');
         expect(snapshot.generating).toBe(false);
         expect(snapshot.overlayMode).toBe('none');
+        expect(snapshot.activeAssistantMessageId).toBeUndefined();
+        expect(snapshot.toolOutputExpanded).toBe(false);
         expect(snapshot.historyPickerView).toEqual({
             open: false,
             selectedIndex: 0,
@@ -755,6 +762,263 @@ describe('chat-store — ordered typed and legacy transcript rows', () => {
             type: 'legacy',
             text: 'replayed tail\n',
         });
+    });
+});
+
+describe('chat-store — activeAssistantMessageId and tool visibility', () => {
+    it('tracks activeAssistantMessageId from assistant parts only', () => {
+        // Given: an empty store
+        const store = createChatStore();
+        expect(store.getSnapshot().activeAssistantMessageId).toBeUndefined();
+
+        // When: assistant A is emitted
+        store.emitTranscriptPart(
+            {
+                id: 'asst-a',
+                type: 'assistant',
+                text: 'first',
+                messageId: 'msg-a',
+                status: 'completed',
+            },
+            'Assistant: first\n',
+        );
+
+        // Then: active is A's attribution key
+        expect(store.getSnapshot().activeAssistantMessageId).toBe('msg-a');
+
+        // When: reasoning arrives (must not steal active)
+        store.emitTranscriptPart(
+            {
+                id: 'reason-a',
+                type: 'reasoning',
+                text: 'thinking',
+                messageId: 'reason-msg',
+                requestId: 'reason-req',
+                status: 'completed',
+            },
+            'Thinking: thinking\n',
+        );
+        expect(store.getSnapshot().activeAssistantMessageId).toBe('msg-a');
+
+        // When: assistant B is emitted
+        store.emitTranscriptPart(
+            {
+                id: 'asst-b',
+                type: 'assistant',
+                text: 'second',
+                requestId: 'req-b',
+                status: 'completed',
+            },
+            'Assistant: second\n',
+        );
+
+        // Then: active becomes B (requestId fallback)
+        expect(store.getSnapshot().activeAssistantMessageId).toBe('req-b');
+        expect(
+            attributionKeyForAssistantPart({
+                id: 'asst-b',
+                type: 'assistant',
+                text: 'second',
+                requestId: 'req-b',
+            }),
+        ).toBe('req-b');
+    });
+
+    it('replaceTranscript recomputes active from the last assistant part', () => {
+        // Given: live active from a prior assistant
+        const store = createChatStore();
+        store.emitTranscriptPart(
+            { id: 'live', type: 'assistant', text: 'live', messageId: 'live-msg', status: 'completed' },
+            'Assistant: live\n',
+        );
+        expect(store.getSnapshot().activeAssistantMessageId).toBe('live-msg');
+
+        // When: replaceTranscript restores a multi-turn transcript ending on assistant C
+        store.replaceTranscript(
+            [
+                { id: 'u1', type: 'user', text: 'hi' },
+                { id: 'a1', type: 'assistant', text: 'one', messageId: 'msg-1', status: 'completed' },
+                {
+                    id: 't1',
+                    type: 'inline-tool',
+                    text: 'repo.read',
+                    messageId: 'msg-1',
+                    status: 'completed',
+                },
+                { id: 'r1', type: 'reasoning', text: 'note', messageId: 'reason-x', status: 'completed' },
+                { id: 'a2', type: 'assistant', text: 'two', messageId: 'msg-2', status: 'completed' },
+            ],
+            'restored\n',
+        );
+
+        // Then: active is the last assistant (msg-2), not reasoning
+        expect(store.getSnapshot().activeAssistantMessageId).toBe('msg-2');
+    });
+
+    it('replaceTranscript with no assistant parts clears activeAssistantMessageId', () => {
+        // Given: active set
+        const store = createChatStore();
+        store.emitTranscriptPart(
+            { id: 'live', type: 'assistant', text: 'live', messageId: 'live-msg', status: 'completed' },
+            'Assistant: live\n',
+        );
+
+        // When: replacement has only user/legacy rows
+        store.replaceTranscript(
+            [
+                { id: 'u1', type: 'user', text: 'hi' },
+                { id: 'legacy-1', type: 'legacy', text: 'old\n' },
+            ],
+            'hi\nold\n',
+        );
+
+        // Then: active is undefined
+        expect(store.getSnapshot().activeAssistantMessageId).toBeUndefined();
+    });
+
+    it('shouldHideToolPart hides past successful tools and diffs only', () => {
+        // Given: active turn B
+        const activeB = 'msg-b';
+
+        // When/Then: successful tool attributed to A while active is B → hide
+        expect(
+            shouldHideToolPart(
+                {
+                    id: 'tool-a',
+                    type: 'inline-tool',
+                    text: 'repo.read',
+                    messageId: 'msg-a',
+                    status: 'completed',
+                },
+                activeB,
+            ),
+        ).toBe(true);
+
+        // Failed tool stays visible
+        expect(
+            shouldHideToolPart(
+                {
+                    id: 'tool-fail',
+                    type: 'block-tool',
+                    text: 'file.edit',
+                    messageId: 'msg-a',
+                    status: 'failed',
+                },
+                activeB,
+            ),
+        ).toBe(false);
+
+        // Undefined messageId stays visible
+        expect(
+            shouldHideToolPart(
+                {
+                    id: 'tool-orphan',
+                    type: 'command',
+                    text: 'pnpm test',
+                    status: 'completed',
+                },
+                activeB,
+            ),
+        ).toBe(false);
+
+        // Successful diff for past turn hides
+        expect(
+            shouldHideToolPart(
+                {
+                    id: 'diff-a',
+                    type: 'diff',
+                    text: '--- a\n+++ b',
+                    messageId: 'msg-a',
+                    status: 'completed',
+                },
+                activeB,
+            ),
+        ).toBe(true);
+
+        // Pending diff stays visible
+        expect(
+            shouldHideToolPart(
+                {
+                    id: 'diff-pending',
+                    type: 'diff',
+                    text: '--- a\n+++ b',
+                    messageId: 'msg-a',
+                    status: 'pending',
+                },
+                activeB,
+            ),
+        ).toBe(false);
+
+        // Active-turn successful tool stays visible
+        expect(
+            shouldHideToolPart(
+                {
+                    id: 'tool-b',
+                    type: 'subagent',
+                    text: 'explore',
+                    messageId: 'msg-b',
+                    status: 'completed',
+                },
+                activeB,
+            ),
+        ).toBe(false);
+
+        // Non-hideable types never hide
+        expect(
+            shouldHideToolPart(
+                { id: 'asst', type: 'assistant', text: 'hi', messageId: 'msg-a', status: 'completed' },
+                activeB,
+            ),
+        ).toBe(false);
+    });
+
+    it('getVisibleTranscriptParts filters with the same hide rule', () => {
+        // Given: mixed past/active tools
+        const parts: readonly RichTranscriptPart[] = [
+            { id: 'a1', type: 'assistant', text: 'one', messageId: 'msg-1', status: 'completed' },
+            {
+                id: 't-past',
+                type: 'inline-tool',
+                text: 'repo.read',
+                messageId: 'msg-1',
+                status: 'completed',
+            },
+            {
+                id: 't-fail',
+                type: 'inline-tool',
+                text: 'file.edit',
+                messageId: 'msg-1',
+                status: 'failed',
+            },
+            { id: 'a2', type: 'assistant', text: 'two', messageId: 'msg-2', status: 'completed' },
+            {
+                id: 't-active',
+                type: 'inline-tool',
+                text: 'repo.search',
+                messageId: 'msg-2',
+                status: 'completed',
+            },
+        ];
+
+        // When: filter against active msg-2
+        const visible = getVisibleTranscriptParts(parts, 'msg-2');
+
+        // Then: past successful tool is gone; failed past tool and active tool remain
+        expect(visible.map((part) => part.id)).toEqual(['a1', 't-fail', 'a2', 't-active']);
+    });
+
+    it('toggleToolOutputExpanded flips the Element B chip flag from the collapsed default', () => {
+        // Given: default chip expansion is collapsed
+        const store = createChatStore();
+        expect(store.getSnapshot().toolOutputExpanded).toBe(false);
+
+        // When: toggle twice
+        store.toggleToolOutputExpanded();
+        expect(store.getSnapshot().toolOutputExpanded).toBe(true);
+        store.toggleToolOutputExpanded();
+
+        // Then: back to collapsed
+        expect(store.getSnapshot().toolOutputExpanded).toBe(false);
     });
 });
 

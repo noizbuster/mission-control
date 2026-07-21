@@ -7,8 +7,8 @@ import {
 import type { AgentEvent, ModelProviderSelection, ProviderStreamChunk } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSessionNavigationController } from './interactive-chat-session-navigation';
-import { writeSessionEvents } from './session-test-support';
-import { appendFile, mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
+import { writeLocalSessionEvents as writeSupportLocalSessionEvents } from './session-test-support';
+import { appendFile, mkdir, mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -25,11 +25,13 @@ describe('interactive chat session navigation', () => {
         tempRoots.length = 0;
     });
 
-    it('refuses to fork a corrupt legacy session file', async () => {
-        const { dataDir, sessionId } = await createCorruptSession();
+    it('forks from SQLite when a stale corrupt legacy JSONL side file shares the id', async () => {
+        const { dataDir, sessionId } = await createSqlSessionWithStaleCorruptJsonl();
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
-        const switchSessionStore = vi.fn(async () => {
-            throw new Error('switchSessionStore should not be called for corrupt sessions');
+        const switchSessionStore = vi.fn(async (targetSessionId: string) => {
+            const store = await openLocalSessionEventStore({ dataDir, sessionId: targetSessionId });
+            await store.close();
+            return store;
         });
         const navigation = createSessionNavigationController({
             getCurrentSessionId: () => sessionId,
@@ -43,15 +45,17 @@ describe('interactive chat session navigation', () => {
                 modelProviderSelection: selection,
                 sessionId: 'session_fork_target',
             }),
-        ).rejects.toThrow(`Cannot fork corrupt session: ${sessionId}`);
-        expect(switchSessionStore).not.toHaveBeenCalled();
+        ).resolves.toMatchObject({ message: expect.stringContaining('session_fork_target') });
+        expect(switchSessionStore).toHaveBeenCalled();
     });
 
-    it('refuses to clone a corrupt legacy session file', async () => {
-        const { dataDir, sessionId } = await createCorruptSession();
+    it('clones from SQLite when a stale corrupt legacy JSONL side file shares the id', async () => {
+        const { dataDir, sessionId } = await createSqlSessionWithStaleCorruptJsonl();
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
-        const switchSessionStore = vi.fn(async () => {
-            throw new Error('switchSessionStore should not be called for corrupt sessions');
+        const switchSessionStore = vi.fn(async (targetSessionId: string) => {
+            const store = await openLocalSessionEventStore({ dataDir, sessionId: targetSessionId });
+            await store.close();
+            return store;
         });
         const navigation = createSessionNavigationController({
             getCurrentSessionId: () => sessionId,
@@ -64,20 +68,21 @@ describe('interactive chat session navigation', () => {
                 modelProviderSelection: selection,
                 sessionId: 'session_clone_target',
             }),
-        ).rejects.toThrow(`Cannot clone corrupt session: ${sessionId}`);
-        expect(switchSessionStore).not.toHaveBeenCalled();
+        ).resolves.toMatchObject({ message: expect.stringContaining('session_clone_target') });
+        expect(switchSessionStore).toHaveBeenCalled();
     });
 
     it('selects a branch from database state without touching a corrupt legacy JSONL artifact', async () => {
         const dataDir = await tempRoot('mctrl-session-navigation-corrupt-');
         const sessionId = 'session_corrupt_source';
-        await writeSessionEvents({
+        await writeSupportLocalSessionEvents({
             dataDir,
             sessionId,
             events: [sessionEvent(sessionId, 'task.completed', 'root task', { kind: 'entry', entryId: 'entry_root' })],
         });
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
         const store = await openLocalSessionEventStore({ dataDir, sessionId });
+        await mkdir(join(dataDir, 'sessions'), { recursive: true });
         await appendFile(join(dataDir, 'sessions', `${sessionId}.jsonl`), '{"corrupt": true}\n', 'utf8');
         const before = await readFile(join(dataDir, 'sessions', `${sessionId}.jsonl`), 'utf8');
         const navigation = createSessionNavigationController({
@@ -106,7 +111,7 @@ describe('interactive chat session navigation', () => {
         const dataDir = await tempRoot('mctrl-session-navigation-copy-');
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
         const sourceSessionId = 'session_navigation_source';
-        await writeSessionEvents({
+        await writeSupportLocalSessionEvents({
             dataDir,
             sessionId: sourceSessionId,
             events: [
@@ -221,7 +226,7 @@ describe('interactive chat session navigation', () => {
         const dataDir = await tempRoot('mctrl-session-navigation-resume-');
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
         const sourceSessionId = 'session_navigation_source';
-        await writeSessionEvents({
+        await writeSupportLocalSessionEvents({
             dataDir,
             sessionId: sourceSessionId,
             events: [
@@ -276,7 +281,7 @@ describe('interactive chat session navigation', () => {
         const dataDir = await tempRoot('mctrl-session-navigation-rename-');
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
         const sessionId = 'session_rename_target';
-        await writeSessionEvents({
+        await writeSupportLocalSessionEvents({
             dataDir,
             sessionId,
             events: [
@@ -330,14 +335,18 @@ describe('interactive chat session navigation', () => {
     });
 });
 
-async function createCorruptSession(): Promise<{ readonly dataDir: string; readonly sessionId: string }> {
+async function createSqlSessionWithStaleCorruptJsonl(): Promise<{
+    readonly dataDir: string;
+    readonly sessionId: string;
+}> {
     const dataDir = await tempRoot('mctrl-session-navigation-corrupt-');
     const sessionId = 'session_corrupt_source';
-    await writeSessionEvents({
+    await writeSupportLocalSessionEvents({
         dataDir,
         sessionId,
         events: [sessionEvent(sessionId, 'task.completed', 'root task', { kind: 'entry', entryId: 'entry_root' })],
     });
+    await mkdir(join(dataDir, 'sessions'), { recursive: true });
     await appendFile(join(dataDir, 'sessions', `${sessionId}.jsonl`), '{"corrupt": true}\n', 'utf8');
     return { dataDir, sessionId };
 }

@@ -57,6 +57,7 @@ describe('TranscriptPartRenderer terminal sanitization', () => {
                                 part={part}
                                 showThinking={true}
                                 toolOutputExpanded={true}
+                                transcriptParts={unsafeTranscriptParts}
                                 viewportColumns={160}
                                 isFirst={index() === 0}
                                 isLast={index() === unsafeTranscriptParts.length - 1}

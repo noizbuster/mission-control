@@ -76,6 +76,7 @@ function buildScriptedModel(onDoStream?: (options: unknown) => void): MockLangua
 
 function scriptedOutputForRequest(options: unknown): string {
     const serializedOptions = JSON.stringify(options);
+    if (serializedOptions.includes('intent.classification')) return 'trivial';
     if (serializedOptions.includes('intake.complete')) return 'true';
     if (serializedOptions.includes('ambiguity.classification')) return 'clear';
     if (serializedOptions.includes('explore.decision')) return 'needs-exploration';
@@ -113,7 +114,7 @@ describe('runAgent --engine graph --session (graph session engine dispatch)', ()
         expect(model.doStreamCalls.length).toBeGreaterThan(1);
         // The admitted prompt was seeded into the graph run's model call (the seeding contract
         // createGraphTurnRunner relies on via agentMessagesToSeedModelMessages).
-        expect(JSON.stringify(seen)).toContain('intake.complete');
+        expect(JSON.stringify(seen)).toContain('just answer');
     });
 
     it('rejects a provider with no AI-SDK mapping before the graph session run starts', async () => {

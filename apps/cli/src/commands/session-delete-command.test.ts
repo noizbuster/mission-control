@@ -6,15 +6,14 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args';
 import { runSessionCommand } from './session';
+import { readLocalSessionReplay } from '@mission-control/core';
 import {
     metadataEvent,
-    pathExists,
-    sessionLogPath,
     setCanonicalSessionParent,
     taskCompletedEvent,
     useTempDataDir,
 } from './session-delete-test-support';
-import { readStoredSessionProjection, writeSessionEvents } from './session-test-support';
+import { readStoredSessionProjection, writeLocalSessionEvents } from './session-test-support';
 import { readFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 
@@ -69,8 +68,8 @@ describe('guarded session delete command', () => {
             `Deleted session ${rootId} (1 events)`,
             `Deleted session ${childId} (2 events)`,
         ]);
-        expect(await pathExists(sessionLogPath(dataDir, rootId))).toBe(false);
-        expect(await pathExists(sessionLogPath(dataDir, childId))).toBe(false);
+        expect(await sessionExists(dataDir, rootId)).toBe(false);
+        expect(await sessionExists(dataDir, childId)).toBe(false);
         await rm(dataDir, { recursive: true, force: true });
     });
 
@@ -85,7 +84,7 @@ describe('guarded session delete command', () => {
             { sessionId: rootId, parentSessionId: null, depth: 0 },
             { sessionId: childId, parentSessionId: rootId, depth: 1 },
         ]);
-        await writeSessionEvents({
+        await writeLocalSessionEvents({
             dataDir,
             sessionId: lateId,
             events: [metadataEvent(lateId, childId), taskCompletedEvent(lateId, 'late run')],
@@ -101,7 +100,7 @@ describe('guarded session delete command', () => {
         // Then
         await expect(deletion).rejects.toMatchObject({ code: 'session_tree_changed' });
         for (const sessionId of [rootId, childId, lateId]) {
-            expect(await pathExists(sessionLogPath(dataDir, sessionId))).toBe(true);
+            expect(await sessionExists(dataDir, sessionId)).toBe(true);
         }
         await rm(dataDir, { recursive: true, force: true });
     });
@@ -119,17 +118,22 @@ describe('guarded session delete command', () => {
 
         // Then
         await expect(deletion).rejects.toMatchObject({ code: 'session_live_locked' });
-        expect(await pathExists(sessionLogPath(dataDir, rootId))).toBe(true);
-        expect(await pathExists(sessionLogPath(dataDir, childId))).toBe(true);
+        expect(await sessionExists(dataDir, rootId)).toBe(true);
+        expect(await sessionExists(dataDir, childId)).toBe(true);
         expect(() => parseArgs(['session', 'delete', rootId, '--force'])).toThrow();
         await closeProcessSessionControlHosts();
         await rm(dataDir, { recursive: true, force: true });
     });
 });
 
+async function sessionExists(dataDir: string, sessionId: string): Promise<boolean> {
+    const replay = await readLocalSessionReplay({ dataDir, sessionId });
+    return replay.kind === 'found';
+}
+
 async function writeTree(dataDir: string, rootId: string, childId: string): Promise<void> {
-    await writeSessionEvents({ dataDir, sessionId: rootId, events: [taskCompletedEvent(rootId, 'root run')] });
-    await writeSessionEvents({
+    await writeLocalSessionEvents({ dataDir, sessionId: rootId, events: [taskCompletedEvent(rootId, 'root run')] });
+    await writeLocalSessionEvents({
         dataDir,
         sessionId: childId,
         events: [metadataEvent(childId, rootId), taskCompletedEvent(childId, 'child run')],

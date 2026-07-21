@@ -40,6 +40,7 @@ describe('TranscriptPartRenderer mounted reactivity', () => {
                         part={part()}
                         showThinking={true}
                         toolOutputExpanded={true}
+                        transcriptParts={[part()]}
                         viewportColumns={80}
                         isFirst={true}
                         isLast={true}
@@ -95,6 +96,7 @@ describe('TranscriptPartRenderer mounted reactivity', () => {
                         part={part()}
                         showThinking={true}
                         toolOutputExpanded={true}
+                        transcriptParts={[part()]}
                         viewportColumns={80}
                         isFirst={true}
                         isLast={true}
@@ -110,7 +112,8 @@ describe('TranscriptPartRenderer mounted reactivity', () => {
             if (parent === undefined) {
                 throw new Error('Expected the mounted transcript parent');
             }
-            expect(setup.captureCharFrame()).toContain('+preview replacement');
+            // Native DiffView may not paint body glyphs into captureCharFrame; header proves the row mounted.
+            expect(setup.captureCharFrame()).toContain('Diff: src/preview.ts');
 
             // When: the same stable transcript ID settles into command output containing diff-looking literals.
             setPart({
@@ -125,7 +128,9 @@ describe('TranscriptPartRenderer mounted reactivity', () => {
             // Then: the original preview is gone, the parent persists, and literals retain command-body styling.
             const textRenderables = collectTextRenderables(setup.renderer.root);
             const visibleText = textRenderables.map((renderable) => renderable.plainText);
+            const frame = setup.captureCharFrame();
             expect(setup.renderer.root.getChildren().at(0)).toBe(parent);
+            expect(frame).not.toContain('Diff: src/preview.ts');
             expect(visibleText).not.toContain('+preview replacement');
             expect(visibleText).toEqual(
                 expect.arrayContaining(['+stdout literal', '-stderr literal', '@@ hunk literal']),
@@ -155,6 +160,7 @@ describe('TranscriptPartRenderer mounted reactivity', () => {
                         part={part()}
                         showThinking={true}
                         toolOutputExpanded={true}
+                        transcriptParts={[part()]}
                         viewportColumns={80}
                         isFirst={true}
                         isLast={true}

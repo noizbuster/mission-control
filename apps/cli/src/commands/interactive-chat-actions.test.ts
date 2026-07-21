@@ -488,7 +488,7 @@ describe('interactive chat actions', () => {
             );
             await result.activeTurn?.done;
 
-            expect(output.getOutput()).toContain('▸ intake');
+            expect(output.getOutput()).toContain('▸ intent-gate');
             expect(output.getOutput()).toContain('Assistant: hello from default');
         });
 

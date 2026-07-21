@@ -21,6 +21,7 @@ import {
     currentGraphTurnPrefix,
     graphOccurrencePartId,
     graphTurnPartId,
+    noteAssistantAttribution,
     openGraphTurn,
     type ProviderRenderState,
     recordGraphErrorEmission,
@@ -185,7 +186,9 @@ function renderInteractiveGraphSignal(
             emitTranscriptFallback(output, fallbackText);
         } else {
             state.streamingTextPartId = partId;
-            emitTranscriptPart(output, { id: partId, type: 'assistant', text, status: 'streaming' }, fallbackText);
+            const part = { id: partId, type: 'assistant' as const, text, status: 'streaming' as const };
+            noteAssistantAttribution(state, part);
+            emitTranscriptPart(output, part, fallbackText);
         }
         return;
     }

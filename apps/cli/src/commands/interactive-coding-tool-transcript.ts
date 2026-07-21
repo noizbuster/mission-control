@@ -17,6 +17,7 @@ export type ToolSettlementTranscriptInput = {
     readonly modelOutputTruncated?: boolean;
     readonly structuredOutput?: unknown;
     readonly errorMessage?: string;
+    readonly messageId?: string;
 };
 
 type CommandMetadata = {
@@ -52,6 +53,7 @@ export function pendingToolTranscriptPart(
     toolCall: ToolCall,
     text: string,
     toolBaseId: string,
+    messageId?: string,
 ): InlineToolTranscriptPart {
     return {
         id: toolBaseId,
@@ -60,6 +62,7 @@ export function pendingToolTranscriptPart(
         toolName: toolCall.toolName,
         text: redact(text),
         status: 'pending',
+        ...(messageId ? { messageId } : {}),
     };
 }
 
@@ -85,6 +88,7 @@ export function projectToolSettlementPart(input: ToolSettlementTranscriptInput):
         ...(output !== undefined ? { output } : {}),
         ...(error !== undefined ? { error } : {}),
         ...(appliedFiles !== undefined ? { appliedFiles } : {}),
+        ...(input.messageId ? { messageId: input.messageId } : {}),
     };
 }
 
@@ -104,6 +108,7 @@ function projectCommandPart(input: ToolSettlementTranscriptInput): RichCommandTr
         id: input.toolBaseId,
         type: 'command',
         toolCallId: input.toolCallId,
+        toolName: input.toolName,
         text,
         status: input.status,
         ...(command !== undefined ? { command } : {}),
@@ -114,6 +119,7 @@ function projectCommandPart(input: ToolSettlementTranscriptInput): RichCommandTr
         ...(metadata.stdoutTruncated !== undefined ? { stdoutTruncated: metadata.stdoutTruncated } : {}),
         ...(metadata.stderrTruncated !== undefined ? { stderrTruncated: metadata.stderrTruncated } : {}),
         ...(error !== undefined ? { error } : {}),
+        ...(input.messageId ? { messageId: input.messageId } : {}),
     };
 }
 
@@ -130,6 +136,7 @@ function projectSubagentPart(input: ToolSettlementTranscriptInput): RichSubagent
         ...(metadata.agentName !== undefined ? { agentName: metadata.agentName } : {}),
         ...(metadata.sessionId !== undefined ? { sessionId: metadata.sessionId } : {}),
         ...(error !== undefined ? { error } : {}),
+        ...(input.messageId ? { messageId: input.messageId } : {}),
     };
 }
 

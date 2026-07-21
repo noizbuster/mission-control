@@ -5,7 +5,7 @@ import { parseArgs } from '../args';
 import { runAgent } from './run-agent';
 import { createBufferedChatOutput, createEmptyAuthStore, createScriptedChatInput } from './run-agent-chat-test-support';
 import { replayedEvents } from './session-replay-test-support';
-import { writeSessionEvents } from './session-test-support';
+import { writeLocalSessionEvents } from './session-test-support';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -23,7 +23,7 @@ describe('runAgent interactive coding agent UX', () => {
         // Given
         const dataDir = await tempRoot('mctrl-chat-data-');
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
-        await writeSessionEvents({
+        await writeLocalSessionEvents({
             dataDir,
             sessionId: 'session_navigation_source',
             events: [

@@ -89,7 +89,7 @@ export const Definitions = {
     abg_overlay_toggle: keybind('ctrl+g', 'Toggle ABG monitoring overlay'),
     abg_minimap_toggle: keybind('<leader>g', 'Toggle ABG minimap'),
     thinking_toggle: keybind('ctrl+t', 'Toggle thinking/reasoning display'),
-    tool_expand: keybind('ctrl+o', 'Toggle tool output expand/collapse'),
+    tool_expand: keybind('ctrl+o', 'Toggle per-message tool statistics expansion'),
     tips_toggle: keybind('<leader>h', 'Toggle tips'),
 
     // model

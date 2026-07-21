@@ -10,6 +10,7 @@ import { parseFileEditOutput, parseFilePatchOutput } from './interactive-coding-
 import { projectToolSettlementPart } from './interactive-coding-tool-transcript';
 import {
     claimToolTranscriptOccurrence,
+    noteAssistantAttribution,
     type ProviderRenderState,
     providerTranscriptPartId,
     retireActiveToolTranscriptParts,
@@ -42,6 +43,7 @@ export function renderProviderEnvelope(
                 status: 'streaming',
                 requestId: chunk.requestId,
             };
+            noteAssistantAttribution(state, part);
             emitTranscriptPart(output, part, fallbackText);
             return;
         }
@@ -96,6 +98,7 @@ export function renderProviderEnvelope(
                 messageId: chunk.message.messageId,
                 requestId: chunk.requestId,
             };
+            noteAssistantAttribution(state, part);
             emitTranscriptPart(output, part, fallbackText);
             if (chunk.finishReason !== 'tool_calls') state.finalMessage = chunk.message.content;
             return;
@@ -127,6 +130,7 @@ export function renderInteractiveToolSettlement(
         [],
     )}\n`;
     const toolBaseId = claimToolTranscriptOccurrence(state, settlement.toolCallId);
+    const messageId = state.lastAssistantAttributionId;
     const settlementPart = projectToolSettlementPart({
         toolBaseId,
         toolCallId: settlement.toolCallId,
@@ -136,6 +140,7 @@ export function renderInteractiveToolSettlement(
         ...(settlement.modelOutput !== undefined ? { modelOutputTruncated: settlement.modelOutput.truncated } : {}),
         ...(settlement.structuredOutput !== undefined ? { structuredOutput: settlement.structuredOutput } : {}),
         ...(status === 'failed' ? { errorMessage: settlement.result.error?.message ?? 'unknown error' } : {}),
+        ...(messageId ? { messageId } : {}),
     });
     retireActiveToolTranscriptParts(state, settlementPart.id);
     emitTranscriptPart(output, settlementPart, fallbackText);
@@ -145,6 +150,7 @@ export function renderInteractiveToolSettlement(
         toolCallId: settlement.toolCallId,
         structuredOutput: settlement.structuredOutput,
         events: settlement.events,
+        ...(messageId ? { messageId } : {}),
     })) {
         emitTranscriptPart(output, part, '');
     }

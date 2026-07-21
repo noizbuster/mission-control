@@ -13,6 +13,7 @@ import { emitInteractiveTaskEvent, runOwnedCodingAgentTurn } from './interactive
 import {
     createProviderRenderState,
     settleTerminalToolTranscriptParts,
+    stampToolPartAttribution,
 } from './interactive-coding-transcript-render-state';
 import { emitTranscriptFallback, emitTranscriptPart } from './interactive-transcript-emission';
 import { closeProductionToolRegistry } from './production-tool-registry';
@@ -104,7 +105,11 @@ async function startOwnedCodingAgentTurn(
             const failedParts = settleTerminalToolTranscriptParts(renderState, 'failed');
             if (trackedOptions.output.writeTranscriptPart !== undefined) {
                 for (const part of failedParts) {
-                    emitTranscriptPart(trackedOptions.output, part, '');
+                    emitTranscriptPart(
+                        trackedOptions.output,
+                        stampToolPartAttribution(part, renderState.lastAssistantAttributionId),
+                        '',
+                    );
                 }
             }
             emitTranscriptFallback(trackedOptions.output, `Error: ${message}\n`);

@@ -16,8 +16,11 @@ import type {
     ReasoningTranscriptPart,
     StatusTranscriptPart,
     SubagentTranscriptPart,
+    TranscriptPart,
     UserTranscriptPart,
 } from '../state/transcript-part';
+import { attributionKeyForAssistantPart } from '../state/transcript-visibility';
+import { AssistantMessageFooter } from './AssistantMessageFooter';
 import { CHAT_ASSISTANT_PAD_LEFT, CHAT_TEXT_MUTED, CHAT_USER_MARGIN_TOP, CHAT_USER_PAD_X } from './chat-theme';
 import { DiffView } from './diff/DiffView';
 import {
@@ -52,16 +55,33 @@ export function TypedUserRow(props: { readonly part: UserTranscriptPart; readonl
 export function TypedAssistantRow(props: {
     readonly part: AssistantTranscriptPart;
     readonly viewportColumns: number;
+    readonly transcriptParts: readonly TranscriptPart[];
+    readonly toolOutputExpanded: boolean;
+    readonly activeAssistantMessageId?: string;
 }): JSX.Element {
+    const attributionKey = () => attributionKeyForAssistantPart(props.part);
+    const showFooter = () => {
+        const key = attributionKey();
+        return key.length > 0 && key !== props.activeAssistantMessageId;
+    };
     return (
-        <MarkdownPanel
-            text={props.part.text}
-            theme={darkTheme}
-            paddingLeft={CHAT_ASSISTANT_PAD_LEFT}
-            marginTop={CHAT_USER_MARGIN_TOP}
-            viewportColumns={props.viewportColumns}
-            streaming={isTranscriptPartStreaming(props.part.status)}
-        />
+        <>
+            <MarkdownPanel
+                text={props.part.text}
+                theme={darkTheme}
+                paddingLeft={CHAT_ASSISTANT_PAD_LEFT}
+                marginTop={CHAT_USER_MARGIN_TOP}
+                viewportColumns={props.viewportColumns}
+                streaming={isTranscriptPartStreaming(props.part.status)}
+            />
+            <Show when={showFooter()}>
+                <AssistantMessageFooter
+                    messageId={attributionKey()}
+                    parts={props.transcriptParts}
+                    expanded={props.toolOutputExpanded}
+                />
+            </Show>
+        </>
     );
 }
 

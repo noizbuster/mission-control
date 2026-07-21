@@ -14,10 +14,11 @@ export type FileResultProjectionInput = {
     readonly toolCallId: string;
     readonly structuredOutput: unknown;
     readonly events: readonly AgentEvent[];
+    readonly messageId?: string;
 };
 
 export function projectFileResultParts(input: FileResultProjectionInput): readonly TranscriptPart[] {
-    const { toolBaseId, toolCallId, structuredOutput, events } = input;
+    const { toolBaseId, toolCallId, structuredOutput, events, messageId } = input;
     const appliedFiles = events.flatMap((event) => (event.type === 'file.diff.applied' ? (event.diffFiles ?? []) : []));
     const proposedFiles = events.flatMap((event) =>
         event.type === 'file.diff.proposed' ? (event.diffFiles ?? []) : [],
@@ -30,11 +31,12 @@ export function projectFileResultParts(input: FileResultProjectionInput): readon
               : parseStructuredDiffFiles(structuredOutput);
     return files.map((file, index) => ({
         id: `${toolBaseId}:result:${index}`,
-        type: 'diff',
+        type: 'diff' as const,
         toolCallId,
         text: renderDiffFile(file),
         filePath: redact(file.filePath),
-        status: appliedFiles.length > 0 || proposedFiles.length === 0 ? 'completed' : 'pending',
+        status: appliedFiles.length > 0 || proposedFiles.length === 0 ? ('completed' as const) : ('pending' as const),
+        ...(messageId ? { messageId } : {}),
     }));
 }
 

@@ -1,6 +1,6 @@
 import type { ToolInvocationSettlement } from '@mission-control/core';
 import { AbgSignalSchema, AgentEventSchema, ToolCallSchema, ToolResultSchema } from '@mission-control/protocol';
-import type { TranscriptPart } from '@mission-control/tui/state';
+import { aggregateToolCallsForMessage, type TranscriptPart } from '@mission-control/tui/state';
 import { describe, expect, it } from 'vitest';
 import type { ChatOutput } from './interactive-chat-io';
 import { interactiveGraphStreamSignal, renderInteractiveGraphDurableEvent } from './interactive-coding-graph-rendering';
@@ -8,6 +8,7 @@ import { renderInteractiveToolSettlement, renderProviderEnvelope } from './inter
 import { renderToolPreview } from './interactive-coding-tool-preview';
 import { createProviderRenderState, type ProviderRenderState } from './interactive-coding-transcript-render-state';
 import { completedSettlement, providerEnvelope } from './interactive-transcript-emission-test-support';
+import { graphDelta, turnStarted } from './interactive-transcript-fallback-test-support';
 
 const timestamp = '2026-07-17T00:00:00.000Z';
 const hostileDisplayPayload =
@@ -308,5 +309,209 @@ describe('interactive typed transcript emission', () => {
             id: 'tool:outer-emission:call-failed:occurrence:1', type: 'inline-tool', toolCallId: 'call-failed', status: 'failed', error: 'provider rejected [REDACTED_CREDENTIAL]',
         }));
         expect(JSON.stringify(recording.transcriptWrites)).not.toContain(secret);
+    });
+
+    it('threads each tool messageId to the preceding assistant attribution key', async () => {
+        // Given
+        const recording = createRecordingOutput();
+        const state = renderState();
+        const firstTool = ToolCallSchema.parse({
+            toolCallId: 'call-a', toolName: 'repo.read', argumentsJson: JSON.stringify({ path: 'a.md' }),
+        });
+        const secondTool = ToolCallSchema.parse({
+            toolCallId: 'call-b', toolName: 'repo.read', argumentsJson: JSON.stringify({ path: 'b.md' }),
+        });
+
+        // When
+        renderProviderEnvelope(recording.output, state, providerEnvelope({
+            kind: 'response_completed', requestId: 'request-a', sequence: 1,
+            message: { messageId: 'message-a', role: 'assistant', content: 'first' },
+            finishReason: 'tool_calls',
+        }));
+        await renderToolPreview(firstTool, recording.output, { state });
+        renderInteractiveToolSettlement(recording.output, completedSettlement({
+            toolCallId: firstTool.toolCallId, toolName: firstTool.toolName, modelOutput: 'a',
+        }), state);
+        renderProviderEnvelope(recording.output, state, providerEnvelope({
+            kind: 'response_completed', requestId: 'request-b', sequence: 2,
+            message: { messageId: 'message-b', role: 'assistant', content: 'second' },
+            finishReason: 'tool_calls',
+        }));
+        await renderToolPreview(secondTool, recording.output, { state });
+        renderInteractiveToolSettlement(recording.output, completedSettlement({
+            toolCallId: secondTool.toolCallId, toolName: secondTool.toolName, modelOutput: 'b',
+        }), state);
+
+        // Then
+        const toolParts = recording.transcriptWrites
+            .map(({ part }) => part)
+            .filter((part) => part.type === 'inline-tool');
+        expect(toolParts).toEqual([
+            expect.objectContaining({ toolCallId: 'call-a', status: 'pending', messageId: 'message-a' }),
+            expect.objectContaining({ toolCallId: 'call-a', status: 'completed', messageId: 'message-a' }),
+            expect.objectContaining({ toolCallId: 'call-b', status: 'pending', messageId: 'message-b' }),
+            expect.objectContaining({ toolCallId: 'call-b', status: 'completed', messageId: 'message-b' }),
+        ]);
+    });
+
+    it('aggregates emitted tool parts per assistant messageId without cross-turn leakage', async () => {
+        // Given
+        const recording = createRecordingOutput();
+        const state = renderState();
+        const toolsA = [
+            ToolCallSchema.parse({
+                toolCallId: 'call-a-read', toolName: 'repo.read', argumentsJson: JSON.stringify({ path: 'a.md' }),
+            }),
+            ToolCallSchema.parse({
+                toolCallId: 'call-a-list', toolName: 'repo.list', argumentsJson: JSON.stringify({ path: '.' }),
+            }),
+            ToolCallSchema.parse({
+                toolCallId: 'call-a-fail', toolName: 'repo.read', argumentsJson: JSON.stringify({ path: 'missing.md' }),
+            }),
+        ] as const;
+        const toolB = ToolCallSchema.parse({
+            toolCallId: 'call-b-read', toolName: 'repo.read', argumentsJson: JSON.stringify({ path: 'b.md' }),
+        });
+
+        // When
+        renderProviderEnvelope(recording.output, state, providerEnvelope({
+            kind: 'response_completed', requestId: 'request-a', sequence: 1,
+            message: { messageId: 'message-a', role: 'assistant', content: 'first turn' },
+            finishReason: 'tool_calls',
+        }));
+        for (const tool of toolsA) {
+            await renderToolPreview(tool, recording.output, { state });
+        }
+        renderInteractiveToolSettlement(recording.output, completedSettlement({
+            toolCallId: toolsA[0].toolCallId, toolName: toolsA[0].toolName, modelOutput: 'a-read',
+        }), state);
+        renderInteractiveToolSettlement(recording.output, completedSettlement({
+            toolCallId: toolsA[1].toolCallId, toolName: toolsA[1].toolName, modelOutput: 'a-list',
+        }), state);
+        renderInteractiveToolSettlement(recording.output, {
+            toolCallId: toolsA[2].toolCallId,
+            toolName: toolsA[2].toolName,
+            result: ToolResultSchema.parse({
+                toolCallId: toolsA[2].toolCallId,
+                status: 'failed',
+                error: { code: 'tool_failed', message: 'not found', retryable: false },
+            }),
+            events: [],
+        } satisfies ToolInvocationSettlement, state);
+
+        renderProviderEnvelope(recording.output, state, providerEnvelope({
+            kind: 'response_completed', requestId: 'request-b', sequence: 2,
+            message: { messageId: 'message-b', role: 'assistant', content: 'second turn' },
+            finishReason: 'tool_calls',
+        }));
+        await renderToolPreview(toolB, recording.output, { state });
+        renderInteractiveToolSettlement(recording.output, completedSettlement({
+            toolCallId: toolB.toolCallId, toolName: toolB.toolName, modelOutput: 'b-read',
+        }), state);
+
+        // Then
+        const emittedParts = recording.transcriptWrites.map(({ part }) => part);
+        const settledTools = emittedParts.filter(
+            (part) =>
+                (part.type === 'inline-tool' || part.type === 'command' || part.type === 'subagent') &&
+                (part.status === 'completed' || part.status === 'failed'),
+        );
+        expect(settledTools).toEqual([
+            expect.objectContaining({ toolCallId: 'call-a-read', status: 'completed', messageId: 'message-a', toolName: 'repo.read' }),
+            expect.objectContaining({ toolCallId: 'call-a-list', status: 'completed', messageId: 'message-a', toolName: 'repo.list' }),
+            expect.objectContaining({ toolCallId: 'call-a-fail', status: 'failed', messageId: 'message-a', toolName: 'repo.read' }),
+            expect.objectContaining({ toolCallId: 'call-b-read', status: 'completed', messageId: 'message-b', toolName: 'repo.read' }),
+        ]);
+
+        const aggA = aggregateToolCallsForMessage(emittedParts, 'message-a');
+        const aggB = aggregateToolCallsForMessage(emittedParts, 'message-b');
+        expect(aggA.totalCount).toBe(2);
+        expect(aggA.failedCount).toBe(1);
+        expect(aggA.byToolName.get('repo.read')).toBe(1);
+        expect(aggA.byToolName.get('repo.list')).toBe(1);
+        expect(aggB.totalCount).toBe(1);
+        expect(aggB.failedCount).toBe(0);
+        expect(aggB.byToolName.get('repo.read')).toBe(1);
+        expect(aggB.byToolName.has('repo.list')).toBe(false);
+        expect(aggA.totalCount + aggA.failedCount).toBe(3);
+    });
+
+    it('uses the graph assistant part id when messageId and requestId are absent', async () => {
+        // Given
+        const recording = createRecordingOutput();
+        const state = renderState();
+        const tap = interactiveGraphStreamSignal(recording.output, state, '/workspace');
+        const toolCall = ToolCallSchema.parse({
+            toolCallId: 'call-graph', toolName: 'repo.read', argumentsJson: JSON.stringify({ path: 'g.md' }),
+        });
+
+        // When
+        await tap(turnStarted('answer-node', 'turn-one'));
+        await tap(graphDelta('answer-node', 'llm.text.delta', 'graph answer'));
+        await renderToolPreview(toolCall, recording.output, { state });
+        renderInteractiveToolSettlement(recording.output, completedSettlement({
+            toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, modelOutput: 'graph tool',
+        }), state);
+
+        // Then
+        const assistantPartId = 'graph:outer-emission:answer-node-turn-one-started:assistant';
+        expect(recording.transcriptWrites.map(({ part }) => part)).toContainEqual(expect.objectContaining({
+            id: assistantPartId, type: 'assistant', status: 'streaming',
+        }));
+        expect(recording.transcriptWrites.map(({ part }) => part)).toContainEqual(expect.objectContaining({
+            toolCallId: 'call-graph', type: 'inline-tool', status: 'pending', messageId: assistantPartId,
+        }));
+        expect(recording.transcriptWrites.map(({ part }) => part)).toContainEqual(expect.objectContaining({
+            toolCallId: 'call-graph', type: 'inline-tool', status: 'completed', messageId: assistantPartId,
+        }));
+    });
+
+    it('leaves tool messageId unset when no assistant attribution exists yet', async () => {
+        // Given
+        const recording = createRecordingOutput();
+        const state = renderState();
+        const toolCall = ToolCallSchema.parse({
+            toolCallId: 'call-early', toolName: 'repo.read', argumentsJson: JSON.stringify({ path: 'early.md' }),
+        });
+
+        // When
+        await renderToolPreview(toolCall, recording.output, { state });
+        renderInteractiveToolSettlement(recording.output, completedSettlement({
+            toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, modelOutput: 'early',
+        }), state);
+
+        // Then
+        for (const part of recording.transcriptWrites.map(({ part }) => part).filter((entry) => entry.type === 'inline-tool')) {
+            expect(part).not.toHaveProperty('messageId');
+        }
+    });
+
+    it('stamps toolName on settled command parts', () => {
+        // Given
+        const recording = createRecordingOutput();
+        const state = renderState();
+        renderProviderEnvelope(recording.output, state, providerEnvelope({
+            kind: 'response_completed', requestId: 'request-cmd', sequence: 1,
+            message: { messageId: 'message-cmd', role: 'assistant', content: 'run it' },
+            finishReason: 'tool_calls',
+        }));
+
+        // When
+        renderInteractiveToolSettlement(recording.output, completedSettlement({
+            toolCallId: 'call-command-named',
+            toolName: 'command.run',
+            modelOutput: '$ pnpm test\nstatus: completed exit: 0\n',
+            structuredOutput: {
+                kind: 'command_run', status: 'completed', command: ['pnpm', 'test'], cwd: '/workspace',
+                exitCode: 0, signal: null, timedOut: false, stdout: '', stderr: '',
+                stdoutTruncated: false, stderrTruncated: false, stdoutOriginalBytes: 0, stderrOriginalBytes: 0,
+                stdoutReturnedBytes: 0, stderrReturnedBytes: 0, durationMs: 1,
+            },
+        }), state);
+
+        // Then
+        expect(recording.transcriptWrites.map(({ part }) => part)).toContainEqual(expect.objectContaining({
+            type: 'command', toolCallId: 'call-command-named', toolName: 'command.run', messageId: 'message-cmd',
+        }));
     });
 });

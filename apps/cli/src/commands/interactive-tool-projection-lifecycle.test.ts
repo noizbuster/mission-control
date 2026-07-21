@@ -62,6 +62,7 @@ describe('active typed tool projection lifecycle', () => {
                 id: 'tool:provider%2Fdenied:command-denied:occurrence:1:preview',
                 type: 'command',
                 toolCallId: 'command-denied',
+                toolName: 'command.run',
                 text: '$ pnpm test',
                 title: 'Command preview for command.run',
                 detail: '$ pnpm test',

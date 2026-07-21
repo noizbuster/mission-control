@@ -3,7 +3,7 @@ import type { AgentEvent } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args';
 import { runSessionCommand } from './session';
-import { codingStepRecords, eventRecords, parseReplayRecords, writeSessionEvents } from './session-test-support';
+import { codingStepRecords, eventRecords, parseReplayRecords, writeLocalSessionEvents } from './session-test-support';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -31,7 +31,7 @@ describe('session run-state rendering', () => {
         // Given
         const dataDir = await useTempDataDir();
         const sessionId = 'session_cli_run_failed';
-        await writeSessionEvents({
+        await writeLocalSessionEvents({
             dataDir,
             sessionId,
             events: [
@@ -80,7 +80,7 @@ describe('session run-state rendering', () => {
         // Given
         const dataDir = await useTempDataDir();
         const sessionId = 'session_cli_run_blocked';
-        await writeSessionEvents({
+        await writeLocalSessionEvents({
             dataDir,
             sessionId,
             events: [
@@ -132,7 +132,7 @@ describe('session run-state rendering', () => {
         // Given
         const dataDir = await useTempDataDir();
         const sessionId = 'session_cli_run_interrupted';
-        await writeSessionEvents({
+        await writeLocalSessionEvents({
             dataDir,
             sessionId,
             events: [
@@ -197,7 +197,7 @@ describe('session run-state rendering', () => {
         ];
 
         for (const scenario of scenarios) {
-            await writeSessionEvents({
+            await writeLocalSessionEvents({
                 dataDir,
                 sessionId: scenario.sessionId,
                 events: [

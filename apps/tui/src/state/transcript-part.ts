@@ -44,6 +44,7 @@ export type ReasoningTranscriptPart = TranscriptPartBase &
 type ToolTranscriptPartDetails = TranscriptPartDetails & {
     readonly toolCallId?: string;
     readonly toolName?: string;
+    readonly messageId?: string;
     readonly output?: string;
     readonly appliedFiles?: readonly string[];
 };
@@ -63,6 +64,7 @@ export type DiffTranscriptPart = TranscriptPartBase &
         readonly type: 'diff';
         readonly filePath?: string;
         readonly toolCallId?: string;
+        readonly messageId?: string;
     };
 
 export type CodeTranscriptPart = TranscriptPartBase &
@@ -78,6 +80,8 @@ export type CommandTranscriptPart = TranscriptPartBase &
         readonly command?: string;
         readonly exitCode?: number;
         readonly toolCallId?: string;
+        readonly toolName?: string;
+        readonly messageId?: string;
     };
 
 export type SubagentTranscriptPart = TranscriptPartBase &
@@ -86,6 +90,7 @@ export type SubagentTranscriptPart = TranscriptPartBase &
         readonly agentName?: string;
         readonly sessionId?: string;
         readonly toolCallId?: string;
+        readonly messageId?: string;
     };
 
 export type StatusTranscriptPart = TranscriptPartBase &

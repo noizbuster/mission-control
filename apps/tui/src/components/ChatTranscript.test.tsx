@@ -95,6 +95,9 @@ describe('ChatTranscript stream-stability topology', () => {
         expect(transcriptFn).toContain('fallback={');
         expect(transcriptFn).toContain('<LegacyTranscriptBlocks');
         expect(transcriptFn).toContain('showThinking={props.showThinking}');
+        expect(transcriptFn).toContain('transcriptParts={props.transcriptParts}');
+        expect(transcriptFn).toContain('toolOutputExpanded={props.toolOutputExpanded}');
+        expect(transcriptFn).toContain('activeAssistantMessageId');
     });
 
     it('passes final-row position reactively to typed transcript rows', () => {

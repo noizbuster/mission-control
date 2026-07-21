@@ -50,6 +50,7 @@ describe('fallback-only graph transcript rendering', () => {
     it('settles an expanded command preview without moving or discarding its argument detail', async () => {
         // Given
         const store = createChatStore();
+        if (!store.getSnapshot().toolOutputExpanded) store.toggleToolOutputExpanded();
         const output = createStoreChatOutput(store);
         const state = renderState('command-preview-turn');
         const toolCall = ToolCallSchema.parse({
@@ -93,6 +94,7 @@ describe('fallback-only graph transcript rendering', () => {
             id: 'tool:command-preview-turn:call-command-preview:occurrence:1:preview',
             type: 'command',
             toolCallId: 'call-command-preview',
+            toolName: 'command.run',
             text: '$ pnpm test',
             title: 'Command preview for command.run',
             detail: '$ pnpm test',

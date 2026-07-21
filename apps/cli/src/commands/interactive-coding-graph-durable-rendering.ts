@@ -14,6 +14,7 @@ import {
     graphTurnPartId,
     graphTurnToolSummary,
     nextGraphTerminalTurnPrefix,
+    noteAssistantAttribution,
     type ProviderRenderState,
     recordGraphErrorEmission,
     recordGraphTurnTool,
@@ -85,11 +86,14 @@ export function renderInteractiveGraphDurableEvent(
         }
         if (assistantId !== undefined && completedText !== undefined && completedText.length > 0) {
             state.assistantTextByRequest.set(assistantId, completedText);
-            emitTranscriptPart(
-                output,
-                { id: assistantId, type: 'assistant', text: completedText, status: 'completed' },
-                fallbackText,
-            );
+            const assistantPart = {
+                id: assistantId,
+                type: 'assistant' as const,
+                text: completedText,
+                status: 'completed' as const,
+            };
+            noteAssistantAttribution(state, assistantPart);
+            emitTranscriptPart(output, assistantPart, fallbackText);
         } else if (fallbackText.length > 0) {
             emitTranscriptFallback(output, fallbackText);
         }

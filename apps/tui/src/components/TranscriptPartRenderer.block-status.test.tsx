@@ -46,6 +46,7 @@ describe('TranscriptPartRenderer typed block status', () => {
                         part={part()}
                         showThinking={true}
                         toolOutputExpanded={true}
+                        transcriptParts={[part()]}
                         viewportColumns={72}
                         isFirst={true}
                         isLast={true}
@@ -111,6 +112,15 @@ describe('TranscriptPartRenderer typed block status', () => {
                         }}
                         showThinking={true}
                         toolOutputExpanded={true}
+                        transcriptParts={[
+                            {
+                                id: 'completed-code',
+                                type: 'code',
+                                filePath: 'src/complete.ts',
+                                text: 'const complete = true;',
+                                status: 'completed',
+                            },
+                        ]}
                         viewportColumns={72}
                         isFirst={true}
                         isLast={false}
@@ -125,6 +135,15 @@ describe('TranscriptPartRenderer typed block status', () => {
                         }}
                         showThinking={true}
                         toolOutputExpanded={true}
+                        transcriptParts={[
+                            {
+                                id: 'failed-code',
+                                type: 'code',
+                                filePath: 'src/failure.ts',
+                                text: 'throw new Error();',
+                                status: 'failed',
+                            },
+                        ]}
                         viewportColumns={72}
                         isFirst={false}
                         isLast={false}
@@ -138,6 +157,14 @@ describe('TranscriptPartRenderer typed block status', () => {
                         }}
                         showThinking={true}
                         toolOutputExpanded={true}
+                        transcriptParts={[
+                            {
+                                id: 'neutral-diff',
+                                type: 'diff',
+                                filePath: 'src/neutral.ts',
+                                text: '+neutral',
+                            },
+                        ]}
                         viewportColumns={72}
                         isFirst={false}
                         isLast={true}

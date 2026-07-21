@@ -181,7 +181,7 @@ describe('TUI theme provider', () => {
         expect(services.theme.preference()).toEqual({ activeThemeId: 'default', customOverrides: [] });
         expect(services.theme.overlayTheme().selectedBg).toBe('#0000ff');
         expect(services.theme.overlayTheme().accents.question).toBe('#ff00ff');
-        expect(services.theme.markdownTheme().heading).toStrictEqual({ bold: true, fg: '#00ffff' });
+        expect(services.theme.markdownTheme().heading).toStrictEqual({ bold: true, fg: '#9d7cd8' });
 
         services.dispose();
     });

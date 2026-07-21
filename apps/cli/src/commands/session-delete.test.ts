@@ -1,15 +1,14 @@
+import { readLocalSessionReplay } from '@mission-control/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args';
 import { runSessionCommand } from './session';
 import {
     metadataEvent,
-    pathExists,
-    sessionLogPath,
     setCanonicalSessionParent,
     taskCompletedEvent,
     useTempDataDir,
 } from './session-delete-test-support';
-import { readStoredSessionProjection, writeSessionEvents } from './session-test-support';
+import { readStoredSessionProjection, writeLocalSessionEvents } from './session-test-support';
 import { rm } from 'node:fs/promises';
 
 describe('session delete', () => {
@@ -20,17 +19,17 @@ describe('session delete', () => {
     it('deletes a single session with no children', async () => {
         const dataDir = await useTempDataDir();
         const sessionId = 'session_solo';
-        await writeSessionEvents({
+        await writeLocalSessionEvents({
             dataDir,
             sessionId,
             events: [taskCompletedEvent(sessionId, 'solo run')],
         });
-        expect(await pathExists(sessionLogPath(dataDir, sessionId))).toBe(true);
+        expect(await sessionExists(dataDir, sessionId)).toBe(true);
 
         const output = await runSessionCommand(parseArgs(['session', 'delete', sessionId]));
 
         expect(output.stdout).toBe(`Deleted session ${sessionId} (1 events)`);
-        expect(await pathExists(sessionLogPath(dataDir, sessionId))).toBe(false);
+        expect(await sessionExists(dataDir, sessionId)).toBe(false);
         await rm(dataDir, { recursive: true, force: true });
     });
 
@@ -39,17 +38,17 @@ describe('session delete', () => {
         const parentId = 'session_parent_root';
         const childId = 'session_parent_root_child_1';
         const grandchildId = 'session_parent_root_child_1_child_1';
-        await writeSessionEvents({
+        await writeLocalSessionEvents({
             dataDir,
             sessionId: parentId,
             events: [taskCompletedEvent(parentId, 'parent run')],
         });
-        await writeSessionEvents({
+        await writeLocalSessionEvents({
             dataDir,
             sessionId: childId,
             events: [metadataEvent(childId, parentId), taskCompletedEvent(childId, 'child run')],
         });
-        await writeSessionEvents({
+        await writeLocalSessionEvents({
             dataDir,
             sessionId: grandchildId,
             events: [metadataEvent(grandchildId, childId), taskCompletedEvent(grandchildId, 'grandchild run')],
@@ -66,9 +65,9 @@ describe('session delete', () => {
         expect(deleted).toContain(`Deleted session ${parentId} (1 events)`);
         expect(deleted).toContain(`Deleted session ${childId} (2 events)`);
         expect(deleted).toContain(`Deleted session ${grandchildId} (2 events)`);
-        expect(await pathExists(sessionLogPath(dataDir, parentId))).toBe(false);
-        expect(await pathExists(sessionLogPath(dataDir, childId))).toBe(false);
-        expect(await pathExists(sessionLogPath(dataDir, grandchildId))).toBe(false);
+        expect(await sessionExists(dataDir, parentId)).toBe(false);
+        expect(await sessionExists(dataDir, childId)).toBe(false);
+        expect(await sessionExists(dataDir, grandchildId)).toBe(false);
         await rm(dataDir, { recursive: true, force: true });
     });
 
@@ -77,17 +76,17 @@ describe('session delete', () => {
         const parentId = 'session_tree_root';
         const childId = 'session_tree_root_child_1';
         const unrelatedId = 'session_unrelated';
-        await writeSessionEvents({
+        await writeLocalSessionEvents({
             dataDir,
             sessionId: parentId,
             events: [taskCompletedEvent(parentId, 'parent run')],
         });
-        await writeSessionEvents({
+        await writeLocalSessionEvents({
             dataDir,
             sessionId: childId,
             events: [metadataEvent(childId, parentId), taskCompletedEvent(childId, 'child run')],
         });
-        await writeSessionEvents({
+        await writeLocalSessionEvents({
             dataDir,
             sessionId: unrelatedId,
             events: [taskCompletedEvent(unrelatedId, 'unrelated run')],
@@ -99,9 +98,9 @@ describe('session delete', () => {
         const output = await runSessionCommand(parseArgs(['session', 'delete', childId]));
 
         expect(output.stdout).toBe(`Deleted session ${childId} (2 events)`);
-        expect(await pathExists(sessionLogPath(dataDir, childId))).toBe(false);
-        expect(await pathExists(sessionLogPath(dataDir, parentId))).toBe(true);
-        expect(await pathExists(sessionLogPath(dataDir, unrelatedId))).toBe(true);
+        expect(await sessionExists(dataDir, childId)).toBe(false);
+        expect(await sessionExists(dataDir, parentId)).toBe(true);
+        expect(await sessionExists(dataDir, unrelatedId)).toBe(true);
         await rm(dataDir, { recursive: true, force: true });
     });
 
@@ -131,3 +130,8 @@ describe('session delete', () => {
         expect(() => parseArgs(['session', 'delete'])).toThrow('session delete requires a session id');
     });
 });
+
+async function sessionExists(dataDir: string, sessionId: string): Promise<boolean> {
+    const replay = await readLocalSessionReplay({ dataDir, sessionId });
+    return replay.kind === 'found';
+}

@@ -11,7 +11,7 @@ import {
     writeLocalSessionEvents,
     writeSessionEvents,
 } from './session-test-support';
-import { appendFile, mkdtemp, rm } from 'node:fs/promises';
+import { appendFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -62,12 +62,12 @@ describe('session commands', () => {
         const dataDir = await useTempDataDir();
         const firstSessionId = 'session_a_imported';
         const secondSessionId = 'session_z_imported';
-        await writeSessionEvents({
+        await writeLocalSessionEvents({
             dataDir,
             sessionId: firstSessionId,
             events: [taskCompletedEvent(firstSessionId, 'first session')],
         });
-        await writeSessionEvents({
+        await writeLocalSessionEvents({
             dataDir,
             sessionId: secondSessionId,
             events: [taskCompletedEvent(secondSessionId, 'second session')],
@@ -84,23 +84,27 @@ describe('session commands', () => {
         await rm(dataDir, { recursive: true, force: true });
     });
 
-    it('replays corrupt legacy JSONL as diagnostics after database import rejects it', async () => {
+    it('prefers database replay over a stale corrupt legacy JSONL side file', async () => {
         // Given
         const dataDir = await useTempDataDir();
         const sessionId = 'session_cli_replay_corrupt';
         const events = sessionCommandFixtureEvents(sessionId, 'hello before corruption');
-        await writeSessionEvents({ dataDir, sessionId, events });
+        await writeLocalSessionEvents({ dataDir, sessionId, events });
+        await mkdir(join(dataDir, 'sessions'), { recursive: true });
         await appendFile(join(dataDir, 'sessions', `${sessionId}.jsonl`), '{"broken":\n', 'utf8');
 
         // When
         const replayOutput = await runSessionCommand(parseArgs(['session', 'replay', sessionId, '--jsonl']));
         const replayRecords = parseReplayRecords(replayOutput);
 
-        // Then
-        expect(eventRecords(replayRecords)).toEqual([]);
-        expect(diagnosticRecords(replayRecords)).toEqual([
-            { code: 'corrupt_trailing_record', lineNumber: 6, sessionId },
+        // Then: SQL is authoritative; stale JSONL diagnostics must not mask the session.
+        expect(eventRecords(replayRecords).map((event) => event.type)).toEqual([
+            'session.started',
+            'session.metadata.updated',
+            'task.completed',
+            'session.stopped',
         ]);
+        expect(diagnosticRecords(replayRecords)).toEqual([]);
         await rm(dataDir, { recursive: true, force: true });
     });
 

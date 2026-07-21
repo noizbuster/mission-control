@@ -52,6 +52,7 @@ describe('typed transcript selection contract', () => {
 
     it('keeps expanded typed tool and diff text selectable without changing visible cells', async () => {
         // Given: one expanded multiline typed tool row and one nonempty typed diff row.
+        // Native <diff> does not expose body glyphs as TextRenderable plainText; select the tool body.
         const setup = await testRender(
             () => (
                 <box flexDirection="column">
@@ -84,26 +85,50 @@ describe('typed transcript selection contract', () => {
             const toolTitle = textByPlainText(textRenderables, 'file.edit');
             const toolBody = textByPlainText(textRenderables, 'second tool line');
             const diffTitle = textByPlainText(textRenderables, 'Diff: src/selection.ts');
-            const diffText = textByPlainText(textRenderables, '+diff selection text');
             const frameBeforeSelection = setup.captureCharFrame();
 
-            // When: the diff line is selected through the native headless mouse path.
-            await setup.mockMouse.drag(diffText.x, diffText.y, diffText.x + 5, diffText.y);
+            // When: the tool body line is selected through the native headless mouse path.
+            await setup.mockMouse.drag(toolBody.x, toolBody.y, toolBody.x + 6, toolBody.y);
             await setup.renderOnce();
 
-            // Then: every rendered typed text seam is selectable, selection is exact, and cells are unchanged.
-            expect([toolTitle, toolBody, diffTitle, diffText].every((renderable) => renderable.selectable)).toBe(true);
-            expect(setup.renderer.getSelection()?.getSelectedText()).toBe('+diff');
+            // Then: tool/diff header seams stay selectable, selection is exact, and cells are unchanged.
+            expect([toolTitle, toolBody, diffTitle].every((renderable) => renderable.selectable)).toBe(true);
+            expect(setup.renderer.getSelection()?.getSelectedText()).toBe('second');
             expect(setup.captureCharFrame()).toBe(frameBeforeSelection);
+            // Diff panel is expanded (not header-only): body slot reserved under the title.
+            expect(frameBeforeSelection).toContain('Diff: src/selection.ts');
+            const headerOnly = await testRender(
+                () => (
+                    <TypedDiffRow
+                        part={{
+                            id: 'diff-selection',
+                            type: 'diff',
+                            filePath: 'src/selection.ts',
+                            text: '+diff selection text',
+                        }}
+                        expanded={false}
+                    />
+                ),
+                { width: 80, height: 12 },
+            );
+            try {
+                await headerOnly.renderOnce();
+                expect(setup.captureCharFrame()).not.toBe(headerOnly.captureCharFrame());
+            } finally {
+                headerOnly.renderer.destroy();
+            }
         } finally {
             setup.renderer.destroy();
         }
     });
 
-    it('reveals one retained semantic part after expansion without another emission', async () => {
-        // Given: one semantic diff emitted while the store preference is collapsed.
+    it('keeps retained semantic diff expanded when chip flag is collapsed without re-emission', async () => {
+        // Given: one semantic diff retained while chip expand (Ctrl+O) is collapsed.
+        // toolOutputExpanded is chip-only; typed body rows always expand (lifecycle gates still apply).
         const store = createChatStore();
-        store.toggleToolOutputExpanded();
+        if (store.getSnapshot().toolOutputExpanded) {
+            store.toggleToolOutputExpanded();
+        }
         const emitTranscriptPart = vi.spyOn(store, 'emitTranscriptPart');
         store.emitTranscriptPart(
             {
@@ -117,12 +142,15 @@ describe('typed transcript selection contract', () => {
         );
         const retainedPart = store.getSnapshot().transcriptParts.at(0);
         if (retainedPart === undefined) throw new Error('Expected retained transcript part');
-        const collapsedSetup = await testRender(
+
+        // When: the part is rendered with the chip flag collapsed vs forced header-only.
+        const chipCollapsed = await testRender(
             () => (
                 <TranscriptPartRenderer
                     part={retainedPart}
                     showThinking={true}
-                    toolOutputExpanded={store.getSnapshot().toolOutputExpanded}
+                    toolOutputExpanded={false}
+                    transcriptParts={[retainedPart]}
                     viewportColumns={80}
                     isFirst={true}
                     isLast={true}
@@ -130,47 +158,37 @@ describe('typed transcript selection contract', () => {
             ),
             { width: 80, height: 8 },
         );
-
-        try {
-            await collapsedSetup.renderOnce();
-            const collapsedText = collectTextRenderables(collapsedSetup.renderer.root).map(
-                (renderable) => renderable.plainText,
-            );
-            expect(collapsedText).toContain('[+] Completed: Diff: src/retained.ts');
-            expect(collapsedText).not.toContain('+retained semantic diff');
-        } finally {
-            collapsedSetup.renderer.destroy();
-        }
-
-        // When: only the visibility preference changes before the next TUI render.
-        store.toggleToolOutputExpanded();
-        const expandedSetup = await testRender(
+        const headerOnly = await testRender(
             () => (
-                <TranscriptPartRenderer
-                    part={retainedPart}
-                    showThinking={true}
-                    toolOutputExpanded={store.getSnapshot().toolOutputExpanded}
-                    viewportColumns={80}
-                    isFirst={true}
-                    isLast={true}
+                <TypedDiffRow
+                    part={{
+                        id: 'retained-diff',
+                        type: 'diff',
+                        filePath: 'src/retained.ts',
+                        text: '+retained semantic diff',
+                        status: 'completed',
+                    }}
+                    expanded={false}
                 />
             ),
             { width: 80, height: 8 },
         );
 
         try {
-            await expandedSetup.renderOnce();
+            await chipCollapsed.renderOnce();
+            await headerOnly.renderOnce();
 
-            // Then: the original part body appears and no producer emission was needed.
-            const expandedText = collectTextRenderables(expandedSetup.renderer.root).map(
-                (renderable) => renderable.plainText,
-            );
-            expect(expandedText).toContain('+retained semantic diff');
+            // Then: chip-collapsed render matches expanded body structure, not header-only; no re-emission.
+            const chipFrame = chipCollapsed.captureCharFrame();
+            const headerFrame = headerOnly.captureCharFrame();
+            expect(chipFrame).toContain('Diff: src/retained.ts');
+            expect(chipFrame).not.toBe(headerFrame);
             expect(store.getSnapshot().transcriptParts.at(0)).toBe(retainedPart);
             expect(emitTranscriptPart).toHaveBeenCalledTimes(1);
         } finally {
             emitTranscriptPart.mockRestore();
-            expandedSetup.renderer.destroy();
+            chipCollapsed.renderer.destroy();
+            headerOnly.renderer.destroy();
         }
     });
 });

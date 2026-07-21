@@ -18,6 +18,7 @@ export type ExpandedToolPreviewOptions = {
     readonly emitPart: (part: DiffTranscriptPart | CommandTranscriptPart, fallbackText: string) => void;
     readonly workspaceRoot?: string;
     readonly fileWriteArguments?: FileWriteArgumentsPreview;
+    readonly messageId?: string;
 };
 
 export async function renderExpandedToolPreview(
@@ -35,6 +36,7 @@ export async function renderExpandedToolPreview(
             title: 'Edit preview for file.edit',
             status: 'pending',
             ...(parsed !== undefined ? { filePath: redactPreviewText(parsed.path) } : {}),
+            ...(options.messageId ? { messageId: options.messageId } : {}),
         };
         options.emitPart(part, options.fallbackVisible ? `Edit preview for file.edit\n${detail}\n` : '');
         return;
@@ -51,6 +53,7 @@ export async function renderExpandedToolPreview(
                     text: detail,
                     title: 'Write preview for file.write',
                     status: 'pending',
+                    ...(options.messageId ? { messageId: options.messageId } : {}),
                 };
                 options.emitPart(part, options.fallbackVisible ? `Write preview for file.write\n${detail}\n` : '');
                 return;
@@ -75,6 +78,7 @@ export async function renderExpandedToolPreview(
             title: `${title} preview for file.write`,
             status: 'pending',
             ...(parsed !== undefined ? { filePath: redactPreviewText(parsed.path) } : {}),
+            ...(options.messageId ? { messageId: options.messageId } : {}),
         };
         options.emitPart(part, options.fallbackVisible ? `${title} preview for file.write\n${detail}\n` : '');
         return;
@@ -91,6 +95,7 @@ export async function renderExpandedToolPreview(
             title: 'Patch preview for file.patch',
             status: 'pending',
             ...(paths.length === 1 && paths[0] !== undefined ? { filePath: redactPreviewText(paths[0]) } : {}),
+            ...(options.messageId ? { messageId: options.messageId } : {}),
         };
         options.emitPart(part, options.fallbackVisible ? `Patch preview for file.patch\n${detail}\n` : '');
         return;
@@ -104,11 +109,13 @@ export async function renderExpandedToolPreview(
             id: `${options.toolBaseId}:preview`,
             type: 'command',
             toolCallId: toolCall.toolCallId,
+            toolName: toolCall.toolName,
             text: detail,
             title: 'Command preview for command.run',
             detail,
             status: 'pending',
             ...(parsed !== undefined ? { command: redactPreviewText([parsed.command, ...parsed.args].join(' ')) } : {}),
+            ...(options.messageId ? { messageId: options.messageId } : {}),
         };
         options.emitPart(part, options.fallbackVisible ? `Command preview for command.run\n${detail}\n` : '');
         return;
@@ -126,11 +133,13 @@ export async function renderExpandedToolPreview(
             id: `${options.toolBaseId}:preview`,
             type: 'command',
             toolCallId: toolCall.toolCallId,
+            toolName: toolCall.toolName,
             text: detail,
             title: 'Command preview for bash.run',
             detail,
             status: 'pending',
             ...(parsed !== undefined ? { command: redactPreviewText(parsed.commandLine) } : {}),
+            ...(options.messageId ? { messageId: options.messageId } : {}),
         };
         options.emitPart(part, options.fallbackVisible ? `Command preview for bash.run\n${detail}\n` : '');
     }

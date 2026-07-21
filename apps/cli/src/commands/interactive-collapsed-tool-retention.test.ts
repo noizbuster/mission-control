@@ -40,8 +40,12 @@ const diffFiles = [
 ] as const;
 
 describe('collapsed semantic tool retention', () => {
+    // Product meaning of isToolOutputExpanded / toolOutputExpanded:
+    // - TUI: chip expand only (Ctrl+O). Typed body rows always expand; lifecycle gates still apply.
+    // - CLI plain fallback: still gates whether specialized preview/settlement prose is written.
+    //   default false keeps fallback compact; typed transcript parts remain the authoritative body.
     it('retains full patch and command preview parts while fallback bytes stay compact', async () => {
-        // Given
+        // Given: chip/fallback expand false — typed parts still carry full bodies; fallback stays compact.
         const recording = createRecording(false);
         const patchCall = toolCall('file.patch', 'call-patch', { patch: patchText });
         const commandCall = toolCall('command.run', 'call-command', { command: 'echo', args: ['hi'] });
@@ -124,9 +128,12 @@ describe('collapsed semantic tool retention', () => {
     });
 
     it('converges a collapsed pending patch preview to completed without losing its body', async () => {
-        // Given
+        // Given: force chip/fallback expand false (CLI isToolOutputExpanded gates plain fallback prose only;
+        // typed parts remain authoritative regardless). Todo 4 owns the store default.
         const store = createChatStore();
-        store.toggleToolOutputExpanded();
+        if (store.getSnapshot().toolOutputExpanded) {
+            store.toggleToolOutputExpanded();
+        }
         const output = createStoreChatOutput(store);
         const patchCall = toolCall('file.patch', 'shared/patch', { patch: patchText });
         const state = createProviderRenderState(executionTurnId);
@@ -182,7 +189,7 @@ describe('collapsed semantic tool retention', () => {
     });
 
     it('preserves expanded preview and settlement fallback bytes exactly', async () => {
-        // Given
+        // Given: isToolOutputExpanded true still unlocks specialized plain-fallback prose (CLI path only).
         const recording = createPlainRecording(true);
         const patchCall = toolCall('file.patch', 'expanded-patch', { patch: patchText });
         const state = createProviderRenderState(executionTurnId);

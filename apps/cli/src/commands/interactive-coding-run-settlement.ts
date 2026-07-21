@@ -10,6 +10,7 @@ import {
     type ProviderRenderState,
     settleInterruptedToolTranscriptParts,
     settleTerminalToolTranscriptParts,
+    stampToolPartAttribution,
 } from './interactive-coding-transcript-render-state';
 import { emitTranscriptFallback, emitTranscriptPart } from './interactive-transcript-emission';
 
@@ -86,7 +87,11 @@ export function settleReceipt(input: ReceiptSettlementInput): void {
             const completedParts = settleTerminalToolTranscriptParts(renderState, 'completed');
             if (options.output.writeTranscriptPart !== undefined) {
                 for (const part of completedParts) {
-                    emitTranscriptPart(options.output, part, '');
+                    emitTranscriptPart(
+                        options.output,
+                        stampToolPartAttribution(part, renderState.lastAssistantAttributionId),
+                        '',
+                    );
                 }
             }
             emitInteractiveTaskEvent(
@@ -109,7 +114,11 @@ export function settleReceipt(input: ReceiptSettlementInput): void {
             if (interruptedParts === undefined) return;
             if (options.output.writeTranscriptPart !== undefined) {
                 for (const part of interruptedParts) {
-                    emitTranscriptPart(options.output, part, '');
+                    emitTranscriptPart(
+                        options.output,
+                        stampToolPartAttribution(part, renderState.lastAssistantAttributionId),
+                        '',
+                    );
                 }
             }
             emitTranscriptFallback(options.output, 'Interrupted active run\n');
@@ -138,7 +147,11 @@ export function settleReceipt(input: ReceiptSettlementInput): void {
             const failedParts = settleTerminalToolTranscriptParts(renderState, 'failed');
             if (options.output.writeTranscriptPart !== undefined) {
                 for (const part of failedParts) {
-                    emitTranscriptPart(options.output, part, '');
+                    emitTranscriptPart(
+                        options.output,
+                        stampToolPartAttribution(part, renderState.lastAssistantAttributionId),
+                        '',
+                    );
                 }
             }
             const reason = observabilityRedactor.redactText(receipt.reason ?? 'run failed');

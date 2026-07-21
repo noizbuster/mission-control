@@ -31,5 +31,8 @@ export * from './model-capability';
 export * from './models-overlay-state';
 export * from './separator-state';
 export * from './terminal-display-sanitizer';
+export * from './tool-call-aggregation';
 export * from './transcript-part';
+export * from './transcript-visibility';
 export type * from './welcome-data-types';
+

@@ -49,6 +49,10 @@ import {
 } from './models-overlay-state';
 import { sanitizeTerminalDisplayText } from './terminal-display-sanitizer';
 import { type TranscriptPart, upsertTranscriptPart } from './transcript-part';
+import {
+    activeAssistantMessageIdFromParts,
+    attributionKeyForAssistantPart,
+} from './transcript-visibility';
 
 export type { HistoryPickerEntry, HistoryPickerState } from './history-picker-state';
 
@@ -171,6 +175,11 @@ export type SessionPickerView = {
 export type ChatStoreState = {
     readonly outputText: string;
     readonly transcriptParts: readonly TranscriptPart[];
+    /**
+     * Attribution key of the latest assistant turn (`messageId ?? requestId ?? id`).
+     * Used to hide past successful tool/diff satellites into Element B chips.
+     */
+    readonly activeAssistantMessageId: string | undefined;
     readonly sessionId: string;
     /** Live session display name; rename overlay falls back to `sessionId` when this is empty. */
     readonly sessionDisplayName: string;
@@ -178,6 +187,7 @@ export type ChatStoreState = {
     readonly generating: boolean;
     readonly agentStatusText: string;
     readonly showThinking: boolean;
+    /** Element B chip expansion (Ctrl+O); not active ToolCard body expansion. */
     readonly toolOutputExpanded: boolean;
     readonly approvalLevel: ApprovalLevel | undefined;
     readonly workflowNames: readonly string[];
@@ -351,13 +361,15 @@ export class ChatStore {
         this.state = {
             outputText: '',
             transcriptParts: [],
+            activeAssistantMessageId: undefined,
             sessionId: '',
             sessionDisplayName: '',
             inputMirror: '',
             generating: false,
             agentStatusText: '',
             showThinking: true,
-            toolOutputExpanded: true,
+            // Element B chip expansion default: collapsed until Ctrl+O.
+            toolOutputExpanded: false,
             approvalLevel: options?.initialApprovalLevel,
             workflowNames: [],
             skillNames: [],
@@ -482,6 +494,7 @@ export class ChatStore {
     replaceTranscript(parts: readonly TranscriptPart[], outputText: string): void {
         this.state.transcriptParts = parts;
         this.state.outputText = outputText;
+        this.state.activeAssistantMessageId = activeAssistantMessageIdFromParts(parts);
         this.submittedUserPartCounter = parts.reduce((highestOccurrence, part) => {
             const occurrenceText = SUBMITTED_USER_PART_ID_PATTERN.exec(part.id)?.[1];
             if (occurrenceText === undefined) return highestOccurrence;
@@ -1772,6 +1785,9 @@ export class ChatStore {
                           ? { ...existing, status: previewStatus }
                           : existing,
                   );
+        if (part.type === 'assistant') {
+            this.state.activeAssistantMessageId = attributionKeyForAssistantPart(part);
+        }
     }
 
     private appendLegacyTranscriptPart(text: string): void {

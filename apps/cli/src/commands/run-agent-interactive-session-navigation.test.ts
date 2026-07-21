@@ -13,8 +13,8 @@ import {
     createEmptyAuthStore,
     createScriptedChatInput,
 } from './run-agent-chat-test-support';
-import { readStoredSessionProjection, writeSessionEvents } from './session-test-support';
-import { appendFile, mkdtemp, rm } from 'node:fs/promises';
+import { readStoredSessionProjection, writeLocalSessionEvents } from './session-test-support';
+import { appendFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -49,17 +49,18 @@ describe('runAgent interactive session navigation repairs', () => {
         expect(output).toContain('Session tree: session_navigation_live');
     });
 
-    it('prints corrupt-session navigation failures and keeps the chat loop alive', async () => {
+    it('switches a SQLite session even when a stale corrupt legacy JSONL side file shares the id', async () => {
         const dataDir = await tempRoot('mctrl-chat-navigation-corrupt-');
         const sessionId = 'session_navigation_corrupt';
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
-        await writeSessionEvents({
+        await writeLocalSessionEvents({
             dataDir,
             sessionId,
             events: [
                 sessionEvent(sessionId, 'task.completed', 'root prompt', { kind: 'entry', entryId: 'entry_root' }),
             ],
         });
+        await mkdir(join(dataDir, 'sessions'), { recursive: true });
         await appendFile(join(dataDir, 'sessions', `${sessionId}.jsonl`), '{"corrupt":true}\n', 'utf8');
         const chatOutput = createBufferedChatOutput();
 
@@ -74,8 +75,8 @@ describe('runAgent interactive session navigation repairs', () => {
             provider: createDeterministicProvider([]),
         });
 
-        expect(output).toContain(`Cannot switch corrupt session: ${sessionId}`);
         expect(output).toContain(sessionId);
+        expect(output).not.toContain(`Cannot switch corrupt session: ${sessionId}`);
         expect(output).toContain('Exiting mission-control chat');
     });
 
@@ -83,7 +84,7 @@ describe('runAgent interactive session navigation repairs', () => {
         const dataDir = await tempRoot('mctrl-chat-navigation-blocked-');
         const sourceSessionId = 'session_navigation_blocked_source';
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
-        await writeSessionEvents({
+        await writeLocalSessionEvents({
             dataDir,
             sessionId: sourceSessionId,
             events: [
@@ -126,7 +127,7 @@ describe('runAgent interactive session navigation repairs', () => {
         const sourceSessionId = 'session_navigation_trusted_source';
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
         await new ProjectTrustStore({ dataDir }).setDecision(workspaceRoot, 'trusted');
-        await writeSessionEvents({
+        await writeLocalSessionEvents({
             dataDir,
             sessionId: sourceSessionId,
             events: [

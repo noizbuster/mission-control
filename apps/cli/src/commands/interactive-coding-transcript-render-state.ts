@@ -20,6 +20,7 @@ export type ProviderRenderState = {
     streamingThinking: boolean;
     streamingThinkingPartId?: string;
     finalMessage?: string;
+    lastAssistantAttributionId?: string;
     readonly assistantTextByRequest: Map<string, string>;
     readonly reasoningTextByRequest: Map<string, string>;
     readonly openGraphTurnByNode: Map<string, string>;
@@ -32,6 +33,25 @@ export type ProviderRenderState = {
     interruptionReceiptSettled: boolean;
     lastGraphErrorEmission?: GraphErrorEmissionState;
 };
+
+export type AssistantAttributionSource = {
+    readonly messageId?: string;
+    readonly requestId?: string;
+    readonly id: string;
+};
+
+export function noteAssistantAttribution(state: ProviderRenderState, part: AssistantAttributionSource): void {
+    state.lastAssistantAttributionId = part.messageId ?? part.requestId ?? part.id;
+}
+
+export function stampToolPartAttribution(
+    part: ActiveToolTranscriptPart,
+    attributionId: string | undefined,
+): ActiveToolTranscriptPart {
+    if ('messageId' in part && part.messageId !== undefined) return part;
+    if (attributionId === undefined || attributionId.length === 0) return part;
+    return { ...part, messageId: attributionId };
+}
 
 export type GraphErrorEmissionState = {
     readonly reason: string;

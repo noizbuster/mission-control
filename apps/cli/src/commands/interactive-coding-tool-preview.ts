@@ -28,7 +28,8 @@ export async function renderToolPreview(
         toolCall.toolName === 'file.write' ? prepareFileWriteArgumentsPreview(toolCall.argumentsJson) : undefined;
     const activity = formatPreviewActivity(toolCall, fileWriteArguments);
     const toolBaseId = allocateToolTranscriptOccurrence(options.state, toolCall.toolCallId);
-    const pendingPart = pendingToolTranscriptPart(toolCall, activity, toolBaseId);
+    const messageId = options.state.lastAssistantAttributionId;
+    const pendingPart = pendingToolTranscriptPart(toolCall, activity, toolBaseId, messageId);
     registerActiveToolTranscriptPart(options.state, pendingPart);
     emitTranscriptPart(output, pendingPart, `${activity}\n`);
     await renderExpandedToolPreview(toolCall, {
@@ -40,6 +41,7 @@ export async function renderToolPreview(
         },
         ...(options.workspaceRoot !== undefined ? { workspaceRoot: options.workspaceRoot } : {}),
         ...(fileWriteArguments !== undefined ? { fileWriteArguments } : {}),
+        ...(messageId ? { messageId } : {}),
     });
 }
 

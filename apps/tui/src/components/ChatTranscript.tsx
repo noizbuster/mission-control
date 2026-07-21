@@ -48,6 +48,7 @@ export type ChatTranscriptProps = {
     readonly generating: boolean;
     readonly showThinking: boolean;
     readonly toolOutputExpanded: boolean;
+    readonly activeAssistantMessageId?: string;
 };
 
 export type ChatTranscriptScrollboxProps = {
@@ -94,10 +95,14 @@ export function ChatTranscript(props: ChatTranscriptProps): JSX.Element {
                             part={part()}
                             showThinking={props.showThinking}
                             toolOutputExpanded={props.toolOutputExpanded}
+                            transcriptParts={props.transcriptParts}
                             viewportColumns={dimensions().width}
                             isFirst={index === 0}
                             isLast={index === props.transcriptParts.length - 1}
                             generating={props.generating}
+                            {...(props.activeAssistantMessageId !== undefined
+                                ? { activeAssistantMessageId: props.activeAssistantMessageId }
+                                : {})}
                         />
                     )}
                 </Index>

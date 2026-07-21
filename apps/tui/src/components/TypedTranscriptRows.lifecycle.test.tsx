@@ -1,12 +1,14 @@
-/** @jsxImportSource @opentui/solid */
+ /** @jsxImportSource @opentui/solid */
 
 import { testRender } from '@opentui/solid';
 import { describe, expect, it } from 'vitest';
-import { TypedSubagentRow, TypedToolRow } from './TypedTranscriptRows';
+import { TranscriptPartRenderer } from './TranscriptPartRenderer';
+import { TypedCodeRow, TypedDiffRow, TypedSubagentRow, TypedToolRow } from './TypedTranscriptRows';
 
 describe('typed transcript lifecycle expansion', () => {
     it('shows settled one-line bodies while preserving active and multiline tool and subagent behavior', async () => {
         // Given: expanded tool and subagent rows spanning active/settled and one-line/multiline states.
+        // Row-level expanded=true is what TranscriptPartRenderer always passes (chip flag is footer-only).
         const setup = await testRender(
             () => (
                 <box flexDirection="column">
@@ -111,6 +113,179 @@ describe('typed transcript lifecycle expansion', () => {
             expect(frame).toContain('subagent-settled-many-last');
         } finally {
             setup.renderer.destroy();
+        }
+    });
+
+    it('keeps active multiline tool/code/diff bodies expanded when chip flag is collapsed', async () => {
+        // Given: chip expand (toolOutputExpanded) is false. Typed bodies must still expand;
+        // Ctrl+O must not be the sole reason any typed body collapses.
+        // Native <diff>/<Markdown> may not paint body glyphs into captureCharFrame; assert
+        // tool body text plus code/diff panel structure matching expanded=true (not header-only).
+        const chipCollapsed = await testRender(
+            () => (
+                <box flexDirection="column">
+                    <TranscriptPartRenderer
+                        part={{
+                            id: 'tool-active-many',
+                            type: 'inline-tool',
+                            title: 'tool-active-many',
+                            text: 'tool-active-many-first\ntool-active-many-last',
+                            status: 'running',
+                        }}
+                        showThinking={true}
+                        toolOutputExpanded={false}
+                        transcriptParts={[]}
+                        viewportColumns={80}
+                        isFirst={true}
+                        isLast={false}
+                    />
+                    <TranscriptPartRenderer
+                        part={{
+                            id: 'code-active-many',
+                            type: 'code',
+                            text: 'const a = 1;\nconst b = 2;',
+                            language: 'ts',
+                            status: 'running',
+                        }}
+                        showThinking={true}
+                        toolOutputExpanded={false}
+                        transcriptParts={[]}
+                        viewportColumns={80}
+                        isFirst={false}
+                        isLast={false}
+                    />
+                    <TranscriptPartRenderer
+                        part={{
+                            id: 'diff-active-many',
+                            type: 'diff',
+                            filePath: 'src/active.ts',
+                            text: '-old line\n+new line',
+                            status: 'running',
+                        }}
+                        showThinking={true}
+                        toolOutputExpanded={false}
+                        transcriptParts={[]}
+                        viewportColumns={80}
+                        isFirst={false}
+                        isLast={true}
+                    />
+                </box>
+            ),
+            { width: 80, height: 30 },
+        );
+        const chipExpanded = await testRender(
+            () => (
+                <box flexDirection="column">
+                    <TranscriptPartRenderer
+                        part={{
+                            id: 'tool-active-many',
+                            type: 'inline-tool',
+                            title: 'tool-active-many',
+                            text: 'tool-active-many-first\ntool-active-many-last',
+                            status: 'running',
+                        }}
+                        showThinking={true}
+                        toolOutputExpanded={true}
+                        transcriptParts={[]}
+                        viewportColumns={80}
+                        isFirst={true}
+                        isLast={false}
+                    />
+                    <TranscriptPartRenderer
+                        part={{
+                            id: 'code-active-many',
+                            type: 'code',
+                            text: 'const a = 1;\nconst b = 2;',
+                            language: 'ts',
+                            status: 'running',
+                        }}
+                        showThinking={true}
+                        toolOutputExpanded={true}
+                        transcriptParts={[]}
+                        viewportColumns={80}
+                        isFirst={false}
+                        isLast={false}
+                    />
+                    <TranscriptPartRenderer
+                        part={{
+                            id: 'diff-active-many',
+                            type: 'diff',
+                            filePath: 'src/active.ts',
+                            text: '-old line\n+new line',
+                            status: 'running',
+                        }}
+                        showThinking={true}
+                        toolOutputExpanded={true}
+                        transcriptParts={[]}
+                        viewportColumns={80}
+                        isFirst={false}
+                        isLast={true}
+                    />
+                </box>
+            ),
+            { width: 80, height: 30 },
+        );
+        // Header-only baseline: row-level expanded=false collapses TypedBlockPanel bodies.
+        const headerOnly = await testRender(
+            () => (
+                <box flexDirection="column">
+                    <TypedToolRow
+                        part={{
+                            id: 'tool-active-many',
+                            type: 'inline-tool',
+                            title: 'tool-active-many',
+                            text: 'tool-active-many-first\ntool-active-many-last',
+                            status: 'running',
+                        }}
+                        expanded={false}
+                    />
+                    <TypedCodeRow
+                        part={{
+                            id: 'code-active-many',
+                            type: 'code',
+                            text: 'const a = 1;\nconst b = 2;',
+                            language: 'ts',
+                            status: 'running',
+                        }}
+                        expanded={false}
+                        viewportColumns={80}
+                    />
+                    <TypedDiffRow
+                        part={{
+                            id: 'diff-active-many',
+                            type: 'diff',
+                            filePath: 'src/active.ts',
+                            text: '-old line\n+new line',
+                            status: 'running',
+                        }}
+                        expanded={false}
+                    />
+                </box>
+            ),
+            { width: 80, height: 30 },
+        );
+
+        try {
+            // When: the same parts render with chip flag false, chip flag true, and forced header-only.
+            await chipCollapsed.renderOnce();
+            await chipExpanded.renderOnce();
+            await headerOnly.renderOnce();
+            const collapsedFrame = chipCollapsed.captureCharFrame();
+            const expandedFrame = chipExpanded.captureCharFrame();
+            const headerOnlyFrame = headerOnly.captureCharFrame();
+
+            // Then: chip flag does not change typed bodies; tool body text stays visible; not header-only.
+            expect(collapsedFrame).toContain('tool-active-many-last');
+            expect(expandedFrame).toContain('tool-active-many-last');
+            expect(headerOnlyFrame).not.toContain('tool-active-many-last');
+            expect(collapsedFrame).toBe(expandedFrame);
+            expect(collapsedFrame).not.toBe(headerOnlyFrame);
+            expect(collapsedFrame).toContain('Running: Code (ts)');
+            expect(collapsedFrame).toContain('Running: Diff: src/active.ts');
+        } finally {
+            chipCollapsed.renderer.destroy();
+            chipExpanded.renderer.destroy();
+            headerOnly.renderer.destroy();
         }
     });
 });

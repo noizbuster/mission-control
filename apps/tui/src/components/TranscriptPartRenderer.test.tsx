@@ -192,7 +192,13 @@ describe('TranscriptPartRenderer component topology', () => {
             expect(source).toContain(variantCase);
         }
         expect(source).toContain('return assertNever(props.part)');
+        // Chip flag no longer drives typed body expand; bodies always get expanded={true}.
+        expect(source).toContain('expanded={true}');
+        expect(source).toContain('toolOutputExpanded={true}');
+        expect(source).not.toContain('expanded={props.toolOutputExpanded}');
         expect(source).toContain('toolOutputExpanded={props.toolOutputExpanded}');
+        expect(source).toContain('shouldHideToolPart');
+        expect(source).toContain('transcriptParts={props.transcriptParts}');
         expect(source).toContain('viewportColumns={props.viewportColumns}');
 
         const rowsSource = readFileSync(
@@ -203,8 +209,11 @@ describe('TranscriptPartRenderer component topology', () => {
         expect(rowsSource).toContain('<Show when={props.showThinking}>');
         expect(rowsSource).toContain('<DiffView');
         expect(rowsSource).toContain('diff={props.part.text}');
+        // Lifecycle gates still consume the row-level expanded prop.
         expect(rowsSource).toContain('expanded={props.expanded}');
         expect(rowsSource).toContain('parseMessageBlocks(props.part.text)');
+        expect(rowsSource).toContain('AssistantMessageFooter');
+        expect(rowsSource).toContain('attributionKeyForAssistantPart');
 
         const typedCodeRowSource = rowsSource.slice(
             rowsSource.indexOf('export function TypedCodeRow'),

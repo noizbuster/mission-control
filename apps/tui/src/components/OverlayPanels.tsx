@@ -358,6 +358,7 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): JSX.Element {
                                     : { attributes: TextAttributes.DIM };
                             return (
                                 // biome-ignore lint/a11y/noStaticElementInteractions: opentui <box> has no role concept; Up/Down/Enter/Space keyboard nav already exists, mouse is an enhancement
+                                // biome-ignore lint/a11y/useKeyWithMouseEvents: keyboard nav is already wired on the parent overlay; mouse hover is enhancement-only
                                 <box
                                     flexDirection="column"
                                     onMouseDown={onOptionClick(index())}

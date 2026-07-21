@@ -39,6 +39,7 @@ export function renderGraphToolSettlement(input: GraphToolSettlementRenderInput)
         toolCallId !== undefined && toolCallId.length > 0
             ? claimToolTranscriptOccurrence(state, toolCallId)
             : undefined;
+    const messageId = state.lastAssistantAttributionId;
     const settlementPart =
         toolCallId !== undefined && toolBaseId !== undefined
             ? projectToolSettlementPart({
@@ -49,6 +50,7 @@ export function renderGraphToolSettlement(input: GraphToolSettlementRenderInput)
                   ...(modelOutput !== undefined ? { modelOutput } : {}),
                   ...(structured !== undefined ? { structuredOutput: structured } : {}),
                   ...(errorMessage !== undefined ? { errorMessage } : {}),
+                  ...(messageId ? { messageId } : {}),
               })
             : undefined;
     if (settlementPart !== undefined) {
@@ -64,6 +66,7 @@ export function renderGraphToolSettlement(input: GraphToolSettlementRenderInput)
             toolCallId,
             structuredOutput: structured,
             events: [],
+            ...(messageId ? { messageId } : {}),
         })) {
             emitTranscriptPart(output, part, '');
         }

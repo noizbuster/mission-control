@@ -1,4 +1,4 @@
-import { createDeterministicProvider, JsonlSessionEventStore, readLocalSessionReplay } from '@mission-control/core';
+import { createDeterministicProvider, openLocalSessionEventStore, readLocalSessionReplay } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args';
@@ -87,142 +87,141 @@ describe('runAgent interactive resume for blocked runs', () => {
 });
 
 async function seedBlockedSession(dataDir: string, sessionId: string): Promise<void> {
-    const store = await JsonlSessionEventStore.open({
+    const events: AgentEvent[] = [
+        {
+            type: 'session.started',
+            timestamp: fixedNow(),
+            sessionId,
+            message: 'seed session started',
+            nativeSidecarStatus: 'mock',
+        },
+        {
+            type: 'prompt.admitted',
+            timestamp: fixedNow(),
+            sessionId,
+            message: 'apply a patch',
+            transcript: {
+                inputId: 'input_seed',
+                messageId: 'message_seed',
+                delivery: 'steer',
+                visibility: 'pending',
+            },
+        },
+        {
+            type: 'prompt.promoted',
+            timestamp: fixedNow(),
+            sessionId,
+            message: 'apply a patch',
+            transcript: {
+                inputId: 'input_seed',
+                messageId: 'message_seed',
+                delivery: 'steer',
+                visibility: 'model_visible',
+            },
+        },
+        {
+            type: 'model.call.started',
+            timestamp: fixedNow(),
+            sessionId,
+            taskId: 'turn_seed',
+            message: 'model call started',
+        },
+        {
+            type: 'model.call.completed',
+            timestamp: fixedNow(),
+            sessionId,
+            taskId: 'turn_seed',
+            message: 'approval required',
+            providerStreamChunk: {
+                kind: 'tool_call_completed',
+                requestId: 'request_seed',
+                sequence: 0,
+                toolCall: {
+                    toolCallId: 'seed_patch_call',
+                    toolName: 'file.patch',
+                    argumentsJson: JSON.stringify({
+                        patch: addFilePatch('.seed.txt', 'approved'),
+                    }),
+                },
+            },
+        },
+        {
+            type: 'model.call.completed',
+            timestamp: fixedNow(),
+            sessionId,
+            taskId: 'turn_seed',
+            message: 'approval required',
+            providerStreamChunk: {
+                kind: 'response_completed',
+                requestId: 'request_seed',
+                sequence: 1,
+                message: {
+                    messageId: 'assistant_seed',
+                    role: 'assistant',
+                    content: 'approval required',
+                    toolCallIds: ['seed_patch_call'],
+                },
+                finishReason: 'tool_calls',
+            },
+        },
+        {
+            type: 'run.blocked',
+            timestamp: fixedNow(),
+            sessionId,
+            message: 'waiting for approval: file.patch',
+            run: {
+                command: 'run',
+                state: 'blocked_on_approval',
+                runId: 'run_seed',
+                reason: 'waiting for approval: file.patch',
+                errorCode: 'tool_failed',
+                toolCallId: 'seed_patch_call',
+            },
+        },
+        {
+            type: 'approval.updated',
+            timestamp: fixedNow(),
+            sessionId,
+            message: 'approval updated: approved',
+            approvalRecord: {
+                approvalId: 'approval_seed_patch_call',
+                requestId: 'approval_seed_patch_call',
+                state: 'approved',
+                requestedAt: fixedNow(),
+                decidedAt: fixedNow(),
+                reason: 'approved externally',
+                subject: {
+                    kind: 'tool',
+                    id: 'seed_patch_call',
+                },
+                policyDecision: 'requires_approval',
+            },
+        },
+        {
+            type: 'tool.completed',
+            timestamp: fixedNow(),
+            sessionId,
+            taskId: 'seed_patch_call',
+            message: 'tool completed: file.patch',
+            toolResult: {
+                toolCallId: 'seed_patch_call',
+                status: 'completed',
+                output: 'applied patch to .seed.txt',
+            },
+        },
+    ];
+    const local = await openLocalSessionEventStore({
         dataDir,
         sessionId,
         now: fixedNow,
         createEventId: (_event, sequence) => `event_${sequence}`,
     });
     try {
-        const events: AgentEvent[] = [
-            {
-                type: 'session.started',
-                timestamp: fixedNow(),
-                sessionId,
-                message: 'seed session started',
-                nativeSidecarStatus: 'mock',
-            },
-            {
-                type: 'prompt.admitted',
-                timestamp: fixedNow(),
-                sessionId,
-                message: 'apply a patch',
-                transcript: {
-                    inputId: 'input_seed',
-                    messageId: 'message_seed',
-                    delivery: 'steer',
-                    visibility: 'pending',
-                },
-            },
-            {
-                type: 'prompt.promoted',
-                timestamp: fixedNow(),
-                sessionId,
-                message: 'apply a patch',
-                transcript: {
-                    inputId: 'input_seed',
-                    messageId: 'message_seed',
-                    delivery: 'steer',
-                    visibility: 'model_visible',
-                },
-            },
-            {
-                type: 'model.call.started',
-                timestamp: fixedNow(),
-                sessionId,
-                taskId: 'turn_seed',
-                message: 'model call started',
-            },
-            {
-                type: 'model.call.completed',
-                timestamp: fixedNow(),
-                sessionId,
-                taskId: 'turn_seed',
-                message: 'approval required',
-                providerStreamChunk: {
-                    kind: 'tool_call_completed',
-                    requestId: 'request_seed',
-                    sequence: 0,
-                    toolCall: {
-                        toolCallId: 'seed_patch_call',
-                        toolName: 'file.patch',
-                        argumentsJson: JSON.stringify({
-                            patch: addFilePatch('.seed.txt', 'approved'),
-                        }),
-                    },
-                },
-            },
-            {
-                type: 'model.call.completed',
-                timestamp: fixedNow(),
-                sessionId,
-                taskId: 'turn_seed',
-                message: 'approval required',
-                providerStreamChunk: {
-                    kind: 'response_completed',
-                    requestId: 'request_seed',
-                    sequence: 1,
-                    message: {
-                        messageId: 'assistant_seed',
-                        role: 'assistant',
-                        content: 'approval required',
-                        toolCallIds: ['seed_patch_call'],
-                    },
-                    finishReason: 'tool_calls',
-                },
-            },
-            {
-                type: 'run.blocked',
-                timestamp: fixedNow(),
-                sessionId,
-                message: 'waiting for approval: file.patch',
-                run: {
-                    command: 'run',
-                    state: 'blocked_on_approval',
-                    runId: 'run_seed',
-                    reason: 'waiting for approval: file.patch',
-                    errorCode: 'tool_failed',
-                    toolCallId: 'seed_patch_call',
-                },
-            },
-            {
-                type: 'approval.updated',
-                timestamp: fixedNow(),
-                sessionId,
-                message: 'approval updated: approved',
-                approvalRecord: {
-                    approvalId: 'approval_seed_patch_call',
-                    requestId: 'approval_seed_patch_call',
-                    state: 'approved',
-                    requestedAt: fixedNow(),
-                    decidedAt: fixedNow(),
-                    reason: 'approved externally',
-                    subject: {
-                        kind: 'tool',
-                        id: 'seed_patch_call',
-                    },
-                    policyDecision: 'requires_approval',
-                },
-            },
-            {
-                type: 'tool.completed',
-                timestamp: fixedNow(),
-                sessionId,
-                taskId: 'seed_patch_call',
-                message: 'tool completed: file.patch',
-                toolResult: {
-                    toolCallId: 'seed_patch_call',
-                    status: 'completed',
-                    output: 'applied patch to .seed.txt',
-                },
-            },
-        ];
-
         for (const event of events) {
-            await store.append(event);
+            await local.append(event);
         }
     } finally {
-        await store.close();
+        await local.close();
     }
 }
 
