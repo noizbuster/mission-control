@@ -14,6 +14,8 @@ export const sessions = sqliteTable(
         providerId: text('provider_id'),
         modelId: text('model_id'),
         title: text('title'),
+        category: text('category'),
+        agentName: text('agent_name'),
         totalInputTokens: integer('total_input_tokens').notNull().default(0),
         totalOutputTokens: integer('total_output_tokens').notNull().default(0),
         totalCostUsd: text('total_cost_usd'),

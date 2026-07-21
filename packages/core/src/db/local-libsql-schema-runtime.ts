@@ -11,6 +11,8 @@ export const runtimePersistenceSchemaSql = [
                 provider_id TEXT,
                 model_id TEXT,
                 title TEXT,
+                category TEXT,
+                agent_name TEXT,
                 total_input_tokens INTEGER NOT NULL DEFAULT 0,
                 total_output_tokens INTEGER NOT NULL DEFAULT 0,
                 total_cost_usd TEXT,

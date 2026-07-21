@@ -220,6 +220,57 @@ describe('local libSQL database runtime', () => {
         expect(legacyTables.rows).toEqual([]);
     });
 
+    it('adds sessions.category and sessions.agent_name on existing databases without wiping rows', async () => {
+        const givenUrl = await tempDbUrl();
+        const legacy = createClient({ url: givenUrl });
+        await legacy.execute(`
+            CREATE TABLE sessions (
+                session_id TEXT PRIMARY KEY,
+                root_session_id TEXT,
+                parent_session_id TEXT,
+                status TEXT NOT NULL,
+                title TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                last_activity_at TEXT NOT NULL
+            )
+        `);
+        await legacy.execute({
+            sql: 'INSERT INTO sessions (session_id, status, title, created_at, updated_at, last_activity_at) VALUES (?, ?, ?, ?, ?, ?)',
+            args: [
+                'ses_legacy',
+                'idle',
+                'keep-me',
+                '2026-07-21T00:00:00.000Z',
+                '2026-07-21T00:00:00.000Z',
+                '2026-07-21T00:00:00.000Z',
+            ],
+        });
+        legacy.close();
+
+        const db = await openLocalLibsqlDb({ url: givenUrl });
+        const columns = await db.client.execute("PRAGMA table_info('sessions')");
+        const names = columns.rows.map((row) => {
+            // biome-ignore lint/complexity/useLiteralKeys: libSQL rows expose table columns through an index signature.
+            return row['name'];
+        });
+        const preserved = await db.client.execute({
+            sql: 'SELECT session_id, title, category, agent_name FROM sessions WHERE session_id = ?',
+            args: ['ses_legacy'],
+        });
+        db.close();
+
+        expect(names).toEqual(expect.arrayContaining(['category', 'agent_name', 'title']));
+        expect(preserved.rows).toEqual([
+            {
+                session_id: 'ses_legacy',
+                title: 'keep-me',
+                category: null,
+                agent_name: null,
+            },
+        ]);
+    });
+
     it('rejects remote libSQL URLs before opening a client', async () => {
         const whenOpening = openLocalLibsqlDb({ url: 'libsql://user:secret@example.turso.io/app?token=secret' });
 

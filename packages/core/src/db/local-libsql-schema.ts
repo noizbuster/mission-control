@@ -6,6 +6,7 @@ import { memoryEntriesSchemaSql } from './local-libsql-schema-memory';
 import { sessionProjectionSchemaSql } from './local-libsql-schema-projections';
 import { runtimePersistenceSchemaSql } from './local-libsql-schema-runtime';
 import { sessionControlSchemaSql } from './local-libsql-schema-session-control';
+import { ensureSessionIdentityColumns } from './local-libsql-schema-session-identity';
 
 export const localDbSchemaSql = [
     ...memoryEntriesSchemaSql,
@@ -21,6 +22,7 @@ export async function ensureLocalDbSchema(client: Client): Promise<void> {
     await client.batch(statements, 'write');
     await rebuildLegacyDesktopApprovalEffects(client);
     await migrateLegacyProjectionTables(client);
+    await ensureSessionIdentityColumns(client);
 }
 
 async function migrateLegacyProjectionTables(client: Client): Promise<void> {
