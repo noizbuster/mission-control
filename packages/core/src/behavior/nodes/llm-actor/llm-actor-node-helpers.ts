@@ -14,6 +14,11 @@ export function readStringConfig(node: AbgNodeSpec, key: string): string | undef
     return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
+export function readBooleanConfig(node: AbgNodeSpec, key: string): boolean | undefined {
+    const value = node.config?.[key];
+    return typeof value === 'boolean' ? value : undefined;
+}
+
 /**
  * Advertise only tools whose `capabilityClasses` intersect the node's allowed set.
  *

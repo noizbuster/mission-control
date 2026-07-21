@@ -12,13 +12,15 @@ import type { AbgNodeRunContext, AbgNodeRunner } from '../../node-registry';
 import type { ToolSet } from 'ai';
 import { bridgeAdvertisementsToAiSdk, createAbgToolSettlementLedger } from './abg-tool-bridge';
 import { type LlmActorTurnResult, runLlmActor } from './llm-actor-node';
+import { YIELD_TOOL_NAME } from '../../../tools/yield-tool/yield-tool';
 import {
     applyEnumConstraint,
     filterByCapabilities,
+    readBooleanConfig,
     readPriorSummary,
     readStringConfig,
 } from './llm-actor-node-helpers';
-import { extractProposedToolName } from './llm-actor-settlements';
+import { extractProposedToolName, extractToolCallId } from './llm-actor-settlements';
 import { discoverPromptSkills } from './llm-actor-skill-cache';
 import {
     appendStructuredOutputSystem,
@@ -27,6 +29,14 @@ import {
     isGenerateObjectToolName,
     resolveStructuredOutputFromTurn,
 } from './structured-output-tool';
+
+/** Blackboard key: child successfully settled `yield` in this spawn. */
+export const CHILD_YIELDED_KEY = 'child.yielded';
+/** Blackboard key: one-shot system reminder pending for the next llm-actor turn. */
+export const CHILD_YIELD_REMINDER_PENDING_KEY = 'child.yield_reminder_pending';
+/** Locked one-shot reminder when requireYieldBeforeExit forces another turn. */
+export const CHILD_YIELD_REMINDER_TEXT =
+    'You did not call yield. Either continue work via a tool call or call yield now with your final result. Do not end with assistant prose alone.';
 
 export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
     const nodeId = node.id;
@@ -53,6 +63,11 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
         };
         return;
     }
+    if (blackboard.get(CHILD_YIELD_REMINDER_PENDING_KEY) === true) {
+        blackboard.appendMessages([{ role: 'system', content: CHILD_YIELD_REMINDER_TEXT }]);
+        blackboard.set(CHILD_YIELD_REMINDER_PENDING_KEY, false);
+    }
+
     const messages = blackboard.getMessages();
     if (messages.length === 0) {
         yield { type: 'started', nodeId, ...graphIdPart };
@@ -157,6 +172,7 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
 
     let turnResult: LlmActorTurnResult | undefined;
     let proposedWorkspaceToolCalls = 0;
+    const proposedYieldToolCallIds: string[] = [];
     for await (const signal of runLlmActor({
         graphId: context.graphId,
         nodeId,
@@ -183,8 +199,22 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
             if (toolName === undefined || !isGenerateObjectToolName(toolName)) {
                 proposedWorkspaceToolCalls += 1;
             }
+            if (toolName === YIELD_TOOL_NAME) {
+                const toolCallId = extractToolCallId(signal.event.payload);
+                if (toolCallId !== undefined) {
+                    proposedYieldToolCallIds.push(toolCallId);
+                }
+            }
         }
         yield signal;
+    }
+
+    for (const toolCallId of proposedYieldToolCallIds) {
+        const settlement = settlementLedger.lookup(toolCallId);
+        if (settlement?.status === 'completed') {
+            blackboard.set(CHILD_YIELDED_KEY, true);
+            break;
+        }
     }
 
     // loop_active is ALWAYS written so a failed/aborted turn after a tool step CLEARS it
@@ -266,6 +296,22 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
                     },
                 });
             }
+        }
+    }
+
+    // Child-only: keep the coding-agent self-edge alive until yield settles (or soft-land /
+    // maxNodeRuns ends the loop). Parent graphs omit requireYieldBeforeExit.
+    const requireYieldBeforeExit = readBooleanConfig(node, 'requireYieldBeforeExit') === true;
+    if (requireYieldBeforeExit) {
+        if (blackboard.get(CHILD_YIELDED_KEY) === true) {
+            // Yield is a workspace tool, so the base loop would stay active; force exit.
+            loopActive = false;
+            blackboard.set('llm.loop_active', false);
+            blackboard.set(CHILD_YIELD_REMINDER_PENDING_KEY, false);
+        } else if (!loopActive) {
+            loopActive = true;
+            blackboard.set('llm.loop_active', true);
+            blackboard.set(CHILD_YIELD_REMINDER_PENDING_KEY, true);
         }
     }
 }

@@ -32,6 +32,11 @@ export type CodingAgentGraphOptions = {
     readonly model: AbgNodeModelOptions;
     /** Tool-turn budget (graph loop bound). Default 40. */
     readonly maxNodeRuns?: number;
+    /**
+     * When true, llm-actor keeps `llm.loop_active` until the child has successfully
+     * called `yield` (or soft-land / maxNodeRuns ends the loop). Task children only.
+     */
+    readonly requireYieldBeforeExit?: boolean;
 };
 
 export function createCodingAgentGraph(options: CodingAgentGraphOptions): AbgGraphSpec {
@@ -48,6 +53,9 @@ export function createCodingAgentGraph(options: CodingAgentGraphOptions): AbgGra
                 id: 'llm-actor',
                 kind: 'llm',
                 label: 'Coding agent — observe → decide → act',
+                ...(options.requireYieldBeforeExit === true
+                    ? { config: { requireYieldBeforeExit: true } }
+                    : {}),
             },
         ],
         edges: [
