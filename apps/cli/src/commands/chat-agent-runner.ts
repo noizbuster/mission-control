@@ -26,7 +26,12 @@ import type { ModelProviderSelection } from '@mission-control/protocol';
 import { closeTreeSitterClient } from '@mission-control/tui/highlight';
 import type { ApprovalLevel, ChatStore, ModelChoice } from '@mission-control/tui/state';
 import { approvalLevelRules } from '@mission-control/tui/state';
-import { type ChatLineAction, type ChatLineOptions, parseChatLine } from './chat-commands';
+import {
+    chatActionShowsWorkingStatus,
+    type ChatLineAction,
+    type ChatLineOptions,
+    parseChatLine,
+} from './chat-commands';
 import { appendInputHistoryEntry } from './input-history-store';
 import { actionResult, type ChatActionResult } from './interactive-chat-action-result';
 import type { ChatInputEvent, ChatOutput } from './interactive-chat-io';
@@ -271,17 +276,24 @@ export function startChatAgentRunner(options: AgentRunnerOptions): AgentRunnerHa
                     break;
                 }
 
-                store.setGenerating(true);
+                const showWorking = chatActionShowsWorkingStatus(action.kind);
+                if (showWorking) {
+                    store.setGenerating(true);
+                }
                 let result: ChatActionResult;
                 try {
                     result = await dispatch(action, { activeTurn });
                 } catch (error) {
                     const message = error instanceof Error ? error.message : String(error);
                     emitTranscriptFallback(chatOutput, `Error: ${message}\n`);
-                    store.setGenerating(false);
+                    if (showWorking) {
+                        store.setGenerating(false);
+                    }
                     continue;
                 }
-                store.setGenerating(false);
+                if (showWorking) {
+                    store.setGenerating(false);
+                }
 
                 applyResult(result);
             }

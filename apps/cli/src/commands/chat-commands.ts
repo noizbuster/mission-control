@@ -477,6 +477,60 @@ function parseWorkflowInvocation(line: string, options: ChatLineOptions): ChatLi
     };
 }
 
+export function chatActionShowsWorkingStatus(kind: ChatLineAction['kind']): boolean {
+    switch (kind) {
+        case 'prompt':
+        case 'skill':
+        case 'workflow':
+        case 'bash':
+        case 'bash-display-only':
+        case 'queue':
+        case 'steer':
+        case 'resume':
+        case 'continue':
+        case 'retry':
+        case 'kick':
+        case 'compact':
+        case 'branch':
+            return true;
+        case 'empty':
+        case 'new-session':
+        case 'clear':
+        case 'session':
+        case 'session-picker':
+        case 'sessions':
+        case 'tree':
+        case 'fork':
+        case 'clone':
+        case 'export':
+        case 'rename':
+        case 'undo':
+        case 'redo':
+        case 'help':
+        case 'hotkeys':
+        case 'interrupt':
+        case 'exit':
+        case 'model-pick':
+        case 'model-list':
+        case 'model':
+        case 'trust':
+        case 'approval':
+        case 'agents':
+        case 'skills':
+        case 'models':
+        case 'mission':
+        case 'unknown-slash':
+        case 'invalid':
+            return false;
+        default:
+            return assertNeverWorkingKind(kind);
+    }
+}
+
 function assertNever(value: never): never {
     throw new Error(`Unexpected model command result: ${String(value)}`);
+}
+
+function assertNeverWorkingKind(value: never): never {
+    throw new Error(`Unexpected chat action kind: ${String(value)}`);
 }

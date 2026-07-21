@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatSkillInvocationPrompt, parseChatLine } from './chat-commands';
+import { chatActionShowsWorkingStatus, formatSkillInvocationPrompt, parseChatLine } from './chat-commands';
 
 describe('chat command parser', () => {
     it('parses model commands when a provider model shorthand is supplied', () => {
@@ -380,5 +380,28 @@ describe('chat command parser', () => {
 
     it('accepts /mission with trailing whitespace as valid', () => {
         expect(parseChatLine('/mission   ')).toEqual({ kind: 'mission' });
+    });
+});
+
+describe('chatActionShowsWorkingStatus', () => {
+    it('keeps model and session pickers idle so overlays own the keyboard', () => {
+        expect(chatActionShowsWorkingStatus('model-pick')).toBe(false);
+        expect(chatActionShowsWorkingStatus('model-list')).toBe(false);
+        expect(chatActionShowsWorkingStatus('model')).toBe(false);
+        expect(chatActionShowsWorkingStatus('models')).toBe(false);
+        expect(chatActionShowsWorkingStatus('session-picker')).toBe(false);
+        expect(chatActionShowsWorkingStatus('sessions')).toBe(false);
+        expect(chatActionShowsWorkingStatus('agents')).toBe(false);
+        expect(chatActionShowsWorkingStatus('approval')).toBe(false);
+    });
+
+    it('marks agent-work actions as generating', () => {
+        expect(chatActionShowsWorkingStatus('prompt')).toBe(true);
+        expect(chatActionShowsWorkingStatus('skill')).toBe(true);
+        expect(chatActionShowsWorkingStatus('workflow')).toBe(true);
+        expect(chatActionShowsWorkingStatus('bash')).toBe(true);
+        expect(chatActionShowsWorkingStatus('continue')).toBe(true);
+        expect(chatActionShowsWorkingStatus('retry')).toBe(true);
+        expect(chatActionShowsWorkingStatus('compact')).toBe(true);
     });
 });

@@ -49,7 +49,7 @@ import type { ProviderAuthStore } from '../auth-store';
 import { getVersion } from '../cli-version';
 import { toggleDisabled } from './agents-disabled-config';
 import { parseModelPatternString, setOverride } from './agents-model-overrides-config';
-import { parseChatLine } from './chat-commands';
+import { chatActionShowsWorkingStatus, parseChatLine } from './chat-commands';
 import { appendInputHistoryEntry, loadInputHistoryEntries } from './input-history-store';
 import type { ChatActionResult } from './interactive-chat-action-result';
 import {
@@ -779,9 +779,7 @@ export async function runInteractiveChatSession(
                 }
             }
             let result: ChatActionResult;
-            const isPickerAction =
-                action.kind === 'sessions' || action.kind === 'session-picker' || action.kind === 'agents';
-            if (tuiHandle !== undefined && !isPickerAction) {
+            if (tuiHandle !== undefined && chatActionShowsWorkingStatus(action.kind)) {
                 tuiHandle.setGenerating(true);
             }
             try {
