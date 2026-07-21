@@ -137,23 +137,24 @@ describe('README runtime contract', () => {
         }
     });
 
-    it('distinguishes in-place projection migration from automatic JSONL compatibility import', () => {
+    it('documents SQL-only session storage and archive import without legacy JSONL auto-discovery', () => {
         const readmeContent = readme();
         const dataModelContent = readDoc('docs/session-data-model.md');
         const readmeTerms = [
-            'session-store opens automatically discover `sessions/*.jsonl`',
-            '`.mc/runs/*.json` files do not auto-import',
+            'session store is SQL-only',
+            'Archive import writes SQL directly',
             'does not probe or automatically import prior SQL stores',
+            'JSONL remains an archive export payload format',
         ] as const;
         const dataModelPatterns = [
             /migrates legacy projection table names in place\s+within the already-open canonical database/u,
             /`session_index_runs` is copied into\s+`session_projection_runs` and then dropped/u,
             /`session_index_diagnostics` is copied into\s+`session_projection_diagnostics` and\s+then dropped/u,
             /does not probe, attach, or import a separate older SQL\s+database file/u,
-            /normal session-store open automatically discovers\s+`sessions\/\*\.jsonl`/u,
-            /`legacy_session_imports` makes the JSONL import idempotent by source path and\s+checksum/u,
-            /does not rewrite or delete the JSONL source/u,
-            /`includeRunSources: false`, so `\.mc\/runs\/\*\.json` files\s+are not auto-imported/u,
+            /session store is SQL-only/u,
+            /does not auto-discover or import `sessions\/\*\.jsonl`/u,
+            /archive import writes validated envelopes into SQL/u,
+            /JSONL remains the archive export payload format only/u,
             /`desktop_approval_effects`/u,
             /`desktop_tool_proposals`/u,
             /private execution authority, not event, replay,\s+or archive data/u,
@@ -170,6 +171,8 @@ describe('README runtime contract', () => {
         for (const pattern of dataModelPatterns) {
             expect(dataModelContent, `session data model missing ${pattern.source}`).toMatch(pattern);
         }
+        expect(readmeContent).not.toContain('legacy_session_imports');
+        expect(dataModelContent).not.toContain('legacy_session_imports');
     });
 
     it('documents workspace trust permission profiles and expanded coding-agent tool set', () => {

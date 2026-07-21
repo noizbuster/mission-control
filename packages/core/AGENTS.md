@@ -13,7 +13,7 @@
 | Run coordination | `src/runtime/` | Prompt admission, wake/run/resume/interrupt, scheduler. |
 | Provider turns | `src/providers/` | Adapters, retries, timeouts, redaction, OpenAI Responses mapping. |
 | Native sidecar | `src/native/` | Process spawn, handshake, status, timeout, mock fallback. |
-| Durable sessions | `src/memory/` | SQLite/libSQL session event store, data-dir resolution, projections, and JSONL replay/import/export compatibility. Durable Mission/Run records live in SQL `mission_runs`; JSONL never owns authoritative Run state. |
+| Durable sessions | `src/memory/` | SQLite/libSQL session event store, data-dir resolution, projections, and archive import/export (JSONL payload format only). Durable Mission/Run records live in SQL `mission_runs`; JSONL never owns authoritative Run state. |
 | Replay | `src/session-replay.ts`, `src/session-*.ts` | Branch, approval, tool outcome, prompt admission projections. |
 | Tools | `src/tools/` | Tool registry, read-only repo tools, `file.patch`, `command.run`, `glob`/`todowrite`/`webfetch`, `task` subagent, `mcp` proxy + namespaced `mcp__*` clients, `skill` on-demand loader, opt-in `lsp` seam. Advertising vs permission: `docs/tool-permission-model.md`. |
 | Skills | `src/skills/` | `SKILL.md` discovery (multi-scope, first-wins) and on-demand body loading. Skills are instruction DATA, not file-edit tools. |

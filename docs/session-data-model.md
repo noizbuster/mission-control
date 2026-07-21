@@ -6,11 +6,10 @@ leases, and Ground Control's Mission Control adapter:
 
 - `<MCTRL_DATA_DIR>/mission-control.db` is the authoritative session event/replay
   database. New coding-agent session appends write `session_events` there, replay
-  and session-list projections are derived from those events, production
-  `user_input` and foreground `subagent` waits are mirrored there, and legacy
-  JSONL import/export compatibility uses this database. Runtime coordination SQL
-  for session inputs, Mission/Run records, context epochs, runtime agents,
-  async jobs, and relation rows uses the same local-only data-dir `mission-control.db`
+  and session-list projections are derived from those events, and production
+  `user_input` and foreground `subagent` waits are mirrored there. The session
+  store is SQL-only. Runtime coordination SQL for session inputs, Mission/Run
+  records, context epochs, runtime agents, async jobs, and relation rows uses the same local-only data-dir `mission-control.db`
   file. `session_events` is authoritative for session, run, approval, and input
   history. `mission_runs` is the authoritative durable SQL Run store, and
   `async_jobs` is authoritative for durable job work, so lifecycle refresh
@@ -20,11 +19,9 @@ Remote Turso is out of scope: the local DB opener accepts `:memory:` and `file:`
 URLs only, rejects `libsql://` and other remote schemes, and does not read auth
 tokens or configure sync.
 
-Legacy JSONL session logs remain session-timeline and import/export compatibility
-inputs. A normal session-store open automatically discovers
-`sessions/*.jsonl`, imports each source idempotently, and leaves the source
-unchanged. JSONL is not authoritative Run storage, and explicit export can
-write a SQLite-native session back to JSONL/archive form.
+JSONL remains the archive export payload format only. A normal session-store
+open does not auto-discover or import `sessions/*.jsonl`. Explicit archive import writes validated envelopes into SQL, and explicit export can write a
+SQLite-native session back to archive form.
 
 This is a bounded local persistence contract, not a remote scheduler or replica:
 there is no Turso sync, vector index, automatic job re-execution, or implicit
@@ -67,7 +64,6 @@ Core `<MCTRL_DATA_DIR>/mission-control.db` tables:
 | `desktop_tool_proposals` | Private exact tool-call payloads used only to execute a later desktop approval. Public events and replay stay redacted. Reusing one tool-call id with different content marks the proposal conflicted and non-executable. |
 | `desktop_approval_effects` | At-most-once ledger for one approved desktop tool effect, separate from approval decision history. It records exact identity, `pending -> executing -> settled | unknown`, an opaque execution token and lease, known outcomes, and execution/recovery/resolution timestamps. |
 | `provider_failures` | Provider failure projection keyed by a failure id, with unique `(session_id, event_id)` rows for request/provider-turn diagnostics. |
-| `legacy_session_imports` | Idempotent compatibility-import ledger keyed by source path and checksum. Normal session-store opens use it for `sessions/*.jsonl`; callers that opt into Run sources can also record `.mc/runs/*.json` files. |
 
 Shared local `mission-control.db` runtime tables:
 
@@ -178,8 +174,6 @@ awaiting-state rendering, child lookup, and import diagnostics:
 | `async_jobs_parent_session_idx` | `parent_session_id` | Parent session job listing. |
 | `async_jobs_child_session_idx` | `child_session_id` | Child session to job lookup. |
 | `async_jobs_agent_idx` | `agent_id` | Agent-scoped job lookup. |
-| `legacy_session_imports_source_checksum_unique` | `(source_path, checksum)` | Idempotent legacy import. |
-| `legacy_session_imports_source_idx` | `source_path` | Import audit by source file. |
 | `session_projection_runs_by_sequence` | `(session_id, sequence)` | Run-event projection ordering. |
 | `session_control_leases` | Primary key `(db_identity, session_id)` | Exact-session owner lookup and epoch fencing. |
 | `session_control_operations` | Primary key `(db_identity, session_id, operation_id)` | Receipt replay, timeout tombstones, and stale callback fencing. |
@@ -319,27 +313,23 @@ when the SQL mirror is wired into the task runtime. Resolving the child marks
 the wait `resolved` and updates the job terminal state. Detached jobs only write
 `async_jobs`; they do not create a blocking wait.
 
-## Compatibility Import And Explicit Export
+## Archive Import And Explicit Export
 
-Runtime startup opens the unified database directly and does not probe or
-automatically import prior SQL stores. It separately runs the JSONL compatibility
-importer on every normal session-store open. The importer discovers only
-`sessions/*.jsonl`, validates each envelope before insertion, and
-`legacy_session_imports` makes the JSONL import idempotent by source path and
-checksum. It does not rewrite or delete the JSONL source.
+Runtime startup opens the unified database directly and does not probe, attach,
+or import a separate older SQL database file. The session store is SQL-only: a
+normal session-store open does not auto-discover or import `sessions/*.jsonl`,
+and `.mc/runs/*.json` files are never auto-imported into `mission_runs`.
 
-The normal opener passes `includeRunSources: false`, so `.mc/runs/*.json` files
-are not auto-imported. Mission and Run JSON records under `.mc/` remain owned
-by their own persistence stores. A caller that explicitly opts into Run-source
-compatibility import may import those files, with `sessionRunId` stripped and a
-`session_owner_stripped` diagnostic recorded when it was present. Only the
-canonical runtime owner attach/settle path may persist `sessionRunId`.
+Archive import writes validated envelopes into SQL through
+`importSessionEnvelopesToLocalStore`. JSONL remains the archive export payload
+format only. Mission and Run JSON records under `.mc/` remain owned by their own
+persistence stores. Only the canonical runtime owner attach/settle path may
+persist `sessionRunId`.
 
-Export is explicit. It reads ordered `session_events` and writes JSONL or an
-archive only when requested, without deleting or rewriting source files. Public
-Run creation is insert-only and rejects a duplicate id rather than replacing an
-existing owner or status. Imported terminal reasons are credential-redacted
-before entering SQL while compatibility source files remain unchanged.
+Export is explicit. It reads ordered `session_events` (or an on-disk JSONL file
+when present for export convenience) and writes an archive only when requested.
+Public Run creation is insert-only and rejects a duplicate id rather than
+replacing an existing owner or status.
 
 ## Local Path And Memory Relationship
 
@@ -362,9 +352,9 @@ algorithm and shared path vectors.
 agent/job mirror tables intentionally share `mission-control.db`. `:memory:` remains
 available for tests and ephemeral stores.
 
-Legacy JSONL logs, if present, remain at `<data-dir>/sessions/<session-id>.jsonl`
-and are automatically imported by normal session-store opens as idempotent,
-source-preserving compatibility artifacts.
+Optional on-disk JSONL logs may remain at
+`<data-dir>/sessions/<session-id>.jsonl` for export convenience. They are not
+auto-imported on open; archive import writes SQL directly.
 
 ## Hierarchy And Guarded Deletion
 
@@ -404,7 +394,8 @@ Authoritative source files:
 - `packages/core/src/db/session-*-schema.ts`
 - `packages/core/src/memory/sqlite-session-event-store*.ts`
 - `packages/core/src/memory/sqlite-session-projection*.ts`
-- `packages/core/src/memory/session-import*.ts`
+- `packages/core/src/memory/session-archive-import.ts`
+- `packages/core/src/memory/session-import-event-read.ts`
 - `packages/core/src/runtime/local-runtime-db.ts`
 - `packages/core/src/runtime/session-input-delivery-sql.ts`
 - `packages/core/src/runtime/mission-run/*store.ts`
