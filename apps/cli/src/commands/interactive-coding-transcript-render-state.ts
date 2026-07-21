@@ -113,7 +113,13 @@ export function claimToolTranscriptOccurrence(state: ProviderRenderState, toolCa
     const pending = state.pendingToolBaseIdsByRawId.get(toolCallId);
     const basePartId = pending?.shift();
     if (pending?.length === 0) state.pendingToolBaseIdsByRawId.delete(toolCallId);
-    return basePartId ?? nextToolTranscriptOccurrence(state, toolCallId);
+    if (basePartId !== undefined) return basePartId;
+    if (process.env['MCTRL_DEBUG_TRANSCRIPT'] === '1') {
+        process.stderr.write(
+            `[transcript] claimToolTranscriptOccurrence: no pending entry for toolCallId=${toolCallId}; minting new occurrence (orphan preview may stay stuck)\n`,
+        );
+    }
+    return nextToolTranscriptOccurrence(state, toolCallId);
 }
 
 export function registerActiveToolTranscriptPart(state: ProviderRenderState, part: ActiveToolTranscriptPart): void {
