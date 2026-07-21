@@ -170,7 +170,7 @@ describe('ConcreteTaskToolRuntime', () => {
 
             const toolNames = captured.context?.childToolRegistry.advertise().map((a) => a.name);
             expect(toolNames).not.toContain('command.run');
-            expect(toolNames).not.toContain('task');
+            expect(toolNames).toContain('task');
             expect(toolNames).toContain('read');
             expect(toolNames).toContain('yield');
         });
@@ -378,6 +378,9 @@ describe('ConcreteTaskToolRuntime', () => {
             parentRegistry.register(makeTool('task', ['subagent']));
             parentRegistry.register(makeTool('workflow', ['workflow']));
             parentRegistry.register(makeTool('webfetch', ['network']));
+            parentRegistry.register(makeTool('web_search', ['network']));
+            parentRegistry.register(makeTool('mcp__docs__lookup', ['network']));
+            parentRegistry.register(makeTool('team_create', ['team']));
             parentRegistry.register(makeTool('spawn-helper', ['subagent']));
 
             const captured: { context: ChildSpawnContext | undefined } = { context: undefined };
@@ -404,18 +407,66 @@ describe('ConcreteTaskToolRuntime', () => {
             expect(toolNames).not.toContain('workflow');
         });
 
-        it('drops network-capability tools from the child surface', async () => {
+        it('drops network-capability tools for OFF agents (not in CHILD_NETWORK_ALLOWED_CATEGORIES)', async () => {
             const { runtime, captured } = buildRuntimeWithCapabilityTools();
             await runtime.runChildSession(makeRequest());
             const toolNames = captured.context?.childToolRegistry.advertise().map((a) => a.name);
             expect(toolNames).not.toContain('webfetch');
+            expect(toolNames).not.toContain('web_search');
+            expect(toolNames).not.toContain('mcp__docs__lookup');
         });
 
-        it('drops subagent-capability tools beyond task from the child surface', async () => {
+        it('retains network tools for ON agent names when parent advertises them', async () => {
+            const child = makeAgent({
+                name: 'librarian',
+                tools: ['read', 'webfetch', 'web_search', 'mcp__docs__lookup', 'workflow', 'team_create'],
+            });
+            const parent = makeParentAgent();
+            const agentIndex = new AgentIndex();
+            agentIndex.register(child);
+            const parentRegistry = new ToolRegistry();
+            parentRegistry.register(makeTool('read', ['read']));
+            parentRegistry.register(makeTool('webfetch', ['network']));
+            parentRegistry.register(makeTool('web_search', ['network']));
+            parentRegistry.register(makeTool('mcp__docs__lookup', ['network']));
+            parentRegistry.register(makeTool('workflow', ['workflow']));
+            parentRegistry.register(makeTool('team_create', ['team']));
+            const captured: { context: ChildSpawnContext | undefined } = { context: undefined };
+            const spawnFn: SpawnFn = async (context) => {
+                captured.context = context;
+                return { sessionId: context.sessionId, status: 'completed', output: '' };
+            };
+            const runtime = new ConcreteTaskToolRuntime({
+                agentIndex,
+                resolveModel: (agent) => ({ providerID: 'test', modelID: agent.name }),
+                workspaceRoot: '/tmp/workspace',
+                parentToolRegistry: parentRegistry,
+                parentAgent: parent,
+                spawnFn,
+            });
+
+            await runtime.runChildSession({
+                sessionId: 'sess-librarian-net',
+                prompt: 'lookup docs',
+                loadSkills: [],
+                childPermissions: [],
+                subagentType: 'librarian',
+            });
+
+            const toolNames = captured.context?.childToolRegistry.advertise().map((a) => a.name) ?? [];
+            expect(toolNames).toContain('webfetch');
+            expect(toolNames).toContain('web_search');
+            expect(toolNames).toContain('mcp__docs__lookup');
+            expect(toolNames).not.toContain('workflow');
+            expect(toolNames).not.toContain('team_create');
+        });
+
+        it('keeps subagent-capability helpers when nesting is depth-allowed', async () => {
             const { runtime, captured } = buildRuntimeWithCapabilityTools();
             await runtime.runChildSession(makeRequest());
             const toolNames = captured.context?.childToolRegistry.advertise().map((a) => a.name);
-            expect(toolNames).not.toContain('spawn-helper');
+            expect(toolNames).toContain('spawn-helper');
+            expect(toolNames).toContain('task');
         });
 
         it('keeps read and bash tools (policy-controlled, not hard-dropped)', async () => {

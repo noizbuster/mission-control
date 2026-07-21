@@ -224,14 +224,22 @@ describe('task tool — background execution', () => {
     });
 });
 
-describe('task tool — nested task denial', () => {
-    it('child permissions always include the nested-subagent deny rule', async () => {
+describe('task tool — nested task depth gate', () => {
+    it('tool-layer child permissions include nested-subagent deny (runtime may strip when depth allows)', async () => {
         const { tool, mock } = buildTool();
         await tool.execute(taskToolInputSchema.parse(params({ category: 'deep' })), CTX);
         const request = mock.calls[0]?.request;
         const nestedDeny = request?.childPermissions.find((r) => r.action === 'subagent' && r.effect === 'deny');
         expect(nestedDeny).toBeDefined();
         expect(nestedDeny?.resource).toBe('**');
+    });
+
+    it('description documents bounded nested task depth rather than a hard ban', () => {
+        const { tool } = buildTool();
+        expect(tool.description).toMatch(/depth 3/i);
+        expect(tool.description).not.toMatch(/cannot spawn nested tasks/i);
+        expect(tool.guideline).toMatch(/depth 3/i);
+        expect(tool.guideline).not.toMatch(/cannot spawn nested tasks/i);
     });
 });
 
@@ -262,9 +270,29 @@ describe('bundled agent discovery via AgentIndex', () => {
         expect(denies.some((r) => r.action === 'write' && r.resource === '**')).toBe(true);
     });
 
-    it('librarian includes webfetch in its tool allowlist', () => {
-        const librarian = agentIndex.lookup('librarian');
-        expect(librarian?.tools).toContain('webfetch');
+    it('ON network categories list webfetch and web_search; OFF categories do not', () => {
+        const onWithTools = ['librarian', 'oracle', 'designer', 'planner'] as const;
+        const off = ['explore', 'reviewer', 'quick'] as const;
+        for (const id of onWithTools) {
+            const bundled = agentIndex.lookup(id);
+            const catalog = getCategory(id);
+            expect(bundled?.tools).toContain('webfetch');
+            expect(bundled?.tools).toContain('web_search');
+            expect(catalog?.tools).toContain('webfetch');
+            expect(catalog?.tools).toContain('web_search');
+        }
+        for (const id of off) {
+            const bundled = agentIndex.lookup(id);
+            const catalog = getCategory(id);
+            expect(bundled?.tools ?? []).not.toContain('webfetch');
+            expect(bundled?.tools ?? []).not.toContain('web_search');
+            expect(catalog?.tools ?? []).not.toContain('webfetch');
+            expect(catalog?.tools ?? []).not.toContain('web_search');
+        }
+        expect(agentIndex.lookup('deep')?.tools).toBeUndefined();
+        expect(agentIndex.lookup('reasoner')?.tools).toBeUndefined();
+        expect(getCategory('deep')?.tools).toBeUndefined();
+        expect(getCategory('reasoner')?.tools).toBeUndefined();
     });
 });
 

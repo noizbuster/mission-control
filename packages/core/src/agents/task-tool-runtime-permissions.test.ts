@@ -44,7 +44,17 @@ describe('ConcreteTaskToolRuntime child permission enforcement', () => {
 
     it('keeps permitted parent tools while intersecting the agent allowlist and hard drops', async () => {
         const childAgent = makePermissionAgent({
-            tools: ['repo.read', 'file.write', 'webfetch', 'local-cache', 'task', 'workflow', 'team_create'],
+            tools: [
+                'repo.read',
+                'file.write',
+                'webfetch',
+                'web_search',
+                'mcp__*',
+                'local-cache',
+                'task',
+                'workflow',
+                'team_create',
+            ],
         });
         const { runtime, contexts } = buildPermissionRuntime(childAgent);
 
@@ -58,24 +68,81 @@ describe('ConcreteTaskToolRuntime child permission enforcement', () => {
         expect(names).not.toContain('file.patch');
         expect(names).not.toContain('bash.run');
         expect(names).not.toContain('webfetch');
-        expect(names).not.toContain('task');
+        expect(names).not.toContain('web_search');
+        expect(names).not.toContain('mcp__docs__lookup');
+        expect(names).toContain('task');
         expect(names).not.toContain('workflow');
         expect(names).not.toContain('team_create');
     });
 
-    it('hard drops team and IRC subagent tools from child task surfaces', async () => {
-        // Given
+    it('hard drops team always; IRC subagent tools pass when nesting is depth-allowed', async () => {
         const childAgent = makePermissionAgent({ tools: ['repo.read', 'team_create', 'irc'] });
         const { runtime, contexts } = buildPermissionRuntime(childAgent);
 
-        // When
         await runtime.runChildSession(makePermissionRequest(allowAllChildPermissions));
 
-        // Then
         const names = advertisedChildToolNames(contexts[0]);
         expect(names).toContain('repo.read');
         expect(names).not.toContain('team_create');
-        expect(names).not.toContain('irc');
+        expect(names).toContain('irc');
+    });
+
+    it('OFF categories explore/reviewer/quick never receive network tools', async () => {
+        for (const category of ['explore', 'reviewer', 'quick'] as const) {
+            const { runtime, contexts } = buildPermissionRuntime(
+                makePermissionAgent({
+                    name: category,
+                    tools: ['read', 'ls', 'grep', 'find', 'glob', 'todowrite', 'webfetch', 'web_search'],
+                }),
+            );
+            const taskRegistry = new ToolRegistry();
+            const taskAdvertisement = taskRegistry.register(createFullParityTaskToolRegistration({ runtime }));
+
+            const result = await taskRegistry.invoke({
+                toolCallId: `call-${category}-off-net`,
+                toolName: 'task',
+                advertisedVersion: taskAdvertisement.version,
+                argumentsJson: JSON.stringify({ category, prompt: 'inspect' }),
+            });
+
+            expect(result.result.status).toBe('completed');
+            const names = advertisedChildToolNames(contexts[0]);
+            expect(names).not.toContain('webfetch');
+            expect(names).not.toContain('web_search');
+            expect(names).not.toContain('mcp__docs__lookup');
+        }
+    });
+
+    it('ON categories retain webfetch, web_search, and mcp when parent has them', async () => {
+        for (const category of ['librarian', 'deep', 'reasoner', 'oracle', 'designer', 'planner'] as const) {
+            const tools =
+                category === 'deep' || category === 'reasoner'
+                    ? undefined
+                    : ['read', 'ls', 'grep', 'find', 'webfetch', 'web_search', 'mcp__*', 'workflow', 'team_create'];
+            const { runtime, contexts } = buildPermissionRuntime(
+                makePermissionAgent({
+                    name: category,
+                    ...(tools !== undefined ? { tools } : {}),
+                }),
+            );
+            const taskRegistry = new ToolRegistry();
+            const taskAdvertisement = taskRegistry.register(createFullParityTaskToolRegistration({ runtime }));
+
+            const result = await taskRegistry.invoke({
+                toolCallId: `call-${category}-on-net`,
+                toolName: 'task',
+                advertisedVersion: taskAdvertisement.version,
+                argumentsJson: JSON.stringify({ category, prompt: 'research' }),
+            });
+
+            expect(result.result.status).toBe('completed');
+            const names = advertisedChildToolNames(contexts[0]);
+            expect(names).toContain('webfetch');
+            expect(names).toContain('web_search');
+            expect(names).toContain('mcp__docs__lookup');
+            expect(names).not.toContain('workflow');
+            expect(names).not.toContain('team_create');
+        }
     });
 
     it('intersects category tool aliases with canonical production read tools', async () => {
@@ -97,6 +164,7 @@ describe('ConcreteTaskToolRuntime child permission enforcement', () => {
         expect(names).toContain('repo.read');
         expect(names).not.toContain('file.write');
         expect(names).not.toContain('bash.run');
+        expect(names).not.toContain('webfetch');
     });
 
     it('applies wildcard action denies to tools with unknown capability classes', async () => {

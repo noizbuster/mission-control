@@ -48,6 +48,29 @@ describe('SqlAgentJobMirror', () => {
         });
     });
 
+    it('round-trips taskDepth through runtime_agents.metadata_json', async () => {
+        await withMirror(async (mirror) => {
+            const registry = new RuntimeAgentRegistry({ mirror });
+            registry.adopt({
+                id: 'agent-depth',
+                displayName: 'depth child',
+                kind: 'sub',
+                parentId: 'Main',
+                authorityFingerprint: 'authority-depth',
+                taskDepth: 2,
+                status: 'running',
+                sessionId: 'child-session-depth',
+            });
+            await mirror.flush();
+
+            const loaded = await mirror.loadRuntimeAgents();
+            const reopened = new RuntimeAgentRegistry({ initialRefs: loaded });
+            const ref = reopened.lookup('agent-depth');
+            expect(ref?.taskDepth).toBe(2);
+            expect(ref?.authorityFingerprint).toBe('authority-depth');
+        });
+    });
+
     it('mirrors async jobs with parent-child lineage and yielded result output', async () => {
         // Given
         await withMirror(async (mirror) => {

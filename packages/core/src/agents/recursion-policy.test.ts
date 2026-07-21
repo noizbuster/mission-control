@@ -3,6 +3,7 @@ import {
     canSpawnAtDepth,
     DEFAULT_MAX_RECURSION_DEPTH,
     HARD_RECURSION_CAP,
+    PRODUCTION_MAX_TASK_DEPTH,
     RecursionTracker,
 } from './recursion-policy';
 
@@ -12,6 +13,15 @@ describe('module constants', () => {
         // root agent (depth 0) may spawn one child (depth 1), and that child
         // may spawn one more (depth 2 is the boundary, blocked).
         expect(DEFAULT_MAX_RECURSION_DEPTH).toBe(2);
+    });
+
+    it('ships production nested-task depth of 3 without changing the compat default', () => {
+        expect(PRODUCTION_MAX_TASK_DEPTH).toBe(3);
+        expect(DEFAULT_MAX_RECURSION_DEPTH).toBe(2);
+        expect(canSpawnAtDepth(PRODUCTION_MAX_TASK_DEPTH, 0)).toBe(true);
+        expect(canSpawnAtDepth(PRODUCTION_MAX_TASK_DEPTH, 1)).toBe(true);
+        expect(canSpawnAtDepth(PRODUCTION_MAX_TASK_DEPTH, 2)).toBe(true);
+        expect(canSpawnAtDepth(PRODUCTION_MAX_TASK_DEPTH, 3)).toBe(false);
     });
 
     it('ships a hard recursion cap of 10 that bounds even unlimited (-1) configs', () => {
