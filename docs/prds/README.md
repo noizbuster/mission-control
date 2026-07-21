@@ -20,6 +20,7 @@ Product requirements distilled from the user's request history on this project. 
 | [`provider-errors-non-fatal.md`](provider-errors-non-fatal.md) | Provider errors: visible, non-fatal, with parsed human-readable messages | 3 |
 | [`rendering-full-fidelity.md`](rendering-full-fidelity.md) | Rendering: full-fidelity markdown, diff, and message styling | 18 |
 | [`sessions-failure-investigation.md`](sessions-failure-investigation.md) | Session reliability: diagnose, fix, and surface root cause for failing mctrl sessions | 5 |
+| [`subagent-task-yield-missing.md`](subagent-task-yield-missing.md) | Subagent reliability: yield guard, task schema normalize, child SQL observability | 5 |
 | [`tui-chat-message-rendering.md`](tui-chat-message-rendering.md) | TUI chat message rendering: visual identity, multi-line bars, and agent processing state | 5 |
 | [`tui-input-output-separation.md`](tui-input-output-separation.md) | TUI input area: visual separation from surrounding context | 3 |
 | [`tui-ctrl-c-esc-exit-interrupt.md`](tui-ctrl-c-esc-exit-interrupt.md) | TUI keyboard: Ctrl+C exit, ESC interrupt-only, multi-line input | 7 |
@@ -29,4 +30,4 @@ Product requirements distilled from the user's request history on this project. 
 | [`tui-slash-command-autocomplete.md`](tui-slash-command-autocomplete.md) | TUI slash command autocomplete: partial-typing resolution and overlay rendering | 8 |
 | [`tui-workflow-autocomplete-ux.md`](tui-workflow-autocomplete-ux.md) | TUI workflow autocomplete: insert prefix without executing | 3 |
 
-_Total: 22 PRDs, 92 requirements._
+_Total: 23 PRDs, 97 requirements._
