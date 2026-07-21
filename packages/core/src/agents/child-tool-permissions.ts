@@ -58,6 +58,7 @@ export function isCategoryToolAllowed(toolName: string, categoryTools: readonly 
         case 'repo.list':
             return categoryTools.includes('ls');
         case 'repo.search':
+        case 'ripgrep':
             return categoryTools.includes('grep') || categoryTools.includes('find');
         default:
             return false;

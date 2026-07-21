@@ -16,6 +16,7 @@ const DESKTOP_REEXECUTABLE_TOOL_NAMES = [
     'find',
     'repo.read.tagged',
     'glob',
+    'ripgrep',
     'file.edit',
     'file.write',
     'file.patch',

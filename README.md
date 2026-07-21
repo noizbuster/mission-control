@@ -432,7 +432,8 @@ Permission profiles:
 Coding-agent tool set:
 
 - Read-only: `repo.read`, `repo.list`, `repo.search`, plus aliases `read`, `ls`, `grep`, and `find`.
-- Tagged and path discovery reads: `repo.read.tagged` supplies anchors for `hashline_edit`, while `glob` discovers workspace files under the same containment and denylist boundary.
+- Tagged and path discovery reads: `repo.read.tagged` supplies anchors for `hashline_edit`, while `glob` discovers workspace files and `ripgrep` searches file contents under the same containment and denylist boundary.
+- Content search via ripgrep: `ripgrep` runs `rg` with safety limits (60s timeout, 256KB output, workspace denylist) and falls back through `grep` and a pure-JS RegExp walker when `rg` is not on PATH. Three output modes: `content` (matching lines), `files_with_matches` (file paths only, default), `count` (per-file match counts). Agents declaring `read`, `ls`, `grep`, or `find` in their `tools:` list inherit it.
 - Exact replacement: `file.edit` replaces exact text in an existing file, with occurrence counting and diff events.
 - Full create/replace: `file.write` creates or replaces a file with full text content, with optional parent-directory creation and binary-content refusal.
 - Unified diff: `file.patch` applies unified diffs with workspace containment and dirty-file checks.
@@ -488,7 +489,7 @@ Desktop scope:
 - `packages/core` contains desktop command services for prompt, queue follow-up, steer, interrupt, resume, and approval decisions.
 - desktop Tauri write commands call the core desktop session command service through the Rust shell bridge and return real `eventsWritten` counts.
 - desktop Tauri credential commands save and list API-key credentials through the shared auth file, and restarted prompt/resume/approval commands reuse the session's persisted provider selection.
-- The desktop registry is deliberately limited to operations reconstructible from the workspace plus tool-call arguments: `repo.read`, `repo.list`, `repo.search`, `read`, `ls`, `grep`, `find`, `repo.read.tagged`, `glob`, `file.edit`, `file.write`, `file.patch`, `hashline_edit`, and `command.run`. Workspace reads remain read-only and do not invent an approval prompt.
+- The desktop registry is deliberately limited to operations reconstructible from the workspace plus tool-call arguments: `repo.read`, `repo.list`, `repo.search`, `read`, `ls`, `grep`, `find`, `repo.read.tagged`, `glob`, `ripgrep`, `file.edit`, `file.write`, `file.patch`, `hashline_edit`, and `command.run`. Workspace reads remain read-only and do not invent an approval prompt.
 - Desktop file mutations and `command.run` still block before execution. Approval settlement rebuilds the same subset in a fresh registry and re-executes only the persisted tool call whose request id and action match the approved record; workspace containment, dirty-file checks, and post-approval target revalidation remain active.
 - Session-bound facilities remain CLI-primary and are not desktop approval re-execution capabilities: staged preview (`ast_grep` rewrite plus `ast_edit` / `resolve`), `job`, `monitor_*`, `interactive_bash`, `shell.session`, `ssh`, `checkpoint` / `rewind`, and `plan_exit`. `lsp` and `lsp_rename` also remain absent because a fresh desktop registry has no live LSP client and cannot reconstruct the server-produced workspace edit from tool-call arguments alone.
 - This bounded subset does not claim full desktop effectful-tool parity. Adding manager-, callback-, or transport-backed tools requires a shared-lifecycle redesign rather than another fresh approval registry.

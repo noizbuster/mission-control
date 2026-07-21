@@ -22,6 +22,7 @@ import {
     registerHashlineEditTool,
     registerInteractiveBashTool,
     registerReadOnlyRepoTools,
+    registerRipgrepTool,
     registerSkillTool,
     registerWebfetchTool,
     registerWebSearchTool,
@@ -54,6 +55,10 @@ export async function registerDefaultCodingToolBase(
     registry.register(createSessionInfoToolRegistration(options.sessionTools));
     registry.register(createSessionSearchToolRegistration(options.sessionTools));
     await registerGlobTool(registry, {
+        workspaceRoot: options.workspaceRoot,
+        requestPermission: options.requestPermission,
+    });
+    await registerRipgrepTool(registry, {
         workspaceRoot: options.workspaceRoot,
         requestPermission: options.requestPermission,
     });

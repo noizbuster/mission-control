@@ -7,6 +7,7 @@ import { registerFileWriteTool } from './tools/file-write';
 import { registerGlobTool } from './tools/glob-tool-factory';
 import { registerHashlineEditTool } from './tools/hashline-edit';
 import { registerReadOnlyRepoTools } from './tools/read-tools';
+import { registerRipgrepTool } from './tools/ripgrep-tool-factory';
 import { ToolRegistry } from './tools/tool-registry';
 
 export type DesktopReExecutableToolRegistryOptions = {
@@ -21,6 +22,7 @@ export async function createDesktopReExecutableToolRegistry(
     const registry = new ToolRegistry();
     await registerReadOnlyRepoTools(registry, { workspaceRoot: options.workspaceRoot });
     await registerGlobTool(registry, { workspaceRoot: options.workspaceRoot });
+    await registerRipgrepTool(registry, { workspaceRoot: options.workspaceRoot });
     await registerFileEditTool(registry, options);
     await registerFileWriteTool(registry, options);
     await registerFilePatchTool(registry, options);

@@ -88,6 +88,25 @@ export {
     type SkillSchemeEntry,
 } from './scheme-resolver';
 export {
+    type RipgrepMatch,
+    type RipgrepOutputMode,
+    type RipgrepToolInput,
+    type RipgrepToolOutput,
+    type RipgrepToolOutputParsed,
+    ripgrepInputSchema,
+    ripgrepOutputSchema,
+    ripgrepParametersJsonSchema,
+    ripgrepToolRegistration,
+    RIPGREP_DEFAULT_HEAD_LIMIT,
+    RIPGREP_DEFAULT_MAX_OUTPUT_BYTES,
+    RIPGREP_DEFAULT_TIMEOUT_MS,
+} from './ripgrep-tool';
+export {
+    createRipgrepToolRegistration,
+    type RipgrepToolFactoryOptions,
+    registerRipgrepTool,
+} from './ripgrep-tool-factory';
+export {
     createShellSessionToolRegistration,
     registerShellSessionTool,
     type ShellSessionInput,
