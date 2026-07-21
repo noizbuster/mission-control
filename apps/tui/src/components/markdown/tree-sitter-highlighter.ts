@@ -84,6 +84,9 @@ let initPromise: Promise<void> | null = null;
 let syntaxStyle: SyntaxStyle | null = null;
 let parsersRegistered = false;
 
+/** LRU cap for asyncResultCache. Without it, long streaming sessions accumulate one entry per unique code block ever highlighted (native TextBuffer/SyntaxStyle pressure). */
+const ASYNC_RESULT_CACHE_LIMIT = 256;
+
 const asyncResultCache = new Map<string, readonly HighlightedLine[]>();
 const inFlight = new Map<string, Promise<void>>();
 
@@ -112,6 +115,24 @@ function notifyHighlightListeners(): void {
 
 function cacheKey(filetype: string, code: string): string {
     return `${filetype}\u0000${code}`;
+}
+
+/** LRU read: re-insert on hit so Map iteration order reflects recency. */
+function readCachedLines(key: string): readonly HighlightedLine[] | undefined {
+    const cached = asyncResultCache.get(key);
+    if (cached === undefined) return undefined;
+    asyncResultCache.delete(key);
+    asyncResultCache.set(key, cached);
+    return cached;
+}
+
+/** LRU write: drop oldest when over cap. */
+function writeCachedLines(key: string, lines: readonly HighlightedLine[]): void {
+    asyncResultCache.set(key, lines);
+    if (asyncResultCache.size > ASYNC_RESULT_CACHE_LIMIT) {
+        const oldest = asyncResultCache.keys().next().value;
+        if (oldest !== undefined) asyncResultCache.delete(oldest);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -200,7 +221,7 @@ function scheduleAsyncHighlight(code: string, filetype: string): void {
             if (highlights === undefined) return;
             const chunks = runtime.toTextChunks(code, highlights, style);
             const lines = chunksToLines(chunks);
-            asyncResultCache.set(key, lines);
+            writeCachedLines(key, lines);
             clearRenderCache();
             notifyHighlightListeners();
         } catch {}
@@ -259,7 +280,7 @@ export function highlightTreeSitter(code: string, lang?: string): readonly Highl
     if (filetype === undefined) return monochrome(code);
 
     const key = cacheKey(filetype, code);
-    const cached = asyncResultCache.get(key);
+    const cached = readCachedLines(key);
     if (cached !== undefined) return cached;
 
     try {

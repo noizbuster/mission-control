@@ -207,6 +207,9 @@ export function asTextareaRef(fake: RecordingTextarea): ChatTextareaHandle {
         set: (renderable) => {
             current = renderable;
         },
+        clear: () => {
+            current = undefined;
+        },
     };
 }
 
@@ -219,6 +222,9 @@ export function asScrollboxRef(fake: RecordingScrollbox): ChatScrollboxHandle {
         get: () => current,
         set: (renderable) => {
             current = renderable;
+        },
+        clear: () => {
+            current = undefined;
         },
     };
 }

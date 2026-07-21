@@ -35,3 +35,5 @@ export {
     monochrome,
     subscribeHighlight,
 } from './tree-sitter-highlighter';
+
+export { destroySharedSyntaxStyle } from './shared-syntax-style';

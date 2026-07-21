@@ -60,6 +60,8 @@ export interface AsyncJobPersistenceMirror {
 export interface AsyncJobManagerOptions {
     readonly mirror?: AsyncJobPersistenceMirror;
     readonly sessionControlHost?: SessionControlHost;
+    /** Maximum number of terminal job entries retained in memory for `listJobs` / `awaitJob` queries. Older terminal entries are evicted; full history lives in the SQL mirror. Defaults to 32. */
+    readonly maxTerminalEntries?: number;
 }
 
 export class QuarantinedJobSettlementError extends Error {
@@ -115,6 +117,9 @@ export class AsyncJobManager {
     private active = 0;
     private readonly mirror: AsyncJobPersistenceMirror | undefined;
     private readonly sessionControlHost: SessionControlHost | undefined;
+    /** FIFO of terminal job ids still retained in {@link jobs} for queryability. Evicted at {@link maxTerminalEntries}. */
+    private readonly terminalOrder: string[] = [];
+    private readonly maxTerminalEntries: number;
 
     constructor(
         private readonly maxConcurrency: number = 4,
@@ -122,6 +127,7 @@ export class AsyncJobManager {
     ) {
         this.mirror = options.mirror;
         this.sessionControlHost = options.sessionControlHost;
+        this.maxTerminalEntries = options.maxTerminalEntries ?? 32;
     }
 
     startJob(input: StartJobInput): BackgroundJobHandle {
@@ -287,6 +293,7 @@ export class AsyncJobManager {
                     entry.terminalError !== undefined)
             ) {
                 this.settleAwaiters(entry);
+                this.reapTerminalJob(entry);
             }
         }
     }
@@ -353,6 +360,7 @@ export class AsyncJobManager {
         await this.detachControl(entry, entry.terminalError ?? entry.quarantineError ?? entry.primaryFailure?.error);
         entry.cleanupPending = false;
         this.settleAwaiters(entry);
+        this.reapTerminalJob(entry);
         this.drainQueue();
     }
 
@@ -499,7 +507,10 @@ export class AsyncJobManager {
     private async finishQueuedCancellation(entry: JobEntry): Promise<void> {
         await this.detachControl(entry, entry.quarantineError ?? entry.primaryFailure?.error);
         entry.cleanupPending = false;
-        if (!entry.preparationPending) this.settleAwaiters(entry);
+        if (!entry.preparationPending) {
+            this.settleAwaiters(entry);
+            this.reapTerminalJob(entry);
+        }
     }
 
     private settleAwaiters(entry: JobEntry): void {
@@ -509,6 +520,21 @@ export class AsyncJobManager {
             if (entry.terminalError !== undefined) awaiter.reject(entry.terminalError);
             else if (entry.quarantineError !== undefined) awaiter.reject(entry.quarantineError);
             else awaiter.resolve(entry.handle);
+        }
+    }
+
+    /** Track a fully-settled terminal entry for bounded queryability, evicting the oldest terminal entry when over {@link maxTerminalEntries}. Live coordination is complete; the durable mirror (SQL async_jobs) retains full history. */
+    private reapTerminalJob(entry: JobEntry): void {
+        if (entry.cleanupPending || entry.preparationPending) return;
+        if (!TERMINAL.has(entry.handle.status) && entry.terminalError === undefined && entry.quarantineError === undefined) {
+            return;
+        }
+        const jobId = entry.handle.jobId;
+        if (this.terminalOrder.includes(jobId)) return;
+        this.terminalOrder.push(jobId);
+        while (this.terminalOrder.length > this.maxTerminalEntries) {
+            const oldestId = this.terminalOrder.shift();
+            if (oldestId !== undefined) this.jobs.delete(oldestId);
         }
     }
 

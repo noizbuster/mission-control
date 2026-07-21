@@ -13,6 +13,17 @@ export function getSharedSyntaxStyle(): SyntaxStyle {
     return cached;
 }
 
+/** Production counterpart to {@link resetSharedSyntaxStyleForTest}: called on TUI unmount so mount/unmount cycles in a long-lived process do not accumulate native SyntaxStyle handles. */
+export function destroySharedSyntaxStyle(): void {
+    if (cached === undefined) return;
+    try {
+        cached.destroy();
+    } catch {
+        void 0;
+    }
+    cached = undefined;
+}
+
 export function resetSharedSyntaxStyleForTest(): void {
     if (cached === undefined) return;
     try {

@@ -6,6 +6,9 @@ import { type Accessor, createSignal, type JSX, onCleanup } from 'solid-js';
 import type { ChatTuiRuntimeOptions } from '../../state/chat-tui-types';
 import { createRequiredContext } from './context-base';
 
+/** Cap on the in-memory events signal. Older events age out; full history lives in the durable session DB. Without this, long streaming sessions accumulate every provider delta/tool signal forever, driving O(N²) re-projection and unbounded Solid signal growth. */
+const MAX_IN_MEMORY_EVENTS = 500;
+
 export type TuiRuntimeEventsService = {
     readonly events: Accessor<readonly AgentEvent[]>;
     readonly latestEvent: Accessor<AgentEvent | undefined>;
@@ -39,7 +42,10 @@ function createTuiRuntimeEventsService(options: ChatTuiRuntimeOptions): TuiRunti
 
     const unsubscribe = options.subscribeEvents?.((event) => {
         if (disposed) return;
-        setEvents((current) => [...current, event]);
+        setEvents((current) => {
+            const next = current.length >= MAX_IN_MEMORY_EVENTS ? current.slice(1) : current;
+            return [...next, event];
+        });
         abgStore.update((draft) => {
             Object.assign(draft, projectAgentEvent(draft, event));
         });

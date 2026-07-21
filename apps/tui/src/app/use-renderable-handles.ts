@@ -26,12 +26,18 @@ export function useRenderableHandles(): RenderableHandles {
         set: (renderable) => {
             textarea = renderable;
         },
+        clear: () => {
+            textarea = undefined;
+        },
     };
 
     const scrollboxHandle: ChatScrollboxHandle = {
         get: () => scrollbox,
         set: (renderable) => {
             scrollbox = renderable;
+        },
+        clear: () => {
+            scrollbox = undefined;
         },
     };
 

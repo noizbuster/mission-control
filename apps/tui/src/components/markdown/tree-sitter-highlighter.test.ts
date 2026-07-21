@@ -329,3 +329,73 @@ describe('closeTreeSitterClient', () => {
         expect(destroySpy).toHaveBeenCalledTimes(2);
     });
 });
+
+describe('asyncResultCache LRU bound', () => {
+    it('evicts the oldest entry after exceeding ASYNC_RESULT_CACHE_LIMIT inserts', async () => {
+        const fg = RGBA.fromHex('#ff0000');
+        const { runtime, highlightOnce } = setupMockRuntime({
+            chunks: [{ __isChunk: true, text: 'x', fg }],
+            highlightResult: { highlights: [] },
+        });
+        setHighlighterRuntime(runtime);
+
+        for (let i = 0; i < 300; i++) {
+            highlightTreeSitter(`code-${i}`, 'ts');
+            await flushPending(5);
+        }
+
+        const callsBefore = highlightOnce.mock.calls.length;
+        highlightTreeSitter('code-0', 'ts');
+        await flushPending(5);
+        const callsAfter = highlightOnce.mock.calls.length;
+        expect(callsAfter).toBeGreaterThan(callsBefore);
+    });
+
+    it('keeps recently-written entries cached so repeated reads do not reparse', async () => {
+        const fg = RGBA.fromHex('#00ff00');
+        const { runtime, highlightOnce } = setupMockRuntime({
+            chunks: [{ __isChunk: true, text: 'x', fg }],
+            highlightResult: { highlights: [] },
+        });
+        setHighlighterRuntime(runtime);
+
+        for (let i = 0; i < 100; i++) {
+            highlightTreeSitter(`code-${i}`, 'ts');
+            await flushPending(5);
+        }
+
+        const callsBefore = highlightOnce.mock.calls.length;
+        highlightTreeSitter('code-99', 'ts');
+        await flushPending(5);
+        const callsAfter = highlightOnce.mock.calls.length;
+        expect(callsAfter).toBe(callsBefore);
+    });
+
+    it('promotes a re-read entry to most-recently-used so it survives older entries', async () => {
+        const fg = RGBA.fromHex('#0000ff');
+        const { runtime, highlightOnce } = setupMockRuntime({
+            chunks: [{ __isChunk: true, text: 'x', fg }],
+            highlightResult: { highlights: [] },
+        });
+        setHighlighterRuntime(runtime);
+
+        highlightTreeSitter('keep', 'ts');
+        await flushPending();
+        for (let i = 0; i < 255; i++) {
+            highlightTreeSitter(`fill-${i}`, 'ts');
+            await flushPending(3);
+        }
+        highlightTreeSitter('keep', 'ts');
+        await flushPending();
+        for (let i = 256; i < 300; i++) {
+            highlightTreeSitter(`fill-${i}`, 'ts');
+            await flushPending(3);
+        }
+
+        const callsBefore = highlightOnce.mock.calls.length;
+        highlightTreeSitter('keep', 'ts');
+        await flushPending(5);
+        const callsAfter = highlightOnce.mock.calls.length;
+        expect(callsAfter).toBe(callsBefore);
+    });
+});

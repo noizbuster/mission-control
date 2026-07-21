@@ -11,6 +11,7 @@ import { TranscriptPartRenderer } from './TranscriptPartRenderer';
 export interface ChatScrollboxHandle {
     readonly get: () => ChatScrollboxSurface | undefined;
     readonly set: (renderable: ScrollBoxRenderable) => void;
+    readonly clear: () => void;
 }
 
 type ChatScrollTarget = number | { readonly x?: number; readonly y?: number };

@@ -270,9 +270,26 @@ const EMIT_COALESCE_MS = 16;
 // 20fps visible update during streaming; halves render frequency vs 16ms to keep
 // the main thread responsive for keyboard input while tokens pour in.
 const STREAMING_EMIT_COALESCE_MS = 50;
+// Sliding-window caps. Without these, long streaming sessions with parallel subagent
+// fan-out accumulate parts and text forever, driving native TextBuffer pressure.
+// Full history remains in the durable session DB; the in-memory store is for live view.
+const MAX_TRANSCRIPT_PARTS = 500;
+const MAX_OUTPUT_TEXT_CHARS = 256 * 1024;
+const MAX_HISTORY_ENTRIES = 1000;
 const CURSOR_UP = '\u001b[A';
 const CURSOR_DOWN = '\u001b[B';
 const APPROVAL_LEVEL_DEFAULT_INDEX = 1;
+
+/** Concatenate `current + text`, dropping the head when the result exceeds `maxChars`. Keeps the most recent tail so live UI stays meaningful; full text remains in the durable session DB. */
+function appendClamped(current: string, text: string, maxChars: number): string {
+    const next = current + text;
+    return next.length > maxChars ? next.slice(next.length - maxChars) : next;
+}
+
+/** Drop the oldest transcript parts when over cap. Preserves insertion order of the tail. */
+function clampTranscriptParts(parts: readonly TranscriptPart[]): readonly TranscriptPart[] {
+    return parts.length > MAX_TRANSCRIPT_PARTS ? parts.slice(parts.length - MAX_TRANSCRIPT_PARTS) : parts;
+}
 
 function sanitizeQuestionOptionForDisplay(option: QuestionOption): QuestionOption {
     return {
@@ -460,7 +477,7 @@ export class ChatStore {
     }
 
     emitOutput(text: string): void {
-        this.state.outputText += text;
+        this.state.outputText = appendClamped(this.state.outputText, text, MAX_OUTPUT_TEXT_CHARS);
         if (this.hasTypedTranscriptParts()) {
             this.appendLegacyTranscriptPart(text);
         }
@@ -477,7 +494,7 @@ export class ChatStore {
 
     emitTranscriptPart(part: TranscriptPart, fallbackText: string): void {
         this.appendTypedTranscriptPart(part);
-        this.state.outputText += fallbackText;
+        this.state.outputText = appendClamped(this.state.outputText, fallbackText, MAX_OUTPUT_TEXT_CHARS);
         if ('status' in part && part.status === 'streaming') {
             this.schedulePublish(STREAMING_EMIT_COALESCE_MS);
             return;
@@ -486,7 +503,7 @@ export class ChatStore {
     }
 
     emitTranscriptFallback(text: string): void {
-        this.state.outputText += text;
+        this.state.outputText = appendClamped(this.state.outputText, text, MAX_OUTPUT_TEXT_CHARS);
         const ms = this.state.generating ? STREAMING_EMIT_COALESCE_MS : EMIT_COALESCE_MS;
         this.schedulePublish(ms);
     }
@@ -1104,7 +1121,9 @@ export class ChatStore {
             text,
             timestamp: Date.now(),
         };
-        this.state.historyEntries = [...this.state.historyEntries, entry];
+        const next = [...this.state.historyEntries, entry];
+        this.state.historyEntries =
+            next.length > MAX_HISTORY_ENTRIES ? next.slice(next.length - MAX_HISTORY_ENTRIES) : next;
         this.state.historyPicker = clampHistoryPickerSelection(
             this.state.historyPicker,
             this.state.historyEntries.length,
@@ -1818,6 +1837,7 @@ export class ChatStore {
         if (part.type === 'assistant') {
             this.state.activeAssistantMessageId = attributionKeyForAssistantPart(part);
         }
+        this.state.transcriptParts = clampTranscriptParts(this.state.transcriptParts);
     }
 
     private appendLegacyTranscriptPart(text: string): void {
@@ -1830,10 +1850,10 @@ export class ChatStore {
             ];
             return;
         }
-        this.state.transcriptParts = [
+        this.state.transcriptParts = clampTranscriptParts([
             ...this.state.transcriptParts,
             { id: this.nextLegacyPartId(), type: 'legacy', text },
-        ];
+        ]);
     }
 
     private nextLegacyPartId(): string {

@@ -117,6 +117,7 @@ export async function createChatTui(options: ChatTuiOptions): Promise<ChatTuiHan
     const { App } = await import('@mission-control/tui/app');
     const { createComponent } = await import('solid-js');
     const { MissionControlTuiProviders } = await import('@mission-control/tui/providers');
+    const { closeTreeSitterClient, destroySharedSyntaxStyle } = await import('@mission-control/tui/highlight');
 
     await bootstrapTreeSitter();
 
@@ -133,5 +134,7 @@ export async function createChatTui(options: ChatTuiOptions): Promise<ChatTuiHan
 
     return createChatTuiHandle(store, () => {
         mountResult.unmount();
+        destroySharedSyntaxStyle();
+        void closeTreeSitterClient();
     });
 }

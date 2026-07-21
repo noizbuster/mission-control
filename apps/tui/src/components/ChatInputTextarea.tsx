@@ -2,7 +2,7 @@
 
 import type { KeyEvent, PasteEvent, TextareaRenderable } from '@opentui/core';
 import { defaultTextareaKeyBindings } from '@opentui/core';
-import type { JSX } from 'solid-js';
+import { type JSX, onCleanup } from 'solid-js';
 import {
     CHAT_ELEMENT_BG,
     CHAT_PLACEHOLDER,
@@ -14,6 +14,7 @@ import { LEFT_ACCENT_BORDER } from './overlay-theme';
 export interface ChatTextareaHandle {
     readonly get: () => ChatTextareaSurface | undefined;
     readonly set: (renderable: TextareaRenderable) => void;
+    readonly clear: () => void;
 }
 
 export interface ChatTextareaSurface {
@@ -57,6 +58,8 @@ export function ChatInputTextareaBase(props: ChatInputTextareaProps): JSX.Elemen
         }
         props.onKeyDown(key);
     };
+
+    onCleanup(() => props.textareaRef.clear());
 
     return (
         <box
