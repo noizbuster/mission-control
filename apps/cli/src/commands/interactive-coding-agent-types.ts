@@ -30,6 +30,8 @@ export type ActiveCodingAgentTurn = {
     readonly answerApproval: (line: string) => boolean;
     readonly hasPendingApproval: () => boolean;
     readonly setApprovalLevel: (level: ApprovalLevel) => void;
+    /** ISO timestamp of the most recent event packet on this turn. */
+    readonly lastPacketAt: () => string;
 };
 
 export type InterruptMode = 'soft' | 'force';

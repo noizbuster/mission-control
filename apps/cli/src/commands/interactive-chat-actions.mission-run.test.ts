@@ -286,6 +286,7 @@ function fakeActiveTurn(): NonNullable<CodingActionContext['activeTurn']> {
         answerApproval: () => false,
         hasPendingApproval: () => false,
         setApprovalLevel: () => undefined,
+        lastPacketAt: () => new Date().toISOString(),
     };
 }
 

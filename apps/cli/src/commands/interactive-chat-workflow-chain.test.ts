@@ -134,6 +134,7 @@ function settledTurn(outcome: 'completed' | 'interrupted'): TurnWithOutcome {
         answerApproval: () => false,
         hasPendingApproval: () => false,
         setApprovalLevel: () => undefined,
+        lastPacketAt: () => new Date().toISOString(),
     };
 }
 
@@ -149,6 +150,7 @@ function deferredTurn(): { readonly turn: TurnWithOutcome } {
         answerApproval: () => false,
         hasPendingApproval: () => false,
         setApprovalLevel: () => undefined,
+        lastPacketAt: () => new Date().toISOString(),
     };
     return { turn };
 }

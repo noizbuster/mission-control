@@ -45,6 +45,7 @@ function createControllableTurn(opts?: { readonly pendingApproval?: boolean }): 
         },
         hasPendingApproval: (): boolean => pendingApproval,
         setApprovalLevel: (_level: ApprovalLevel): void => {},
+        lastPacketAt: (): string => new Date().toISOString(),
     };
 
     return {

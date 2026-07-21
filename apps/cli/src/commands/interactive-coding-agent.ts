@@ -55,10 +55,31 @@ async function startOwnedCodingAgentTurn(
         readonly execute: (owner: SessionRunOwner) => Promise<SessionRunOwnerReceipt>;
     },
 ): Promise<ActiveCodingAgentTurn> {
+    let lastPacketAt = new Date().toISOString();
+    const notePacket = (): void => {
+        lastPacketAt = new Date().toISOString();
+    };
+    const originalEmit = options.emitEvent;
+    const originalObserve = options.observeStoredEvent;
+    const trackedOptions = {
+        ...options,
+        emitEvent: (event: Parameters<typeof originalEmit>[0]) => {
+            notePacket();
+            originalEmit(event);
+        },
+        ...(originalObserve !== undefined
+            ? {
+                  observeStoredEvent: (event: Parameters<NonNullable<typeof originalObserve>>[0]) => {
+                      notePacket();
+                      originalObserve(event);
+                  },
+              }
+            : {}),
+    };
     let activeApprovalRedactor =
-        options.authStore === undefined
+        trackedOptions.authStore === undefined
             ? createObservabilityRedactor()
-            : await createProviderAuthStoreObservabilityRedactor(options.authStore);
+            : await createProviderAuthStoreObservabilityRedactor(trackedOptions.authStore);
     const approvalRedactor: ObservabilityRedactor = {
         redactText: (text) => activeApprovalRedactor.redactText(text),
         redactIdentifier: (identifier) => activeApprovalRedactor.redactIdentifier(identifier),
@@ -66,28 +87,28 @@ async function startOwnedCodingAgentTurn(
         createTextStream: () => activeApprovalRedactor.createTextStream(),
     };
     const approvals = createInteractiveApprovalBroker(
-        { ...options, observabilityRedactor: approvalRedactor },
-        options.permissionSession,
+        { ...trackedOptions, observabilityRedactor: approvalRedactor },
+        trackedOptions.permissionSession,
     );
-    const renderState = createProviderRenderState(options.turnId);
+    const renderState = createProviderRenderState(trackedOptions.turnId);
     const { owner, tools, observabilityRedactor, overlayWiring } = await createInteractiveRunOwner(
-        options,
+        trackedOptions,
         approvals,
         renderState,
     );
     activeApprovalRedactor = observabilityRedactor;
     let settled = false;
-    const outcome = runOwnedCodingAgentTurn(options, owner, renderState, action, approvalRedactor)
+    const outcome = runOwnedCodingAgentTurn(trackedOptions, owner, renderState, action, approvalRedactor)
         .catch((error: unknown) => {
             const message = approvalRedactor.redactText(error instanceof Error ? error.message : String(error));
             const failedParts = settleTerminalToolTranscriptParts(renderState, 'failed');
-            if (options.output.writeTranscriptPart !== undefined) {
+            if (trackedOptions.output.writeTranscriptPart !== undefined) {
                 for (const part of failedParts) {
-                    emitTranscriptPart(options.output, part, '');
+                    emitTranscriptPart(trackedOptions.output, part, '');
                 }
             }
-            emitTranscriptFallback(options.output, `Error: ${message}\n`);
-            settleCrashedCodingTurn(options, message, approvalRedactor, owner.status().runId);
+            emitTranscriptFallback(trackedOptions.output, `Error: ${message}\n`);
+            settleCrashedCodingTurn(trackedOptions, message, approvalRedactor, owner.status().runId);
             return 'failed' as const;
         })
         .finally(async () => {
@@ -114,6 +135,7 @@ async function startOwnedCodingAgentTurn(
         answerApproval: approvals.answer,
         hasPendingApproval: approvals.hasPending,
         setApprovalLevel: approvals.setApprovalLevel,
+        lastPacketAt: () => lastPacketAt,
     };
 }
 

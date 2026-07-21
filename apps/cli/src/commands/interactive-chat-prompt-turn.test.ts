@@ -19,6 +19,7 @@ const startCodingAgentTurnMock = vi.hoisted(() =>
         answerApproval: () => false,
         hasPendingApproval: () => false,
         setApprovalLevel: () => undefined,
+        lastPacketAt: () => new Date().toISOString(),
     })),
 );
 

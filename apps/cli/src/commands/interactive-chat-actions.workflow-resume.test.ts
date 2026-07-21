@@ -604,5 +604,6 @@ function fakeActiveTurn() {
         answerApproval: () => false,
         hasPendingApproval: () => false,
         setApprovalLevel: () => undefined,
+        lastPacketAt: () => new Date().toISOString(),
     };
 }

@@ -36,6 +36,7 @@ export function startCompactionTurn(options: CompactionTurnOptions): ActiveCodin
         options.output.write(`Compaction failed: ${errorMessage(error)}\n`);
     });
 
+    const startedAt = new Date().toISOString();
     return {
         done,
         interrupt: () => {
@@ -44,6 +45,7 @@ export function startCompactionTurn(options: CompactionTurnOptions): ActiveCodin
         answerApproval: () => false,
         hasPendingApproval: () => false,
         setApprovalLevel: () => undefined,
+        lastPacketAt: () => startedAt,
     };
 }
 
