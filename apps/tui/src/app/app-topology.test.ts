@@ -266,6 +266,30 @@ describe('App OpenCode layout wiring', () => {
         expect(transcriptBlock).toContain('toolOutputExpanded={snapshot().toolOutputExpanded}');
     });
 
+    it('passes <ChatTranscript> as inline JSX, never wrapped in an IIFE (regression: scrollbar flicker)', () => {
+        //Wrapping <ChatTranscript> in `(() => <ChatTranscript .../>)()` defeats Solid's inline-JSX
+        //reconciliation: every snapshot publish produces a new JSX.Element ref, Solid unmounts +
+        //remounts the component, the OpenTUI scrollbox rebuilds with scrollHeight=0, and the
+        //scrollbar flashes (visible as a 1-row screen shift on every keystroke). See
+        //apps/tui/AGENTS.md "JSX Element Identity And Component Props".
+        const appSource = readSource(chatAppRootFile);
+        expect(appSource).toContain('transcript={');
+        expect(appSource).not.toContain('transcript={(()');
+        expect(appSource).not.toContain('transcript={(() =>');
+        expect(appSource).not.toMatch(/transcript=\{\s*\(\s*\(\s*\)\s*=>/u);
+    });
+
+    it('passes activeAssistantMessageId unconditionally so the ChatTranscript instance stays mounted', () => {
+        //`exactOptionalPropertyTypes` rejects `prop={undefined}` on `prop?: T`. The previous fix
+        //used `{...(cond ? { prop: val } : {})}` to dodge the type error, but conditional spreads
+        //on a long-lived component can confuse Solid's reconciler. ChatTranscriptProps now declares
+        //`activeAssistantMessageId: string | undefined` so the caller passes the value directly.
+        const appSource = readSource(chatAppRootFile);
+        const transcriptBlock = sliceBetween(appSource, '<ChatTranscript', '/>');
+        expect(transcriptBlock).toContain('activeAssistantMessageId={snapshot().activeAssistantMessageId}');
+        expect(transcriptBlock).not.toContain('activeAssistantMessageId !== undefined');
+    });
+
     it('keeps dock as a flexShrink sibling of the flexGrow upper region', () => {
         const appSource = readSource(chatAppRootFile);
         const mainStart = appSource.indexOf('function AppMain');

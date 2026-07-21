@@ -154,6 +154,20 @@ Use Solid primitives for component state and lifecycle: `createSignal`, `createM
 
 Use Solid callback refs, local variables, or signals for native renderable handles. Do not introduce object ref wrappers for components; narrow locals before use and keep renderable ownership at the component seam.
 
+### JSX Element Identity And Component Props
+
+Solid's compiler recognizes inline JSX expressions like `prop={<Foo .../>}` as a single component instance and reconciles by type across parent re-renders. **Wrapping the JSX in an IIFE (`prop={(() => <Foo .../>)()}`) or any other indirect call defeats this optimization**: the parent's re-render produces a brand-new `JSX.Element` ref each time, Solid treats it as a new component instance, and the previous instance is unmounted + remounted on every snapshot publish.
+
+This pattern is silent on the Welcome screen / empty transcript and only surfaces when the remounted component owns scroll state the user can see — e.g. `<ChatTranscript>` remounting on every keystroke rebuilt the OpenTUI scrollbox, briefly measured `scrollHeight=0`, and flashed the scrollbar. Debugging required a module-scoped mount counter because the effect re-ran once per mount and looked like a normal reactive update.
+
+Rules:
+
+- Pass components as inline JSX, never as the return value of a wrapping function. `transcript={<ChatTranscript .../>}` ✅ ; `transcript={(() => <ChatTranscript .../>)()}` ❌.
+- When the wrapping was added to read a reactive value once into a const, just read it inline — Solid's reactive system handles redundant reads efficiently.
+- Optional props under `exactOptionalPropertyTypes` should use `prop: T | undefined` (caller passes the value unconditionally) instead of `prop?: T` + conditional spread `{...(cond ? { prop: val } : {})}` when the prop is on a component that must stay mounted. The conditional spread creates a new props shape on every render and can confuse Solid's reconciler.
+- For props that genuinely must be skipped when absent, keep the conditional spread — it is fine on leaf boxes/text where re-mount is cheap.
+- Regression test: `app-topology.test.ts` scans `app.tsx` for IIFE-wrapped `<ChatTranscript>` and fails the build if it returns.
+
 ### Keyboard Routing
 
 OpenTUI's `useKeyboard` delivers one `KeyEvent` per physical keypress. Editing keys (printable input, backspace, arrows, word-move, Enter-submit, IME) stay on `TextareaRenderable` and the managed textarea keymap layer. App chords, transcript scroll, prompt history list-select (Up at buffer start opens the 2-column history picker; Enter inserts fill-only; Esc closes), autocomplete completion, and submit run from the textarea `onKeyDown` handler with raw `KeyEvent.preventDefault()` when handled. Overlays read keyboard input through their mounted handlers while focus is redirected away from the textarea. Ctrl+C is always routed through the global keyboard sink so interrupt/exit works during focus races.
@@ -220,3 +234,4 @@ Flat `<text>` blocks are explicitly `selectable`; `Markdown` leaves default sele
 - Do NOT re-add a hand-rolled cursor or composition buffer. The `TextareaRenderable` owns the cursor, selection, and IME composition; the chat store only mirrors `plainText` into `inputBuffer`.
 - Do NOT add a Ctrl+C copy regime. Copy is mouse-release only via OSC52 (`onMouseUp` on the root box). Ctrl+C is reserved for interrupt/exit and routes through the global sink, never the textarea.
 - Do NOT spawn clipboard binaries (`pbcopy` / `xclip` / `wl-copy`) for copy. OSC52 is emitted by OpenTUI's native core.
+- Do NOT wrap `<ChatTranscript>` (or any component that owns scroll state) in an IIFE or function call when passing it as a prop. The wrapper defeats Solid's inline-JSX reconciliation: every snapshot publish constructs a new `JSX.Element` ref, Solid unmounts + remounts the component, and the OpenTUI scrollbox briefly measures `scrollHeight=0` (scrollbar flash + 1-row screen shift on every keystroke). See **JSX Element Identity And Component Props** above.

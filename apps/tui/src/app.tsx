@@ -180,6 +180,13 @@ function AppMain(props: AppProps): JSX.Element {
                             showWelcome={showWelcome()}
                             welcomeData={welcomeData}
                             statusBarProps={statusBarProps()}
+                            // IMPORTANT: pass <ChatTranscript> as inline JSX, NEVER wrapped in an
+                            // IIFE or any indirect call. Solid's compiler reconciles inline JSX by
+                            // component type across parent re-renders; an IIFE wrapper produces a
+                            // new JSX.Element ref on every snapshot publish and Solid unmounts +
+                            // remounts <ChatTranscript>, which rebuilt the scrollbox and flashed the
+                            // scrollbar on every keystroke. See apps/tui/AGENTS.md "JSX Element
+                            // Identity And Component Props". Regression test: app-topology.test.ts.
                             transcript={
                                 <ChatTranscript
                                     blocks={messageBlocks()}
