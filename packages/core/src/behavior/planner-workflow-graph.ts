@@ -59,6 +59,7 @@ import {
 } from './planner-dual-review';
 import { PLANNER_MAX_INTERVIEW_TURNS } from './planner-interview';
 import { METIS_REJECT_ROUTE_VALUES, PLANNER_METIS_REJECT_BUDGET } from './planner-metis';
+import { READONLY_TASK_CHILD_CONTEXT } from './readonly-task-child-context';
 
 export { PLANNER_SCAFFOLD_HEADERS };
 export {
@@ -212,11 +213,13 @@ export const PLANNER_DUAL_ORACLE_PROMPT =
 
 /** Context injected into explore/research prompts before read-only delegation. */
 export const PLANNER_READONLY_CHILD_CONTEXT =
-    'Planner-readonly applies to these workflow nodes after mode materialization. Spawned child ' +
-    'agents do NOT inherit workflow PolicyEffectRule sets; their authority is independently ' +
-    'constrained by the selected read-only category and AgentDefinition.pathPolicies. Delegate only ' +
-    'to explore/librarian, frame child prompts as read-only research (TASK / DELIVERABLE / SCOPE / ' +
-    'VERIFY), and treat subagent output as claims until verified.';
+    'Planner-readonly applies to these workflow nodes after mode materialization. ' +
+    READONLY_TASK_CHILD_CONTEXT;
+
+const PLANNER_READONLY_EXPLORATION_CHILD_LIMIT =
+    ' For these planner explore/research nodes, task() delegation is limited to ' +
+    'explore/librarian read-only research categories (category:"explore" or ' +
+    'category:"librarian"); never use category:"deep" or write-capable categories.';
 
 export type PlannerWorkflowGraphOptions = {
     /**
@@ -324,7 +327,7 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
                 id: 'explore',
                 kind: 'llm',
                 label: 'Explore the codebase to ground the plan',
-                capabilities: ['read'],
+                capabilities: ['read', 'subagent', 'network'],
                 config: {
                     systemPrompt:
                         'Deep exploration to ground an execution-ready plan. Hierarchy: (1) use read ' +
@@ -332,6 +335,7 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
                         'via task with TASK / DELIVERABLE / SCOPE / VERIFY framing, (3) never ask the ' +
                         'user during this node. Cite file:line evidence for every claim. ' +
                         PLANNER_READONLY_CHILD_CONTEXT +
+                        PLANNER_READONLY_EXPLORATION_CHILD_LIMIT +
                         ' Multi-turn: keep going until exploration is grounded — do not stop early. ' +
                         'While exploring, call tools and do NOT output true. When ready, synthesize ' +
                         'findings. Output ONLY the JSON boolean `true` when complete — no prose, no ' +
@@ -380,7 +384,7 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
                 id: 'research',
                 kind: 'llm',
                 label: 'Research best practices for an unclear request',
-                capabilities: ['read'],
+                capabilities: ['read', 'subagent', 'network'],
                 config: {
                     systemPrompt:
                         'The request outcome is fuzzy. Research best practices and prior art to make ' +
@@ -388,6 +392,7 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
                         'defaults (industry standard or repo convention) with rationale. Prefer tools ' +
                         'and explore/librarian agents over questions. ' +
                         PLANNER_READONLY_CHILD_CONTEXT +
+                        PLANNER_READONLY_EXPLORATION_CHILD_LIMIT +
                         ' Multi-turn: keep going until research is grounded — do not stop early. While ' +
                         'researching, call tools and do NOT output true. When ready, synthesize findings. ' +
                         'Output ONLY the JSON boolean `true` when complete — no prose, no formatting, no ' +

@@ -4,8 +4,8 @@
  * A mode is a structural overlay applied at materialization time — NOT a prompt injection.
  * This declaration carries:
  *   - a concise principle-level `systemPromptOverlay` (condensed from the full 331-line source
- *     to ~45 lines covering the six invariants: certainty, scenario, TDD, QA, reviewer
- *     separation, no self-approval),
+ *     to ~50 lines covering the seven invariants: certainty, scenario, TDD, QA, reviewer
+ *     separation, no self-approval, parallel investigation),
  *   - a hard policy-gate rule requiring a scenario before any edit (action `edit` → `ask`),
  *   - an empty `requiredTools` (autopilot does not restrict the tool surface).
  *
@@ -58,7 +58,14 @@ pass is mandatory before declaring complete. No self-approval under any circumst
 ## completion discipline
 A task is complete only when: the change works (verified through the surface), tests pass,
 types are clean, and no debug artifacts remain. Partial completion is failure — say so
-explicitly rather than implying done.`;
+explicitly rather than implying done.
+
+## parallel investigation
+When investigation spans multiple modules or an uncertain surface area, prefer parallel
+read-only delegation via \`task(explore)\` and \`task(librarian)\`, then synthesize the
+returned findings. Do not skip delegation solely to hoard context — parallel subagents widen
+the read surface without displacing your working set. Trivial single-file reads stay inline;
+this directive kicks in when the read surface grows.`;
 
 /**
  * The autopilot mode declaration.

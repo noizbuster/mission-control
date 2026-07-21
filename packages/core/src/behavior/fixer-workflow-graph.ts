@@ -1,4 +1,4 @@
-// allow: SIZE_OK -- HEAD 452 -> current 465 pure LOC; one declarative fixer-workflow graph whose node and edge tables stay together.
+// allow: SIZE_OK -- HEAD 452 -> current 511 pure LOC; one declarative fixer-workflow graph whose node and edge tables stay together.
 /**
  * The Fixer workflow graph: the intent-gated implement/fix path (ABG graph).
  * Inspired by orchestrator discipline for bounded implementation with verification;
@@ -43,6 +43,7 @@
  * maturity-classify, anti-dup-guard, evidence-check) and richer prompts.
  */
 import type { AbgGraphSpec, AbgNodeModelOptions } from '@mission-control/protocol';
+import { READONLY_TASK_CHILD_CONTEXT } from './readonly-task-child-context';
 
 export const FIXER_WORKFLOW_GRAPH_ID = 'fixer';
 /** Hard ceiling for the whole graph (including research tool turns + synthesis). */
@@ -122,7 +123,7 @@ export function createFixerWorkflowGraph(options: FixerWorkflowGraphOptions = {}
                 id: 'research-explore',
                 kind: 'llm',
                 label: 'Exploratory research — read-only, NO edits',
-                capabilities: ['read'],
+                capabilities: ['read', 'subagent', 'network'],
                 config: {
                     systemPrompt:
                         'Exploratory/research intent. Explore the codebase and/or external docs to answer the ' +
@@ -136,7 +137,12 @@ export function createFixerWorkflowGraph(options: FixerWorkflowGraphOptions = {}
                         'for a distinctive symbol from the docs, or list the parent directory. Only conclude ' +
                         '"not present" after at least one alternative search has returned empty. A failed read ' +
                         'is NOT explored ground — it tells you nothing about whether the file exists elsewhere.\n' +
-                        'Multi-turn: keep calling tools until you have enough grounded evidence for a complete ' +
+                        'SUBAGENT ROUTING: for multi-file codebase mapping prefer task(category:"explore"); for ' +
+                        'external docs/APIs prefer task(category:"librarian") (child may webfetch/web_search/mcp). ' +
+                        'Trivial single-symbol lookups may use parent read tools. Never task(category:"deep"). ' +
+                        'Before final synthesis, gather enough grounded evidence from tools and/or children. ' +
+                        READONLY_TASK_CHILD_CONTEXT +
+                        '\nMulti-turn: keep calling tools until you have enough grounded evidence for a complete ' +
                         'answer. While exploring, call tools and do NOT output true. When ready, synthesize the ' +
                         'answer. Output ONLY the JSON boolean `true` when complete — no prose, no formatting, no extra text.',
                     outputKey: 'explore.complete',
@@ -157,14 +163,14 @@ export function createFixerWorkflowGraph(options: FixerWorkflowGraphOptions = {}
                         'user\'s request>"). Use this when the request needs a real plan before any code.\n' +
                         '2. Ask exactly ONE high-signal clarifying question (with 2-4 options and your ' +
                         'recommended default first). Use this when one answer would unblock planning.\n' +
-                         'Never implement, never edit files, never run effectful tools. Planning mode is STICKY: ' +
-                         '"do/fix/build" all mean "plan X" here, not "implement X". While calling the workflow ' +
-                         'tool, do NOT emit true. When you have routed to #planner or asked the question, Output ' +
-                         'ONLY the JSON boolean `true` — no prose, no formatting, no extra text.',
-                     outputKey: 'planner.routed',
-                     outputShape: 'boolean',
-                 },
-             },
+                        'Never implement, never edit files, never run effectful tools. Planning mode is STICKY: ' +
+                        '"do/fix/build" all mean "plan X" here, not "implement X". While calling the workflow ' +
+                        'tool, do NOT emit true. When you have routed to #planner or asked the question, Output ' +
+                        'ONLY the JSON boolean `true` — no prose, no formatting, no extra text.',
+                    outputKey: 'planner.routed',
+                    outputShape: 'boolean',
+                },
+            },
             {
                 id: 'memory',
                 kind: 'memory',
@@ -281,7 +287,10 @@ export function createFixerWorkflowGraph(options: FixerWorkflowGraphOptions = {}
                     systemPrompt:
                         'Execute the delegated sub-task via the task tool. Frame the delegation with TASK, ' +
                         'EXPECTED OUTCOME, REQUIRED TOOLS, MUST DO, MUST NOT DO, and CONTEXT. ' +
-                        'Prefer category routing (e.g. category: "quick" or "deep") with prompt/assignment. ' +
+                        'Choose category by work type: investigation/mapping → explore; external/docs-style ' +
+                        'lookup → librarian (network-enabled); hard reasoning → reasoner or oracle when ' +
+                        'appropriate; implementation → deep or quick; UI → designer. Prefer category ' +
+                        'routing with prompt/assignment. ' +
                         'If a task call returns task_yield_missing or a degraded-salvage error, retry once with a ' +
                         'tighter assignment that requires the child to call yield with a final result.',
                 },
@@ -339,17 +348,17 @@ export function createFixerWorkflowGraph(options: FixerWorkflowGraphOptions = {}
                 id: 'clarify',
                 kind: 'llm',
                 label: 'Ask ONE clarifying question — ambiguous prompts',
-                 config: {
-                     systemPrompt:
-                         'Ask the user exactly ONE targeted clarifying question. Name what you understood, what ' +
-                         'you are unsure about, 2-4 options with effort/implications, and your recommendation. ' +
-                         'After the question is asked, Output ONLY the JSON boolean `true` — no prose, no ' +
-                         'formatting, no extra text.',
-                     outputKey: 'clarify.active',
-                     outputShape: 'boolean',
-                 },
-             },
-         ],
+                config: {
+                    systemPrompt:
+                        'Ask the user exactly ONE targeted clarifying question. Name what you understood, what ' +
+                        'you are unsure about, 2-4 options with effort/implications, and your recommendation. ' +
+                        'After the question is asked, Output ONLY the JSON boolean `true` — no prose, no ' +
+                        'formatting, no extra text.',
+                    outputKey: 'clarify.active',
+                    outputShape: 'boolean',
+                },
+            },
+        ],
         edges: [
             { source: 'intent-gate', target: 'direct-respond', condition: 'intent-trivial', priority: 30 },
             { source: 'intent-gate', target: 'research-explore', condition: 'intent-exploratory', priority: 25 },
@@ -451,11 +460,11 @@ export function createFixerWorkflowGraph(options: FixerWorkflowGraphOptions = {}
                 description: 'exploratory research synthesis ready',
                 when: { kind: 'blackboard.value.equals', key: 'explore.complete', value: true },
             },
-             {
-                 id: 'planner-routed',
-                 description: 'routed to #planner or asked one question',
-                 when: { kind: 'blackboard.value.equals', key: 'planner.routed', value: true },
-             },
+            {
+                id: 'planner-routed',
+                description: 'routed to #planner or asked one question',
+                when: { kind: 'blackboard.value.equals', key: 'planner.routed', value: true },
+            },
             {
                 id: 'plan-ready',
                 description: 'todo plan produced',

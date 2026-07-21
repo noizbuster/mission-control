@@ -1,4 +1,4 @@
-// allow: SIZE_OK -- HEAD 563 -> current 564 pure LOC; one declarative executer graph with inseparable retry and verdict routing tables.
+// allow: SIZE_OK -- HEAD 563 -> current ~610 pure LOC; one declarative executer graph with inseparable retry and verdict routing tables plus F1-F4 dual-review prompts.
 /**
  * The executer workflow graph: executes a plan produced by the planner workflow
  * (plan Task 3.4, ABG Round 8 decomposition).
@@ -135,7 +135,14 @@ export const EXECUTER_DELEGATE_WORKER_PROMPT =
     'sections: ## 1. TASK (exact checkbox item), ## 2. EXPECTED OUTCOME (files, ' +
     'functionality, verification command), ## 3. REQUIRED TOOLS, ## 4. MUST DO, ## 5. MUST NOT ' +
     'DO, ## 6. CONTEXT (notepad paths, inherited wisdom, dependencies). Follow every section. ' +
-    'Append findings to the notepad after completion (never overwrite).';
+    'Choose category by work type: investigation/mapping → explore; external/docs-style lookup → ' +
+    'librarian (network-enabled); hard reasoning → reasoner or oracle when appropriate; ' +
+    'implementation → deep or quick; UI → designer. Prefer category routing with prompt/assignment. ' +
+    'This node has no write capability — do not append the notepad yourself. Put notepad paths in ' +
+    'CONTEXT and require write-capable children to append findings (never overwrite), or return ' +
+    'findings in the yield result for the conductor. ' +
+    'If a task call returns task_yield_missing or a degraded-salvage error, retry once with a ' +
+    'tighter assignment that requires the child to call yield with a final result.';
 
 /**
  * Verify-before-checkbox prompt (plan Task 9). The checkbox-update node MUST
@@ -178,6 +185,52 @@ export const EXECUTER_FINAL_STRIKE_BUDGET = 3;
  * when `verdictStrategy === 'all-approve'` and writes the result to `verdictKey`.
  */
 export const EXECUTER_VERDICT_STRATEGY_ALL_APPROVE = 'all-approve';
+
+/**
+ * F1–F4 hybrid dual-review critic prompts. Each lane builds a reviewer
+ * assignment for its rubric, calls `task()` once with `category:"reviewer"` or
+ * `agent:"reviewer"`, treats child text as claims, and emits whole-output
+ * APPROVE|REJECT only (mirrors planner dual-reviewer discipline). Soft prompt
+ * bias only — task is not topology-enforced. Capabilities stay `['subagent']`
+ * so the pure-structured omit-capabilities gate does not apply.
+ */
+export const EXECUTER_F1_PROMPT =
+    'You are the F1 (goal) final critic for the Mission Control executer workflow. ' +
+    'Build a reviewer assignment that checks whether the implementation achieves the plan ' +
+    'stated goal (mission outcome, acceptance intent, and delivered scope). Call task() ' +
+    'exactly once with category="reviewer" or agent="reviewer" and that assignment. Treat ' +
+    'the child text as claims, not proof. After the child returns, output ONLY one ' +
+    'whole-output verdict — APPROVE or REJECT — with no prose or formatting. Prefer REJECT ' +
+    'when the goal is unmet or evidence is missing.';
+
+export const EXECUTER_F2_PROMPT =
+    'You are the F2 (constraints) final critic for the Mission Control executer workflow. ' +
+    'Build a reviewer assignment that checks whether every explicit plan constraint was ' +
+    'honored (MUST NOT / MUST DO, scope bounds, policy limits, forbidden paths). Call task() ' +
+    'exactly once with category="reviewer" or agent="reviewer" and that assignment. Treat ' +
+    'the child text as claims, not proof. After the child returns, output ONLY one ' +
+    'whole-output verdict — APPROVE or REJECT — with no prose or formatting. Prefer REJECT ' +
+    'when any explicit constraint was violated or is unproven.';
+
+export const EXECUTER_F3_PROMPT =
+    'You are the F3 (tests-as-claims) final critic for the Mission Control executer workflow. ' +
+    'Build a reviewer assignment that verifies test *evidence* already present in the plan, ' +
+    'context, and reviewer-child report only: cited commands, logs, assertion names, and ' +
+    'pass/fail receipts. Do NOT run the test suite yourself, do NOT invoke bash/command.run, ' +
+    'and do NOT claim you executed tests. Call task() exactly once with category="reviewer" ' +
+    'or agent="reviewer" and that assignment. Treat the child text as claims, not proof. ' +
+    'After the child returns, output ONLY one whole-output verdict — APPROVE or REJECT — ' +
+    'with no prose or formatting. Prefer REJECT when cited test evidence is missing, vague, ' +
+    'or contradictory.';
+
+export const EXECUTER_F4_PROMPT =
+    'You are the F4 (code quality) final critic for the Mission Control executer workflow. ' +
+    'Build a reviewer assignment that checks whether the delivered code is clean and ' +
+    'well-structured (clarity, cohesion, unnecessary complexity, type-safety, and ' +
+    'maintainability relative to the plan). Call task() exactly once with category="reviewer" ' +
+    'or agent="reviewer" and that assignment. Treat the child text as claims, not proof. ' +
+    'After the child returns, output ONLY one whole-output verdict — APPROVE or REJECT — ' +
+    'with no prose or formatting. Prefer REJECT when quality blockers remain.';
 
 /**
  * Fix-loop gate prompt (plan Task 10). The final verification wave REJECTED the
@@ -398,46 +451,45 @@ export function createExecuterWorkflowGraph(options: ExecuterWorkflowGraphOption
             {
                 id: 'f1',
                 kind: 'llm',
-                label: 'F1 — Goal verification critic',
+                label: 'F1 — Goal verification critic (dual-review hybrid via task reviewer)',
+                capabilities: ['subagent'],
                 config: {
-                    systemPrompt:
-                        'F1 (Mission Control executer final critic): Verify the implementation ' +
-                        'achieves the plan stated goal. Output ONLY one verdict — APPROVE or REJECT — ' +
-                        'with no prose or formatting.',
+                    systemPrompt: EXECUTER_F1_PROMPT,
                     outputKey: 'final.f1',
+                    outputEnum: ['APPROVE', 'REJECT'],
                 },
             },
             {
                 id: 'f2',
                 kind: 'llm',
-                label: 'F2 — Constraint verification critic',
+                label: 'F2 — Constraint verification critic (dual-review hybrid via task reviewer)',
+                capabilities: ['subagent'],
                 config: {
-                    systemPrompt:
-                        'F2 (Mission Control executer final critic): Verify all explicit constraints ' +
-                        'were honored. Output ONLY one verdict — APPROVE or REJECT — with no prose or formatting.',
+                    systemPrompt: EXECUTER_F2_PROMPT,
                     outputKey: 'final.f2',
+                    outputEnum: ['APPROVE', 'REJECT'],
                 },
             },
             {
                 id: 'f3',
                 kind: 'llm',
-                label: 'F3 — Test verification critic',
+                label: 'F3 — Test-evidence verification critic (dual-review hybrid via task reviewer)',
+                capabilities: ['subagent'],
                 config: {
-                    systemPrompt:
-                        'F3 (Mission Control executer final critic): Verify all tests pass. Output ' +
-                        'ONLY one verdict — APPROVE or REJECT — with no prose or formatting.',
+                    systemPrompt: EXECUTER_F3_PROMPT,
                     outputKey: 'final.f3',
+                    outputEnum: ['APPROVE', 'REJECT'],
                 },
             },
             {
                 id: 'f4',
                 kind: 'llm',
-                label: 'F4 — Code quality verification critic',
+                label: 'F4 — Code quality verification critic (dual-review hybrid via task reviewer)',
+                capabilities: ['subagent'],
                 config: {
-                    systemPrompt:
-                        'F4 (Mission Control executer final critic): Verify the code is clean and ' +
-                        'well-structured. Output ONLY one verdict — APPROVE or REJECT — with no prose or formatting.',
+                    systemPrompt: EXECUTER_F4_PROMPT,
                     outputKey: 'final.f4',
+                    outputEnum: ['APPROVE', 'REJECT'],
                 },
             },
             {
