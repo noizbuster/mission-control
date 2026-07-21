@@ -63,6 +63,17 @@ export function insertToolStatement(
                 tool_call_id, session_id, name, status, arguments_json, result_json,
                 started_at, completed_at, failed_at, last_message, error_json, applied_files_json
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(session_id, tool_call_id) DO UPDATE SET
+                name = excluded.name,
+                status = excluded.status,
+                arguments_json = excluded.arguments_json,
+                result_json = excluded.result_json,
+                started_at = excluded.started_at,
+                completed_at = excluded.completed_at,
+                failed_at = excluded.failed_at,
+                last_message = excluded.last_message,
+                error_json = excluded.error_json,
+                applied_files_json = excluded.applied_files_json
         `,
         args: [
             record.toolId,

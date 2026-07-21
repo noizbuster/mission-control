@@ -88,7 +88,7 @@ export const sessionProjectionSchemaSql = [
         `,
     `
             CREATE TABLE IF NOT EXISTS tool_calls (
-                tool_call_id TEXT PRIMARY KEY NOT NULL,
+                tool_call_id TEXT NOT NULL,
                 session_id TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
                 run_id TEXT,
                 approval_id TEXT,
@@ -101,7 +101,8 @@ export const sessionProjectionSchemaSql = [
                 failed_at TEXT,
                 last_message TEXT,
                 error_json TEXT,
-                applied_files_json TEXT
+                applied_files_json TEXT,
+                PRIMARY KEY (session_id, tool_call_id)
             );
         `,
     desktopToolProposalsTableSql,

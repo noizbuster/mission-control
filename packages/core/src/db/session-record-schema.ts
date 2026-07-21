@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text, unique } from 'drizzle-orm/sqlite-core';
+import { index, integer, primaryKey, sqliteTable, text, unique } from 'drizzle-orm/sqlite-core';
 import { sessions } from './session-core-schema';
 import {
     approvalStatuses,
@@ -120,7 +120,7 @@ export const approvals = sqliteTable(
 export const toolCalls = sqliteTable(
     'tool_calls',
     {
-        toolCallId: text('tool_call_id').primaryKey(),
+        toolCallId: text('tool_call_id').notNull(),
         sessionId: text('session_id')
             .notNull()
             .references(() => sessions.sessionId, { onDelete: 'cascade' }),
@@ -136,6 +136,7 @@ export const toolCalls = sqliteTable(
         errorJson: text('error_json'),
     },
     (table) => [
+        primaryKey({ columns: [table.sessionId, table.toolCallId] }),
         index('tool_calls_session_status_idx').on(table.sessionId, table.status),
         index('tool_calls_run_idx').on(table.runId),
         index('tool_calls_approval_idx').on(table.approvalId),

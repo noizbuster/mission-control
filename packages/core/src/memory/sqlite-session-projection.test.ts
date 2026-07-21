@@ -156,6 +156,37 @@ describe('sqlite session projection', () => {
         expect(eventRows.rows).toEqual([{ event_id: 'event_session_started' }]);
         expect(sessions.rows).toEqual([{ status: 'stopped', last_event_seq: 10 }]);
     });
+
+    it('allows two sessions to reuse the same tool_call_id without colliding', async () => {
+        // Given: the tool_calls primary key is session-scoped, so cross-session tool_call_id
+        // reuse (deterministic fixtures, provider id reuse) must not raise SQLITE_CONSTRAINT.
+        const url = await tempDbUrl('cross-session-tool-call-id');
+        const store = await openSqliteSessionProjectionStoreForTests(url);
+        const client = createClient({ url });
+        const otherSessionId = 'session_other_reuses_tool_id';
+        for (const sessionId of [SESSION_ID, otherSessionId]) {
+            await client.execute({
+                sql: `INSERT INTO sessions (session_id, status, created_at, updated_at, last_activity_at)
+                      VALUES (?, 'running', ?, ?, ?)`,
+                args: [sessionId, CREATED_AT, CREATED_AT, CREATED_AT],
+            });
+            await client.execute({
+                sql: `INSERT INTO tool_calls (tool_call_id, session_id, name, status)
+                      VALUES ('shared_tool_call', ?, 'read', 'completed')`,
+                args: [sessionId],
+            });
+        }
+        const rows = await client.execute({
+            sql: `SELECT session_id, tool_call_id, status FROM tool_calls ORDER BY session_id, tool_call_id`,
+        });
+        client.close();
+        store.close();
+
+        expect(rows.rows).toEqual([
+            { session_id: otherSessionId, tool_call_id: 'shared_tool_call', status: 'completed' },
+            { session_id: SESSION_ID, tool_call_id: 'shared_tool_call', status: 'completed' },
+        ]);
+    });
 });
 
 async function expectQueryCoverage(store: SqliteSessionProjectionStore, sessionId: string): Promise<void> {
