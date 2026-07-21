@@ -27,7 +27,11 @@
 - Connect user-scope and trusted-workspace project servers EAGERLY at session start (the AI-SDK bridge snapshots `advertise()` per node-run — lazy connect = turn-1 tool blindness). Resolve project trust before `connectAll()` and before reading or merging `.mcp.json`.
 - Config scope controls provenance, project trust, and name precedence, not process location. Launch every local stdio server, whether user or project scope, with `cwd` set to the selected `workspaceRoot`; never use the launcher `process.cwd()`. Remote servers have no cwd.
 - Re-read canonical trust before every project-scope MCP invocation. Any non-`trusted` result or lookup failure must close and remove project connections before returning a non-retryable failure; user-scope connections and invocation-time network approval remain independent.
-- `network` capability tools are dropped from child registries (child-policy blocklist, todo 3).
+- **Child network is category-scoped, not universally denied.** `network` stays in `CHILD_HARD_DROPPED_CAPABILITY_KINDS` (`../../agents/child-graph-spawn.ts`). The filter-time exception is `CHILD_NETWORK_ALLOWED_CATEGORIES` via `allowNetworkCapability`:
+  - **ON** (may retain parent `webfetch` / `web_search` / `mcp__*`): `librarian`, `deep`, `reasoner`, `oracle`, `designer`, `planner`
+  - **OFF** (network hard-dropped; no webfetch/mcp on child): `explore`, `reviewer`, `quick`
+  - Webfetch / namespaced MCP claims on children apply only to ON paths. Prefer routing external lookup via `librarian` (or another ON category when chosen).
+- Research workflow parents (`research-explore`, planner `explore`/`research`) declare parent capabilities `read+subagent+network` so they can advertise network tools and `task()`; that is separate from the child matrix above. See `../../behavior/AGENTS.md` and `../task/AGENTS.md`.
 
 ## Tests
 
@@ -40,5 +44,5 @@
 
 - Do NOT make real network calls in tests — use mocked transports or the loopback fixture server.
 - Do NOT leave a transport call without a deadline — a hung server must reject at the boundary.
-- Do NOT register MCP tools into child/subagent registries (`network` capability is not child-safe).
+- Do NOT register MCP tools into child/subagent registries for OFF categories; network remains hard-dropped unless the child category/agent is in `CHILD_NETWORK_ALLOWED_CATEGORIES`. Do not claim all children have network.
 - Do NOT bypass the `${VAR}` allowlist — project configs cannot extend it.

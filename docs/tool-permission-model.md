@@ -130,7 +130,7 @@ Independent of capability advertising:
 ## Parent vs child surfaces
 
 - Parent workflow nodes: filtered by node `capabilities` + expand map
-- Child `task()` surfaces: structural drops (`task`/`job` omitted; hard drops for `subagent`/`workflow`/`network`/`team`), category and `pathPolicies`, retained workspace approval callbacks
+- Child `task()` surfaces: structural drops (`task`/`job` omitted unless depth allows nesting; `workflow`/`team` always hard-dropped; `subagent` depth-gated; `network` retained only for `CHILD_NETWORK_ALLOWED_CATEGORIES`), category and `pathPolicies`, retained workspace approval callbacks
 - Child agents do not inherit parent advertising rules automatically beyond the built child registry
 
 ## Common mistakes

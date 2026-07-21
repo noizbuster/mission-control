@@ -55,7 +55,7 @@ Beyond the scaffold above, the behavior package now hosts the **real** coding-ag
 - **Graph + registry:** `coding-agent-graph.ts` (Observe→Decide→Act loop; `llm-actor` self-edge gated by `blackboard.value.equals llm.loop_active`), `coding-agent-registry.ts` (real node runners in a SEPARATE registry — the mock registry still serves fixtures/flat-loop, strangler-fig).
 - **Real nodes:** `nodes/llm-actor/` (`runLlmActorNode` = graph↔AI-SDK bridge, pins `stopWhen: stepCountIs(1)` so the GRAPH owns the loop), `nodes/tool-actor-node.ts`, `nodes/memory-node.ts`, `nodes/policy-gate-node.ts` (3-state, emits `policy.evaluated`), `nodes/human-approval-node.ts`, `nodes/critic-node.ts` (Draft→Critic→QualityGate, sets `critic.passed`).
 - **Coordinator re-entry:** `enqueueSelectedTargets` feeds the node's `lastEventType` / live `blackboard` / `lastPolicyDecision` into rule evaluation (carried per-result, concurrency-safe), so runtime-condition edges fire. `escalate`/`fallback` signals + `node.escalated`/`node.fallback` events exist.
-- **Subagents + replay:** `../agents/task-tool-runtime-authority.ts` (`buildChildToolSurface`: category/tool allowlists, agent `pathPolicies`, hard drops, and invocation policy), `subagents/spawn-child.ts` (runs the supplied child surface), `replay/recorded-llm-replay.ts` (deterministic turn replay from recorded envelopes, ABG §7.5). `subagents/child-policy.ts` is retained only for deprecated simple-task compatibility filtering.
+- **Subagents + replay:** `../agents/task-tool-runtime-authority.ts` (`buildChildToolSurface`: category/tool allowlists, agent `pathPolicies`, depth-gated nested `task`, category-scoped network, hard drops, and invocation policy), `subagents/spawn-child.ts` (runs the supplied child surface), `replay/recorded-llm-replay.ts` (deterministic turn replay from recorded envelopes, ABG §7.5). `subagents/child-policy.ts` is retained only for deprecated simple-task compatibility filtering. See **Workflow subagent research path** below and `../agents/AGENTS.md` for the network matrix and `PRODUCTION_MAX_TASK_DEPTH`.
 - **Event vocabulary** (emit `event.type` strings): `llm.turn.started`, `llm.text.delta`, `llm.reasoning.delta`, `llm.tool_call.proposed`, `llm.turn.completed`, `llm.error`, `tool.started`/`tool.completed`/`tool.failed`/`tool.denied`, `policy.evaluated`, `context.packed`, `critic.evaluated`. These are free-form emit types (not the `AgentEventType` enum); the projection in `signals.ts` maps the signal `type` to the durable `AgentEvent` type.
 
 **Hard constraint (pre-mortem #4):** every `streamText` in `runLlmActor` pins `stopWhen: stepCountIs(1)` — the graph, never the SDK, owns the observe→decide→act loop.
@@ -77,8 +77,11 @@ Beyond the scaffold above, the behavior package now hosts the **real** coding-ag
 - **`task` tool + child spawn (`tools/task-tool.ts`, `subagents/spawn-child.ts`):** the `task`
   tool delegates to an injected `spawn` fn; `spawnChildCodingAgent` builds a child coding-agent
   run from a caller-supplied child registry. The full-parity path uses `buildChildToolSurface` to
-  omit `task`/`job`, hard-drop `subagent`/`workflow`/`network`/`team`, add `yield`, and install
-  category plus derived path-policy invocation checks. Destructive tools remain policy-controlled.
+  omit `task`/`job` (unless depth-allowed nesting), hard-drop `workflow`/`team`, hard-drop
+  `subagent` unless depth-allowed, hard-drop `network` unless category/agent is in
+  `CHILD_NETWORK_ALLOWED_CATEGORIES`, add `yield`, and install category plus derived path-policy
+  invocation checks. Destructive tools remain policy-controlled. Bounded nesting only
+  (`PRODUCTION_MAX_TASK_DEPTH=3`); not unlimited recursion and not OMC free recursion.
 - **`lsp`/`mcp` tools (`tools/lsp-tool.ts`, `tools/mcp-tool.ts`):** client-seam tools
   (`LspClient`/`McpClient`) with in-process clients for tests; real stdio/JSON-RPC transport
   sits behind the seam.
@@ -93,3 +96,60 @@ Beyond the scaffold above, the behavior package now hosts the **real** coding-ag
 **Still deferred (larger engineering, needs explicit approval):** per-adapter SSE-parsing
 deletion (the risky final cutover — delete only after the CLI defaults to the graph + e2e
 verified); full Inspector UI surfaces (separate app package).
+
+## Workflow subagent research path
+
+Built-in workflow graphs advertise `task()` and network on specific research parents. Child
+network is category-scoped and nested depth is capped in `../agents/` (not by stripping every child of both).
+
+### Research parents (`read` + `subagent` + `network`)
+
+These llm nodes keep capabilities exactly `['read', 'subagent', 'network']` so they can read
+the workspace, call `task()`, and use parent-side `webfetch` / `web_search` / `mcp__*` when
+advertised. They do **not** get write/edit/patch/bash:
+
+| Workflow | Node ids | Factory |
+| --- | --- | --- |
+| `default` / `fixer` exploratory branch | `research-explore` | `fixer-workflow-graph.ts` (default wraps fixer) |
+| `planner` clear path | `explore` | `planner-workflow-graph.ts` |
+| `planner` unclear path | `research` | `planner-workflow-graph.ts` |
+
+Soft prompt bias (not topology): prefer `explore` / `librarian` children for read-only breadth;
+route external docs/web lookup via `librarian` (or `deep` / `reasoner` / `oracle` / `designer`
+when the parent chooses those categories). Shared text: `readonly-task-child-context.ts`.
+Do not list `category:"deep"` as a preferred read-only route on those parents.
+
+Planner dual-reviewer / oracle nodes stay `['subagent']` only (no parent network on those
+lanes). Planner-readonly mode has empty `requiredTools`, so materialize does not strip
+`subagent`/`network` from explore/research.
+
+### Child network matrix (category-scoped)
+
+Child `network` is **not** universally denied. `network` stays in
+`CHILD_HARD_DROPPED_CAPABILITY_KINDS`; the allowlist is a filter-time exception via
+`allowNetworkCapability` / `CHILD_NETWORK_ALLOWED_CATEGORIES` in `../agents/child-graph-spawn.ts`:
+
+- **ON** (may retain parent `webfetch` / `web_search` / `mcp__*`): `librarian`, `deep`,
+  `reasoner`, `oracle`, `designer`, `planner`
+- **OFF** (network hard-dropped): `explore`, `reviewer`, `quick`
+
+Webfetch claims apply only on ON paths (and on research parents that declare `network`).
+
+### Nested `task` depth
+
+Production nesting uses only `PRODUCTION_MAX_TASK_DEPTH = 3` in `../agents/recursion-policy.ts`:
+spawn while `taskDepth < 3` (depths 0/1/2 may keep nested `task`); depth 3 is the blocked leaf
+(MAIN → d1 → d2 → d3). Still no unlimited recursion; `AgentDefinition.recursion` and
+`DEFAULT_MAX_RECURSION_DEPTH` (compat, value 2) cannot raise the live cap. Not OMC free
+recursion.
+
+### Executer F1–F4 dual-review hybrid
+
+`executer-workflow-graph.ts` final wave: each of f1–f4 is an llm critic with
+`capabilities: ['subagent']` and `outputEnum: ['APPROVE', 'REJECT']`. Soft prompt bias asks
+for `task(reviewer)` then a whole-output verdict. `final-verification-wave` still aggregates
+via `verdictStrategy: 'all-approve'` / `aggregateFinalVerdict` into string `final.verdict`.
+
+- F1 goal, F2 constraints, F3 tests-as-claims (evidence only; **no bash** / no self-run suite),
+  F4 code quality.
+- Critics do not declare `bash`, `read`, or `network`. Do not document F3 as running tests.
