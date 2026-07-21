@@ -80,44 +80,32 @@ export async function readSessionSnapshot(dataDir, sessionId, observabilityRedac
     }
 }
 
-async function sessionSummary(dataDir, store, record, observabilityRedactor) {
+async function sessionSummary(_dataDir, store, record, _observabilityRedactor) {
     const projectionDiagnostics = (await store.getDiagnostics(record.sessionId)).map(projectionDiagnostic);
-    const replay = await readLocalSessionReplay({
-        dataDir,
-        sessionId: record.sessionId,
-        observabilityRedactor,
-    });
-    if (replay.kind === 'missing') {
-        return {
-            sessionId: record.sessionId,
-            fileName: record.sessionId,
-            state: stateForEventCount(record.eventCount, projectionDiagnostics),
-            status: record.status,
-            ...statusTextFields(record),
-            ...(record.awaiting !== undefined ? { awaiting: record.awaiting } : {}),
-            eventCount: record.eventCount,
-            updatedAt: record.updatedAt,
-            diagnostics: projectionDiagnostics,
-        };
-    }
-    const projection = replay.replay.projection;
-    const diagnostics = [...replay.replay.diagnostics.map(replayDiagnostic), ...projectionDiagnostics];
     return {
         sessionId: record.sessionId,
         fileName: record.sessionId,
-        state: stateForProjection(projection, diagnostics),
+        state: stateForEventCount(record.eventCount, projectionDiagnostics),
         status: record.status,
-        ...statusTextFields(record, projection.snapshot),
-        ...(record.awaiting !== undefined
-            ? { awaiting: record.awaiting }
-            : projection.snapshot.awaiting !== undefined
-              ? { awaiting: projection.snapshot.awaiting }
-              : {}),
-        eventCount: projection.events.length,
+        ...statusTextFields(record),
+        ...(record.awaiting !== undefined ? { awaiting: record.awaiting } : {}),
+        eventCount: record.eventCount,
         updatedAt: record.updatedAt,
-        diagnostics,
-        sessionTree: sessionTreeSummary(projection.sessionTree),
-        stats: statsFromProjection(projection),
+        diagnostics: projectionDiagnostics,
+        sessionTree: sessionTreeSummaryFromRecord(record),
+    };
+}
+
+function sessionTreeSummaryFromRecord(record) {
+    return {
+        ...(record.name !== undefined ? { sessionName: record.name } : {}),
+        ...(record.cwd !== undefined ? { cwd: record.cwd } : {}),
+        ...(record.trustedRoot !== undefined ? { trustedRoot: record.trustedRoot } : {}),
+        ...(record.workspaceTrust !== undefined ? { workspaceTrust: record.workspaceTrust } : {}),
+        ...(record.parentSessionId !== undefined ? { parentSessionId: record.parentSessionId } : {}),
+        ...(record.activeLeafId !== undefined ? { activeLeafId: record.activeLeafId } : {}),
+        entryCount: 0,
+        branchCount: 0,
     };
 }
 

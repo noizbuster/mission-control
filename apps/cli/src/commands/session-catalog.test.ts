@@ -8,8 +8,8 @@ import {
     listSessionCatalogEntries,
     listSessionCatalogEntriesForWorkspace,
 } from './session-catalog';
-import { createSessionLog, useTempDataDir } from './session-import-export-fixtures';
-import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { useTempDataDir } from './session-import-export-fixtures';
+import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -137,31 +137,29 @@ describe('listSessionCatalogEntriesForWorkspace', () => {
             expect(await realpath(symlinkWorkspace)).toBe(realWorkspace);
             expect(symlinkWorkspace).not.toBe(realWorkspace);
 
-            await writeFile(
-                join(dataDir, 'sessions', `${matchingSessionId}.jsonl`),
-                createSessionLog({
+            await writeDurableSession(
+                dataDir,
+                matchingSessionId,
+                workspaceCatalogEvents({
                     sessionId: matchingSessionId,
                     createdAt: '2026-06-13T10:00:00.000Z',
                     updatedAt: '2026-06-13T10:00:03.000Z',
                     cwd: realWorkspace,
-                    workspaceTrust: 'unknown',
                     name: 'Symlinked',
                     activeLeafId: 'entry_match',
                 }),
-                'utf8',
             );
-            await writeFile(
-                join(dataDir, 'sessions', `${otherSessionId}.jsonl`),
-                createSessionLog({
+            await writeDurableSession(
+                dataDir,
+                otherSessionId,
+                workspaceCatalogEvents({
                     sessionId: otherSessionId,
                     createdAt: '2026-06-13T10:00:00.000Z',
                     updatedAt: '2026-06-13T10:00:09.000Z',
                     cwd: otherWorkspace,
-                    workspaceTrust: 'unknown',
                     name: 'Other project',
                     activeLeafId: 'entry_other',
                 }),
-                'utf8',
             );
 
             // Passing the symlink proves realpath normalization bridges symlink -> real target.
@@ -303,6 +301,50 @@ function blockedApprovalEvents(sessionId: string): readonly AgentEvent[] {
                 errorCode: 'tool_failed',
                 toolCallId: 'patch_call',
             },
+        },
+    ];
+}
+
+function workspaceCatalogEvents(input: {
+    readonly sessionId: string;
+    readonly createdAt: string;
+    readonly updatedAt: string;
+    readonly cwd: string;
+    readonly name: string;
+    readonly activeLeafId: string;
+}): readonly AgentEvent[] {
+    return [
+        {
+            type: 'session.started',
+            timestamp: input.createdAt,
+            sessionId: input.sessionId,
+            message: 'session started',
+        },
+        {
+            type: 'session.metadata.updated',
+            timestamp: '2026-06-13T10:00:01.000Z',
+            sessionId: input.sessionId,
+            message: 'session metadata updated',
+            sessionTree: {
+                kind: 'metadata',
+                cwd: input.cwd,
+                workspaceTrust: 'unknown',
+                name: input.name,
+            },
+        },
+        {
+            type: 'task.completed',
+            timestamp: '2026-06-13T10:00:02.000Z',
+            sessionId: input.sessionId,
+            message: 'root prompt',
+            sessionTree: { kind: 'entry', entryId: 'entry_root' },
+        },
+        {
+            type: 'session.tree.active_leaf',
+            timestamp: input.updatedAt,
+            sessionId: input.sessionId,
+            message: 'active branch selected',
+            sessionTree: { kind: 'active_leaf', entryId: input.activeLeafId },
         },
     ];
 }

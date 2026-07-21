@@ -1,11 +1,4 @@
-import {
-    normalizeWorkspaceRoot,
-    type ObservabilityRedactor,
-    ProjectTrustStore,
-    type ReplayDiagnostic,
-    readLocalSessionReplay,
-} from '@mission-control/core';
-import type { AgentSnapshot } from '@mission-control/protocol';
+import { normalizeWorkspaceRoot, type ObservabilityRedactor } from '@mission-control/core';
 import {
     readProjectionDiagnosticsForSession,
     readSessionProjectionState,
@@ -14,24 +7,6 @@ import {
 import type { CliSessionCatalogEntry } from './session-catalog-types';
 import { parseCliSessionId } from './session-id';
 import { resolve } from 'node:path';
-
-type SessionProjectionResult =
-    | { readonly kind: 'missing' }
-    | {
-          readonly kind: 'projection';
-          readonly snapshot: AgentSnapshot;
-          readonly eventCount: number;
-          readonly messageCount: number;
-          readonly createdAt?: string | undefined;
-          readonly updatedAt?: string | undefined;
-          readonly cwd?: string | undefined;
-          readonly trustedRoot?: string | undefined;
-          readonly workspaceTrust?: 'trusted' | 'denied' | 'unknown' | undefined;
-          readonly name?: string | undefined;
-          readonly activeLeafId?: string | undefined;
-          readonly parentSessionId?: string | undefined;
-          readonly diagnostics: readonly ReplayDiagnostic[];
-      };
 
 export async function normalizeWorkspaceRootWithFallback(workspaceRoot: string): Promise<string> {
     try {
@@ -46,17 +21,14 @@ export async function readSessionCatalogEntry(
     projectionState?: SessionProjectionReadState,
     observabilityRedactor?: ObservabilityRedactor,
 ): Promise<CliSessionCatalogEntry> {
+    void observabilityRedactor;
     const parsedSessionId = requireValidSessionId(sessionId);
     if (projectionState !== undefined) {
-        return readSessionCatalogEntryFromProjectionState(parsedSessionId, projectionState, observabilityRedactor);
+        return readSessionCatalogEntryFromProjectionState(parsedSessionId, projectionState);
     }
     const openedProjectionState = await readSessionProjectionState();
     try {
-        return await readSessionCatalogEntryFromProjectionState(
-            parsedSessionId,
-            openedProjectionState,
-            observabilityRedactor,
-        );
+        return await readSessionCatalogEntryFromProjectionState(parsedSessionId, openedProjectionState);
     } finally {
         openedProjectionState.store.close();
     }
@@ -65,33 +37,16 @@ export async function readSessionCatalogEntry(
 async function readSessionCatalogEntryFromProjectionState(
     parsedSessionId: string,
     projectionState: SessionProjectionReadState,
-    observabilityRedactor?: ObservabilityRedactor,
 ): Promise<CliSessionCatalogEntry> {
     const projectionRecord = projectionState.records.get(parsedSessionId);
-    const projection = await readSessionProjection(parsedSessionId, observabilityRedactor);
     const projectionDiagnostics = await readProjectionDiagnosticsForSession(parsedSessionId, projectionState);
-    if (projection.kind === 'missing') {
-        if (projectionRecord !== undefined) {
-            return {
-                sessionId: parsedSessionId,
-                status: projectionRecord.status,
-                ...(projectionRecord.awaiting !== undefined ? { awaiting: projectionRecord.awaiting } : {}),
-                eventCount: projectionRecord.eventCount,
-                messageCount: 0,
-                createdAt: projectionRecord.startedAt,
-                updatedAt: projectionRecord.updatedAt,
-                cwd: undefined,
-                trustedRoot: undefined,
-                name: undefined,
-                activeLeafId: undefined,
-                parentSessionId: projectionRecord.parentSessionId,
-                trustStatus: 'unknown',
-                diagnostics: [...projectionState.diagnostics, ...projectionDiagnostics],
-            };
-        }
+    const sessionHasDiagnostics = projectionDiagnostics.length > 0;
+    const diagnostics = [...projectionState.diagnostics, ...projectionDiagnostics];
+
+    if (projectionRecord === undefined) {
         return {
             sessionId: parsedSessionId,
-            status: 'missing',
+            status: sessionHasDiagnostics ? 'corrupt' : 'missing',
             eventCount: 0,
             messageCount: 0,
             createdAt: undefined,
@@ -102,74 +57,32 @@ async function readSessionCatalogEntryFromProjectionState(
             activeLeafId: undefined,
             parentSessionId: undefined,
             trustStatus: 'unknown',
-            diagnostics: [...projectionState.diagnostics, ...projectionDiagnostics],
+            diagnostics,
         };
     }
-    const hasDiagnostics = projection.diagnostics.length > 0;
-    const canUseDbSummary = projectionRecord !== undefined && !hasDiagnostics;
+
     return {
         sessionId: parsedSessionId,
-        status: hasDiagnostics ? 'corrupt' : canUseDbSummary ? projectionRecord.status : projection.snapshot.status,
-        ...(canUseDbSummary && projectionRecord.awaiting !== undefined
-            ? { awaiting: projectionRecord.awaiting }
-            : projection.snapshot.awaiting !== undefined
-              ? { awaiting: projection.snapshot.awaiting }
-              : {}),
-        eventCount: projection.eventCount,
-        messageCount: projection.messageCount,
-        createdAt: projection.createdAt,
-        updatedAt: projectionRecord?.updatedAt ?? projection.updatedAt,
-        cwd: projection.cwd,
-        trustedRoot: projection.trustedRoot,
-        name: projection.name,
-        activeLeafId: projection.activeLeafId,
-        parentSessionId: projectionRecord?.parentSessionId ?? projection.parentSessionId,
-        trustStatus: await readTrustStatus(projection.workspaceTrust, projection.trustedRoot ?? projection.cwd),
-        diagnostics: [...projection.diagnostics, ...projectionState.diagnostics, ...projectionDiagnostics],
+        status: sessionHasDiagnostics ? 'corrupt' : projectionRecord.status,
+        ...(projectionRecord.awaiting !== undefined ? { awaiting: projectionRecord.awaiting } : {}),
+        eventCount: projectionRecord.eventCount,
+        messageCount: projectionRecord.messageCount ?? 0,
+        createdAt: projectionRecord.startedAt,
+        updatedAt: projectionRecord.updatedAt,
+        ...(projectionRecord.cwd !== undefined ? { cwd: projectionRecord.cwd } : { cwd: undefined }),
+        ...(projectionRecord.trustedRoot !== undefined
+            ? { trustedRoot: projectionRecord.trustedRoot }
+            : { trustedRoot: undefined }),
+        ...(projectionRecord.name !== undefined ? { name: projectionRecord.name } : { name: undefined }),
+        ...(projectionRecord.activeLeafId !== undefined
+            ? { activeLeafId: projectionRecord.activeLeafId }
+            : { activeLeafId: undefined }),
+        ...(projectionRecord.parentSessionId !== undefined
+            ? { parentSessionId: projectionRecord.parentSessionId }
+            : { parentSessionId: undefined }),
+        trustStatus: projectionRecord.workspaceTrust ?? 'unknown',
+        diagnostics,
     };
-}
-
-async function readSessionProjection(
-    sessionId: string,
-    observabilityRedactor?: ObservabilityRedactor,
-): Promise<SessionProjectionResult> {
-    const replay = await readLocalSessionReplay({
-        sessionId,
-        ...(observabilityRedactor !== undefined ? { observabilityRedactor } : {}),
-    });
-    if (replay.kind === 'missing') {
-        return { kind: 'missing' };
-    }
-    const projection = replay.replay.projection;
-    const lastEvent = projection.events.at(-1);
-    return {
-        kind: 'projection',
-        snapshot: projection.snapshot,
-        eventCount: projection.events.length,
-        messageCount: projection.events.filter((event) => event.message !== undefined).length,
-        createdAt: projection.envelopes.at(0)?.createdAt ?? projection.snapshot.startedAt,
-        updatedAt: lastEvent?.timestamp,
-        cwd: projection.sessionTree.cwd,
-        trustedRoot: projection.sessionTree.trustedRoot,
-        workspaceTrust: projection.sessionTree.workspaceTrust,
-        name: projection.sessionTree.sessionName,
-        activeLeafId: projection.sessionTree.activeLeafId,
-        parentSessionId: projection.sessionTree.parentSessionId,
-        diagnostics: replay.replay.diagnostics,
-    };
-}
-
-async function readTrustStatus(
-    durableTrust: 'trusted' | 'denied' | 'unknown' | undefined,
-    workspaceRoot: string | undefined,
-): Promise<'trusted' | 'denied' | 'unknown'> {
-    if (durableTrust !== undefined) {
-        return durableTrust;
-    }
-    if (workspaceRoot === undefined) {
-        return 'unknown';
-    }
-    return new ProjectTrustStore().getDecision(workspaceRoot).then((trust) => trust.decision);
 }
 
 function requireValidSessionId(sessionId: string): string {
