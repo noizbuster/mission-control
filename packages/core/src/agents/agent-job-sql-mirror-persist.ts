@@ -33,6 +33,7 @@ export async function upsertRuntimeAgentRow(input: { readonly client: Client; re
                 ...(input.ref.authorityFingerprint !== undefined
                     ? { authorityFingerprint: input.ref.authorityFingerprint }
                     : {}),
+                ...(input.ref.taskDepth !== undefined ? { taskDepth: input.ref.taskDepth } : {}),
             }),
         ],
     });

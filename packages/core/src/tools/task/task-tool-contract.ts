@@ -82,6 +82,12 @@ export interface ChildSpawnRequest {
     readonly subagentType?: string;
     readonly loadSkills: readonly string[];
     readonly childPermissions: readonly PolicyEffectRule[];
+    /**
+     * Depth assigned to the session being spawned (child depth). Root children
+     * of MAIN default to `0` only when unset before runtime stamping; the
+     * runtime always stamps `parentDepth + 1` before authority prep.
+     */
+    readonly taskDepth?: number;
     readonly parentContext?: string;
     readonly signal?: AbortSignal;
     readonly controlEpoch?: SessionControlEpoch;

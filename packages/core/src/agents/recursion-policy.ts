@@ -1,11 +1,10 @@
 /**
- * Standalone recursion-depth compatibility utility.
+ * Recursion-depth gate for abstract chains and production nested `task()`.
  *
- * Models an abstract depth gate compatible with imported agent declarations.
- * Production `task()` routing does not consult this utility: child sessions
- * structurally omit `task` and `job` regardless of recursion metadata. Mirrors
- * oh-my-pi's `canSpawnAtDepth` gate (`task/types.ts:214`) with one extension: a
- * hard cap that bounds even unlimited standalone configurations.
+ * Production nesting uses {@linkcode PRODUCTION_MAX_TASK_DEPTH} exclusively via
+ * `canSpawnAtDepth(PRODUCTION_MAX_TASK_DEPTH, childDepth)`. Do not repurpose
+ * {@linkcode DEFAULT_MAX_RECURSION_DEPTH} as the live product cap — it remains
+ * `2` for compatibility tests and imported-agent bookkeeping only.
  *
  * Semantics:
  *   - `maxRecursionDepth >= 0`: spawning is allowed while
@@ -20,8 +19,15 @@
 /**
  * Default depth for standalone compatibility calculations. A value of 2 means
  * depth 0 and depth 1 pass while depth 2 is the blocked boundary.
+ * Not the production nested-task cap — see {@linkcode PRODUCTION_MAX_TASK_DEPTH}.
  */
 export const DEFAULT_MAX_RECURSION_DEPTH = 2;
+
+/**
+ * Production nested-`task` depth cap. With max=3, depths 0/1/2 may spawn and
+ * depth 3 is the blocked leaf (MAIN→d1→d2→d3). The only production gate.
+ */
+export const PRODUCTION_MAX_TASK_DEPTH = 3;
 
 /**
  * Absolute ceiling on recursion depth that applies even when

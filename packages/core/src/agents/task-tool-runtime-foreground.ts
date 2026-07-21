@@ -14,6 +14,7 @@ type ForegroundChildIdentity = {
     readonly sessionId: string;
     readonly agentId: string;
     readonly authorityFingerprint: string;
+    readonly taskDepth: number;
 };
 
 export async function runForegroundChildSession(input: {
@@ -45,6 +46,7 @@ export async function runForegroundChildSession(input: {
             kind: 'sub',
             parentId: parentSessionId,
             authorityFingerprint: child.authorityFingerprint,
+            taskDepth: child.taskDepth,
             status: 'running',
             sessionId: child.sessionId,
         });

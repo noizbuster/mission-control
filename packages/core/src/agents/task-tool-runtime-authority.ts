@@ -6,7 +6,7 @@ import { ToolRegistry } from '../tools/tool-registry';
 import { ToolExecutionError } from '../tools/tool-registry-types';
 import { createYieldToolRegistration } from '../tools/yield-tool/yield-tool';
 import type { AgentIndex } from './agent-registry';
-import { hasHardDroppedCapability } from './child-graph-spawn';
+import { hasHardDroppedCapability, isChildNetworkCategoryAllowed } from './child-graph-spawn';
 import {
     createChildToolInvocationPolicy,
     isCategoryToolAllowed,
@@ -14,6 +14,7 @@ import {
 } from './child-tool-permissions';
 import type { ModelPattern } from './model-resolver';
 import { deriveChildPathPolicies } from './path-policy-derive';
+import { PRODUCTION_MAX_TASK_DEPTH } from './recursion-policy';
 import { canSpawn } from './spawn-policy';
 import { buildChildSystemPrompt } from './spawn-prompt-builder';
 import { createHash } from 'node:crypto';
@@ -24,6 +25,7 @@ export type PreparedChildSpawnAuthority = {
     readonly systemPrompt: string;
     readonly childToolRegistry: ToolRegistry;
     readonly authorityFingerprint: string;
+    readonly request: ChildSpawnRequest;
 };
 
 export function lookupChildAgent(agentIndex: AgentIndex, request: ChildSpawnRequest): AgentDefinition {
@@ -56,17 +58,25 @@ export function buildChildToolSurface(input: {
     readonly child: AgentDefinition;
     readonly childPermissions: readonly PolicyEffectRule[];
     readonly categoryTools: readonly string[] | undefined;
+    readonly categoryId?: string;
     readonly workspaceRoot: string;
+    readonly allowTaskNesting?: boolean;
 }): ToolRegistry {
     const pathPolicies = deriveChildPathPolicies(input.parentAgent, input.child);
     const ruleGroups = [pathPolicies, input.childPermissions];
+    const allowTaskNesting = input.allowTaskNesting === true;
+    const networkSubject = input.categoryId ?? input.child.name;
+    const allowNetworkCapability = isChildNetworkCategoryAllowed(networkSubject);
     const registry = input.parentToolRegistry.cloneWithFilter(
         (advertisement) =>
             isCategoryToolAllowed(advertisement.name, input.child.tools) &&
             isCategoryToolAllowed(advertisement.name, input.categoryTools) &&
-            advertisement.name !== TASK_TOOL_NAME &&
-            advertisement.name !== JOB_TOOL_NAME &&
-            !hasHardDroppedCapability(advertisement.capabilityClasses) &&
+            (allowTaskNesting ||
+                (advertisement.name !== TASK_TOOL_NAME && advertisement.name !== JOB_TOOL_NAME)) &&
+            !hasHardDroppedCapability(advertisement.capabilityClasses, {
+                allowSubagentNesting: allowTaskNesting,
+                allowNetworkCapability,
+            }) &&
             !isToolDeniedForEveryResource(advertisement, ruleGroups),
         createChildToolInvocationPolicy(ruleGroups, input.workspaceRoot),
     );
@@ -100,6 +110,8 @@ export function childAuthorityFingerprint(input: {
     readonly systemPrompt: string;
     readonly childToolRegistry: ToolRegistry;
 }): string {
+    // taskDepth + PRODUCTION_MAX_TASK_DEPTH are part of authority: pre-depth
+    // resumes invalidate when the fingerprint shape changes.
     const canonicalAuthority = canonicalJson({
         parentSessionId: input.parentSessionId,
         workspaceRoot: input.workspaceRoot,
@@ -112,6 +124,8 @@ export function childAuthorityFingerprint(input: {
         categoryId: input.request.category?.id ?? null,
         categoryTools: canonicalStringSet(input.request.category?.tools),
         childPermissions: input.request.childPermissions,
+        taskDepth: input.request.taskDepth ?? 0,
+        productionMaxTaskDepth: PRODUCTION_MAX_TASK_DEPTH,
         model: {
             providerID: input.model.providerID,
             modelID: input.model.modelID,
@@ -131,6 +145,8 @@ export function prepareChildSpawnAuthority(input: {
     readonly parentSessionId: string;
     readonly workspaceRoot: string;
     readonly request: ChildSpawnRequest;
+    readonly allowTaskNesting?: boolean;
+    readonly finalizeChildRegistry?: (registry: ToolRegistry, agent: AgentDefinition) => void;
 }): PreparedChildSpawnAuthority {
     const agent = lookupChildAgent(input.agentIndex, input.request);
     const model = input.resolveModel(agent);
@@ -144,14 +160,18 @@ export function prepareChildSpawnAuthority(input: {
         child: agent,
         childPermissions: input.request.childPermissions,
         categoryTools: input.request.category?.tools,
+        ...(input.request.category?.id !== undefined ? { categoryId: input.request.category.id } : {}),
         workspaceRoot: input.workspaceRoot,
+        ...(input.allowTaskNesting !== undefined ? { allowTaskNesting: input.allowTaskNesting } : {}),
     });
+    input.finalizeChildRegistry?.(childToolRegistry, agent);
     return {
         agent,
         model,
         systemPrompt,
         childToolRegistry,
         authorityFingerprint: childAuthorityFingerprint({ ...input, agent, model, systemPrompt, childToolRegistry }),
+        request: input.request,
     };
 }
 

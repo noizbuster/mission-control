@@ -17,21 +17,77 @@ import { createYieldToolRegistration } from '../tools/yield-tool/yield-tool';
 import type { ChildSpawnContext } from './task-tool-runtime';
 
 /**
- * Capability classes ALWAYS dropped from child tool surfaces, regardless of path
- * policies. `subagent` (nested task recursion — ABG §10.6), `workflow` (self-invokable
- * workflow graph recursion), `network` (webfetch/mcp reaching beyond the workspace),
- * and `team` (child-created orchestration groups). Destructive kinds
- * (bash/write/patch) are intentionally excluded — they
- * are policy-controlled via `deriveChildPathPolicies` so a `deep` agent keeps
- * write/bash while a `planner` loses them.
+ * Capability classes hard-dropped from child tool surfaces by default.
+ * - `subagent`: nested task recursion (omitted when nesting is depth-allowed —
+ *   see {@linkcode hasHardDroppedCapability} `allowSubagentNesting`)
+ * - `workflow`: self-invokable workflow graph recursion (always dropped)
+ * - `network`: webfetch/web_search/mcp beyond the workspace (default dropped;
+ *   omitted only when the resolved category id or agent name is in
+ *   {@linkcode CHILD_NETWORK_ALLOWED_CATEGORIES} via `allowNetworkCapability`)
+ * - `team`: child-created orchestration groups (always dropped)
+ * Destructive kinds (bash/write/patch) stay policy-controlled via path policies.
+ * Do not remove `network` from this set globally — the allowlist is a filter-time exception.
  */
-const CHILD_HARD_DROPPED_CAPABILITY_KINDS = new Set<string>(['subagent', 'workflow', 'network', 'team']);
+export const CHILD_HARD_DROPPED_CAPABILITY_KINDS: ReadonlySet<string> = new Set([
+    'subagent',
+    'workflow',
+    'network',
+    'team',
+]);
+
+/**
+ * Categories (and same-named bundled agents) that may retain `network` tools on
+ * the child surface when the parent already advertises them. OFF categories
+ * (explore, reviewer, quick) stay hard-dropped for network.
+ */
+export const CHILD_NETWORK_ALLOWED_CATEGORIES: ReadonlySet<string> = new Set([
+    'librarian',
+    'deep',
+    'reasoner',
+    'oracle',
+    'designer',
+    'planner',
+]);
+
 const DEFAULT_CHILD_SUMMARY_LIMIT = 4000;
 /** Prefix on salvage text when the child never called `yield`. Exported for settlement classifiers. */
 export const DEGRADED_SALVAGE_LABEL = '[degraded salvage] ';
 
-export function hasHardDroppedCapability(capabilities: readonly string[]): boolean {
-    return capabilities.some((capability) => CHILD_HARD_DROPPED_CAPABILITY_KINDS.has(capability));
+export type HardDropOptions = {
+    /** When true, do not hard-drop `subagent` solely to block nesting (todo 1c). */
+    readonly allowSubagentNesting?: boolean;
+    /**
+     * When true, do not hard-drop `network` solely for the category allowlist (todo 1b).
+     * Independent of {@linkcode allowSubagentNesting}.
+     */
+    readonly allowNetworkCapability?: boolean;
+};
+
+export function isChildNetworkCategoryAllowed(categoryOrAgentName: string): boolean {
+    return CHILD_NETWORK_ALLOWED_CATEGORIES.has(categoryOrAgentName);
+}
+
+export function hasHardDroppedCapability(
+    capabilities: readonly string[],
+    options?: HardDropOptions,
+): boolean {
+    return (
+        hasAlwaysDroppedCapability(capabilities) ||
+        hasSubagentDroppedCapability(capabilities, options?.allowSubagentNesting === true) ||
+        hasNetworkDroppedCapability(capabilities, options?.allowNetworkCapability === true)
+    );
+}
+
+function hasAlwaysDroppedCapability(capabilities: readonly string[]): boolean {
+    return capabilities.some((capability) => capability === 'workflow' || capability === 'team');
+}
+
+function hasSubagentDroppedCapability(capabilities: readonly string[], allowSubagentNesting: boolean): boolean {
+    return !allowSubagentNesting && capabilities.includes('subagent');
+}
+
+function hasNetworkDroppedCapability(capabilities: readonly string[], allowNetworkCapability: boolean): boolean {
+    return !allowNetworkCapability && capabilities.includes('network');
 }
 
 export interface ChildGraphSpawnDeps {

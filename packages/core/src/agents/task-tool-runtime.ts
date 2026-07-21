@@ -7,8 +7,11 @@ import type {
     TaskToolBackgroundHandle,
     TaskToolRuntime,
 } from '../tools/task/task-tool';
+import { createFullParityTaskToolRegistration } from '../tools/task/task-tool';
+import { withNestSubagentPermission } from '../tools/task/task-tool-routing';
 import { ToolRegistry } from '../tools/tool-registry';
 import type { AgentIndex } from './agent-registry';
+import { canSpawnAtDepth, PRODUCTION_MAX_TASK_DEPTH } from './recursion-policy';
 import { getRuntimeRegistry, MAIN_AGENT_ID, type RuntimeAgentRegistry } from './runtime-registry';
 import {
     assertAgentSpawnAllowed,
@@ -29,6 +32,8 @@ import {
 import { runForegroundChildSession } from './task-tool-runtime-foreground';
 import type { TaskToolSubagentMirror } from './task-tool-runtime-types';
 import { randomBytes } from 'node:crypto';
+
+export { PRODUCTION_MAX_TASK_DEPTH } from './recursion-policy';
 
 export type {
     ChildSpawnContext,
@@ -75,8 +80,9 @@ export class ConcreteTaskToolRuntime implements TaskToolRuntime {
 
     async runChildSession(request: ChildSpawnRequest): Promise<ChildSpawnResult> {
         this.services?.sessionControlHost?.assertChildSpawnAllowed(this.parentSessionId);
-        this.assertSpawnAllowed(request);
-        return this.runForegroundChildSession(request.sessionId, request, this.prepareSpawn(request));
+        const prepared = this.prepareSpawn(request);
+        this.assertSpawnAllowed(prepared.request);
+        return this.runForegroundChildSession(prepared.request.sessionId, prepared.request, prepared);
     }
 
     startBackgroundSession(request: ChildSpawnRequest): TaskToolBackgroundHandle {
@@ -84,17 +90,17 @@ export class ConcreteTaskToolRuntime implements TaskToolRuntime {
             throw new Error(NO_SERVICES_MESSAGE);
         }
         this.services.sessionControlHost?.assertChildSpawnAllowed(this.parentSessionId);
-        this.assertSpawnAllowed(request);
         const prepared = this.prepareSpawn(request);
+        this.assertSpawnAllowed(prepared.request);
         return startBackgroundChildSession({
-            request,
+            request: prepared.request,
             services: this.services,
             parentSessionId: this.parentSessionId,
             authorityFingerprint: prepared.authorityFingerprint,
             executeSpawn: (sessionId, signal, controlEpoch) =>
                 this.executeSpawn({
                     sessionId,
-                    request,
+                    request: prepared.request,
                     prepared,
                     signal,
                     ...(controlEpoch !== undefined ? { controlEpoch } : {}),
@@ -104,16 +110,16 @@ export class ConcreteTaskToolRuntime implements TaskToolRuntime {
 
     async resumeChildSession(sessionId: string, request: ChildSpawnRequest): Promise<ChildSpawnResult> {
         this.services?.sessionControlHost?.assertChildSpawnAllowed(this.parentSessionId);
-        this.assertSpawnAllowed(request);
+        const prepared = this.prepareSpawn(request);
+        this.assertSpawnAllowed(prepared.request);
         const child = this.runtimeRegistry().lookup(sessionId);
         if (!this.sessionExists(sessionId) || child === undefined) {
             throw childResumeError(sessionId, 'session is not resumable');
         }
-        const prepared = this.prepareSpawn(request);
         if (child.authorityFingerprint !== prepared.authorityFingerprint) {
             throw childResumeError(sessionId, 'child authority does not match the original session');
         }
-        return this.runForegroundChildSession(sessionId, request, prepared);
+        return this.runForegroundChildSession(sessionId, prepared.request, prepared);
     }
 
     sessionExists(sessionId: string): boolean {
@@ -140,6 +146,7 @@ export class ConcreteTaskToolRuntime implements TaskToolRuntime {
                 sessionId,
                 agentId: childDisplayName(request),
                 authorityFingerprint: prepared.authorityFingerprint,
+                taskDepth: request.taskDepth ?? 0,
             },
             parentSessionId: this.parentSessionId,
             request,
@@ -174,6 +181,14 @@ export class ConcreteTaskToolRuntime implements TaskToolRuntime {
     }
 
     private prepareSpawn(request: ChildSpawnRequest): PreparedChildSpawnAuthority {
+        const parentDepth = this.resolveParentDepth();
+        const childDepth = parentDepth + 1;
+        const nestingAllowed = canSpawnAtDepth(PRODUCTION_MAX_TASK_DEPTH, childDepth);
+        const stampedRequest: ChildSpawnRequest = {
+            ...request,
+            taskDepth: childDepth,
+            childPermissions: withNestSubagentPermission(request.childPermissions, nestingAllowed),
+        };
         return prepareChildSpawnAuthority({
             agentIndex: this.agentIndex,
             resolveModel: this.resolveModelFn,
@@ -181,8 +196,44 @@ export class ConcreteTaskToolRuntime implements TaskToolRuntime {
             parentAgent: this.parentAgent,
             parentSessionId: this.parentSessionId,
             workspaceRoot: this.workspaceRoot,
-            request,
+            request: stampedRequest,
+            allowTaskNesting: nestingAllowed,
+            ...(nestingAllowed
+                ? {
+                      finalizeChildRegistry: (registry, agent) => {
+                          this.registerNestedTaskTool(registry, agent, stampedRequest.sessionId);
+                      },
+                  }
+                : {}),
         });
+    }
+
+    private registerNestedTaskTool(
+        childToolRegistry: ToolRegistry,
+        childAgent: AgentDefinition,
+        childSessionId: string,
+    ): void {
+        const nestedRuntime = new ConcreteTaskToolRuntime({
+            agentIndex: this.agentIndex,
+            resolveModel: this.resolveModelFn,
+            workspaceRoot: this.workspaceRoot,
+            parentToolRegistry: childToolRegistry,
+            parentAgent: childAgent,
+            parentSessionId: childSessionId,
+            spawnFn: this.spawnFn,
+            ...(this.services !== undefined ? { services: this.services } : {}),
+            ...(this.hostCallbacks !== undefined ? { hostCallbacks: this.hostCallbacks } : {}),
+        });
+        childToolRegistry.register(createFullParityTaskToolRegistration({ runtime: nestedRuntime }));
+    }
+
+    private resolveParentDepth(): number {
+        if (this.parentSessionId === MAIN_AGENT_ID) return 0;
+        const ref = this.runtimeRegistry().lookup(this.parentSessionId);
+        if (ref === undefined) {
+            return PRODUCTION_MAX_TASK_DEPTH;
+        }
+        return ref.taskDepth ?? 0;
     }
 
     private assertSpawnAllowed(request: ChildSpawnRequest): void {

@@ -9,9 +9,9 @@
  * calls so tests can mock everything.
  *
  * Child authority is completed by `buildChildToolSurface` in the concrete runtime. It intersects
- * category and agent tool allowlists, omits `task`/`job`, applies hard capability drops, adds
- * `yield`, and enforces category plus derived agent path-policy rules at invocation time. Task
- * routing appends the nested-subagent deny independently.
+ * category and agent tool allowlists, depth-gates nested `task` (PRODUCTION_MAX_TASK_DEPTH),
+ * applies hard capability drops, adds `yield`, and enforces category plus derived agent
+ * path-policy rules at invocation time. Nested-subagent deny is omitted only when depth allows.
  *
  * Batch mode (todo 24): `tasks[]` fan-out alongside single-spawn `prompt`.
  * Schema enforces XOR between batch and single-spawn; children run in parallel
@@ -70,8 +70,9 @@ export function createFullParityTaskToolRegistration(
         description:
             'Delegate a sub-task to a child agent session. Route by category for preset ' +
             'model/permissions/tools, or specify subagent_type directly. Supports background ' +
-            'execution and session resume. Children cannot spawn nested tasks. Pass tasks[] ' +
-            'for batch fan-out (mutually exclusive with prompt/assignment).',
+            'execution and session resume. Nested task() is allowed up to depth 3 ' +
+            '(MAIN→child→grandchild→great-grandchild leaf). Pass tasks[] for batch fan-out ' +
+            '(mutually exclusive with prompt/assignment).',
         capabilityClasses: ['subagent'],
         parametersJsonSchema: {
             type: 'object',
@@ -186,7 +187,7 @@ export function createFullParityTaskToolRegistration(
         },
         guideline:
             'Delegate a sub-task to a child agent. Use category to preset model/tools/permissions ' +
-            '(deep=full, explore=read-only, reasoner=opus). Children cannot spawn nested tasks. ' +
+            '(deep=full, explore=read-only, reasoner=opus). Nested task() is bounded to depth 3. ' +
             'Set run_in_background=true for async work; pass task_id to resume an existing session. ' +
             'Pass tasks[] to fan out a parallel batch (each item has its own agent+assignment); ' +
             'optional context is forwarded to every child.',

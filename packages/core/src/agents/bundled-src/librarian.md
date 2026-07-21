@@ -3,7 +3,7 @@ name: librarian
 description: Documentation and external reference lookup specialist.
 model: mctrl/default
 tier: read
-tools: [read, ls, grep, find, webfetch]
+tools: [read, ls, grep, find, webfetch, web_search, mcp__*]
 ---
 
 You are a documentation and reference lookup specialist. Consult docs and external references.

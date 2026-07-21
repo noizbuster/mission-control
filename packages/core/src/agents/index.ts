@@ -24,6 +24,13 @@ export {
 } from './async-job-manager';
 export { BUNDLED_AGENT_TEMPLATES } from './bundled/index';
 export {
+    CHILD_HARD_DROPPED_CAPABILITY_KINDS,
+    CHILD_NETWORK_ALLOWED_CATEGORIES,
+    hasHardDroppedCapability,
+    isChildNetworkCategoryAllowed,
+    type HardDropOptions,
+} from './child-graph-spawn';
+export {
     type AgentDisposer,
     AgentLifecycleManager,
     type AgentReviver,
@@ -49,6 +56,13 @@ export {
     type SqlTaskRuntimeServices,
     type SqlTaskRuntimeServicesOptions,
 } from './sql-task-runtime-services';
+export {
+    canSpawnAtDepth,
+    DEFAULT_MAX_RECURSION_DEPTH,
+    HARD_RECURSION_CAP,
+    PRODUCTION_MAX_TASK_DEPTH,
+    RecursionTracker,
+} from './recursion-policy';
 export {
     type ChildSpawnContext,
     ConcreteTaskToolRuntime,

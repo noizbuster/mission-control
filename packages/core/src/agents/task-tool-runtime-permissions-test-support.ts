@@ -75,6 +75,8 @@ export function buildPermissionRuntime(
         ['bash.run', ['bash.run']],
         ['command.run', ['command.run']],
         ['webfetch', ['network']],
+        ['web_search', ['network']],
+        ['mcp__docs__lookup', ['network']],
         ['local-cache', ['network-cache']],
         ['task', ['subagent']],
         ['job', ['subagent']],

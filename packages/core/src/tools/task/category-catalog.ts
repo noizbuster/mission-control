@@ -45,6 +45,8 @@ const PLANNING_RULES: readonly PolicyEffectRule[] = [
     { action: 'write', resource: '.mc/notepads/**', effect: 'allow' },
 ];
 
+const NETWORK_TOOLS: readonly string[] = ['webfetch', 'web_search', 'mcp__*'];
+
 // --- Built-in categories ---------------------------------------------------
 
 const BUILTIN_CATEGORY_LIST: readonly CategoryDefinition[] = [
@@ -74,7 +76,17 @@ const BUILTIN_CATEGORY_LIST: readonly CategoryDefinition[] = [
         id: 'designer',
         model: 'sonnet',
         permissions: ALLOW_ALL,
-        tools: ['read', 'ls', 'grep', 'find', 'file.patch', 'file.edit', 'file.write', 'command.run'],
+        tools: [
+            'read',
+            'ls',
+            'grep',
+            'find',
+            'file.patch',
+            'file.edit',
+            'file.write',
+            'command.run',
+            ...NETWORK_TOOLS,
+        ],
         systemPromptAddendum: 'You are a frontend engineering specialist. Focus on UI, UX, and visual correctness.',
     },
     {
@@ -88,23 +100,23 @@ const BUILTIN_CATEGORY_LIST: readonly CategoryDefinition[] = [
         id: 'oracle',
         model: 'opus',
         permissions: READ_ONLY_DENIES,
-        tools: ['read', 'ls', 'grep', 'find'],
+        tools: ['read', 'ls', 'grep', 'find', ...NETWORK_TOOLS],
         systemPromptAddendum:
             'You are a high-reasoning read-only consultant. Analyze deeply and provide authoritative answers.',
     },
     {
         id: 'librarian',
         permissions: READ_ONLY_DENIES,
-        tools: ['read', 'ls', 'grep', 'find', 'webfetch'],
+        tools: ['read', 'ls', 'grep', 'find', ...NETWORK_TOOLS],
         systemPromptAddendum:
             'You are a documentation and reference lookup specialist. Consult docs and external references.',
     },
     {
         id: 'planner',
         permissions: PLANNING_RULES,
-        tools: ['read', 'ls', 'grep', 'find', 'glob'],
+        tools: ['read', 'ls', 'grep', 'find', 'glob', ...NETWORK_TOOLS],
         systemPromptAddendum:
-            'You are a planning specialist. Produce plans under .mc/plans/ and notes under .mc/notepads/. Read-only elsewhere.',
+            'You are a planning specialist. Produce plans under .mc/plans/ and notes under .mc/notepads/. Read-only elsewhere. Brief external doc/API checks via webfetch, web_search, or mcp are allowed; do not sprawl into full web research. Keep plan-mode sticky and prefer local codebase evidence first.',
     },
     {
         id: 'reviewer',

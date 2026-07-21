@@ -20,6 +20,8 @@ export interface AgentRef {
     readonly kind: AgentKind;
     readonly parentId?: string;
     readonly authorityFingerprint?: string;
+    /** Nested `task` depth of this session (MAIN children start at 1). */
+    readonly taskDepth?: number;
     status: AgentStatus;
     readonly sessionId: string;
     sessionFile?: string;

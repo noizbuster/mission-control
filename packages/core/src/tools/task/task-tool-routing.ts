@@ -38,8 +38,26 @@ export function resolveRouting(params: TaskToolParams): RoutingResolution {
     return fallback !== undefined ? { category: fallback } : {};
 }
 
-export function buildChildPermissions(category: CategoryDefinition | undefined): readonly PolicyEffectRule[] {
-    return [...(category?.permissions ?? []), NESTED_SUBAGENT_DENY_RULE];
+/**
+ * Nested-deny omit site (pinned): strip or append the trailing `subagent/**` deny.
+ * `nestSubagent: true` omits the deny so a depth-allowed child may keep `task`.
+ */
+export function withNestSubagentPermission(
+    permissions: readonly PolicyEffectRule[],
+    nestSubagent: boolean,
+): readonly PolicyEffectRule[] {
+    const stripped = permissions.filter(
+        (rule) => !(rule.action === 'subagent' && rule.resource === '**' && rule.effect === 'deny'),
+    );
+    if (nestSubagent) return stripped;
+    return [...stripped, NESTED_SUBAGENT_DENY_RULE];
+}
+
+export function buildChildPermissions(
+    category: CategoryDefinition | undefined,
+    options?: { readonly nestSubagent?: boolean },
+): readonly PolicyEffectRule[] {
+    return withNestSubagentPermission(category?.permissions ?? [], options?.nestSubagent === true);
 }
 
 export function buildRequest(input: {

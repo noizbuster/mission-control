@@ -32,6 +32,7 @@ export function startBackgroundChildSession(input: {
         kind: 'sub',
         parentId: input.parentSessionId,
         authorityFingerprint: input.authorityFingerprint,
+        taskDepth: input.request.taskDepth ?? 0,
         status: 'running',
         sessionId,
     });

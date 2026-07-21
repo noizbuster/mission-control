@@ -46,8 +46,11 @@ export function createChildToolInvocationPolicy(
     };
 }
 
+const MCP_TOOL_NAME_PREFIX = 'mcp__';
+
 export function isCategoryToolAllowed(toolName: string, categoryTools: readonly string[] | undefined): boolean {
     if (categoryTools === undefined || categoryTools.includes(toolName)) return true;
+    if (isNetworkFamilyToolAllowed(toolName, categoryTools)) return true;
     switch (toolName) {
         case 'repo.read':
         case 'repo.read.tagged':
@@ -59,6 +62,19 @@ export function isCategoryToolAllowed(toolName: string, categoryTools: readonly 
         default:
             return false;
     }
+}
+
+function isNetworkFamilyToolAllowed(toolName: string, categoryTools: readonly string[]): boolean {
+    if (categoryTools.includes('network')) return isNetworkFamilyToolName(toolName);
+    if (toolName === 'webfetch' || toolName === 'web_search') return false;
+    if (!toolName.startsWith(MCP_TOOL_NAME_PREFIX)) return false;
+    return categoryTools.some(
+        (entry) => entry === 'mcp' || entry === 'mcp__*' || entry.startsWith(MCP_TOOL_NAME_PREFIX),
+    );
+}
+
+function isNetworkFamilyToolName(toolName: string): boolean {
+    return toolName === 'webfetch' || toolName === 'web_search' || toolName.startsWith(MCP_TOOL_NAME_PREFIX);
 }
 
 function policyActionsFor(advertisement: ToolAdvertisement): readonly string[] {
