@@ -20,7 +20,13 @@
  * to prove the outputKey seam persists the new class labels.
  */
 import type { LanguageModelV3StreamPart } from '@ai-sdk/provider';
-import { AbgGraphSpecSchema, type AbgNodeSpec, type AbgRuleSpec, type AbgSignal } from '@mission-control/protocol';
+import {
+    AbgGraphSpecSchema,
+    type AbgNodeSpec,
+    type AbgRuleSpec,
+    type AbgSignal,
+    WorkflowSpecSchema,
+} from '@mission-control/protocol';
 import type { ModelMessage } from 'ai';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
@@ -31,6 +37,8 @@ import { runAbgGraph } from './graph-runner';
 import type { AbgNodeRunContext } from './node-registry';
 import { createAbgNodeRegistry } from './node-registry';
 import { runLlmActorNode } from './nodes/llm-actor/llm-actor-node-runner';
+import { READONLY_TASK_CHILD_CONTEXT } from './readonly-task-child-context';
+import { readFile } from 'node:fs/promises';
 
 const INTENT_CLASSES = [
     'trivial',
@@ -40,6 +48,8 @@ const INTENT_CLASSES = [
     'ambiguous',
 ] as const;
 type IntentClass = (typeof INTENT_CLASSES)[number];
+
+const workflowJsonPath = `${process.cwd()}/examples/abg/fixer.workflow.json`;
 
 const INTENT_TARGET: Record<IntentClass, string> = {
     trivial: 'direct-respond',
@@ -147,6 +157,19 @@ describe('fixer workflow parity — schema and structure', () => {
     });
 });
 
+describe('fixer workflow fixture parity', () => {
+    it('matches createFixerWorkflowGraph() and declares no modes', async () => {
+        const contents = await readFile(workflowJsonPath, 'utf8');
+        const result = WorkflowSpecSchema.safeParse(JSON.parse(contents));
+        expect(result.success).toBe(true);
+        if (!result.success) {
+            return;
+        }
+        expect(result.data.graph).toEqual(createFixerWorkflowGraph());
+        expect(result.data.modes === undefined || result.data.modes.length === 0).toBe(true);
+    });
+});
+
 describe('fixer workflow parity — five richer intent classes route correctly', () => {
     it('intent-gate prompt requires a strict single-line classification', () => {
         const graph = createFixerWorkflowGraph();
@@ -201,20 +224,25 @@ describe('fixer workflow parity — five richer intent classes route correctly',
 });
 
 describe('fixer workflow parity — exploratory-research routes read-only, never edits', () => {
-    it('research-explore declares only the read capability (no write/edit/patch/bash/task)', () => {
+    it('research-explore declares exact read+subagent+network capabilities (no write/edit/patch/bash)', () => {
         const graph = createFixerWorkflowGraph();
         const capabilities = findNode(graph, 'research-explore').capabilities ?? [];
-        expect(capabilities).toContain('read');
-        const forbidden = ['write', 'edit', 'patch', 'bash', 'subagent'];
+        expect(capabilities).toEqual(['read', 'subagent', 'network']);
+        const forbidden = ['write', 'edit', 'patch', 'bash'];
         for (const cap of forbidden) {
             expect(capabilities, `research-explore must not declare ${cap}`).not.toContain(cap);
         }
     });
 
-    it('research-explore prompt forbids edits', () => {
+    it('research-explore prompt forbids edits and carries explore/librarian + readonly child context', () => {
         const graph = createFixerWorkflowGraph();
         const prompt = configString(findNode(graph, 'research-explore'), 'systemPrompt') ?? '';
         expect(/must not edit|never edit|read-only/i.test(prompt)).toBe(true);
+        expect(prompt).toContain(READONLY_TASK_CHILD_CONTEXT);
+        expect(prompt).toContain('category:"explore"');
+        expect(prompt).toContain('category:"librarian"');
+        expect(prompt).toMatch(/Never\s+task\(category:"deep"\)/i);
+        expect(prompt).toMatch(/before final synthesis/i);
     });
 
     it('delegate-wave and delegate-worker are NOT reachable from research-explore', () => {
@@ -227,6 +255,10 @@ describe('fixer workflow parity — exploratory-research routes read-only, never
 
     it('research-explore reaches final-respond (synthesis, no implementation)', () => {
         const graph = createFixerWorkflowGraph();
+        expect(edgesFrom(graph, 'research-explore').map((edge) => edge.target)).toEqual([
+            'final-respond',
+            'research-explore',
+        ]);
         const reachable = reachableTargets(graph, 'research-explore');
         expect(reachable.has('final-respond')).toBe(true);
     });
@@ -341,12 +373,7 @@ describe('fixer workflow parity — explicit-implementation creates todos + dele
         expect(/disciplined|transitional|legacy|greenfield/i.test(prompt)).toBe(true);
         expect(configString(node, 'outputKey')).toBe('explore.maturity');
         expect(configString(node, 'outputShape')).toBe('string');
-        expect(configValue(node, 'outputEnum')).toEqual([
-            'disciplined',
-            'transitional',
-            'legacy',
-            'greenfield',
-        ]);
+        expect(configValue(node, 'outputEnum')).toEqual(['disciplined', 'transitional', 'legacy', 'greenfield']);
         expect(configString(node, 'outputSoftLandDefault')).toBe('transitional');
     });
 });
@@ -437,13 +464,7 @@ const FIXER_EQUALS_ROUTED_LLM_GATES = [
         nodeId: 'intent-gate',
         outputKey: 'intent.classification',
         kind: 'enum' as const,
-        outputEnum: [
-            'trivial',
-            'exploratory-research',
-            'open-ended-planning',
-            'explicit-implementation',
-            'ambiguous',
-        ],
+        outputEnum: ['trivial', 'exploratory-research', 'open-ended-planning', 'explicit-implementation', 'ambiguous'],
     },
     { nodeId: 'research-explore', outputKey: 'explore.complete', kind: 'boolean' as const },
     { nodeId: 'route-planner', outputKey: 'planner.routed', kind: 'boolean' as const },
@@ -460,19 +481,16 @@ const FIXER_EQUALS_ROUTED_LLM_GATES = [
 ] as const;
 
 describe('fixer workflow parity — progress-contract routing key matrix', () => {
-    it.each(FIXER_EQUALS_ROUTED_LLM_GATES)(
-        '$nodeId declares fail-closed shape/enum for $outputKey',
-        (gate) => {
-            const graph = createFixerWorkflowGraph();
-            const node = findNode(graph, gate.nodeId);
-            expect(configString(node, 'outputKey')).toBe(gate.outputKey);
-            if (gate.kind === 'boolean') {
-                expect(configString(node, 'outputShape')).toBe('boolean');
-            } else {
-                expect(configValue(node, 'outputEnum')).toEqual([...gate.outputEnum]);
-            }
-        },
-    );
+    it.each(FIXER_EQUALS_ROUTED_LLM_GATES)('$nodeId declares fail-closed shape/enum for $outputKey', (gate) => {
+        const graph = createFixerWorkflowGraph();
+        const node = findNode(graph, gate.nodeId);
+        expect(configString(node, 'outputKey')).toBe(gate.outputKey);
+        if (gate.kind === 'boolean') {
+            expect(configString(node, 'outputShape')).toBe('boolean');
+        } else {
+            expect(configValue(node, 'outputEnum')).toEqual([...gate.outputEnum]);
+        }
+    });
 
     it('todo-plan keeps array shape for fanOutKey plan.todos (key.exists, not equals)', () => {
         const graph = createFixerWorkflowGraph();

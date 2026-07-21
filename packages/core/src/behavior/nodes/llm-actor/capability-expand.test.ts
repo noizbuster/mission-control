@@ -60,6 +60,19 @@ describe('expandCapabilityLabels', () => {
         expect(set.has('custom.plugin')).toBe(true);
         expect(set.size).toBe(1);
     });
+
+    it("Given ['read','subagent'] When expanded Then intersects task tool class so task is advertisable", () => {
+        const set = expandCapabilityLabels(['read', 'subagent']);
+        expect(set.has('read')).toBe(true);
+        expect(set.has('repo.read')).toBe(true);
+        expect(set.has('subagent')).toBe(true);
+        const names = filterByCapabilities(registry, ['read', 'subagent']).map((tool) => tool.name);
+        expect(names).toContain('task');
+        expect(names).toEqual(expect.arrayContaining(['glob', 'repo.read', 'read', 'task']));
+        expect(names).not.toContain('file.edit');
+        expect(names).not.toContain('bash.run');
+        expect(names).not.toContain('webfetch');
+    });
 });
 
 describe('filterByCapabilities (OpenCode-style expand)', () => {

@@ -18,7 +18,7 @@
  *      plan.ready to the blackboard from a real model turn.
  */
 import type { LanguageModelV3StreamPart } from '@ai-sdk/provider';
-import { type AbgNodeSpec, WorkflowSpecSchema } from '@mission-control/protocol';
+import { type AbgGraphSpec, type AbgNodeSpec, WorkflowSpecSchema } from '@mission-control/protocol';
 import type { ModelMessage } from 'ai';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -45,7 +45,7 @@ function configString(node: AbgNodeSpec | undefined, key: string): string | unde
     return typeof value === 'string' ? value : undefined;
 }
 
-function findNode(graph: ReturnType<typeof createPlannerWorkflowGraph>, id: string): AbgNodeSpec {
+function findNode(graph: AbgGraphSpec, id: string): AbgNodeSpec {
     const node = graph.nodes.find((candidate) => candidate.id === id);
     if (node === undefined) {
         throw new Error(`test setup: planner graph missing node '${id}'`);
@@ -289,6 +289,24 @@ describe('planner workflow parity: independently constrained child consultations
         expect(PLANNER_READONLY_CHILD_CONTEXT).toMatch(/selected read-only category/i);
         expect(PLANNER_READONLY_CHILD_CONTEXT).toMatch(/AgentDefinition\.pathPolicies/);
         expect(PLANNER_READONLY_CHILD_CONTEXT).toMatch(/read-only research/i);
+        expect(PLANNER_READONLY_CHILD_CONTEXT).toMatch(/explore/i);
+        expect(PLANNER_READONLY_CHILD_CONTEXT).toMatch(/librarian/i);
+        expect(PLANNER_READONLY_CHILD_CONTEXT).not.toMatch(/category\s*:\s*["']deep["']/i);
+    });
+
+    it('explore and research advertise read + subagent + network for task/network tools', () => {
+        const graph = createPlannerWorkflowGraph();
+        expect(findNode(graph, 'explore').capabilities).toEqual(['read', 'subagent', 'network']);
+        expect(findNode(graph, 'research').capabilities).toEqual(['read', 'subagent', 'network']);
+    });
+
+    it('materializeWorkflow with planner-readonly keeps explore/research subagent capability', async () => {
+        const spec = WorkflowSpecSchema.parse(await loadPlannerSpec());
+        const executed = materializeWorkflow(spec);
+        const explore = executed.nodes.find((node) => node.id === 'explore');
+        const research = executed.nodes.find((node) => node.id === 'research');
+        expect(explore?.capabilities).toEqual(['read', 'subagent', 'network']);
+        expect(research?.capabilities).toEqual(['read', 'subagent', 'network']);
     });
 
     it('explore prompt carries the planner-readonly child context', () => {
@@ -301,6 +319,17 @@ describe('planner workflow parity: independently constrained child consultations
         const graph = createPlannerWorkflowGraph();
         const prompt = configString(findNode(graph, 'research'), 'systemPrompt') ?? '';
         expect(prompt).toContain(PLANNER_READONLY_CHILD_CONTEXT);
+    });
+
+    it('explore and research prompts ban deep and write-capable child categories', () => {
+        const graph = createPlannerWorkflowGraph();
+
+        for (const id of ['explore', 'research'] as const) {
+            const prompt = configString(findNode(graph, id), 'systemPrompt') ?? '';
+            expect(prompt).toMatch(/explore\/librarian|category:"explore".*category:"librarian"/i);
+            expect(prompt).toMatch(/category:"deep"/);
+            expect(prompt).toMatch(/write-capable categor/i);
+        }
     });
 
     it('explore requires boolean explore.complete === true (not key.exists)', () => {

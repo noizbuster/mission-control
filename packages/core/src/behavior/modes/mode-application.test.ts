@@ -345,6 +345,14 @@ describe('autopilotMode declaration', () => {
         expect(overlay.toLowerCase()).toContain('self-approval');
     });
 
+    it('includes the parallel-investigation directive referencing task(explore/librarian)', () => {
+        const overlay = autopilotMode.systemPromptOverlay ?? '';
+
+        expect(overlay.toLowerCase()).toContain('parallel investigation');
+        expect(overlay).toContain('task(explore)');
+        expect(overlay).toContain('task(librarian)');
+    });
+
     it('requires approval before edit via policy-gate', () => {
         const editPolicy = autopilotMode.policies.find((p) => p.action === 'edit' && p.resource === '**');
 

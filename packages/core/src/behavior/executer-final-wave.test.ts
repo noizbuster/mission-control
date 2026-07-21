@@ -1,9 +1,13 @@
-// allow: SIZE_OK -- HEAD 173 -> current 278 pure LOC; one cohesive executer final-wave verdict + fix-loop routing + progress-contract enum/shape matrix and 3-strike regression guard.
+// allow: SIZE_OK -- cohesive executer final-wave verdict + fix-loop routing + progress-contract enum/shape matrix, 3-strike regression guard, and F1-F4 soft-bias prompt contracts.
 import type { AbgNodeSpec } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import {
     aggregateFinalVerdict,
     createExecuterWorkflowGraph,
+    EXECUTER_F1_PROMPT,
+    EXECUTER_F2_PROMPT,
+    EXECUTER_F3_PROMPT,
+    EXECUTER_F4_PROMPT,
     EXECUTER_FINAL_STRIKE_BUDGET,
     routeFixLoop,
 } from './executer-workflow-graph';
@@ -283,13 +287,38 @@ describe('executer final.verdict stays aggregateFinalVerdict (not an llm outputE
         expect(verdictWriter, 'no llm node may own final.verdict as an outputKey').toBeUndefined();
     });
 
-    it('the F1-F4 critics emit free-text APPROVE/REJECT without an outputEnum lock (aggregated, not enum-gated)', () => {
+    it('F1–F4 declare outputEnum: [\'APPROVE\',\'REJECT\'] and capabilities: [\'subagent\'] (dual-review hybrid; still aggregated via parallel verdictStrategy, not llm-owned final.verdict)', () => {
         for (const criticId of ['f1', 'f2', 'f3', 'f4']) {
             const critic = nodeById(criticId);
             expect(critic?.kind).toBe('llm');
             expect(configString(critic, 'outputKey')).toBe(`final.${criticId}`);
-            expect(configValue(critic, 'outputEnum'), `${criticId} must not enum-lock its verdict`).toBeUndefined();
+            expect(configValue(critic, 'outputEnum')).toEqual(['APPROVE', 'REJECT']);
+            expect(critic?.capabilities).toEqual(['subagent']);
         }
+    });
+
+    it('F1–F4 soft-bias prompts require reviewer category tokens and forbid category:"deep" routing', () => {
+        const prompts = {
+            f1: EXECUTER_F1_PROMPT,
+            f2: EXECUTER_F2_PROMPT,
+            f3: EXECUTER_F3_PROMPT,
+            f4: EXECUTER_F4_PROMPT,
+        } as const;
+        for (const criticId of ['f1', 'f2', 'f3', 'f4'] as const) {
+            const wired = configString(nodeById(criticId), 'systemPrompt') ?? '';
+            const prompt = prompts[criticId];
+            expect(wired).toBe(prompt);
+            expect(prompt).toMatch(/category\s*=\s*"reviewer"|category:"reviewer"|agent\s*=\s*"reviewer"|agent:"reviewer"/i);
+            expect(prompt).toMatch(/\breviewer\b/i);
+            expect(prompt).toMatch(/\bAPPROVE\b/);
+            expect(prompt).toMatch(/\bREJECT\b/);
+            expect(prompt).not.toMatch(/category\s*[:=]\s*["']deep["']/i);
+            expect(prompt).not.toMatch(/category\s*[:=]\s*["']explore["']/i);
+            expect(prompt).not.toMatch(/category\s*[:=]\s*["']librarian["']/i);
+        }
+        expect(EXECUTER_F3_PROMPT).toMatch(/Do NOT run the test suite/i);
+        expect(EXECUTER_F3_PROMPT).toMatch(/Do NOT invoke bash\/command\.run/i);
+        expect(EXECUTER_F3_PROMPT).toMatch(/Do NOT claim you executed tests/i);
     });
 
     it('final.verdict is written by the parallel node verdictStrategy (all-approve), not an llm outputKey', () => {
@@ -306,13 +335,15 @@ describe('executer final.verdict stays aggregateFinalVerdict (not an llm outputE
         expect(aggregateFinalVerdict([])).toBe('REJECT');
     });
 
-    it('fix-loop is the only llm enum gate and locks fix.route to retry|blocked (not APPROVE|REJECT)', () => {
+    it('enum-gated llm nodes are exactly fix-loop plus f1–f4 (ids locked)', () => {
         const fixLoop = nodeById('fix-loop');
         expect(configValue(fixLoop, 'outputEnum')).toEqual(['retry', 'blocked']);
         const enumGatedNodes = graph.nodes.filter(
             (node) => node.kind === 'llm' && configValue(node, 'outputEnum') !== undefined,
         );
-        expect(enumGatedNodes.map((node) => node.id)).toEqual(['fix-loop']);
+        expect(enumGatedNodes.map((node) => node.id).sort()).toEqual(
+            ['f1', 'f2', 'f3', 'f4', 'fix-loop'].sort(),
+        );
     });
 
     it('per-task-verify writes a critic verdict string, not a boolean (verify.complete must stay shape-free)', () => {

@@ -1,4 +1,4 @@
-import type { AbgNodeSpec } from '@mission-control/protocol';
+import { type AbgNodeSpec, WorkflowSpecSchema } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import { appendNotepad, assertAppendOnly, NotepadAppendOnlyError, readNotepad } from '../persistence/notepad-store';
 import { parsePlanSections } from '../persistence/plan-store';
@@ -11,8 +11,11 @@ import {
     EXECUTER_PARSE_PLAN_PROMPT,
 } from './executer-workflow-graph';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+const workflowJsonPath = `${process.cwd()}/examples/abg/executer.workflow.json`;
 
 function nodeConfig(node: AbgNodeSpec | undefined, key: string): unknown {
     return node?.config?.[key];
@@ -78,6 +81,19 @@ describe('executer workflow parity — section-scoped parsing wiring', () => {
 
         expect(result.total).toBe(4);
         expect(result.nextTaskLabel).toBe('1. Port atlas parser');
+    });
+});
+
+describe('executer workflow fixture parity', () => {
+    it('matches createExecuterWorkflowGraph()', async () => {
+        const contents = await readFile(workflowJsonPath, 'utf8');
+        const result = WorkflowSpecSchema.safeParse(JSON.parse(contents));
+
+        expect(result.success).toBe(true);
+        if (!result.success) {
+            return;
+        }
+        expect(result.data.graph).toEqual(createExecuterWorkflowGraph());
     });
 });
 
