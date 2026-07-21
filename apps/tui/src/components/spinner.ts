@@ -1,8 +1,8 @@
 import { type Accessor, createSignal, onCleanup, onMount } from 'solid-js';
 
 /**
- * Shared braille spinner primitives. Default mode is `'static'` (no interval)
- * because animated frames force terminal redraws. Opt in with `MCTRL_SPINNER=animate`.
+ * Shared braille spinner primitives. Default mode is `'animate'`.
+ * Opt out with `MCTRL_SPINNER=static` when redraw cost matters.
  */
 export const SPINNER_FRAMES = [
     '\u280B',
@@ -22,7 +22,7 @@ export const SPINNER_STATIC_GLYPH = '\u25CF';
 export const SPINNER_MODE_ENV = 'MCTRL_SPINNER';
 
 export function resolveSpinnerMode(env: NodeJS.ProcessEnv = process.env): 'static' | 'animate' {
-    return env[SPINNER_MODE_ENV] === 'animate' ? 'animate' : 'static';
+    return env[SPINNER_MODE_ENV] === 'static' ? 'static' : 'animate';
 }
 
 export function useSpinnerFrame(): { readonly glyph: Accessor<string>; readonly animated: boolean } {

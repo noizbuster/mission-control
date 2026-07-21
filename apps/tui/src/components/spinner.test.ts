@@ -19,8 +19,8 @@ describe('resolveSpinnerMode (MCTRL_SPINNER env var)', () => {
         }
     });
 
-    it('defaults to "static" when MCTRL_SPINNER is unset (no interval = mouse selection works)', () => {
-        expect(resolveSpinnerMode()).toBe('static');
+    it('defaults to "animate" when MCTRL_SPINNER is unset', () => {
+        expect(resolveSpinnerMode()).toBe('animate');
     });
 
     it('returns "static" when MCTRL_SPINNER=static', () => {
@@ -28,24 +28,21 @@ describe('resolveSpinnerMode (MCTRL_SPINNER env var)', () => {
         expect(resolveSpinnerMode()).toBe('static');
     });
 
-    it('returns "animate" when MCTRL_SPINNER=animate (opt-in to original 80ms braille)', () => {
+    it('returns "animate" when MCTRL_SPINNER=animate', () => {
         process.env[ENV_KEY] = 'animate';
         expect(resolveSpinnerMode()).toBe('animate');
     });
 
-    it('falls back to "static" for unknown values (typo-safe default)', () => {
+    it('falls back to "animate" for unknown values', () => {
         process.env[ENV_KEY] = 'animated';
-        expect(resolveSpinnerMode()).toBe('static');
+        expect(resolveSpinnerMode()).toBe('animate');
 
         process.env[ENV_KEY] = 'true';
-        expect(resolveSpinnerMode()).toBe('static');
-
-        process.env[ENV_KEY] = '1';
-        expect(resolveSpinnerMode()).toBe('static');
+        expect(resolveSpinnerMode()).toBe('animate');
     });
 
     it('accepts an explicit env record for hermetic tests', () => {
-        expect(resolveSpinnerMode({ [ENV_KEY]: 'animate' })).toBe('animate');
-        expect(resolveSpinnerMode({})).toBe('static');
+        expect(resolveSpinnerMode({ [ENV_KEY]: 'static' })).toBe('static');
+        expect(resolveSpinnerMode({})).toBe('animate');
     });
 });

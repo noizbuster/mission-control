@@ -3,6 +3,7 @@ import {
     describeRetryableFailure,
     formatNodeRetryStatus,
     formatNodeWorkingStatus,
+    formatThinkingStatus,
 } from './interactive-coding-graph-status';
 
 describe('describeRetryableFailure', () => {
@@ -37,5 +38,13 @@ describe('formatNodeWorkingStatus', () => {
     it('shows attempt number after the first try', () => {
         expect(formatNodeWorkingStatus('intent-gate', 2)).toBe('Classifying intent (attempt 2)…');
         expect(formatNodeWorkingStatus('intent-gate')).toBe('Classifying intent…');
+    });
+});
+
+describe('formatThinkingStatus', () => {
+    it('includes known node labels and falls back for unknown nodes', () => {
+        expect(formatThinkingStatus('intent-gate')).toBe('Thinking… (Classifying intent)');
+        expect(formatThinkingStatus()).toBe('Thinking…');
+        expect(formatThinkingStatus('custom-node-x')).toBe('Thinking…');
     });
 });

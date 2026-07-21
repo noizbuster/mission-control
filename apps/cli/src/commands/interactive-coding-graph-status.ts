@@ -39,6 +39,13 @@ export function formatNodeWorkingStatus(nodeId: string, attempt?: number): strin
     return `${label}…`;
 }
 
+export function formatThinkingStatus(nodeId?: string): string {
+    if (nodeId === undefined || nodeId.length === 0) return 'Thinking…';
+    const label = formatNodeLabel(nodeId);
+    if (label === nodeId.replace(/-/g, ' ')) return 'Thinking…';
+    return `Thinking… (${label})`;
+}
+
 const NODE_LABELS: Readonly<Record<string, string>> = {
     'intent-gate': 'Classifying intent',
     'direct-respond': 'Responding',

@@ -7,6 +7,7 @@ import {
     describeRetryableFailure,
     formatNodeRetryStatus,
     formatNodeWorkingStatus,
+    formatThinkingStatus,
 } from './interactive-coding-graph-status';
 import {
     extractSignalError,
@@ -123,7 +124,7 @@ function renderInteractiveGraphSignal(
     }
     if (signal.type === 'emit' && signal.event.type === 'llm.turn.started') {
         openGraphTurn(state, signal.nodeId, signal.event.id);
-        output.setAgentStatus?.('Thinking...');
+        output.setAgentStatus?.(formatThinkingStatus(signal.nodeId));
         return;
     }
     const reasoningDelta = readReasoningDeltaFromSignal(signal);
