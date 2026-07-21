@@ -119,11 +119,7 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
                     }
 
                     if (promptMenuInteractionsEnabled() && captured.startsWith('$')) {
-                        const insertText = resolveSkillCommandMenuInsertText(
-                            captured,
-                            snap.menuState,
-                            snap.skillNames,
-                        );
+                        const insertText = resolveSkillCommandMenuInsertText(captured, snap.menuState, snap.skillNames);
                         if (insertText !== undefined) {
                             props.textareaRef.get()?.setText(insertText);
                             props.textareaRef.get()?.gotoBufferEnd();
@@ -155,11 +151,7 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
                         );
                         if (resolved !== captured) value = resolved;
                     } else if (promptMenuInteractionsEnabled() && captured.startsWith('$')) {
-                        const resolved = resolveSkillCommandMenuSubmission(
-                            captured,
-                            snap.menuState,
-                            snap.skillNames,
-                        );
+                        const resolved = resolveSkillCommandMenuSubmission(captured, snap.menuState, snap.skillNames);
                         if (resolved !== captured) value = resolved;
                     }
 
@@ -193,27 +185,8 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
             snap.overlayMode === 'session-picker';
 
         if (hostedOverlayActive) {
-            if (
-                key.name === 'up' ||
-                key.name === 'down' ||
-                key.name === 'left' ||
-                key.name === 'right' ||
-                key.name === 'pageup' ||
-                key.name === 'pagedown' ||
-                key.name === 'home' ||
-                key.name === 'end' ||
-                key.name === 'return' ||
-                key.name === 'escape' ||
-                key.name === 'backspace' ||
-                key.name === 'tab'
-            ) {
-                return;
-            }
-            const ch = String.fromCodePoint((key as { baseCode?: number }).baseCode ?? 0);
-            if (ch.length > 0 && ch.charCodeAt(0) >= 32) {
-                key.preventDefault();
-                return;
-            }
+            key.preventDefault();
+            return;
         }
 
         if (key.name === 'return' && !key.ctrl && !key.meta && !key.shift) {

@@ -1,11 +1,11 @@
 /** @jsxImportSource @opentui/solid */
 
 import type { JSX } from 'solid-js';
+import { MissionPanelOverlay } from '../components/MissionPanelOverlay';
+import { AgentsDashboardOverlay, ModelPickerOverlay, SessionPickerOverlay } from '../components/OverlayPanels';
 import type { ChatAppActions } from '../state/chat-app-actions';
 import type { ChatStore, ChatStoreOverlayMode } from '../state/chat-store';
 import type { MissionControlServicesLike } from '../state/mission-services-types';
-import { MissionPanelOverlay } from '../components/MissionPanelOverlay';
-import { AgentsDashboardOverlay } from '../components/OverlayPanels';
 import { ModalPopup } from './ModalPopup';
 
 export type ModalOverlaysProps = {
@@ -16,16 +16,19 @@ export type ModalOverlaysProps = {
     readonly missionControlServices: MissionControlServicesLike | undefined;
 };
 
-/**
- * Modal popup modes rendered as absolute siblings over the normal layout.
- * The rename, approval, level-picker, model-picker, and session-picker
- * overlays have been migrated to the OpenCode-style dialog stack
- * (see `components/dialog/`). This component renders only the remaining
- * complex modal overlays that still use the ModalPopup shell.
- */
 export function ModalOverlays(props: ModalOverlaysProps): JSX.Element {
     return (
         <>
+            {props.overlayMode === 'model-picker' ? (
+                <ModalPopup>
+                    <ModelPickerOverlay store={props.store} />
+                </ModalPopup>
+            ) : null}
+            {props.overlayMode === 'session-picker' ? (
+                <ModalPopup>
+                    <SessionPickerOverlay store={props.store} />
+                </ModalPopup>
+            ) : null}
             {props.overlayMode === 'agents-dashboard' ? (
                 <ModalPopup>
                     <AgentsDashboardOverlay
@@ -41,7 +44,9 @@ export function ModalOverlays(props: ModalOverlaysProps): JSX.Element {
                         store={props.store}
                         workspaceRoot={props.workspaceRoot}
                         {...(props.actions !== undefined ? { actions: props.actions } : {})}
-                        {...(props.missionControlServices !== undefined ? { services: props.missionControlServices } : {})}
+                        {...(props.missionControlServices !== undefined
+                            ? { services: props.missionControlServices }
+                            : {})}
                     />
                 </ModalPopup>
             ) : null}

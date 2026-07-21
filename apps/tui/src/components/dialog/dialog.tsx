@@ -1,19 +1,24 @@
 /** @jsxImportSource @opentui/solid */
 
-import { useRenderer, useTerminalDimensions } from '@opentui/solid';
-import { batch, createContext, createEffect, createSignal, For, onCleanup, Show, useContext, type JSX, type ParentProps } from 'solid-js';
-import { TextAttributes, type Renderable } from '@opentui/core';
-import { useKeyboard } from '@opentui/solid';
-import { createStore } from 'solid-js/store';
+import { type Renderable, TextAttributes } from '@opentui/core';
+import { useKeyboard, useRenderer, useTerminalDimensions } from '@opentui/solid';
 import {
-    APPROVAL_LEVEL_PICKER_ENTRIES,
-    APPROVAL_OPTIONS,
-    type ChatStore,
-} from '../../state/chat-store';
-import { useSolidStoreSelector } from '../../platform/use-solid-store-selector';
+    batch,
+    createContext,
+    createEffect,
+    createSignal,
+    For,
+    type JSX,
+    onCleanup,
+    type ParentProps,
+    Show,
+    useContext,
+} from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { useModeStack } from '../../platform/keymap/mode-stack';
-import { useTuiClipboard, useTuiToast } from '../../platform/providers/clipboard-toast-context';
 import { useTuiTheme } from '../../platform/providers/route-dialog-theme-context';
+import { useSolidStoreSelector } from '../../platform/use-solid-store-selector';
+import { APPROVAL_LEVEL_PICKER_ENTRIES, APPROVAL_OPTIONS, type ChatStore } from '../../state/chat-store';
 
 /**
  * Dialog shell: fullscreen dimmed backdrop + centered panel.
@@ -38,8 +43,7 @@ export function Dialog(
         if (props.size === 'large') return 88;
         return 60;
     };
-    const horizontalPadding = (): number =>
-        Math.max(0, Math.floor((dimensions().width - panelWidth()) / 2));
+    const horizontalPadding = (): number => Math.max(0, Math.floor((dimensions().width - panelWidth()) / 2));
 
     return (
         // biome-ignore lint/a11y/noStaticElementInteractions: opentui <box> has no role concept; click-outside-to-close is a dialog UX pattern
@@ -178,15 +182,11 @@ function init(): DialogContext {
 export function DialogProvider(props: ParentProps): JSX.Element {
     const value = init();
 
-    function copySelection(): boolean {
+    function _copySelection(): boolean {
         return false;
     }
 
-    return (
-        <DialogContextCtx.Provider value={value}>
-            {props.children}
-        </DialogContextCtx.Provider>
-    );
+    return <DialogContextCtx.Provider value={value}>{props.children}</DialogContextCtx.Provider>;
 }
 
 // ---------------------------------------------------------------------------
@@ -207,11 +207,6 @@ export function DialogOverlay(props: { readonly store: ChatStore }): JSX.Element
                     <RenameDialogBox store={props.store} />
                 </DialogFrame>
             </Show>
-            <Show when={overlayMode() === 'session-picker'}>
-                <DialogFrame>
-                    <SessionPickerDialogBox store={props.store} />
-                </DialogFrame>
-            </Show>
             <Show when={overlayMode() === 'approval'}>
                 <DialogFrame>
                     <ApprovalDialogBox store={props.store} />
@@ -220,11 +215,6 @@ export function DialogOverlay(props: { readonly store: ChatStore }): JSX.Element
             <Show when={overlayMode() === 'level-picker'}>
                 <DialogFrame>
                     <LevelPickerDialogBox store={props.store} />
-                </DialogFrame>
-            </Show>
-            <Show when={overlayMode() === 'model-picker'}>
-                <DialogFrame>
-                    <ModelPickerDialogBox store={props.store} />
                 </DialogFrame>
             </Show>
         </>
@@ -250,11 +240,7 @@ function DialogFrame(props: ParentProps): JSX.Element {
 
 type ListRow = { readonly label: string; readonly description?: string };
 
-function useListNavigation(
-    count: () => number,
-    onSelect: (index: number) => void,
-    onCancel: () => void,
-) {
+function useListNavigation(count: () => number, onSelect: (index: number) => void, onCancel: () => void) {
     const [selected, setSelected] = createSignal(0);
 
     useKeyboard((key) => {
@@ -301,19 +287,13 @@ function ListView(props: {
                             <text fg={props.selected() === index() ? '#ffff00' : '#666666'}>
                                 {props.selected() === index() ? '\u276f ' : '  '}
                             </text>
-                            <text fg={props.selected() === index() ? '#ffffff' : '#aaaaaa'}>
-                                {row.label}
-                            </text>
+                            <text fg={props.selected() === index() ? '#ffffff' : '#aaaaaa'}>{row.label}</text>
                         </box>
-                        {row.description !== undefined ? (
-                            <text fg="#666666">{`    ${row.description}`}</text>
-                        ) : null}
+                        {row.description !== undefined ? <text fg="#666666">{`    ${row.description}`}</text> : null}
                     </box>
                 )}
             </For>
-            {props.footer !== undefined ? (
-                <text fg="#888888">{props.footer}</text>
-            ) : null}
+            {props.footer !== undefined ? <text fg="#888888">{props.footer}</text> : null}
         </box>
     );
 }
@@ -346,42 +326,18 @@ function RenameDialogBox(props: { store: ChatStore }): JSX.Element {
 
     return (
         <box paddingLeft={2} paddingRight={2} gap={1}>
-            <text attributes={TextAttributes.BOLD} fg="#ffffff">{' Rename Session '}</text>
+            <text attributes={TextAttributes.BOLD} fg="#ffffff">
+                {' Rename Session '}
+            </text>
             <box flexDirection="row">
                 <text fg="#00ffff">{'>'}</text>
                 <text fg="#ffffff">{buffer()}</text>
-                <text bg="#ffffff" fg="#000000">{'\u2588'}</text>
+                <text bg="#ffffff" fg="#000000">
+                    {'\u2588'}
+                </text>
             </box>
             <text fg="#888888">{'\u23ce'} submit · esc cancel</text>
         </box>
-    );
-}
-
-function SessionPickerDialogBox(props: { store: ChatStore }): JSX.Element {
-    const snapshot = useSolidStoreSelector(props.store, (s) => s);
-    const entries = () => snapshot().sessionPickerEntries;
-    const rows = (): ListRow[] =>
-        entries().map((e) => ({
-            label: e.label.length > 0 ? e.label : e.sessionId,
-            ...(e.updatedAt !== undefined ? { description: e.updatedAt } : {}),
-        }));
-
-    const selected = useListNavigation(
-        () => entries().length,
-        (index) => {
-            const entry = entries()[index];
-            if (entry !== undefined) props.store.hideSessionPicker(entry.sessionId);
-        },
-        () => props.store.hideSessionPicker(undefined),
-    );
-
-    return (
-        <ListView
-            title="Select Session"
-            rows={rows()}
-            selected={selected}
-            footer="{'\u2191/\u2193'} navigate · {'\u23ce'} select · esc cancel"
-        />
     );
 }
 
@@ -406,7 +362,9 @@ function ApprovalDialogBox(props: { store: ChatStore }): JSX.Element {
 
     return (
         <box paddingLeft={2} paddingRight={2} gap={1}>
-            <text attributes={TextAttributes.BOLD} fg="#ffffff">{' Approval Required '}</text>
+            <text attributes={TextAttributes.BOLD} fg="#ffffff">
+                {' Approval Required '}
+            </text>
             <text fg="#aaaaaa">{`${toolName()} — ${action()}`}</text>
             <For each={rows}>
                 {(row, index) => (
@@ -417,13 +375,13 @@ function ApprovalDialogBox(props: { store: ChatStore }): JSX.Element {
                             </text>
                             <text fg={selected() === index() ? '#ffffff' : '#aaaaaa'}>{row.label}</text>
                         </box>
-                        {row.description !== undefined ? (
-                            <text fg="#666666">{`    ${row.description}`}</text>
-                        ) : null}
+                        {row.description !== undefined ? <text fg="#666666">{`    ${row.description}`}</text> : null}
                     </box>
                 )}
             </For>
-            <text fg="#888888">{'\u2191/\u2193'} navigate · {'\u23ce'} select · esc deny</text>
+            <text fg="#888888">
+                {'\u2191/\u2193'} navigate · {'\u23ce'} select · esc deny
+            </text>
         </box>
     );
 }
@@ -444,34 +402,6 @@ function LevelPickerDialogBox(props: { store: ChatStore }): JSX.Element {
         <ListView
             title="Select Approval Level"
             rows={rows}
-            selected={selected}
-            footer="{'\u2191/\u2193'} navigate · {'\u23ce'} select · esc cancel"
-        />
-    );
-}
-
-function ModelPickerDialogBox(props: { store: ChatStore }): JSX.Element {
-    const snapshot = useSolidStoreSelector(props.store, (s) => s);
-    const choices = () => snapshot().modelPickerChoices;
-    const rows = (): ListRow[] =>
-        choices().map((c) => ({
-            label: c.label,
-            ...(c.unavailableReason !== undefined ? { description: c.unavailableReason } : {}),
-        }));
-
-    const selected = useListNavigation(
-        () => choices().length,
-        (index) => {
-            const choice = choices()[index];
-            if (choice !== undefined) props.store.hideModelPicker(choice.selection);
-        },
-        () => props.store.hideModelPicker(undefined),
-    );
-
-    return (
-        <ListView
-            title="Select Model"
-            rows={rows()}
             selected={selected}
             footer="{'\u2191/\u2193'} navigate · {'\u23ce'} select · esc cancel"
         />

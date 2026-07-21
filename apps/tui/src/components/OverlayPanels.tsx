@@ -454,6 +454,7 @@ export function ModelPickerOverlay({ store }: ModelPickerOverlayProps): JSX.Elem
 
     useKeyboard((key) => {
         if (key.name === 'return') {
+            key.preventDefault();
             const currentView = view();
             const selectedChoice = currentView.visibleChoices[currentView.selectedIndex - currentView.startIndex];
             if (selectedChoice !== undefined) {
@@ -463,7 +464,23 @@ export function ModelPickerOverlay({ store }: ModelPickerOverlayProps): JSX.Elem
             return;
         }
         if ((key.ctrl && key.name === 'c') || key.name === 'escape') {
+            key.preventDefault();
             store.hideModelPicker(undefined);
+            return;
+        }
+        if (key.name === 'up' || (key.ctrl && key.name === 'p') || key.name === 'k') {
+            key.preventDefault();
+            store.updateModelPickerKeypress('k');
+            return;
+        }
+        if (key.name === 'down' || (key.ctrl && key.name === 'n') || key.name === 'j') {
+            key.preventDefault();
+            store.updateModelPickerKeypress('j');
+            return;
+        }
+        if (key.name === 'backspace') {
+            key.preventDefault();
+            store.updateModelPickerKeypress('\b');
             return;
         }
         if (
@@ -503,7 +520,11 @@ export function ModelPickerOverlay({ store }: ModelPickerOverlayProps): JSX.Elem
                 return;
             }
         }
-        store.updateModelPickerKeypress(key.sequence);
+        if (key.ctrl || key.meta || key.super) return;
+        if (key.sequence.length === 1 && key.sequence >= ' ' && key.sequence <= '~') {
+            key.preventDefault();
+            store.updateModelPickerKeypress(key.sequence);
+        }
     });
 
     return (
@@ -662,21 +683,42 @@ export function SessionPickerOverlay({ store }: SessionPickerOverlayProps): JSX.
 
     useKeyboard((key) => {
         if (key.name === 'return') {
+            key.preventDefault();
             store.confirmSessionPicker();
             return;
         }
         if ((key.ctrl && key.name === 'c') || key.name === 'escape') {
+            key.preventDefault();
             store.cancelSessionPicker();
             return;
         }
-        store.updateSessionPickerSearch(key.sequence);
+        if (key.name === 'up' || (key.ctrl && key.name === 'p') || key.name === 'k') {
+            key.preventDefault();
+            store.updateSessionPickerSearch('k');
+            return;
+        }
+        if (key.name === 'down' || (key.ctrl && key.name === 'n') || key.name === 'j') {
+            key.preventDefault();
+            store.updateSessionPickerSearch('j');
+            return;
+        }
+        if (key.name === 'backspace') {
+            key.preventDefault();
+            store.updateSessionPickerSearch('\b');
+            return;
+        }
+        if (key.ctrl || key.meta || key.super) return;
+        if (key.sequence.length === 1 && key.sequence >= ' ' && key.sequence <= '~') {
+            key.preventDefault();
+            store.updateSessionPickerSearch(key.sequence);
+        }
     });
 
     return (
         <OverlayFrame
             variant="modal"
             title="Select session"
-            footer="Up/Down to navigate, type to search, Enter to attach, Ctrl+C to cancel"
+            footer="↑↓ navigate · type to search · Enter attach · Esc cancel"
         >
             <text attributes={TextAttributes.DIM}>{`Search: ${view().searchQuery}`}</text>
             {view().totalCount === 0 ? (
