@@ -1,9 +1,15 @@
-import { missionControlDataDirEnvKey, ProjectTrustStore } from '@mission-control/core';
+import {
+    importSessionEnvelopesToLocalStore,
+    missionControlDataDirEnvKey,
+    parseJsonlSessionLog,
+    ProjectTrustStore,
+} from '@mission-control/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args';
 import { runSessionCommand } from './session';
 import {
     archiveManifest,
+    createArchiveJson,
     createSessionLog,
     fixedNow,
     useTempDataDir,
@@ -27,20 +33,17 @@ describe('session archive commands', () => {
         await mkdir(join(importDataDir, 'sessions'), { recursive: true });
         await new ProjectTrustStore({ dataDir: sourceDataDir, now: fixedNow }).setDecision(workspaceRoot, 'trusted');
         await new ProjectTrustStore({ dataDir: importDataDir, now: fixedNow }).setDecision(workspaceRoot, 'trusted');
-        await writeFile(
-            join(sourceDataDir, 'sessions', `${sessionId}.jsonl`),
-            createSessionLog({
-                sessionId,
-                createdAt: '2026-06-13T11:00:00.000Z',
-                updatedAt: '2026-06-13T11:00:03.000Z',
-                cwd: workspaceRoot,
-                workspaceTrust: 'trusted',
-                name: 'Export demo',
-                parentSessionId: 'session_seed',
-                activeLeafId: 'entry_reply',
-            }),
-            'utf8',
-        );
+        const eventsJsonl = createSessionLog({
+            sessionId,
+            createdAt: '2026-06-13T11:00:00.000Z',
+            updatedAt: '2026-06-13T11:00:03.000Z',
+            cwd: workspaceRoot,
+            workspaceTrust: 'trusted',
+            name: 'Export demo',
+            parentSessionId: 'session_seed',
+            activeLeafId: 'entry_reply',
+        });
+        await seedSessionFromJsonl({ dataDir: sourceDataDir, sessionId, eventsJsonl });
         const originalShow = await withProcessCwd(workspaceRoot, async () => {
             vi.stubEnv(missionControlDataDirEnvKey, sourceDataDir);
             return runSessionCommand(parseArgs(['session', 'show', sessionId]));
@@ -131,11 +134,9 @@ describe('session archive commands', () => {
         );
         await writeFile(
             trustedArchivePath,
-            JSON.stringify({
-                kind: 'mission-control.session-archive',
-                version: 1,
-                manifest: archiveManifest(sessionId, workspaceRoot),
-                checksum: { algorithm: 'sha256', value: 'skip' },
+            createArchiveJson({
+                sessionId,
+                workspaceRoot,
                 eventsJsonl: createSessionLog({
                     sessionId,
                     createdAt: '2026-06-13T12:00:00.000Z',
@@ -148,9 +149,10 @@ describe('session archive commands', () => {
             }),
             'utf8',
         );
-        await writeFile(
-            join(dataDir, 'sessions', `${sessionId}.jsonl`),
-            createSessionLog({
+        await seedSessionFromJsonl({
+            dataDir,
+            sessionId,
+            eventsJsonl: createSessionLog({
                 sessionId,
                 createdAt: '2026-06-13T12:30:00.000Z',
                 updatedAt: '2026-06-13T12:30:03.000Z',
@@ -159,8 +161,7 @@ describe('session archive commands', () => {
                 name: 'Existing session',
                 activeLeafId: 'entry_root',
             }),
-            'utf8',
-        );
+        });
 
         await expect(
             withProcessCwd(workspaceRoot, async () => {
@@ -191,8 +192,7 @@ describe('session archive commands', () => {
                 vi.stubEnv(missionControlDataDirEnvKey, dataDir);
                 return runSessionCommand(parseArgs(['session', 'import', trustedArchivePath]));
             }),
-        ).rejects.toThrow();
-        expect(await readFile(join(dataDir, 'sessions', `${sessionId}.jsonl`), 'utf8')).toContain('Existing session');
+        ).rejects.toThrow(/Session already exists/u);
         await rm(corruptArchivePath, { force: true });
         await rm(mismatchArchivePath, { force: true });
         await rm(invalidArchivePath, { force: true });
@@ -201,3 +201,21 @@ describe('session archive commands', () => {
         await rm(dataDir, { recursive: true, force: true });
     });
 });
+
+async function seedSessionFromJsonl(input: {
+    readonly dataDir: string;
+    readonly sessionId: string;
+    readonly eventsJsonl: string;
+}): Promise<void> {
+    const parsed = parseJsonlSessionLog({
+        contents: input.eventsJsonl,
+        filePath: `${input.sessionId}.jsonl`,
+        sessionId: input.sessionId,
+    });
+    const result = await importSessionEnvelopesToLocalStore({
+        dataDir: input.dataDir,
+        sessionId: input.sessionId,
+        envelopes: parsed.envelopes,
+    });
+    expect(result).toBe('imported');
+}

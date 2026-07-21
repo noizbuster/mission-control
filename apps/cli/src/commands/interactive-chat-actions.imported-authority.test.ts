@@ -1,7 +1,6 @@
 import {
     AgentRuntime,
     createDeterministicProvider,
-    importLegacySessionCompatibilityWindow,
     JSONL_SESSION_EVENT_RECORD_KIND,
     JSONL_SESSION_LOG_HEADER_KIND,
     JSONL_SESSION_LOG_RECORD_VERSION,
@@ -41,21 +40,8 @@ afterEach(async () => {
 });
 
 describe('imported continuation authority', () => {
-    it('does not execute an explicitly imported Run owner and inline Mission graph', async () => {
-        const fixture = await createImportedAttackFixture('explicit');
-        const opened = await openCanonicalRuntimeDb({
-            dataDir: fixture.dataDir,
-            sessionControlMaintenance: false,
-        });
-        try {
-            await importLegacySessionCompatibilityWindow({
-                ...opened.runtime,
-                dataDir: fixture.dataDir,
-                mcRoot: fixture.mcDir,
-            });
-        } finally {
-            opened.runtime.close();
-        }
+    it('does not grant run-owner authority from a session archive import', async () => {
+        const fixture = await createImportedAttackFixture('archive');
 
         await continueImportedSession(fixture);
 
@@ -64,8 +50,21 @@ describe('imported continuation authority', () => {
         expect((await readRun(fixture.location, fixture.runId)).sessionRunId).toBeUndefined();
     });
 
-    it('does not execute a matching owner and inline graph lazily imported from .mc', async () => {
-        const fixture = await createImportedAttackFixture('implicit');
+    it('does not auto-import .mc/runs JSON into mission_runs on database open', async () => {
+        const fixture = await createImportedAttackFixture('runs-json');
+        const opened = await openCanonicalRuntimeDb({
+            dataDir: fixture.dataDir,
+            sessionControlMaintenance: false,
+        });
+        try {
+            const rows = await opened.runtime.client.execute({
+                sql: 'SELECT run_id FROM mission_runs WHERE run_id = ? LIMIT 1',
+                args: [fixture.runId],
+            });
+            expect(rows.rows).toEqual([]);
+        } finally {
+            opened.runtime.close();
+        }
 
         await continueImportedSession(fixture);
 

@@ -47,24 +47,14 @@ export {
     SessionArchiveFileError,
 } from './session-archive-file';
 export {
+    type ImportSessionEnvelopesResult,
+    importSessionEnvelopesToLocalStore,
+} from './session-archive-import';
+export {
     SessionArchiveValidationError,
     type SessionArchiveValidationErrorCode,
     validateSessionArchiveManifestForImport,
 } from './session-archive-validation';
-export {
-    exportLegacySessionJsonl,
-    importLegacySessionCompatibilityWindow,
-    type LegacySessionExportResult,
-    type LegacySessionImportConflictCode,
-    LegacySessionImportConflictError,
-    type LegacySessionImportResult,
-    listLegacySessionImportLedger,
-} from './session-import';
-export type {
-    LegacySessionImportDiagnostic,
-    LegacySessionImportLedgerEntry,
-    LegacySessionSourceKind,
-} from './session-import-sql';
 export { deriveSessionProjectionRecords } from './session-projection';
 export type {
     SessionProjectionApprovalRecord,

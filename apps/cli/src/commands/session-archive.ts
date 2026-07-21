@@ -1,6 +1,7 @@
 import {
     createProviderAuthStoreObservabilityRedactor,
     createSessionArchive,
+    importSessionEnvelopesToLocalStore,
     JSONL_SESSION_EVENT_RECORD_KIND,
     JSONL_SESSION_LOG_HEADER_KIND,
     JSONL_SESSION_LOG_RECORD_VERSION,
@@ -16,7 +17,7 @@ import type { AgentEventEnvelope } from '@mission-control/protocol';
 import { createProviderAuthStore } from '../auth-store';
 import { deriveSessionCatalogProjection } from './session-catalog-projection';
 import { parseCliSessionId } from './session-id';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
 export class SessionArchiveCommandError extends Error {
@@ -146,43 +147,25 @@ export async function importSessionArchiveFile(input: { readonly filePath: strin
         trustedRoot: trust.workspaceRoot,
     });
     const sessionId = requireValidSessionId(archive.manifest.sessionId);
-    const sessionPath = resolveSessionLogPath(sessionId);
     const parsedLog = parseJsonlSessionLog({
         contents: archive.eventsJsonl,
-        filePath: sessionPath,
+        filePath: input.filePath,
         sessionId,
     });
     const observabilityRedactor = await createProviderAuthStoreObservabilityRedactor(createProviderAuthStore());
-    const observableContents = serializeReplayAsJsonl(
-        sessionId,
-        parsedLog.envelopes.map((envelope) =>
-            redactAgentEventEnvelopeForObservability(envelope, observabilityRedactor),
-        ),
-        parsedLog.header.createdAt,
+    const envelopes = parsedLog.envelopes.map((envelope) =>
+        redactAgentEventEnvelopeForObservability(envelope, observabilityRedactor),
     );
-    await mkdir(dirname(sessionPath), { recursive: true });
-    let wroteSessionPath = false;
-    try {
-        await writeFile(sessionPath, observableContents, { encoding: 'utf8', flag: 'wx' });
-        wroteSessionPath = true;
-        const replay = await readLocalSessionReplay({ sessionId, observabilityRedactor });
-        if (replay.kind === 'missing') {
-            throw new SessionArchiveCommandError({
-                code: 'session_not_found',
-                message: `Imported session could not be projected: ${sessionId}`,
-            });
-        }
-    } catch (error: unknown) {
-        if (wroteSessionPath) {
-            await rm(sessionPath, { force: true });
-        }
-        if (isExistingFileError(error)) {
-            throw new SessionArchiveCommandError({
-                code: 'session_exists',
-                message: `Session already exists: ${sessionId}`,
-            });
-        }
-        throw error;
+    const result = await importSessionEnvelopesToLocalStore({
+        sessionId,
+        envelopes,
+        observabilityRedactor,
+    });
+    if (result === 'session_exists') {
+        throw new SessionArchiveCommandError({
+            code: 'session_exists',
+            message: `Session already exists: ${sessionId}`,
+        });
     }
     return `Imported session ${sessionId} from ${input.filePath}\n`;
 }

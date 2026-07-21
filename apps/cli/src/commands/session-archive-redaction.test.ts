@@ -1,4 +1,8 @@
-import { missionControlDataDirEnvKey, ProjectTrustStore } from '@mission-control/core';
+import {
+    missionControlDataDirEnvKey,
+    ProjectTrustStore,
+    readLocalSessionReplay,
+} from '@mission-control/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args';
 import { createProviderAuthStore } from '../auth-store';
@@ -64,10 +68,12 @@ describe('session archive credential redaction', () => {
             await runSessionCommand(parseArgs(['session', 'import', importPath]));
         });
 
+        const importedReplay = await readLocalSessionReplay({ dataDir, sessionId: importedSessionId });
         const observable = [
             await readFile(exportPath, 'utf8'),
-            await readFile(join(dataDir, 'sessions', `${importedSessionId}.jsonl`), 'utf8'),
+            JSON.stringify(importedReplay),
         ].join('\n');
+        expect(importedReplay.kind).toBe('found');
         expect(observable).toContain('[REDACTED_CREDENTIAL]');
         expect(observable).not.toContain(credential);
         await Promise.all([
