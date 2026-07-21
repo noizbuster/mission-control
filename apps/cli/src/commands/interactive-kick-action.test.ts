@@ -1,4 +1,4 @@
-import { AsyncJobManager, RuntimeAgentRegistry } from '@mission-control/core';
+import { AsyncJobManager, type TaskToolRuntimeServices, RuntimeAgentRegistry } from '@mission-control/core';
 import { describe, expect, it, vi } from 'vitest';
 import type { CodingActionContext } from './interactive-chat-action-context';
 import type { ChatOutput } from './interactive-chat-io';
@@ -14,7 +14,6 @@ function createOutput(): ChatOutput & { readonly lines: string[] } {
         write: (text: string) => {
             lines.push(text);
         },
-        controlsPrompt: true,
     };
 }
 
@@ -80,7 +79,7 @@ describe('runKickAction', () => {
                     runtimeRegistry: registry,
                     jobManager,
                     lifecycleManager: {} as never,
-                } as CodingActionContext['taskRuntimeServices'],
+                } as TaskToolRuntimeServices,
             }),
         );
 

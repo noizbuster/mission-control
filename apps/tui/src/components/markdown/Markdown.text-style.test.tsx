@@ -8,14 +8,14 @@ describe('markdownSyntaxStyles', () => {
     it('uses CHAT_TEXT for ordinary prose when the theme leaves it unset', () => {
         const styles = markdownSyntaxStyles(darkTheme);
 
-        expect(styles.default?.fg).toBe(CHAT_TEXT);
+        expect(styles['default']?.fg).toBe(CHAT_TEXT);
     });
 
     it('uses a theme default text foreground override for ordinary prose', () => {
         const defaultForeground = '#123456';
         const styles = markdownSyntaxStyles({ ...darkTheme, defaultTextStyle: { fg: defaultForeground } });
 
-        expect(styles.default?.fg).toBe(defaultForeground);
+        expect(styles['default']?.fg).toBe(defaultForeground);
     });
 
     it('registers OpenTUI markup.* scopes (not the obsolete markdown.* names)', () => {
@@ -27,7 +27,7 @@ describe('markdownSyntaxStyles', () => {
         expect(styles['markup.strong']).toBeDefined();
         expect(styles['markup.raw']).toBeDefined();
         expect(styles['markup.link.label']).toBeDefined();
-        expect(styles.conceal).toBeDefined();
+        expect(styles['conceal']).toBeDefined();
     });
 
     it('styles headings bold purple matching OpenCode markdownHeading', () => {
@@ -48,7 +48,7 @@ describe('markdownSyntaxStyles', () => {
     it('includes tree-sitter keyword scope for fenced code highlighting', () => {
         const styles = markdownSyntaxStyles(darkTheme);
 
-        expect(styles.keyword?.fg).toBe(darkSyntaxPalette.keyword);
-        expect(styles.keyword?.italic).toBe(true);
+        expect(styles['keyword']?.fg).toBe(darkSyntaxPalette.keyword);
+        expect(styles['keyword']?.italic).toBe(true);
     });
 });
