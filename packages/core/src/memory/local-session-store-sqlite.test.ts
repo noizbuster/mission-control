@@ -15,6 +15,7 @@ import {
     writeLegacySource,
 } from './local-session-store-test-support';
 import { createSessionArchive } from './session-archive-file';
+import { importSessionEnvelopesToLocalStore } from './session-archive-import';
 import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -119,16 +120,17 @@ describe('local session store SQLite-native sessions', () => {
         expect(JSON.stringify(result)).not.toContain(credential);
     });
 
-    it('uses the configured redactor when startup imports a legacy JSONL session', async () => {
-        const dataDir = await tempDataDir('startup-redaction');
-        const sessionId = 'session_startup_import_redaction';
-        const credential = ['startup', 'legacy', 'credential'].join('_');
-        await writeLegacySource(
+    it('uses the configured redactor when archive import writes envelopes into SQL', async () => {
+        const dataDir = await tempDataDir('archive-import-redaction');
+        const sessionId = 'session_archive_import_redaction';
+        const credential = ['startup', 'archive', 'credential'].join('_');
+        const result = await importSessionEnvelopesToLocalStore({
             dataDir,
             sessionId,
-            jsonlFor(sessionId, [
+            observabilityRedactor: createObservabilityRedactor({ secrets: [credential] }),
+            envelopes: [
                 {
-                    eventId: 'event_startup_redaction_0',
+                    eventId: 'event_archive_redaction_0',
                     sequence: 0,
                     createdAt: CREATED_AT,
                     sessionId,
@@ -137,17 +139,12 @@ describe('local session store SQLite-native sessions', () => {
                         type: 'task.completed',
                         timestamp: CREATED_AT,
                         sessionId,
-                        message: `legacy ${credential}`,
+                        message: `archive ${credential}`,
                     },
                 },
-            ]),
-        );
-        const store = await openLocalSessionEventStore({
-            dataDir,
-            sessionId,
-            observabilityRedactor: createObservabilityRedactor({ secrets: [credential] }),
+            ],
         });
-        await store.close();
+        expect(result).toBe('imported');
         const opened = await openCanonicalRuntimeDb({ dataDir, sessionControlMaintenance: false });
 
         try {

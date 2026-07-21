@@ -183,19 +183,3 @@ export const contextEpochs = sqliteTable(
     ],
 );
 
-export const legacySessionImports = sqliteTable(
-    'legacy_session_imports',
-    {
-        importId: text('import_id').primaryKey(),
-        sourcePath: text('source_path').notNull(),
-        sourceKind: text('source_kind').notNull(),
-        checksum: text('checksum').notNull(),
-        importedEventCount: integer('imported_event_count').notNull().default(0),
-        importedAt: text('imported_at').notNull(),
-        diagnosticsJson: text('diagnostics_json'),
-    },
-    (table) => [
-        unique('legacy_session_imports_source_checksum_unique').on(table.sourcePath, table.checksum),
-        index('legacy_session_imports_source_idx').on(table.sourcePath),
-    ],
-);

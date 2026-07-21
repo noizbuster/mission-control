@@ -2,8 +2,6 @@ import type { AgentEvent } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 import { type LocalLibsqlWriteTarget, openLocalLibsqlDb, runWithLocalLibsqlWriteLock } from '../db/local-libsql-db';
 import { envelope, sessionStoppedEvent } from '../session-replay-coding-test-support';
-import { exportLegacySessionJsonl, importLegacySessionCompatibilityWindow } from './session-import';
-import { SESSION_IMPORT_TEST_SESSION_ID, writeLegacyFixture } from './session-import-test-support';
 import { openSqliteSessionEventStoreForTests } from './sqlite-session-event-store-test-support';
 import { projectSessionEventsToSqlite } from './sqlite-session-projection';
 import { openSqliteSessionProjectionStoreForTests } from './sqlite-session-projection-test-support';
@@ -63,80 +61,6 @@ describe('local libSQL write serialization', () => {
         runtime.close();
         store.close();
     });
-
-    it('serializes legacy JSONL import behind the shared local write lane', async () => {
-        // Given: a legacy JSONL source is imported into the same URL used by append writes.
-        const root = await tempDir('import');
-        const fixture = await writeLegacyFixture({ tmpRoot: root, name: 'legacy-import' });
-        const runtime = await openMigratedDb(await tempDbUrl('legacy-import'));
-        const releaseLane = deferred();
-        const holdingWrite = holdWriteLaneWithSessionStatus({
-            target: runtime,
-            release: releaseLane.promise,
-            sessionId: SESSION_IMPORT_TEST_SESSION_ID,
-        });
-        await holdingWrite.started;
-
-        // When: compatibility import starts while the lane is held.
-        const importing = importLegacySessionCompatibilityWindow({
-            ...runtime,
-            dataDir: fixture.dataDir,
-            mcRoot: fixture.mcRoot,
-            now: () => '2026-07-01T00:00:00.000Z',
-        });
-        await Promise.resolve();
-        releaseLane.resolve();
-        await importing;
-        await holdingWrite.done;
-
-        // Then: imported session state won the queue order instead of racing before the held write.
-        const rows = await runtime.client.execute({
-            sql: 'SELECT status, last_event_seq FROM sessions WHERE session_id = ?',
-            args: [SESSION_IMPORT_TEST_SESSION_ID],
-        });
-        expect(rows.rows).toEqual([{ status: 'stopped', last_event_seq: 1 }]);
-        runtime.close();
-    });
-
-    it('serializes legacy export marking behind the shared local write lane', async () => {
-        // Given: an imported legacy session can be exported from the local libSQL store.
-        const root = await tempDir('export');
-        const fixture = await writeLegacyFixture({ tmpRoot: root, name: 'legacy-export' });
-        const runtime = await openMigratedDb(await tempDbUrl('legacy-export'));
-        await importLegacySessionCompatibilityWindow({
-            ...runtime,
-            dataDir: fixture.dataDir,
-            mcRoot: fixture.mcRoot,
-            now: () => '2026-07-01T00:00:00.000Z',
-        });
-        const releaseLane = deferred();
-        const holdingWrite = holdWriteLaneWithExportMarker({
-            target: runtime,
-            release: releaseLane.promise,
-            sessionId: SESSION_IMPORT_TEST_SESSION_ID,
-        });
-        await holdingWrite.started;
-
-        // When: export writes its marker while the shared write lane is held.
-        const exporting = exportLegacySessionJsonl({
-            ...runtime,
-            sessionId: SESSION_IMPORT_TEST_SESSION_ID,
-            outputDir: join(root, 'exports'),
-            now: () => '2026-07-01T00:02:00.000Z',
-        });
-        await Promise.resolve();
-        releaseLane.resolve();
-        await exporting;
-        await holdingWrite.done;
-
-        // Then: the export marker ran after the held write.
-        const rows = await runtime.client.execute({
-            sql: 'SELECT exported_at FROM sessions WHERE session_id = ?',
-            args: [SESSION_IMPORT_TEST_SESSION_ID],
-        });
-        expect(rows.rows).toEqual([{ exported_at: '2026-07-01T00:02:00.000Z' }]);
-        runtime.close();
-    });
 });
 
 type Deferred = {
@@ -170,10 +94,6 @@ async function tempDbUrl(name: string): Promise<string> {
     return `file:${join(await tempDir(name), 'mission-control.db')}`;
 }
 
-async function openMigratedDb(url: string) {
-    return openLocalLibsqlDb({ url });
-}
-
 function holdWriteLaneWithSessionStatus(input: {
     readonly target: LocalLibsqlWriteTarget;
     readonly release: Promise<void>;
@@ -192,20 +112,6 @@ function holdWriteLaneWithSessionStatus(input: {
                     last_event_seq = excluded.last_event_seq
             `,
             args: [input.sessionId, CREATED_AT, CREATED_AT, CREATED_AT],
-        });
-    });
-}
-
-function holdWriteLaneWithExportMarker(input: {
-    readonly target: LocalLibsqlWriteTarget;
-    readonly release: Promise<void>;
-    readonly sessionId: string;
-}): HeldWrite {
-    return holdWriteLane(input.target, async () => {
-        await input.release;
-        await input.target.client.execute({
-            sql: 'UPDATE sessions SET exported_at = ? WHERE session_id = ?',
-            args: ['held-write-marker', input.sessionId],
         });
     });
 }

@@ -103,7 +103,6 @@ function auditWriteArchitecture(files: readonly SourceFile[]): readonly Architec
         if (
             file.path !== 'db/local-libsql-db.ts' &&
             file.path !== 'db/local-libsql-schema.ts' &&
-            file.path !== 'memory/session-import.ts' &&
             /ensureLocalDbSchema\s*\(/u.test(file.source)
         ) {
             violations.push({ code: 'read_path_schema_initialization', path: file.path });

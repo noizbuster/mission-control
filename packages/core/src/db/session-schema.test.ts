@@ -5,7 +5,6 @@ import {
     approvals,
     asyncJobs,
     contextEpochs,
-    legacySessionImports,
     memoryEntries,
     missionRuns,
     missions,
@@ -74,7 +73,6 @@ describe('database schema exports', () => {
             contextEpochs,
             runtimeAgents,
             asyncJobs,
-            legacySessionImports,
         ];
 
         // When: table names are read from Drizzle metadata.
@@ -99,7 +97,6 @@ describe('database schema exports', () => {
             'context_epochs',
             'runtime_agents',
             'async_jobs',
-            'legacy_session_imports',
         ]);
     });
 

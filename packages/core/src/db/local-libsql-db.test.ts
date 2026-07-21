@@ -101,7 +101,6 @@ describe('local libSQL database runtime', () => {
                 'approvals',
                 'async_jobs',
                 'context_epochs',
-                'legacy_session_imports',
                 'memory_entries',
                 'mission_runs',
                 'missions',

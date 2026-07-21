@@ -155,47 +155,41 @@ describe('clean unified storage artifact guard', () => {
         expect(references).toEqual([...approvedLegacyMemoryReferences]);
     });
 
-    it('preserves approved session import and schema migration vocabulary', () => {
+    it('preserves schema migration vocabulary and keeps legacy session import removed', () => {
         const sources = repositorySources();
         const legacySessionTable = ['legacy', 'session', 'imports'].join('_');
         const schemaMigrationTable = ['schema', 'migrations'].join('_');
-        const approvedVocabulary = [
-            {
-                term: legacySessionTable,
-                paths: [
-                    'README.md',
-                    'docs/session-data-model.md',
-                    'packages/core/src/db/',
-                    'packages/core/src/memory/',
-                    'tests/readme-runtime-contract.test.ts',
-                ],
-            },
-            {
-                term: schemaMigrationTable,
-                paths: ['packages/core/src/db/', 'tests/readme-contract.test.ts'],
-            },
-        ] as const;
-
-        const scopeViolations = approvedVocabulary.flatMap(({ term, paths }) =>
-            sources
-                .filter((file) => file.source.includes(term))
-                .filter((file) => !paths.some((path) => file.path === path || file.path.startsWith(path)))
-                .map((file) => `${term}: ${file.path}`),
-        );
+        const legacyImportSymbol = [
+            'import',
+            'Legacy',
+            'Session',
+            'Compatibility',
+            'Window',
+        ].join('');
 
         expect(
             readFileSync(join(repositoryRoot, 'packages/core/src/db/local-libsql-schema-memory.ts'), 'utf8'),
         ).toContain('memory_entries');
-        expect(
-            readFileSync(join(repositoryRoot, 'packages/core/src/db/local-libsql-schema-projections.ts'), 'utf8'),
-        ).toContain(legacySessionTable);
         expect(readFileSync(join(repositoryRoot, 'packages/core/src/db/local-libsql-db.ts'), 'utf8')).toContain(
             schemaMigrationTable,
         );
-        expect(readFileSync(join(repositoryRoot, 'packages/core/src/memory/session-import.ts'), 'utf8')).toContain(
-            'importLegacySessionCompatibilityWindow',
-        );
-        expect(scopeViolations).toEqual([]);
+        expect(
+            readFileSync(join(repositoryRoot, 'packages/core/src/db/local-libsql-schema-projections.ts'), 'utf8'),
+        ).not.toContain(legacySessionTable);
+        expect(
+            sources
+                .filter((file) => file.source.includes(legacyImportSymbol))
+                .map((file) => file.path)
+                .sort(),
+        ).toEqual([]);
+        expect(
+            sources
+                .filter((file) => file.source.includes(legacySessionTable))
+                .filter((file) => file.path !== 'tests/readme-runtime-contract.test.ts')
+                .filter((file) => file.path !== 'tests/storage-artifact-guard.test.ts')
+                .map((file) => file.path)
+                .sort(),
+        ).toEqual([]);
     });
 
     it('finds no prohibited migration artifact in the final maintained tree', () => {

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
     createJsonlSessionEventRecord,
     createJsonlSessionLogHeader,
+    parseJsonlSessionLog,
     serializeJsonlRecord,
 } from './memory/jsonl-session-records';
 import {
@@ -123,7 +124,7 @@ describe('session replay parity contract', () => {
         }
     });
 
-    it('fails closed when importing corrupt legacy JSONL while prefix replay reports the safe diagnostic', async () => {
+    it('fails closed when parsing corrupt JSONL while prefix replay reports the safe diagnostic', async () => {
         // Given
         const sessionId = 'session_replay_parity_corrupt';
         const ledgers = await openReplayParityLedgers(sessionId);
@@ -146,13 +147,19 @@ describe('session replay parity contract', () => {
         try {
             // When
             const prefixReplay = projectJsonlSessionReplayPrefix({ sessionId, contents });
-            for (const ledger of ledgers) {
-                await expect(ledger.importLegacyJsonlStrict(contents)).rejects.toMatchObject({
+            expect(() =>
+                parseJsonlSessionLog({
+                    contents,
+                    filePath: `${sessionId}.jsonl`,
+                    sessionId,
+                }),
+            ).toThrow(
+                expect.objectContaining({
                     code: 'corrupt_line',
                     lineNumber: 3,
                     sessionId,
-                });
-            }
+                }),
+            );
             const replays = await Promise.all(ledgers.map((ledger) => ledger.getReplay(sessionId)));
 
             // Then

@@ -3,18 +3,12 @@ import { parseArgs } from '@mission-control/cli/args';
 import { runSessionCommand } from '@mission-control/cli/commands/session';
 import { SqlAgentJobMirror } from '../packages/core/src/agents/agent-job-sql-mirror';
 import { openLocalLibsqlDb } from '../packages/core/src/db/local-libsql-db';
-import {
-    exportLegacySessionJsonl,
-    localSessionDbPath,
-    parseSessionArchive,
-    readLocalSessionReplay,
-} from '@mission-control/core';
+import { localSessionDbPath, parseSessionArchive } from '@mission-control/core';
 import { SqlSessionInputDelivery } from '../packages/core/src/runtime/session-input-delivery';
 import {
     appendNativeEvents,
     approvalEvent,
     approvalResumedEvent,
-    envelope,
     metadataEvent,
     providerCompletedEvent,
     providerFailedEvent,
@@ -29,10 +23,9 @@ import {
     tempDataDir,
     toolCompletedEvent,
     writeDbRowsArtifact,
-    writeLegacyJsonl,
 } from './coding-agent-session-store-e2e-support';
 import { startForegroundChildWait } from './coding-agent-session-store-e2e-task-support';
-import { readFile, rm, stat } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const tempDirs: string[] = [];
@@ -43,17 +36,11 @@ describe('coding-agent SQLite session store e2e hardening', () => {
         await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
     });
 
-    it('preserves production append await resume list archive export and legacy JSONL compatibility in one temp data dir', async () => {
-        // Given: one temp data dir with a native parent session and a legacy JSONL fixture.
+    it('preserves production append await resume list archive export in one temp data dir', async () => {
+        // Given: one temp data dir with a native parent session.
         const dataDir = await tempDataDir(tempDirs);
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
         const parentSessionId = 'session_e2e_parent';
-        const legacySessionId = 'session_e2e_legacy';
-        await writeLegacyJsonl(dataDir, legacySessionId, [
-            envelope(legacySessionId, 0, 'legacy_started', sessionStartedEvent(legacySessionId)),
-            envelope(legacySessionId, 1, 'legacy_stopped', sessionStoppedEvent(legacySessionId, 1)),
-        ]);
-        const legacyBefore = await readFile(join(dataDir, 'sessions', `${legacySessionId}.jsonl`), 'utf8');
         await appendNativeEvents(dataDir, parentSessionId, [
             sessionStartedEvent(parentSessionId),
             metadataEvent(parentSessionId),
@@ -101,12 +88,6 @@ describe('coding-agent SQLite session store e2e hardening', () => {
         const archive = parseSessionArchive(await readFile(archivePath, 'utf8'));
         const runtime = await openLocalLibsqlDb({ url: `file:${localSessionDbPath(dataDir)}` });
         try {
-            const legacyExport = await exportLegacySessionJsonl({
-                ...runtime,
-                sessionId: parentSessionId,
-                outputDir: join(dataDir, 'rollback-jsonl'),
-                now: () => '2026-07-06T00:00:10.000Z',
-            });
             const statusRows = await readStatusRows(runtime);
             const waitRows = await readWaitRows(runtime);
             const detailRows = await readDetailRows(runtime, parentSessionId);
@@ -119,10 +100,8 @@ describe('coding-agent SQLite session store e2e hardening', () => {
                     detailRows,
                 });
             }
-            const legacyReplay = await readLocalSessionReplay({ dataDir, sessionId: legacySessionId });
-            const legacyAfter = await readFile(join(dataDir, 'sessions', `${legacySessionId}.jsonl`), 'utf8');
 
-            // Then: public output, DB rows, archive/export, and legacy source compatibility all agree.
+            // Then: public output, DB rows, and archive export agree.
             expect(blockedListOutput).toContain(
                 'session_e2e_parent\tstatus=awaiting approval (approval=approval_patch,run=run_parent,tool=patch_call)',
             );
@@ -134,14 +113,11 @@ describe('coding-agent SQLite session store e2e hardening', () => {
             });
             expect(archive.manifest.sessionId).toBe(parentSessionId);
             expect(archive.eventsJsonl).toContain('approval.resumed');
-            expect(legacyExport.exportedEventCount).toBe(14);
-            expect(await stat(legacyExport.filePath)).toMatchObject({ size: expect.any(Number) });
             expect(statusRows).toEqual(
                 expect.arrayContaining([
                     expect.objectContaining({
                         session_id: parentSessionId,
                         status: 'stopped',
-                        exported_at: '2026-07-06T00:00:10.000Z',
                     }),
                 ]),
             );
@@ -156,8 +132,6 @@ describe('coding-agent SQLite session store e2e hardening', () => {
             expect(detailRows.failures).toEqual([
                 { event_id: `${parentSessionId}_11_model_call_failed`, request_id: 'request_parent' },
             ]);
-            expect(legacyReplay.kind).toBe('found');
-            expect(legacyAfter).toBe(legacyBefore);
         } finally {
             runtime.close();
         }

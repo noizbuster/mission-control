@@ -1,9 +1,13 @@
-import { ProjectTrustStore } from '@mission-control/core';
+import {
+    importSessionEnvelopesToLocalStore,
+    parseJsonlSessionLog,
+    ProjectTrustStore,
+} from '@mission-control/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args';
 import { runSessionCommand } from './session';
 import { createSessionLog, fixedNow, useTempDataDir } from './session-import-export-fixtures';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -17,20 +21,15 @@ describe('session stats commands', () => {
         const workspaceRoot = await mkdtemp(join(tmpdir(), 'mission-control-session-workspace-'));
         const sessionId = 'session_stats_surface';
         await new ProjectTrustStore({ dataDir, now: fixedNow }).setDecision(workspaceRoot, 'trusted');
-        await writeFile(
-            join(dataDir, 'sessions', `${sessionId}.jsonl`),
-            createSessionLog({
-                sessionId,
-                createdAt: '2026-06-13T10:00:00.000Z',
-                updatedAt: '2026-06-13T10:00:03.000Z',
-                cwd: workspaceRoot,
-                workspaceTrust: 'trusted',
-                name: 'Stats demo',
-                parentSessionId: 'session_parent',
-                activeLeafId: 'entry_branch',
-            }),
-            'utf8',
-        );
+        await seedSession(dataDir, sessionId, {
+            createdAt: '2026-06-13T10:00:00.000Z',
+            updatedAt: '2026-06-13T10:00:03.000Z',
+            cwd: workspaceRoot,
+            workspaceTrust: 'trusted',
+            name: 'Stats demo',
+            parentSessionId: 'session_parent',
+            activeLeafId: 'entry_branch',
+        });
 
         const listOutput = await runSessionCommand(parseArgs(['session', 'list']));
         const showOutput = JSON.parse((await runSessionCommand(parseArgs(['session', 'show', sessionId]))).stdout);
@@ -62,19 +61,14 @@ describe('session stats commands', () => {
         const dataDir = await useTempDataDir();
         const workspaceRoot = await mkdtemp(join(tmpdir(), 'mission-control-session-trust-workspace-'));
         const sessionId = 'session_stats_durable_trust';
-        await writeFile(
-            join(dataDir, 'sessions', `${sessionId}.jsonl`),
-            createSessionLog({
-                sessionId,
-                createdAt: '2026-06-13T10:00:00.000Z',
-                updatedAt: '2026-06-13T10:00:03.000Z',
-                cwd: workspaceRoot,
-                workspaceTrust: 'trusted',
-                name: 'Durable trust demo',
-                activeLeafId: 'entry_branch',
-            }),
-            'utf8',
-        );
+        await seedSession(dataDir, sessionId, {
+            createdAt: '2026-06-13T10:00:00.000Z',
+            updatedAt: '2026-06-13T10:00:03.000Z',
+            cwd: workspaceRoot,
+            workspaceTrust: 'trusted',
+            name: 'Durable trust demo',
+            activeLeafId: 'entry_branch',
+        });
 
         const listOutput = await runSessionCommand(parseArgs(['session', 'list']));
         const showOutput = JSON.parse((await runSessionCommand(parseArgs(['session', 'show', sessionId]))).stdout);
@@ -85,3 +79,30 @@ describe('session stats commands', () => {
         await rm(dataDir, { recursive: true, force: true });
     });
 });
+
+async function seedSession(
+    dataDir: string,
+    sessionId: string,
+    input: {
+        readonly createdAt: string;
+        readonly updatedAt: string;
+        readonly cwd: string;
+        readonly workspaceTrust: 'trusted' | 'denied' | 'unknown';
+        readonly name: string;
+        readonly activeLeafId: string;
+        readonly parentSessionId?: string;
+    },
+): Promise<void> {
+    const eventsJsonl = createSessionLog({ sessionId, ...input });
+    const parsed = parseJsonlSessionLog({
+        contents: eventsJsonl,
+        filePath: `${sessionId}.jsonl`,
+        sessionId,
+    });
+    const result = await importSessionEnvelopesToLocalStore({
+        dataDir,
+        sessionId,
+        envelopes: parsed.envelopes,
+    });
+    expect(result).toBe('imported');
+}

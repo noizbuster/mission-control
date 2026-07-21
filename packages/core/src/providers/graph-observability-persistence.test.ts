@@ -4,7 +4,6 @@ import { projectAbgSignalToEvent } from '../behavior/signals';
 import { openLocalLibsqlDb } from '../db/local-libsql-db';
 import { JsonlSessionEventStore } from '../memory/jsonl-session-event-store';
 import { parseJsonlSessionLog } from '../memory/jsonl-session-records';
-import { exportLegacySessionJsonl } from '../memory/session-import';
 import { SqliteSessionEventStore } from '../memory/sqlite-session-event-store';
 import { projectSessionReplay } from '../session-replay';
 import { createObservabilityRedactor } from './observability-redactor';
@@ -87,20 +86,11 @@ describe('graph observability persistence redaction', () => {
             const rawJsonl = await readFile(jsonlPath, 'utf8');
             const parsedJsonl = parseJsonlSessionLog({ sessionId, contents: rawJsonl, filePath: jsonlPath });
             const jsonlReplay = projectSessionReplay({ sessionId, envelopes: parsedJsonl.envelopes });
-            const exported = await exportLegacySessionJsonl({
-                ...runtime,
-                sessionId,
-                outputDir: join(root, 'export'),
-                now: () => NOW,
-                observabilityRedactor,
-            });
-            const exportedJsonl = await readFile(exported.filePath, 'utf8');
             const surfaces = [
                 JSON.stringify(sqlRows.rows),
                 JSON.stringify(sqliteReplay),
                 JSON.stringify(jsonlReplay),
                 rawJsonl,
-                exportedJsonl,
             ];
 
             // Then

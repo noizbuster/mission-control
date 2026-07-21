@@ -8,7 +8,6 @@ import { readCanonicalSessionTree } from '../runtime/session-stop-tree-resolver'
 import type { SessionStoreIdentity } from '../runtime/session-store-identity';
 import { computeCanonicalSessionTreeToken } from '../runtime/session-tree-token';
 import { resolveMissionControlDataDir } from './data-dir';
-import { importLegacySessionCompatibilityWindow } from './session-import';
 import { createSqliteSessionProjectionStore, type SqliteSessionProjectionStore } from './sqlite-session-projection';
 
 export type EnsuredLocalSessionDatabase = {
@@ -172,20 +171,7 @@ export async function openEnsuredLocalSessionDatabase(input: {
     readonly now?: () => string;
     readonly observabilityRedactor?: ObservabilityRedactor;
 }): Promise<EnsuredLocalSessionDatabase> {
-    const opened = await openCanonicalRuntimeDb({ dataDir: input.dataDir });
-    try {
-        await importLegacySessionCompatibilityWindow({
-            ...opened.runtime,
-            dataDir: opened.identity.canonicalDataDir,
-            includeRunSources: false,
-            ...(input.now !== undefined ? { now: input.now } : {}),
-            ...(input.observabilityRedactor !== undefined
-                ? { observabilityRedactor: input.observabilityRedactor }
-                : {}),
-        });
-        return opened;
-    } catch (error: unknown) {
-        opened.runtime.close();
-        throw error;
-    }
+    void input.now;
+    void input.observabilityRedactor;
+    return openCanonicalRuntimeDb({ dataDir: input.dataDir });
 }

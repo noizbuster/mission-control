@@ -5,11 +5,9 @@ import {
     redactAgentEventEnvelopeForObservability,
 } from '../providers/observability-redactor';
 import { type JsonlSessionReplayPrefixProjection, projectSessionReplay } from '../session-replay';
-import type { ReplayDiagnostic } from '../session-replay-types';
 import { resolveMissionControlDataDir } from './data-dir';
 import { openEnsuredLocalSessionDatabase } from './local-session-store-database';
-import { readExportEnvelopes } from './session-import-event-sql';
-import { listLegacySessionImportLedger } from './session-import-sql';
+import { readCanonicalSessionEnvelopes } from './session-import-event-read';
 
 export type LocalSessionReplayReadResult =
     | {
@@ -34,24 +32,20 @@ export async function readLocalSessionReplay(input: {
         observabilityRedactor,
     });
     try {
-        if (await hasSqliteSession(runtime.client, input.sessionId)) {
-            const envelopes = (await readExportEnvelopes({ client: runtime.client, sessionId: input.sessionId })).map(
-                (envelope) => redactAgentEventEnvelopeForObservability(envelope, observabilityRedactor),
-            );
-            if (envelopes.length > 0) {
-                const projection = projectSessionReplay({ sessionId: input.sessionId, envelopes });
-                return { kind: 'found', replay: { projection, diagnostics: projection.diagnostics } };
-            }
+        if (!(await hasSqliteSession(runtime.client, input.sessionId))) {
+            return { kind: 'missing' };
         }
-        const diagnostics = await readLegacyReplayDiagnostics(runtime.client, input.sessionId);
-        if (diagnostics.length > 0) {
-            const projection = projectSessionReplay({ sessionId: input.sessionId, envelopes: [] });
-            return { kind: 'found', replay: { projection, diagnostics } };
+        const envelopes = (
+            await readCanonicalSessionEnvelopes({ client: runtime.client, sessionId: input.sessionId })
+        ).map((envelope) => redactAgentEventEnvelopeForObservability(envelope, observabilityRedactor));
+        if (envelopes.length === 0) {
+            return { kind: 'missing' };
         }
+        const projection = projectSessionReplay({ sessionId: input.sessionId, envelopes });
+        return { kind: 'found', replay: { projection, diagnostics: projection.diagnostics } };
     } finally {
         runtime.close();
     }
-    return { kind: 'missing' };
 }
 
 async function hasSqliteSession(client: Client, sessionId: string): Promise<boolean> {
@@ -60,22 +54,4 @@ async function hasSqliteSession(client: Client, sessionId: string): Promise<bool
         args: [sessionId],
     });
     return result.rows.length > 0;
-}
-
-async function readLegacyReplayDiagnostics(client: Client, sessionId: string): Promise<readonly ReplayDiagnostic[]> {
-    const entries = await listLegacySessionImportLedger(client);
-    const diagnostics: ReplayDiagnostic[] = [];
-    for (const entry of entries) {
-        for (const diagnostic of entry.diagnostics) {
-            if (
-                diagnostic.sourceKind === 'jsonl' &&
-                diagnostic.code === 'corrupt_jsonl' &&
-                diagnostic.sessionId === sessionId &&
-                diagnostic.lineNumber !== undefined
-            ) {
-                diagnostics.push({ code: 'corrupt_trailing_record', lineNumber: diagnostic.lineNumber, sessionId });
-            }
-        }
-    }
-    return diagnostics;
 }

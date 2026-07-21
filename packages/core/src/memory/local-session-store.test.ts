@@ -1,52 +1,86 @@
 import { describe, expect, it } from 'vitest';
+import { importSessionEnvelopesToLocalStore } from './session-archive-import';
 import { readLocalSessionReplay } from './local-session-store';
 import {
     sessionStartedEvent,
     sessionStoppedEvent,
     tempDataDir,
-    writeLegacyJsonl,
-    writeLegacySource,
 } from './local-session-store-test-support';
-import { readFile } from 'node:fs/promises';
 
-describe('local session store legacy JSONL compatibility', () => {
-    it('reads legacy JSONL-only sessions through the compatibility path without deleting the source', async () => {
-        // Given: a legacy JSONL session exists before the SQLite store is opened.
-        const dataDir = await tempDataDir('legacy');
-        const sessionId = 'session_legacy_jsonl_core';
-        const legacyPath = await writeLegacyJsonl(dataDir, sessionId, [
-            { eventId: 'event_legacy_started', sequence: 0, event: sessionStartedEvent(sessionId) },
-            { eventId: 'event_legacy_stopped', sequence: 1, event: sessionStoppedEvent(sessionId) },
-        ]);
-        const before = await readFile(legacyPath, 'utf8');
+describe('local session store SQL replay', () => {
+    it('reads sessions that were imported into SQL', async () => {
+        // Given: envelopes are imported directly into the local SQL store.
+        const dataDir = await tempDataDir('sql-import');
+        const sessionId = 'session_sql_import_core';
+        const imported = await importSessionEnvelopesToLocalStore({
+            dataDir,
+            sessionId,
+            envelopes: [
+                {
+                    eventId: 'event_started',
+                    sequence: 0,
+                    createdAt: '2026-06-05T10:00:00.000Z',
+                    sessionId,
+                    durability: 'durable',
+                    event: sessionStartedEvent(sessionId),
+                },
+                {
+                    eventId: 'event_stopped',
+                    sequence: 1,
+                    createdAt: '2026-06-05T10:00:01.000Z',
+                    sessionId,
+                    durability: 'durable',
+                    event: sessionStoppedEvent(sessionId),
+                },
+            ],
+        });
 
         // When: core reads the session through the local read API.
         const result = await readLocalSessionReplay({ dataDir, sessionId });
-        const after = await readFile(legacyPath, 'utf8');
 
-        // Then: legacy events are projected and the source bytes remain untouched.
+        // Then: SQL-native events are projected.
+        expect(imported).toBe('imported');
         expect(result.kind).toBe('found');
         expect(result.kind === 'found' ? result.replay.projection.events.map((event) => event.type) : []).toEqual([
             'session.started',
             'session.stopped',
         ]);
-        expect(after).toBe(before);
     });
 
-    it('returns malformed legacy JSONL diagnostics when no SQLite-native session exists', async () => {
-        // Given: a legacy JSONL file has an invalid header and no native SQLite rows exist.
-        const dataDir = await tempDataDir('malformed');
-        const sessionId = 'session_malformed_jsonl_core';
-        await writeLegacySource(dataDir, sessionId, '{not json}\n');
+    it('returns missing when no SQL session rows exist', async () => {
+        // Given: the data dir has no session rows for the requested id.
+        const dataDir = await tempDataDir('missing');
+        const sessionId = 'session_missing_core';
 
         // When: core reads the session through the local read API.
         const result = await readLocalSessionReplay({ dataDir, sessionId });
 
-        // Then: the legacy fallback fails closed with a replay diagnostic.
-        expect(result.kind).toBe('found');
-        expect(result.kind === 'found' ? result.replay.projection.events : []).toEqual([]);
-        expect(result.kind === 'found' ? result.replay.diagnostics : []).toEqual([
-            { code: 'corrupt_trailing_record', lineNumber: 1, sessionId },
-        ]);
+        // Then: the read fails closed as missing.
+        expect(result).toEqual({ kind: 'missing' });
+    });
+
+    it('rejects a second import for a session that already has events', async () => {
+        // Given: a session already has durable events in SQL.
+        const dataDir = await tempDataDir('collision');
+        const sessionId = 'session_collision_core';
+        const envelope = {
+            eventId: 'event_started',
+            sequence: 0,
+            createdAt: '2026-06-05T10:00:00.000Z',
+            sessionId,
+            durability: 'durable' as const,
+            event: sessionStartedEvent(sessionId),
+        };
+        await importSessionEnvelopesToLocalStore({ dataDir, sessionId, envelopes: [envelope] });
+
+        // When: the same session is imported again.
+        const second = await importSessionEnvelopesToLocalStore({
+            dataDir,
+            sessionId,
+            envelopes: [{ ...envelope, eventId: 'event_started_again' }],
+        });
+
+        // Then: the import reports the existing session.
+        expect(second).toBe('session_exists');
     });
 });

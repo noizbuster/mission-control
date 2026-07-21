@@ -18,7 +18,6 @@ export type ReplayParityLedger = {
     append(event: AgentEvent): Promise<void>;
     appendEnvelope(envelope: AgentEventEnvelope): Promise<void>;
     appendEnvelopeWithStoreSequence(envelope: AgentEventEnvelope): Promise<void>;
-    importLegacyJsonlStrict(contents: string): Promise<void>;
     getReplay(sessionId: string): Promise<SessionReplayProjection>;
     close(): Promise<void>;
 };
@@ -61,17 +60,6 @@ export class PlannedSqliteReplayLedgerFake implements ReplayParityLedger {
             ...parsedEnvelope,
             sequence: this.nextSequence,
         });
-    }
-
-    async importLegacyJsonlStrict(contents: string): Promise<void> {
-        const parsed = parseJsonlSessionLog({
-            contents,
-            filePath: `${this.sessionId}.jsonl`,
-            sessionId: this.sessionId,
-        });
-        for (const envelope of parsed.envelopes) {
-            await this.appendEnvelope(envelope);
-        }
     }
 
     async getReplay(sessionId: string): Promise<SessionReplayProjection> {
@@ -130,16 +118,6 @@ export async function openJsonlReplayParityLedger(input: {
         append: (event) => store.append(event),
         appendEnvelope: (envelope) => store.appendEnvelope(envelope),
         appendEnvelopeWithStoreSequence: (envelope) => store.appendEnvelopeWithStoreSequence(envelope),
-        importLegacyJsonlStrict: async (contents) => {
-            const parsed = parseJsonlSessionLog({
-                contents,
-                filePath: `${input.sessionId}.jsonl`,
-                sessionId: input.sessionId,
-            });
-            for (const envelope of parsed.envelopes) {
-                await store.appendEnvelope(envelope);
-            }
-        },
         getReplay: async (sessionId) => {
             await store.getEvents(sessionId);
             const contents = await readFile(join(input.dataDir, 'sessions', `${input.sessionId}.jsonl`), 'utf8');
