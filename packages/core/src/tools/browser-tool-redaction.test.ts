@@ -204,6 +204,7 @@ describe('browser tool redaction', () => {
                 toolCallId: 'browser-model-error-call',
                 messages: [] as ModelMessage[],
                 abortSignal: toolContext().signal,
+                context: {} as never,
             },
         );
         await registration.close();
