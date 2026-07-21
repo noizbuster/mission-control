@@ -69,6 +69,7 @@ export function buildRequest(input: {
     readonly signal?: AbortSignal;
     readonly controlEpoch?: SessionControlEpoch;
 }): ChildSpawnRequest {
+    const parentContext = input.parentContext ?? input.params.context;
     return {
         sessionId: input.sessionId,
         prompt: input.params.prompt ?? input.params.assignment ?? '',
@@ -77,7 +78,7 @@ export function buildRequest(input: {
         ...(input.routing.category !== undefined ? { category: input.routing.category } : {}),
         ...(input.routing.subagentType !== undefined ? { subagentType: input.routing.subagentType } : {}),
         ...(input.params.title !== undefined ? { title: input.params.title } : {}),
-        ...(input.parentContext !== undefined ? { parentContext: input.parentContext } : {}),
+        ...(parentContext !== undefined ? { parentContext } : {}),
         ...(input.signal !== undefined ? { signal: input.signal } : {}),
         ...(input.controlEpoch !== undefined ? { controlEpoch: input.controlEpoch } : {}),
     };

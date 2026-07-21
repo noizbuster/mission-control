@@ -28,7 +28,37 @@ export const taskToolBaseObjectSchema = z
     })
     .strict();
 
+type TaskToolBaseObject = z.infer<typeof taskToolBaseObjectSchema>;
+
+export function normalizeTaskPromptAssignment(data: TaskToolBaseObject): TaskToolBaseObject {
+    const prompt = data.prompt;
+    const assignment = data.assignment;
+    if (prompt === undefined || assignment === undefined) {
+        return data;
+    }
+
+    const contextEmpty = data.context === undefined || data.context === '';
+    const next: TaskToolBaseObject = {
+        load_skills: data.load_skills,
+        assignment,
+        ...(data.category !== undefined ? { category: data.category } : {}),
+        ...(data.subagent_type !== undefined ? { subagent_type: data.subagent_type } : {}),
+        ...(data.agent !== undefined ? { agent: data.agent } : {}),
+        ...(data.run_in_background !== undefined ? { run_in_background: data.run_in_background } : {}),
+        ...(data.task_id !== undefined ? { task_id: data.task_id } : {}),
+        ...(data.tasks !== undefined ? { tasks: data.tasks } : {}),
+        ...(data.title !== undefined ? { title: data.title } : {}),
+        ...(contextEmpty && prompt !== assignment
+            ? { context: prompt }
+            : data.context !== undefined
+              ? { context: data.context }
+              : {}),
+    };
+    return next;
+}
+
 export const taskToolInputSchema = taskToolBaseObjectSchema
+    .transform(normalizeTaskPromptAssignment)
     .refine((data) => !(data.category !== undefined && data.subagent_type !== undefined), {
         message: "Provide either 'category' or 'subagent_type', not both",
     })
@@ -38,9 +68,6 @@ export const taskToolInputSchema = taskToolBaseObjectSchema
             message: "Provide at most one of 'category', 'subagent_type', or 'agent'",
         },
     )
-    .refine((data) => !(data.prompt !== undefined && data.assignment !== undefined), {
-        message: "Provide either 'prompt' or 'assignment', not both",
-    })
     .refine(
         (data) => {
             const hasBatch = data.tasks !== undefined;

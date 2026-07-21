@@ -216,6 +216,86 @@ describe('task tool — validation', () => {
     });
 });
 
+describe('task tool — prompt/assignment normalize', () => {
+    it('accepts both prompt and assignment; child receives assignment text', async () => {
+        const { tool, mock } = buildTool();
+        const parsed = taskToolInputSchema.parse({
+            load_skills: [],
+            category: 'deep',
+            prompt: 'parent framing for the child',
+            assignment: 'do the concrete assignment',
+        });
+        expect(parsed.assignment).toBe('do the concrete assignment');
+        expect(parsed.prompt).toBeUndefined();
+        expect(parsed.context).toBe('parent framing for the child');
+
+        await tool.execute(parsed, CTX);
+        const request = mock.calls[0]?.request;
+        expect(request?.prompt).toBe('do the concrete assignment');
+        expect(request?.parentContext).toBe('parent framing for the child');
+    });
+
+    it('leaves prompt-only input unchanged', async () => {
+        const { tool, mock } = buildTool();
+        const parsed = taskToolInputSchema.parse({ load_skills: [], prompt: 'prompt only work' });
+        expect(parsed.prompt).toBe('prompt only work');
+        expect(parsed.assignment).toBeUndefined();
+        expect(parsed.context).toBeUndefined();
+
+        await tool.execute(parsed, CTX);
+        expect(mock.calls[0]?.request?.prompt).toBe('prompt only work');
+        expect(mock.calls[0]?.request?.parentContext).toBeUndefined();
+    });
+
+    it('leaves assignment-only input unchanged', async () => {
+        const { tool, mock } = buildTool();
+        const parsed = taskToolInputSchema.parse({ load_skills: [], assignment: 'assignment only work' });
+        expect(parsed.assignment).toBe('assignment only work');
+        expect(parsed.prompt).toBeUndefined();
+        expect(parsed.context).toBeUndefined();
+
+        await tool.execute(parsed, CTX);
+        expect(mock.calls[0]?.request?.prompt).toBe('assignment only work');
+        expect(mock.calls[0]?.request?.parentContext).toBeUndefined();
+    });
+
+    it('keeps existing context when both prompt and assignment are present', () => {
+        const parsed = taskToolInputSchema.parse({
+            load_skills: [],
+            prompt: 'discarded framing',
+            assignment: 'keep assignment',
+            context: 'already set parent context',
+        });
+        expect(parsed.assignment).toBe('keep assignment');
+        expect(parsed.prompt).toBeUndefined();
+        expect(parsed.context).toBe('already set parent context');
+    });
+
+    it('drops prompt without merging when it equals assignment', () => {
+        const parsed = taskToolInputSchema.parse({
+            load_skills: [],
+            prompt: 'same text',
+            assignment: 'same text',
+        });
+        expect(parsed.assignment).toBe('same text');
+        expect(parsed.prompt).toBeUndefined();
+        expect(parsed.context).toBeUndefined();
+    });
+
+    it('rejects both prompt+assignment together with tasks (batch XOR intact)', () => {
+        const result = taskToolInputSchema.safeParse({
+            load_skills: [],
+            prompt: 'parent framing',
+            assignment: 'child work',
+            tasks: [{ agent: 'explore', assignment: 'batch item' }],
+        });
+        expect(result.success).toBe(false);
+        if (!result.success) {
+            expect(result.error.issues.some((issue) => issue.message.includes('either'))).toBe(true);
+        }
+    });
+});
+
 describe('task tool — session resume', () => {
     it('resumes an existing session via task_id', async () => {
         const { tool, mock } = buildTool();

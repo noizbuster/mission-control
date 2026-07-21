@@ -90,7 +90,8 @@ export function createFullParityTaskToolRegistration(
                 prompt: { type: 'string', description: 'The full instruction for the child agent (single-spawn).' },
                 assignment: {
                     type: 'string',
-                    description: 'Alias for prompt (oh-my-pi convention). Mutually exclusive with prompt.',
+                    description:
+                        'Alias for prompt (oh-my-pi convention). When both prompt and assignment are set, assignment wins and differing prompt text is merged into context.',
                 },
                 run_in_background: { type: 'boolean', description: 'Return a background id immediately.' },
                 task_id: { type: 'string', description: 'Existing session id (ses_...) to resume.' },
