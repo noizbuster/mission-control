@@ -5,7 +5,12 @@ import {
     refreshSessionAwaitingFromPendingWaits,
 } from '../memory/session-awaiting-sql';
 import { resolvedSubagentJob } from './agent-job-sql-mirror-handles';
-import { upsertJobRow } from './agent-job-sql-mirror-persist';
+import {
+    markChildSessionRunning,
+    markChildSessionSettled,
+    upsertJobRow,
+    upsertSubagentRelation,
+} from './agent-job-sql-mirror-persist';
 import type { ResolveSubagentWaitInput, StartSubagentWaitInput } from './agent-job-sql-mirror-types';
 import type { BackgroundJobHandle } from './async-job-manager';
 
@@ -26,10 +31,11 @@ export async function startSubagentWaitWithJob(
     now: string,
 ): Promise<void> {
     await ensurePublicSessionRow({ client, sessionId: input.parentSessionId, now });
-    await ensurePublicSessionRow({ client, sessionId: input.childSessionId, now });
-    await client.execute({
-        sql: 'UPDATE sessions SET parent_session_id = ?, updated_at = ?, last_activity_at = ? WHERE session_id = ?',
-        args: [input.parentSessionId, now, now, input.childSessionId],
+    await markChildSessionRunning({
+        client,
+        sessionId: input.childSessionId,
+        parentSessionId: input.parentSessionId,
+        now,
     });
     await client.execute({
         sql:
@@ -49,21 +55,12 @@ export async function startSubagentWaitWithJob(
             JSON.stringify({ mode: input.mode }),
         ],
     });
-    await client.execute({
-        sql:
-            'INSERT INTO session_relations ' +
-            '(relation_id, parent_session_id, child_session_id, kind, created_at, metadata_json) ' +
-            'VALUES (?, ?, ?, ?, ?, ?) ' +
-            'ON CONFLICT(parent_session_id, child_session_id, kind) DO UPDATE SET created_at = excluded.created_at, ' +
-            'metadata_json = excluded.metadata_json',
-        args: [
-            `${input.parentSessionId}:${input.childSessionId}:subagent`,
-            input.parentSessionId,
-            input.childSessionId,
-            'subagent',
-            now,
-            JSON.stringify({ agentId: input.agentId ?? null, mode: input.mode }),
-        ],
+    await upsertSubagentRelation({
+        client,
+        parentSessionId: input.parentSessionId,
+        childSessionId: input.childSessionId,
+        now,
+        metadata: { agentId: input.agentId ?? null, mode: input.mode },
     });
     await persistSessionAwaiting({
         client,
@@ -92,7 +89,13 @@ export async function resolveSubagentWaitWithJob(
     now: string,
 ): Promise<void> {
     await ensurePublicSessionRow({ client, sessionId: input.parentSessionId, now });
-    await ensurePublicSessionRow({ client, sessionId: input.childSessionId, now });
+    await markChildSessionSettled({
+        client,
+        sessionId: input.childSessionId,
+        parentSessionId: input.parentSessionId,
+        status: input.status,
+        now,
+    });
     await client.execute({
         sql:
             'UPDATE session_awaits SET status = ?, resolved_at = ? ' +

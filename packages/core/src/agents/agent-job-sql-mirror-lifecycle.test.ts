@@ -74,13 +74,37 @@ describe('SqlAgentJobMirror lifecycle', () => {
             await mirror.flush();
 
             const rows = await mirror.client.execute(
-                'SELECT session_id, parent_session_id FROM sessions WHERE session_id IN (?, ?) ORDER BY session_id',
+                'SELECT session_id, parent_session_id, status FROM sessions WHERE session_id IN (?, ?) ORDER BY session_id',
                 ['child-bg', 'child-fg'],
             );
             expect(rows.rows).toEqual([
-                { session_id: 'child-bg', parent_session_id: 'parent-session' },
-                { session_id: 'child-fg', parent_session_id: 'parent-session' },
+                { session_id: 'child-bg', parent_session_id: 'parent-session', status: 'running' },
+                { session_id: 'child-fg', parent_session_id: 'parent-session', status: 'running' },
             ]);
+        });
+    });
+
+    it('settles child session status on foreground resolve', async () => {
+        await withAgentJobMirror(async (mirror) => {
+            await mirror.startSubagentWait({
+                parentSessionId: 'parent-session',
+                childSessionId: 'child-fg',
+                agentId: 'agent-fg',
+                mode: 'sync',
+            });
+            await mirror.resolveSubagentWait({
+                parentSessionId: 'parent-session',
+                childSessionId: 'child-fg',
+                status: 'completed',
+                output: 'done',
+            });
+            await mirror.flush();
+
+            const rows = await mirror.client.execute(
+                'SELECT session_id, status FROM sessions WHERE session_id = ?',
+                ['child-fg'],
+            );
+            expect(rows.rows).toEqual([{ session_id: 'child-fg', status: 'idle' }]);
         });
     });
 });

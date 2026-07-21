@@ -5,6 +5,8 @@ import { runtimeStatusToDb } from './agent-job-sql-mirror-rows';
 import type { BackgroundJobHandle } from './async-job-manager';
 import type { AgentRef } from './runtime-registry';
 
+export type ChildSessionTerminalStatus = 'completed' | 'failed' | 'cancelled';
+
 export async function upsertRuntimeAgentRow(input: { readonly client: Client; readonly ref: AgentRef }): Promise<void> {
     await ensurePublicSessionRow({
         client: input.client,
@@ -20,6 +22,14 @@ export async function upsertRuntimeAgentRow(input: { readonly client: Client; re
         ...(input.ref.category !== undefined ? { category: input.ref.category } : {}),
         ...(input.ref.parentId !== undefined ? { parentSessionId: input.ref.parentId } : {}),
     });
+    if (input.ref.parentId !== undefined && input.ref.status === 'running') {
+        await markChildSessionRunning({
+            client: input.client,
+            sessionId: input.ref.sessionId,
+            parentSessionId: input.ref.parentId,
+            now: input.ref.lastActivity,
+        });
+    }
     await input.client.execute({
         sql:
             'INSERT INTO runtime_agents ' +
@@ -56,6 +66,7 @@ export async function upsertJobRow(input: {
     readonly handle: BackgroundJobHandle;
 }): Promise<void> {
     const terminalAt = input.handle.completedAt ?? null;
+    const now = input.handle.completedAt ?? input.handle.startedAt;
     await ensurePublicSessionRow({
         client: input.client,
         sessionId: input.handle.sessionId,
@@ -67,10 +78,22 @@ export async function upsertJobRow(input: {
             sessionId: input.handle.parentSessionId,
             now: input.handle.startedAt,
         });
-        await input.client.execute({
-            sql: 'UPDATE sessions SET parent_session_id = COALESCE(parent_session_id, ?), updated_at = ?, last_activity_at = ? WHERE session_id = ?',
-            args: [input.handle.parentSessionId, input.handle.startedAt, input.handle.startedAt, input.handle.sessionId],
-        });
+        if (input.handle.status === 'queued' || input.handle.status === 'running') {
+            await markChildSessionRunning({
+                client: input.client,
+                sessionId: input.handle.sessionId,
+                parentSessionId: input.handle.parentSessionId,
+                now: input.handle.startedAt,
+            });
+        } else {
+            await markChildSessionSettled({
+                client: input.client,
+                sessionId: input.handle.sessionId,
+                parentSessionId: input.handle.parentSessionId,
+                status: input.handle.status,
+                now,
+            });
+        }
     }
     await input.client.execute({
         sql:
@@ -100,23 +123,90 @@ export async function upsertJobRow(input: {
         ],
     });
     if (input.handle.parentSessionId !== undefined) {
-        await input.client.execute({
-            sql:
-                'INSERT INTO session_relations ' +
-                '(relation_id, parent_session_id, child_session_id, kind, created_at, metadata_json) ' +
-                'VALUES (?, ?, ?, ?, ?, ?) ' +
-                'ON CONFLICT(parent_session_id, child_session_id, kind) DO UPDATE SET created_at = excluded.created_at, ' +
-                'metadata_json = excluded.metadata_json',
-            args: [
-                relationId(input.handle.parentSessionId, input.handle.sessionId, 'subagent'),
-                input.handle.parentSessionId,
-                input.handle.sessionId,
-                'subagent',
-                input.handle.startedAt,
-                JSON.stringify({ agentId: input.handle.agentId ?? null, jobId: input.handle.jobId }),
-            ],
+        await upsertSubagentRelation({
+            client: input.client,
+            parentSessionId: input.handle.parentSessionId,
+            childSessionId: input.handle.sessionId,
+            now: input.handle.startedAt,
+            metadata: { agentId: input.handle.agentId ?? null, jobId: input.handle.jobId },
         });
     }
+}
+
+export async function markChildSessionRunning(input: {
+    readonly client: Client;
+    readonly sessionId: string;
+    readonly parentSessionId: string;
+    readonly now: string;
+}): Promise<void> {
+    await ensurePublicSessionRow({
+        client: input.client,
+        sessionId: input.sessionId,
+        now: input.now,
+    });
+    await input.client.execute({
+        sql:
+            'UPDATE sessions SET parent_session_id = ?, status = ?, updated_at = ?, last_activity_at = ? ' +
+            'WHERE session_id = ? AND status NOT IN (?, ?)',
+        args: [input.parentSessionId, 'running', input.now, input.now, input.sessionId, 'stopped', 'failed'],
+    });
+}
+
+export async function markChildSessionSettled(input: {
+    readonly client: Client;
+    readonly sessionId: string;
+    readonly parentSessionId: string;
+    readonly status: ChildSessionTerminalStatus;
+    readonly now: string;
+}): Promise<void> {
+    await ensurePublicSessionRow({
+        client: input.client,
+        sessionId: input.sessionId,
+        now: input.now,
+    });
+    const sessionStatus = input.status === 'failed' ? 'failed' : 'idle';
+    await input.client.execute({
+        sql:
+            'UPDATE sessions SET parent_session_id = COALESCE(parent_session_id, ?), status = ?, ' +
+            'failed_at = CASE WHEN ? = ? THEN COALESCE(failed_at, ?) ELSE failed_at END, ' +
+            'updated_at = ?, last_activity_at = ? WHERE session_id = ? AND status NOT IN (?)',
+        args: [
+            input.parentSessionId,
+            sessionStatus,
+            sessionStatus,
+            'failed',
+            input.now,
+            input.now,
+            input.now,
+            input.sessionId,
+            'stopped',
+        ],
+    });
+}
+
+export async function upsertSubagentRelation(input: {
+    readonly client: Client;
+    readonly parentSessionId: string;
+    readonly childSessionId: string;
+    readonly now: string;
+    readonly metadata: Readonly<Record<string, string | null>>;
+}): Promise<void> {
+    await input.client.execute({
+        sql:
+            'INSERT INTO session_relations ' +
+            '(relation_id, parent_session_id, child_session_id, kind, created_at, metadata_json) ' +
+            'VALUES (?, ?, ?, ?, ?, ?) ' +
+            'ON CONFLICT(parent_session_id, child_session_id, kind) DO UPDATE SET created_at = excluded.created_at, ' +
+            'metadata_json = excluded.metadata_json',
+        args: [
+            relationId(input.parentSessionId, input.childSessionId, 'subagent'),
+            input.parentSessionId,
+            input.childSessionId,
+            'subagent',
+            input.now,
+            JSON.stringify(input.metadata),
+        ],
+    });
 }
 
 function relationId(parentSessionId: string, childSessionId: string, kind: string): string {

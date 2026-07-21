@@ -22,7 +22,15 @@ export type SessionMessageRole = (typeof sessionMessageRoles)[number];
 export const sessionPartKinds = ['text', 'tool_call', 'tool_result', 'reasoning', 'file', 'data'] as const;
 export type SessionPartKind = (typeof sessionPartKinds)[number];
 
-export const sessionRelationKinds = ['parent_child', 'fork', 'clone', 'compaction', 'import', 'export'] as const;
+export const sessionRelationKinds = [
+    'parent_child',
+    'subagent',
+    'fork',
+    'clone',
+    'compaction',
+    'import',
+    'export',
+] as const;
 export type SessionRelationKind = (typeof sessionRelationKinds)[number];
 
 export const missionRunStatuses = ['pending', 'running', 'blocked', 'completed', 'failed', 'cancelled'] as const;
