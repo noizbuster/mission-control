@@ -22,6 +22,10 @@ export interface AgentRef {
     readonly authorityFingerprint?: string;
     /** Nested `task` depth of this session (MAIN children start at 1). */
     readonly taskDepth?: number;
+    /** Category id used when the child was adopted (immutable after adopt). */
+    readonly category?: string;
+    /** Optional human title for the child session (immutable after adopt). */
+    readonly title?: string;
     status: AgentStatus;
     readonly sessionId: string;
     sessionFile?: string;

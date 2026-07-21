@@ -86,6 +86,25 @@ describe('RuntimeAgentRegistry', () => {
         expect(ref?.activity).toBe('investigating');
     });
 
+    it('adopt preserves category and title and update does not clear them', () => {
+        const registry = new RuntimeAgentRegistry();
+        registry.adopt(
+            makeAdoptInput('sub-identity', {
+                category: 'deep',
+                title: 'Investigate auth',
+            }),
+        );
+
+        const adopted = registry.lookup('sub-identity');
+        expect(adopted?.category).toBe('deep');
+        expect(adopted?.title).toBe('Investigate auth');
+
+        registry.update('sub-identity', { status: 'idle' });
+        const updated = registry.lookup('sub-identity');
+        expect(updated?.category).toBe('deep');
+        expect(updated?.title).toBe('Investigate auth');
+    });
+
     it('update merges status, lastActivity, activity, and sessionFile', () => {
         const registry = new RuntimeAgentRegistry();
         registry.adopt(makeAdoptInput('sub-update'));
