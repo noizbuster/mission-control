@@ -41,6 +41,9 @@ export function sessionRecordFromRow(row: z.infer<typeof sessionRowSchema>): Ses
         updatedAt: row.updated_at,
         sourcePath: row.legacy_jsonl_path ?? '',
         ...(row.parent_session_id !== null ? { parentSessionId: row.parent_session_id } : {}),
+        ...(row.title !== null && row.title !== undefined ? { title: row.title } : {}),
+        ...(row.category !== null && row.category !== undefined ? { category: row.category } : {}),
+        ...(row.agent_name !== null && row.agent_name !== undefined ? { agentName: row.agent_name } : {}),
     };
 }
 

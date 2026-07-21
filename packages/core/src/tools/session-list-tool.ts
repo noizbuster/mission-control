@@ -44,6 +44,10 @@ export const sessionListOutputSchema = z.object({
             updatedAt: z.string().optional(),
             cwd: z.string().optional(),
             sessionName: z.string().optional(),
+            parentSessionId: z.string().optional(),
+            title: z.string().optional(),
+            category: z.string().optional(),
+            agentName: z.string().optional(),
             agentsUsed: z.array(z.string()),
             corrupt: z.boolean(),
         }),
@@ -108,6 +112,9 @@ async function collectSummaries(
                 ...(read.awaiting !== undefined ? { awaiting: read.awaiting } : {}),
                 ...(read.updatedAt !== undefined ? { updatedAt: read.updatedAt } : {}),
                 ...(read.parentSessionId !== undefined ? { parentSessionId: read.parentSessionId } : {}),
+                ...(read.title !== undefined ? { title: read.title } : {}),
+                ...(read.category !== undefined ? { category: read.category } : {}),
+                ...(read.agentName !== undefined ? { agentName: read.agentName } : {}),
             });
         }),
     );

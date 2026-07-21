@@ -26,6 +26,9 @@ export type SessionProjectionSessionRecord = {
     readonly updatedAt: string;
     readonly sourcePath: string;
     readonly parentSessionId?: string | undefined;
+    readonly title?: string | undefined;
+    readonly category?: string | undefined;
+    readonly agentName?: string | undefined;
     readonly abortMarker?: {
         readonly completedAt: string;
         readonly operationId: string;

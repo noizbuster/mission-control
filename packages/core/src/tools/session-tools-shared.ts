@@ -30,6 +30,9 @@ export type SessionSummary = {
     readonly cwd?: string;
     readonly sessionName?: string;
     readonly parentSessionId?: string;
+    readonly title?: string;
+    readonly category?: string;
+    readonly agentName?: string;
     readonly agentsUsed: string[];
     readonly corrupt: boolean;
 };
@@ -46,6 +49,9 @@ export type SessionProjectionRead = {
     readonly awaiting?: SessionAwaitingDetails;
     readonly updatedAt?: string;
     readonly parentSessionId?: string;
+    readonly title?: string;
+    readonly category?: string;
+    readonly agentName?: string;
 };
 
 export type SessionToolsOptions = {
@@ -97,6 +103,9 @@ export async function readSessionProjection(
                 updatedAt: sqlSession.updatedAt,
                 ...(sqlSession.awaiting !== undefined ? { awaiting: sqlSession.awaiting } : {}),
                 ...(sqlSession.parentSessionId !== undefined ? { parentSessionId: sqlSession.parentSessionId } : {}),
+                ...(sqlSession.title !== undefined ? { title: sqlSession.title } : {}),
+                ...(sqlSession.category !== undefined ? { category: sqlSession.category } : {}),
+                ...(sqlSession.agentName !== undefined ? { agentName: sqlSession.agentName } : {}),
             };
         }
         return {
@@ -111,6 +120,9 @@ export async function readSessionProjection(
                       ...(sqlSession.parentSessionId !== undefined
                           ? { parentSessionId: sqlSession.parentSessionId }
                           : {}),
+                      ...(sqlSession.title !== undefined ? { title: sqlSession.title } : {}),
+                      ...(sqlSession.category !== undefined ? { category: sqlSession.category } : {}),
+                      ...(sqlSession.agentName !== undefined ? { agentName: sqlSession.agentName } : {}),
                   }
                 : {}),
         };
@@ -127,6 +139,9 @@ export function summarizeProjection(
         readonly awaiting?: SessionAwaitingDetails;
         readonly updatedAt?: string;
         readonly parentSessionId?: string;
+        readonly title?: string;
+        readonly category?: string;
+        readonly agentName?: string;
     },
 ): SessionSummary {
     const events = projection.events;
@@ -154,6 +169,9 @@ export function summarizeProjection(
             : projection.sessionTree.parentSessionId !== undefined
               ? { parentSessionId: projection.sessionTree.parentSessionId }
               : {}),
+        ...(overrides?.title !== undefined ? { title: overrides.title } : {}),
+        ...(overrides?.category !== undefined ? { category: overrides.category } : {}),
+        ...(overrides?.agentName !== undefined ? { agentName: overrides.agentName } : {}),
         agentsUsed: uniqueAgents(projection.envelopes),
         corrupt: false,
     };
