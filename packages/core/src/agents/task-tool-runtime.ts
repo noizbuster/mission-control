@@ -165,6 +165,7 @@ export class ConcreteTaskToolRuntime implements TaskToolRuntime {
 
     private async executeSpawn(input: ExecuteSpawnInput): Promise<ChildSpawnResult> {
         const { sessionId, request, prepared, signal, controlEpoch } = input;
+        const hostCallbacks = this.hostCallbacksForChild(sessionId, request, prepared.agent.name);
         return this.spawnFn({
             sessionId,
             prompt: request.prompt,
@@ -176,8 +177,33 @@ export class ConcreteTaskToolRuntime implements TaskToolRuntime {
             workspaceRoot: this.workspaceRoot,
             signal,
             ...(controlEpoch !== undefined ? { controlEpoch } : {}),
-            ...(this.hostCallbacks !== undefined ? { hostCallbacks: this.hostCallbacks } : {}),
+            ...(hostCallbacks !== undefined ? { hostCallbacks } : {}),
         });
+    }
+
+    private hostCallbacksForChild(
+        sessionId: string,
+        request: ChildSpawnRequest,
+        agentName: string,
+    ): ChildHostCallbacks | undefined {
+        const base = this.hostCallbacks;
+        if (base === undefined) {
+            return undefined;
+        }
+        const displayName = childDisplayName(request);
+        return {
+            ...base,
+            resolveChildAskUserSource: (sid: string) => {
+                if (sid === sessionId) {
+                    return {
+                        agentName: displayName !== sessionId ? displayName : agentName,
+                        ...(request.category !== undefined ? { category: request.category.id } : {}),
+                        ...(request.title !== undefined ? { title: request.title } : {}),
+                    };
+                }
+                return base.resolveChildAskUserSource?.(sid);
+            },
+        };
     }
 
     private prepareSpawn(request: ChildSpawnRequest): PreparedChildSpawnAuthority {

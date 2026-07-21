@@ -49,6 +49,8 @@ export async function runForegroundChildSession(input: {
             taskDepth: child.taskDepth,
             status: 'running',
             sessionId: child.sessionId,
+            ...(request.category !== undefined ? { category: request.category.id } : {}),
+            ...(request.title !== undefined ? { title: request.title } : {}),
         });
         if (services?.mirror !== undefined) {
             await services.mirror

@@ -35,6 +35,8 @@ export function startBackgroundChildSession(input: {
         taskDepth: input.request.taskDepth ?? 0,
         status: 'running',
         sessionId,
+        ...(input.request.category !== undefined ? { category: input.request.category.id } : {}),
+        ...(input.request.title !== undefined ? { title: input.request.title } : {}),
     });
 
     const execute: JobExecuteFn = async (signal, controlEpoch) => {
