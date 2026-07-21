@@ -2,6 +2,7 @@ export {
     type AskUserInput,
     type AskUserOutput,
     type AskUserQuestionRequest,
+    type AskUserQuestionSource,
     type AskUserToolOptions,
     type AskUserUserInputWaitContext,
     type AskUserUserInputWaitMirror,
@@ -15,6 +16,21 @@ export {
     startAskUserInputWait,
     waitIdForAskUserToolCall,
 } from './ask-user-tool';
+export {
+    type ChildAskUserParentAnswererOptions,
+    createChildAskUserParentAnswerer,
+    formatParentAskUserPrompt,
+    parseParentAskUserDecisionText,
+} from './child-ask-user-parent-answerer';
+export {
+    type ChildAskUserParentAnswerer,
+    type ChildAskUserParentDecision,
+    type ChildAskUserSourceFields,
+    type RouteChildAskUserOptions,
+    formatChildAskUserHeader,
+    routeChildAskUser,
+    withChildAskUserSource,
+} from './child-ask-user-router';
 export {
     type AstEditInput,
     type AstEditOutput,

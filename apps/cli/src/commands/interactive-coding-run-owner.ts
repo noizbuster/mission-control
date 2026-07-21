@@ -1,6 +1,8 @@
 import {
     type AskUserQuestionRequest,
+    type ChildAskUserParentAnswerer,
     createAgentNodeRunBudgetGrantor,
+    createChildAskUserParentAnswerer,
     createCodingAgentNodeRegistry,
     createGraphTurnRunner,
     extractContextTokensUsed,
@@ -39,6 +41,7 @@ type MutableChildHostCallbacks = {
     onSignal?: (signal: AbgSignal) => void | Promise<void>;
     onDurableEvent?: (event: AgentEvent) => void;
     observabilityRedactor?: ObservabilityRedactor;
+    parentAskUserAnswerer?: ChildAskUserParentAnswerer;
 };
 
 export type InteractiveRunOwnerSetup = {
@@ -60,6 +63,15 @@ export async function createInteractiveRunOwner(
         emitEvent: (event: AgentEvent) => options.emitEvent(event),
         output: { write: (text: string) => options.output.write(text) },
     };
+    if (resolveSdkModel !== undefined && options.requestUserQuestion !== undefined) {
+        childHostCallbacks.parentAskUserAnswerer = createChildAskUserParentAnswerer({
+            resolveSdkModel,
+            model: {
+                providerID: options.modelProviderSelection.providerID,
+                modelID: options.modelProviderSelection.modelID,
+            },
+        });
+    }
     const systemPromptEnv = await buildCodingAgentSystemPromptEnv({
         workspaceRoot: options.workspaceRoot,
         modelId: options.modelProviderSelection.modelID,

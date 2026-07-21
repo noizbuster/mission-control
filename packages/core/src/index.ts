@@ -591,6 +591,7 @@ export {
     type AskUserInput,
     type AskUserOutput,
     type AskUserQuestionRequest,
+    type AskUserQuestionSource,
     type AskUserToolOptions,
     createAskUserToolRegistration,
     registerAskUserTool,
