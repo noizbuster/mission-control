@@ -145,6 +145,7 @@ export function reconstructSessionTranscriptParts(input: SessionTranscriptInput)
 
     const parts: TranscriptPart[] = [];
     let userPartOccurrence = 0;
+    let currentAssistantMessageId: string | undefined;
 
     for (const envelope of input.envelopes) {
         const event = envelope.event;
@@ -173,6 +174,7 @@ export function reconstructSessionTranscriptParts(input: SessionTranscriptInput)
                 if (step.message.length === 0) {
                     break;
                 }
+                currentAssistantMessageId = step.messageId;
                 parts.push({
                     id: `resume:assistant:${envelope.eventId}`,
                     type: 'assistant',
@@ -206,6 +208,9 @@ export function reconstructSessionTranscriptParts(input: SessionTranscriptInput)
                     status: isFailed ? 'failed' : 'completed',
                     ...(output !== undefined ? { output } : {}),
                     ...(errorMessage !== undefined ? { error: errorMessage } : {}),
+                    ...(currentAssistantMessageId !== undefined
+                        ? { messageId: currentAssistantMessageId }
+                        : {}),
                 });
                 break;
             }

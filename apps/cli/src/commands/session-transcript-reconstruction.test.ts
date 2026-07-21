@@ -1,5 +1,6 @@
 import type { CodingReplayStep } from '@mission-control/core';
 import type { AgentEvent, AgentEventEnvelope } from '@mission-control/protocol';
+import { shouldHideToolPart } from '@mission-control/tui/state';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { writeLocalSessionEvents } from './session-test-support';
 import { loadSessionTranscript, reconstructSessionTranscript, reconstructSessionTranscriptParts } from './session-transcript-reconstruction';
@@ -335,5 +336,42 @@ describe('reconstructSessionTranscriptParts', () => {
 
         expect(result.outputText).toContain('You: hello');
         expect(result.outputText).toContain('Assistant: world');
+    });
+
+    it('stamps the owning assistant messageId on tool parts so shouldHideToolPart can fold past turns', () => {
+        const envelopes = [
+            envelope(1, userPromptEvent('do things')),
+            envelope(2, { type: 'model.call.completed', timestamp: NOW }),
+            envelope(3, { type: 'tool.completed', timestamp: NOW }),
+            envelope(4, { type: 'model.call.completed', timestamp: NOW }),
+            envelope(5, { type: 'tool.completed', timestamp: NOW }),
+            envelope(6, { type: 'model.call.completed', timestamp: NOW }),
+        ];
+        const steps: CodingReplayStep[] = [
+            providerMessageStep(2, 'first turn'),
+            toolCallStep(3, 'call_one', 'grep'),
+            toolResultStep(3, 'call_one', 'completed', undefined, 'one'),
+            providerMessageStep(4, 'second turn'),
+            toolCallStep(5, 'call_two', 'read'),
+            toolResultStep(5, 'call_two', 'completed', undefined, 'two'),
+            providerMessageStep(6, 'third turn'),
+        ];
+        const result = reconstructSessionTranscriptParts({ envelopes, codingSteps: steps });
+
+        const toolParts = result.parts.filter((part) => part.type === 'inline-tool');
+        expect(toolParts).toHaveLength(2);
+        // First tool belongs to msg_2 (first assistant turn).
+        expect('messageId' in toolParts[0]! ? toolParts[0].messageId : undefined).toBe('msg_2');
+        // Second tool belongs to msg_4 (second assistant turn).
+        expect('messageId' in toolParts[1]! ? toolParts[1].messageId : undefined).toBe('msg_4');
+
+        // The last assistant part is msg_6 → activeAssistantMessageId = 'msg_6'.
+        // Both tools belong to earlier turns, so shouldHideToolPart hides them.
+        const lastAssistant = [...result.parts].reverse().find((part) => part.type === 'assistant');
+        const activeId = 'messageId' in (lastAssistant ?? {}) ? (lastAssistant as { messageId?: string }).messageId : undefined;
+        expect(activeId).toBe('msg_6');
+        for (const tool of toolParts) {
+            expect(shouldHideToolPart(tool, activeId)).toBe(true);
+        }
     });
 });
