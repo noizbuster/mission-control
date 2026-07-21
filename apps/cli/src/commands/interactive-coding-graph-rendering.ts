@@ -2,6 +2,7 @@ import { redactCredentialText, type ToolInvocationSettlement } from '@mission-co
 import type { AbgSignal } from '@mission-control/protocol';
 import { sanitizeTerminalDisplayText } from '@mission-control/tui/state';
 import type { ChatOutput } from './interactive-chat-io';
+import { renderGraphToolSettlement } from './interactive-coding-graph-tool-rendering';
 import { reportGraphRenderFailure } from './interactive-coding-graph-render-failure';
 import {
     describeRetryableFailure,
@@ -195,6 +196,22 @@ function renderInteractiveGraphSignal(
     if (signal.type === 'emit' && signal.event.type === 'tool.started') {
         const toolName = readStringField(signal.event.payload, 'toolName') ?? 'tool';
         output.setAgentStatus?.(`Running ${sanitizeTerminalDisplayText(toolName)}...`);
+        return;
+    }
+    if (signal.type === 'emit' && (signal.event.type === 'tool.completed' || signal.event.type === 'tool.failed')) {
+        // Live-settle the row; durable events are batched at graph end, so without this
+        // instant tools stay stuck at "[~] Running" until runAbgGraph returns.
+        // Mark toolCallId so the deferred renderInteractiveGraphDurableEvent skips the duplicate.
+        const toolCallId = readStringField(signal.event.payload, 'toolCallId');
+        if (toolCallId !== undefined && toolCallId.length > 0) {
+            state.liveSettledToolCallIds.add(toolCallId);
+            renderGraphToolSettlement({
+                output,
+                state,
+                payload: signal.event.payload,
+                status: signal.event.type === 'tool.completed' ? 'completed' : 'failed',
+            });
+        }
         return;
     }
     const proposal = readToolCallProposal(signal);

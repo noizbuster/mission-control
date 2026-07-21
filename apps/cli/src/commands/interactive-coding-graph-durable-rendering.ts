@@ -119,6 +119,11 @@ export function renderInteractiveGraphDurableEvent(
                 : undefined;
         const assistantId = turnPrefix === undefined ? undefined : graphTurnPartId(turnPrefix, 'assistant');
         const reasoningId = turnPrefix === undefined ? undefined : graphTurnPartId(turnPrefix, 'reasoning');
+        const toolCallId = readStringField(emit.payload, 'toolCallId');
+        // Skip if the live signal handler already settled this toolCallId; otherwise we'd
+        // mint a new occurrence (the pending queue is empty by now) and produce an orphan row.
+        const alreadyLiveSettled =
+            toolCallId !== undefined && toolCallId.length > 0 && state.liveSettledToolCallIds.has(toolCallId);
         output.clearAgentStatus?.();
         if (
             (state.streamingText && state.streamingTextPartId === assistantId) ||
@@ -129,6 +134,9 @@ export function renderInteractiveGraphDurableEvent(
             delete state.streamingTextPartId;
             state.streamingThinking = false;
             delete state.streamingThinkingPartId;
+        }
+        if (alreadyLiveSettled) {
+            return;
         }
         renderGraphToolSettlement({
             output,

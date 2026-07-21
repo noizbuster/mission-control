@@ -29,6 +29,7 @@ export type ProviderRenderState = {
     readonly activeToolTranscriptParts: Map<string, ActiveToolTranscriptPart>;
     readonly toolOccurrenceCountByRawId: Map<string, number>;
     readonly pendingToolBaseIdsByRawId: Map<string, string[]>;
+    readonly liveSettledToolCallIds: Set<string>;
     graphOccurrenceOrdinal: number;
     interruptionReceiptSettled: boolean;
     lastGraphErrorEmission?: GraphErrorEmissionState;
@@ -81,6 +82,7 @@ export function createProviderRenderState(executionTurnId: string): ProviderRend
         activeToolTranscriptParts: new Map(),
         toolOccurrenceCountByRawId: new Map(),
         pendingToolBaseIdsByRawId: new Map(),
+        liveSettledToolCallIds: new Set(),
         graphOccurrenceOrdinal: 0,
         interruptionReceiptSettled: false,
     };
