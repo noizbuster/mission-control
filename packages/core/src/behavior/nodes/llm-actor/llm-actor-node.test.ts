@@ -16,6 +16,7 @@
  * LanguageModelV3 layer — where the SDK's dispatch/loop-control behavior lives.
  */
 import type { AbgSignal } from '@mission-control/protocol';
+import type { LanguageModelV3StreamPart } from '@ai-sdk/provider';
 import { stepCountIs, streamText } from 'ai';
 import { MockLanguageModelV3 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
@@ -24,6 +25,7 @@ import { wrapFlatProviderAsSdkModel } from '../../../providers/ai-sdk/flat-provi
 import { createDeterministicProvider } from '../../../providers/deterministic-provider';
 import type { PolicyGateFn } from './abg-tool-bridge';
 import { runLlmActor } from './llm-actor-node';
+import type { LlmActorModel } from './llm-actor-node';
 import {
     anthropicShapeChunks,
     buildEchoTools,
@@ -181,7 +183,8 @@ describe('LLMActor node — Phase 0 gating spike', () => {
         // Then
         expect(provider.attemptCount()).toBe(1);
         expect(retrySleepCalls).toBe(1);
-        expect(retrySleepSignal).toBe(controller.signal);
+        // AI SDK merges our abort signal with the chunk-timeout signal; verify state, not identity.
+        expect(retrySleepSignal?.aborted).toBe(true);
         expect(signals.at(-1)).toMatchObject({
             type: 'failure',
             error: { code: 'provider_aborted' },
@@ -236,5 +239,82 @@ describe('LLMActor node — Phase 0 gating spike', () => {
         }
         // Without the stepCountIs(1) constraint the SDK runs its own loop -> 2 model calls.
         expect(model.doStreamCalls.length).toBe(2);
+    });
+
+    it('suppresses the AI SDK v6 system-in-messages warning for runtime-authored system messages', async () => {
+        const model = buildMockModel('openai', 'gpt-5', openaiShapeChunks());
+        const tools = buildEchoTools(async () => ({ allowed: true }));
+        const warnings: string[] = [];
+        const originalWarn = console.warn;
+        console.warn = (value: string) => {
+            warnings.push(value);
+        };
+        try {
+            const collected: AbgSignal[] = [];
+            for await (const signal of runLlmActor({
+                graphId: 'g1',
+                nodeId: 'llm-1',
+                model,
+                system: assembleSystemPrompt(),
+                messages: [
+                    { role: 'system', content: 'runtime-injected reminder' },
+                    ...messages,
+                ],
+                tools,
+                now: () => NOW,
+            })) {
+                collected.push(signal);
+            }
+            const systemWarnings = warnings.filter((text) => text.includes('allowSystemInMessages'));
+            expect(systemWarnings).toEqual([]);
+            expect(collected.at(-1)).toMatchObject({ type: 'success' });
+        } finally {
+            console.warn = originalWarn;
+        }
+    });
+
+    it('aborts a stalled provider stream via the chunk timeout', async () => {
+        // Stalled stream: yields stream-start, then nothing — mirrors a hung SSE connection.
+        // The stream errors itself when the SDK's merged abort signal fires (chunk timeout).
+        const stalledModel: LlmActorModel = {
+            specificationVersion: 'v3',
+            provider: 'openai',
+            modelId: 'gpt-5',
+            supportedUrls: {},
+            async doGenerate() {
+                throw new Error('not used');
+            },
+            async doStream({ abortSignal }) {
+                const stream = new ReadableStream<LanguageModelV3StreamPart>({
+                    start(controller) {
+                        controller.enqueue({ type: 'stream-start', warnings: [] });
+                        // intentionally never enqueues again; closes only on abort
+                        abortSignal?.addEventListener('abort', () => {
+                            controller.error(new DOMException('aborted', 'AbortError'));
+                        }, { once: true });
+                    },
+                });
+                return { stream };
+            },
+        };
+        const tools = buildEchoTools(async () => ({ allowed: true }));
+        const start = Date.now();
+        const collected: AbgSignal[] = [];
+        for await (const signal of runLlmActor({
+            graphId: 'g1',
+            nodeId: 'llm-1',
+            model: stalledModel,
+            system: assembleSystemPrompt(),
+            messages,
+            tools,
+            timeoutMs: 50,
+            now: () => NOW,
+        })) {
+            collected.push(signal);
+        }
+        const elapsed = Date.now() - start;
+        expect(elapsed).toBeLessThan(5_000);
+        expect(collected.at(-1)).toMatchObject({ type: 'failure' });
+        expect(collected.some((signal) => signal.type === 'success')).toBe(false);
     });
 });

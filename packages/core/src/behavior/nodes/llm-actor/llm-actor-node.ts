@@ -47,6 +47,13 @@ import {
 
 export type { LlmActorModel, LlmActorRunInput, LlmActorTurnResult } from './llm-actor-node-types';
 
+/**
+ * Default per-chunk timeout for real-provider streams driven through the graph path.
+ * Mirrors the flat-path `nextProviderChunk` timeout (120s) so both execution paths
+ * abort a stalled SSE connection at the same bound.
+ */
+const DEFAULT_PROVIDER_TURN_TIMEOUT_MS = 120_000;
+
 export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSignal> {
     const { nodeId, now } = input;
     const observabilityRedactor = input.observabilityRedactor ?? createObservabilityRedactor();
@@ -90,6 +97,11 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
                 model: input.model,
                 system: input.system,
                 messages: input.messages,
+                // Runtime-authored system messages (yield reminders, mid-conversation context
+                // updates) are placed in `messages` for chronological fidelity; safe to opt in.
+                allowSystemInMessages: true,
+                // Prevents indefinite hang on a stalled provider stream (mirrors flat-path 120s).
+                timeout: { chunkMs: input.timeoutMs ?? DEFAULT_PROVIDER_TURN_TIMEOUT_MS },
                 stopWhen: stepCountIs(1),
                 // Own rate-limit waits below; disable AI SDK's short finite retry budget.
                 maxRetries: 0,

@@ -22,6 +22,8 @@ export type LlmActorRunInput = {
     readonly tools?: ToolSet;
     readonly toolChoice?: NonNullable<StreamTextParameters['toolChoice']>;
     readonly signal?: AbortSignal;
+    /** Per-chunk provider stream timeout (ms). Bounds hung real-provider SSE connections. */
+    readonly timeoutMs?: number;
     readonly now: () => string;
     readonly settlementLedger?: AbgToolSettlementLedger;
     readonly haltOnFailedToolSettlement?: boolean;
