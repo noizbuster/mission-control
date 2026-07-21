@@ -32,10 +32,16 @@
 ## Research parents (workflow graphs)
 
 Workflow llm nodes that research (not implement) advertise parent capabilities
-`['read', 'subagent', 'network']` so they can call `task()` and use parent network tools:
+`['read', 'subagent', 'network', 'bash']` so they can call `task()`, use parent network tools,
+and run read-only bash (`git log`, `rg`, `find`, `pnpm list`, …) for direct exploration without
+forcing a `task()` round-trip. Mutations stay forbidden by prompt and the approval gate
+(permission profile default `ask`):
 
 - `research-explore` on `default` / `fixer` (`../../behavior/fixer-workflow-graph.ts`)
 - planner `explore` and `research` (`../../behavior/planner-workflow-graph.ts`)
+
+The `default` / `fixer` graph also gives `maturity-sample` and `evidence-check` `['read', 'bash']`
+for sampling and personal verification (lsp/build/test evidence the prompts already demanded).
 
 Soft bias on those parents: prefer `explore` / `librarian` children; route external lookup via
 `librarian` (or ON categories when chosen). See `../../behavior/AGENTS.md` **Workflow subagent

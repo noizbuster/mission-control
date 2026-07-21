@@ -31,7 +31,7 @@
   - **ON** (may retain parent `webfetch` / `web_search` / `mcp__*`): `librarian`, `deep`, `reasoner`, `oracle`, `designer`, `planner`
   - **OFF** (network hard-dropped; no webfetch/mcp on child): `explore`, `reviewer`, `quick`
   - Webfetch / namespaced MCP claims on children apply only to ON paths. Prefer routing external lookup via `librarian` (or another ON category when chosen).
-- Research workflow parents (`research-explore`, planner `explore`/`research`) declare parent capabilities `read+subagent+network` so they can advertise network tools and `task()`; that is separate from the child matrix above. See `../../behavior/AGENTS.md` and `../task/AGENTS.md`.
+- Research workflow parents (`research-explore`, planner `explore`/`research`) declare parent capabilities `read+subagent+network+bash` so they can advertise network tools, `task()`, and read-only bash (mutations still prompt-gated and policy-gated); that is separate from the child matrix above. See `../../behavior/AGENTS.md` and `../task/AGENTS.md`.
 
 ## Tests
 

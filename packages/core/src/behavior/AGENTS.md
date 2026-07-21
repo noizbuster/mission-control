@@ -102,17 +102,23 @@ verified); full Inspector UI surfaces (separate app package).
 Built-in workflow graphs advertise `task()` and network on specific research parents. Child
 network is category-scoped and nested depth is capped in `../agents/` (not by stripping every child of both).
 
-### Research parents (`read` + `subagent` + `network`)
+### Research parents (`read` + `subagent` + `network` + `bash`)
 
-These llm nodes keep capabilities exactly `['read', 'subagent', 'network']` so they can read
-the workspace, call `task()`, and use parent-side `webfetch` / `web_search` / `mcp__*` when
-advertised. They do **not** get write/edit/patch/bash:
+These llm nodes keep capabilities exactly `['read', 'subagent', 'network', 'bash']` so they can read
+the workspace, call `task()`, use parent-side `webfetch` / `web_search` / `mcp__*` when advertised,
+and run read-only bash (git log, rg, find, ls, cat, pnpm list, etc.) for direct exploration without
+forcing a `task()` round-trip. They do **not** get write/edit/patch — bash is for read-only inspection
+and every invocation still goes through the approval gate (`permission profile` default `ask`):
 
 | Workflow | Node ids | Factory |
 | --- | --- | --- |
 | `default` / `fixer` exploratory branch | `research-explore` | `fixer-workflow-graph.ts` (default wraps fixer) |
 | `planner` clear path | `explore` | `planner-workflow-graph.ts` |
 | `planner` unclear path | `research` | `planner-workflow-graph.ts` |
+
+The `default` / `fixer` graph also exposes `['read', 'bash']` on `maturity-sample` (sampling benefits
+from `git log` / `pnpm list` / `rg`) and on `evidence-check` (whose prompt already demanded
+`lsp_diagnostics` / build / test verification that was previously unreachable without tools).
 
 Soft prompt bias (not topology): prefer `explore` / `librarian` children for read-only breadth;
 route external docs/web lookup via `librarian` (or `deep` / `reasoner` / `oracle` / `designer`
@@ -121,7 +127,9 @@ Do not list `category:"deep"` as a preferred read-only route on those parents.
 
 Planner dual-reviewer / oracle nodes stay `['subagent']` only (no parent network on those
 lanes). Planner-readonly mode has empty `requiredTools`, so materialize does not strip
-`subagent`/`network` from explore/research.
+`subagent`/`network`/`bash` from explore/research. The mode's `systemPromptOverlay` explicitly
+forbids using bash to mutate files; the per-node prompts repeat that constraint. The mode's
+write-deny policies continue to govern file mutations independently of bash.
 
 ### Child network matrix (category-scoped)
 
