@@ -248,5 +248,5 @@ function epoch(
 }
 
 function executionOptions(toolCallId: string) {
-    return { toolCallId, messages: [] as ModelMessage[], abortSignal: new AbortController().signal };
+    return { toolCallId, messages: [] as ModelMessage[], abortSignal: new AbortController().signal, context: {} as never };
 }

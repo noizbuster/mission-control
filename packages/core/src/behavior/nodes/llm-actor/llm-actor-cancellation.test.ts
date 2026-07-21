@@ -36,7 +36,7 @@ describe('LLM actor cancellation propagation', () => {
 
         await bridged.execute(
             {},
-            { toolCallId: 'model-tool-call', messages: [] as ModelMessage[], abortSignal: controller.signal },
+            { toolCallId: 'model-tool-call', messages: [] as ModelMessage[], abortSignal: controller.signal, context: {} as never },
         );
 
         expect(observed?.signal).toBe(controller.signal);

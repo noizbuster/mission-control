@@ -19,7 +19,7 @@ describe('abg-tool-bridge', () => {
         }
         const result = await bridged.execute(
             { wrong: 1 },
-            { toolCallId: 'c1', messages: [] as ModelMessage[], abortSignal: new AbortController().signal },
+            { toolCallId: 'c1', messages: [] as ModelMessage[], abortSignal: new AbortController().signal, context: {} as never },
         );
         expect(result).toContain('failed (schema_invalid)');
     });
@@ -43,7 +43,7 @@ describe('abg-tool-bridge', () => {
 
         await bridged.execute(
             { text: 'hi' },
-            { toolCallId: 'c_ok', messages: [] as ModelMessage[], abortSignal: new AbortController().signal },
+            { toolCallId: 'c_ok', messages: [] as ModelMessage[], abortSignal: new AbortController().signal, context: {} as never },
         );
         const completed = ledger.lookup('c_ok');
         expect(completed?.status).toBe('completed');
@@ -51,7 +51,7 @@ describe('abg-tool-bridge', () => {
 
         await bridged.execute(
             { wrong: 1 },
-            { toolCallId: 'c_bad', messages: [] as ModelMessage[], abortSignal: new AbortController().signal },
+            { toolCallId: 'c_bad', messages: [] as ModelMessage[], abortSignal: new AbortController().signal, context: {} as never },
         );
         const failed = ledger.lookup('c_bad');
         expect(failed?.status).toBe('failed');
@@ -71,7 +71,7 @@ describe('abg-tool-bridge', () => {
 
         const result = await bridged.execute(
             { text: 'hi' },
-            { toolCallId: 'c_deny', messages: [] as ModelMessage[], abortSignal: new AbortController().signal },
+            { toolCallId: 'c_deny', messages: [] as ModelMessage[], abortSignal: new AbortController().signal, context: {} as never },
         );
         expect(result).toContain('BLOCKED');
         const entry = ledger.lookup('c_deny');
