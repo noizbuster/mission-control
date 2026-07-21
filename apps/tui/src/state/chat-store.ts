@@ -48,7 +48,7 @@ import {
     selectModelForAssignment as selectModelForAssignmentReducer,
 } from './models-overlay-state';
 import { sanitizeTerminalDisplayText } from './terminal-display-sanitizer';
-import { type TranscriptPart, upsertTranscriptPart } from './transcript-part';
+import { extractOccurrenceNumber, type TranscriptPart, upsertTranscriptPart } from './transcript-part';
 import {
     activeAssistantMessageIdFromParts,
     attributionKeyForAssistantPart,
@@ -1775,16 +1775,46 @@ export class ChatStore {
             this.appendLegacyTranscriptPart(this.state.outputText);
         }
         const parts = upsertTranscriptPart(this.state.transcriptParts, part);
+        const toolCallId = 'toolCallId' in part ? part.toolCallId : undefined;
         const previewStatus =
             'status' in part && (part.status === 'completed' || part.status === 'failed') ? part.status : undefined;
         this.state.transcriptParts =
             previewStatus === undefined
                 ? parts
-                : parts.map((existing) =>
-                      existing.id === `${part.id}:preview` && 'status' in existing && existing.status === 'pending'
-                          ? { ...existing, status: previewStatus }
-                          : existing,
-                  );
+                : parts
+                      .filter((existing) => {
+                          // Drop orphaned previews whose occurrence is older than the settlement's
+                          // (claimToolTranscriptOccurrence fallback path). Newer-occurrence FIFO
+                          // previews must stay pending until their own settlement arrives.
+                          if (
+                              toolCallId !== undefined &&
+                              existing.id !== part.id &&
+                              existing.id !== `${part.id}:preview` &&
+                              'toolCallId' in existing &&
+                              existing.toolCallId === toolCallId &&
+                              'status' in existing &&
+                              (existing.status === 'pending' ||
+                                  existing.status === 'running' ||
+                                  existing.status === 'streaming')
+                          ) {
+                              const existingOccurrence = extractOccurrenceNumber(existing.id);
+                              const settlementOccurrence = extractOccurrenceNumber(part.id);
+                              if (
+                                  existingOccurrence !== undefined &&
+                                  settlementOccurrence !== undefined &&
+                                  existingOccurrence >= settlementOccurrence
+                              ) {
+                                  return true;
+                              }
+                              return false;
+                          }
+                          return true;
+                      })
+                      .map((existing) =>
+                          existing.id === `${part.id}:preview` && 'status' in existing && existing.status === 'pending'
+                              ? { ...existing, status: previewStatus }
+                              : existing,
+                      );
         if (part.type === 'assistant') {
             this.state.activeAssistantMessageId = attributionKeyForAssistantPart(part);
         }

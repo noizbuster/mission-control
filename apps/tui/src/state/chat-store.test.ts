@@ -2533,3 +2533,275 @@ describe('ChatStore sticky notice', () => {
         expect(store.getSnapshot().stickyNotice).toBeNull();
     });
 });
+
+describe('ChatStore orphaned tool preview reconciliation', () => {
+    function statusOf(part: RichTranscriptPart | undefined): string | undefined {
+        return part !== undefined && 'status' in part ? part.status : undefined;
+    }
+
+    function typeOf(part: RichTranscriptPart | undefined): string | undefined {
+        return part?.type;
+    }
+
+    it('drops an orphaned pending preview when a settlement arrives with a different id for the same toolCallId', () => {
+        // Given: an orphaned pending inline-tool preview (e.g., the pending queue was cleared
+        // between renderToolPreview and renderInteractiveToolSettlement, so the settlement
+        // minted a new occurrence number).
+        const store = createChatStore();
+        store.emitTranscriptPart(
+            {
+                id: 'tool:turn-1:call-A:occurrence:1',
+                type: 'inline-tool',
+                toolCallId: 'call-A',
+                toolName: 'repo.read',
+                text: 'tool: repo.read',
+                status: 'pending',
+                messageId: 'msg-1',
+            },
+            'tool: repo.read\n',
+        );
+        expect(store.getSnapshot().transcriptParts).toHaveLength(1);
+
+        // When: the settlement arrives with a different id (orphan scenario).
+        store.emitTranscriptPart(
+            {
+                id: 'tool:turn-1:call-A:occurrence:2',
+                type: 'inline-tool',
+                toolCallId: 'call-A',
+                toolName: 'repo.read',
+                text: 'tool: repo.read result',
+                status: 'completed',
+                messageId: 'msg-1',
+            },
+            'tool: repo.read completed\n',
+        );
+
+        // Then: only the settlement row remains; the orphaned pending preview is gone.
+        const parts = store.getSnapshot().transcriptParts;
+        expect(parts).toHaveLength(1);
+        expect(parts[0]?.id).toBe('tool:turn-1:call-A:occurrence:2');
+        expect(statusOf(parts[0])).toBe('completed');
+    });
+
+    it('drops an orphaned :preview companion from a different occurrence when its settlement arrives', () => {
+        // Given: an orphaned :preview companion (e.g., the file.patch diff preview) registered
+        // under occurrence:1, while the settlement mints occurrence:2.
+        const store = createChatStore();
+        store.emitTranscriptPart(
+            {
+                id: 'tool:turn-1:call-B:occurrence:1',
+                type: 'inline-tool',
+                toolCallId: 'call-B',
+                toolName: 'file.patch',
+                text: 'tool: file.patch',
+                status: 'pending',
+                messageId: 'msg-1',
+            },
+            'tool: file.patch\n',
+        );
+        store.emitTranscriptPart(
+            {
+                id: 'tool:turn-1:call-B:occurrence:1:preview',
+                type: 'diff',
+                filePath: 'src/a.ts',
+                toolCallId: 'call-B',
+                text: '-old\n+new',
+                status: 'pending',
+                messageId: 'msg-1',
+            },
+            '',
+        );
+        expect(store.getSnapshot().transcriptParts).toHaveLength(2);
+
+        // When: the settlement arrives with a different occurrence number.
+        store.emitTranscriptPart(
+            {
+                id: 'tool:turn-1:call-B:occurrence:2',
+                type: 'block-tool',
+                toolCallId: 'call-B',
+                toolName: 'file.patch',
+                text: 'patch applied',
+                status: 'completed',
+                messageId: 'msg-1',
+            },
+            'patch applied\n',
+        );
+
+        // Then: both orphaned rows from occurrence:1 are dropped; only the settlement remains.
+        const parts = store.getSnapshot().transcriptParts;
+        expect(parts).toHaveLength(1);
+        expect(parts[0]?.id).toBe('tool:turn-1:call-B:occurrence:2');
+        expect(statusOf(parts[0])).toBe('completed');
+    });
+
+    it('preserves the same-occurrence :preview companion and updates its status (regression)', () => {
+        const store = createChatStore();
+        store.emitTranscriptPart(
+            {
+                id: 'tool:turn-1:call-C:occurrence:1',
+                type: 'inline-tool',
+                toolCallId: 'call-C',
+                toolName: 'file.patch',
+                text: 'tool: file.patch',
+                status: 'pending',
+                messageId: 'msg-1',
+            },
+            'tool: file.patch\n',
+        );
+        store.emitTranscriptPart(
+            {
+                id: 'tool:turn-1:call-C:occurrence:1:preview',
+                type: 'diff',
+                filePath: 'src/a.ts',
+                toolCallId: 'call-C',
+                text: '-old\n+new',
+                status: 'pending',
+                messageId: 'msg-1',
+            },
+            '',
+        );
+
+        store.emitTranscriptPart(
+            {
+                id: 'tool:turn-1:call-C:occurrence:1',
+                type: 'block-tool',
+                toolCallId: 'call-C',
+                toolName: 'file.patch',
+                text: 'patch applied',
+                status: 'completed',
+                messageId: 'msg-1',
+            },
+            'patch applied\n',
+        );
+
+        const parts = store.getSnapshot().transcriptParts;
+        expect(parts).toHaveLength(2);
+        const settlement = parts.find((part) => part.id === 'tool:turn-1:call-C:occurrence:1');
+        const preview = parts.find((part) => part.id === 'tool:turn-1:call-C:occurrence:1:preview');
+        expect(typeOf(settlement)).toBe('block-tool');
+        expect(statusOf(settlement)).toBe('completed');
+        expect(typeOf(preview)).toBe('diff');
+        expect(statusOf(preview)).toBe('completed');
+    });
+
+    it('preserves unrelated pending previews for the same toolCallId in FIFO order', () => {
+        // Given: two preview occurrences for the same toolCallId (FIFO batched task scenario).
+        const store = createChatStore();
+        store.emitTranscriptPart(
+            {
+                id: 'tool:turn-1:call-D:occurrence:1',
+                type: 'inline-tool',
+                toolCallId: 'call-D',
+                toolName: 'task',
+                text: 'task 1',
+                status: 'pending',
+                messageId: 'msg-1',
+            },
+            'task 1\n',
+        );
+        store.emitTranscriptPart(
+            {
+                id: 'tool:turn-1:call-D:occurrence:2',
+                type: 'inline-tool',
+                toolCallId: 'call-D',
+                toolName: 'task',
+                text: 'task 2',
+                status: 'pending',
+                messageId: 'msg-1',
+            },
+            'task 2\n',
+        );
+
+        // When: only occurrence:1 settles (correct same-id claim).
+        store.emitTranscriptPart(
+            {
+                id: 'tool:turn-1:call-D:occurrence:1',
+                type: 'subagent',
+                toolCallId: 'call-D',
+                text: 'task 1 result',
+                status: 'completed',
+                messageId: 'msg-1',
+            },
+            'task 1 done\n',
+        );
+
+        // Then: occurrence:2 stays pending (it has not settled yet); occurrence:1 settled.
+        const parts = store.getSnapshot().transcriptParts;
+        expect(parts).toHaveLength(2);
+        const settled = parts.find((part) => part.id === 'tool:turn-1:call-D:occurrence:1');
+        const pending = parts.find((part) => part.id === 'tool:turn-1:call-D:occurrence:2');
+        expect(statusOf(settled)).toBe('completed');
+        expect(typeOf(settled)).toBe('subagent');
+        expect(statusOf(pending)).toBe('pending');
+        expect(typeOf(pending)).toBe('inline-tool');
+    });
+
+    it('does not touch previews with a different toolCallId', () => {
+        const store = createChatStore();
+        store.emitTranscriptPart(
+            {
+                id: 'tool:turn-1:call-E:occurrence:1',
+                type: 'inline-tool',
+                toolCallId: 'call-E',
+                toolName: 'repo.read',
+                text: 'other tool pending',
+                status: 'pending',
+                messageId: 'msg-1',
+            },
+            'other\n',
+        );
+
+        store.emitTranscriptPart(
+            {
+                id: 'tool:turn-1:call-F:occurrence:1',
+                type: 'inline-tool',
+                toolCallId: 'call-F',
+                toolName: 'repo.read',
+                text: 'tool: repo.read',
+                status: 'completed',
+                messageId: 'msg-1',
+            },
+            'done\n',
+        );
+
+        // The unrelated call-E preview stays untouched.
+        const parts = store.getSnapshot().transcriptParts;
+        expect(parts).toHaveLength(2);
+        const ePart = parts.find((part) => part.id === 'tool:turn-1:call-E:occurrence:1');
+        expect(statusOf(ePart)).toBe('pending');
+    });
+
+    it('does not remove already-settled rows that share the toolCallId', () => {
+        // Guards against double-settlement or mid-flight occurrence collisions nuking
+        // completed rows that happen to share the toolCallId.
+        const store = createChatStore();
+        store.emitTranscriptPart(
+            {
+                id: 'tool:turn-1:call-G:occurrence:1',
+                type: 'inline-tool',
+                toolCallId: 'call-G',
+                toolName: 'repo.read',
+                text: 'first',
+                status: 'completed',
+                messageId: 'msg-1',
+            },
+            'first\n',
+        );
+        store.emitTranscriptPart(
+            {
+                id: 'tool:turn-1:call-G:occurrence:2',
+                type: 'inline-tool',
+                toolCallId: 'call-G',
+                toolName: 'repo.read',
+                text: 'second',
+                status: 'completed',
+                messageId: 'msg-1',
+            },
+            'second\n',
+        );
+
+        const parts = store.getSnapshot().transcriptParts;
+        expect(parts).toHaveLength(2);
+        expect(parts.every((part) => statusOf(part) === 'completed')).toBe(true);
+    });
+});

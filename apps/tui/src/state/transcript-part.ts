@@ -141,3 +141,10 @@ export function upsertTranscriptPart(
     }
     return parts.map((existing, index) => (index === existingIndex ? part : existing));
 }
+
+const OCCURRENCE_PATTERN = /:occurrence:(\d+)/;
+
+export function extractOccurrenceNumber(id: string): number | undefined {
+    const match = OCCURRENCE_PATTERN.exec(id);
+    return match?.[1] === undefined ? undefined : Number(match[1]);
+}
