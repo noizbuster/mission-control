@@ -97,7 +97,11 @@ import {
 import { loadPricingTable } from './pricing-table-store';
 import type { EnsuredSession } from './run-agent-session';
 import { listSessionCatalogEntriesForWorkspace } from './session-catalog';
-import { loadSessionTranscript } from './session-transcript-reconstruction';
+import { loadSessionTranscript, loadSessionTranscriptParts } from './session-transcript-reconstruction';
+import {
+    formatSessionFinalizeLineFromInfo,
+    type SessionFinalizeInfo,
+} from '../ui/session-finalize';
 import {
     detectGitBranch,
     detectGitWorktree,
@@ -169,9 +173,12 @@ export type InteractiveChatOptions = {
     readonly profileName?: string;
     readonly plainPromptGraph?: PlainPromptGraph;
     readonly observabilityRedactor?: ObservabilityRedactor;
+    readonly sessionFinalizeSink?: MutableSessionFinalizeSink;
 };
 
 export type PlainPromptGraph = 'default-workflow' | 'coding-agent';
+
+export type MutableSessionFinalizeSink = { info?: SessionFinalizeInfo };
 
 export async function runInteractiveChatSession(
     runtime: AgentRuntime,
@@ -440,7 +447,39 @@ export async function runInteractiveChatSession(
                       ? { observeStoredEvent: options.observeStoredEvent }
                       : {}),
               });
-    const unregisterProcessCleanup = tuiHandle === undefined ? registerProcessTerminalCleanup(chatInput) : undefined;
+
+    let sessionFinalizeInfo: SessionFinalizeInfo = { status: 'aborted' };
+    let sessionFinalizeWritten = false;
+    const writeSessionFinalize = (): void => {
+        if (sessionFinalizeWritten) return;
+        sessionFinalizeWritten = true;
+        const line = formatSessionFinalizeLineFromInfo(sessionFinalizeInfo);
+        try {
+            chatOutput.write(`${line}\n`);
+        } catch {
+            // chatOutput may be torn down during cleanup; suppress.
+        }
+        if (tuiHandle !== undefined) {
+            // TUI is unmounted by chatInput.close() below, so chatOutput no longer reaches the
+            // terminal. Mirror to stderr so the user still sees the finalize line.
+            try {
+                process.stderr.write(`${line}\n`);
+            } catch {
+                // stderr write failure is not recoverable; suppress.
+            }
+        }
+    };
+
+    const unregisterProcessCleanup = tuiHandle === undefined
+        ? registerProcessTerminalCleanup(chatInput, {
+            onForceExit: () => {
+                if (!sessionFinalizeWritten) {
+                    sessionFinalizeInfo = { status: 'aborted', reason: 'interrupted by signal' };
+                }
+                writeSessionFinalize();
+            },
+        })
+        : undefined;
 
     const syncSessionDisplayName = async (sessionId: string | undefined): Promise<void> => {
         const sid = sessionId ?? '';
@@ -608,11 +647,14 @@ export async function runInteractiveChatSession(
         // Best-effort: load the prior conversation so it's visible on resume. A missing or
         // corrupt log leaves the transcript blank and resume still proceeds.
         if (currentSessionId !== undefined) {
-            const resumedTranscript = await loadSessionTranscript(currentSessionId, options.observabilityRedactor);
-            if (resumedTranscript.length > 0) {
-                if (tuiHandle !== undefined) {
-                    tuiHandle.replaceOutputText(resumedTranscript);
-                } else {
+            if (tuiHandle !== undefined) {
+                const resumed = await loadSessionTranscriptParts(currentSessionId, options.observabilityRedactor);
+                if (resumed.parts.length > 0 || resumed.outputText.length > 0) {
+                    tuiHandle.replaceTranscript(resumed.parts, resumed.outputText);
+                }
+            } else {
+                const resumedTranscript = await loadSessionTranscript(currentSessionId, options.observabilityRedactor);
+                if (resumedTranscript.length > 0) {
                     chatOutput.write(resumedTranscript);
                 }
             }
@@ -693,6 +735,7 @@ export async function runInteractiveChatSession(
                 }
                 if (pendingInterrupt && event.interruptedPartialInput !== true) {
                     chatOutput.write('\n');
+                    sessionFinalizeInfo = { status: 'aborted', reason: 'interrupted by user' };
                     break;
                 }
                 pendingInterrupt = true;
@@ -725,6 +768,7 @@ export async function runInteractiveChatSession(
             if (action.kind === 'exit') {
                 activeTurn = await stopActiveTurn(activeTurn);
                 chatOutput.write('Exiting mission-control chat\n');
+                sessionFinalizeInfo = { status: 'complete' };
                 break;
             }
             if (
@@ -985,7 +1029,19 @@ export async function runInteractiveChatSession(
                 await options.persistApprovalLevel?.(currentApprovalLevel);
             }
         }
+    } catch (error: unknown) {
+        if (!sessionFinalizeWritten) {
+            sessionFinalizeInfo = {
+                status: 'failed',
+                reason: error instanceof Error ? error.message : String(error),
+            };
+        }
+        throw error;
     } finally {
+        writeSessionFinalize();
+        if (options.sessionFinalizeSink !== undefined) {
+            options.sessionFinalizeSink.info = sessionFinalizeInfo;
+        }
         unregisterProcessCleanup?.();
         activeTurn?.interrupt('force');
         titleGenerationAbortController.abort();

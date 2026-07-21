@@ -1,6 +1,7 @@
 import type { CodingReplayStep } from '@mission-control/core';
 import { type ObservabilityRedactor, readLocalSessionReplay } from '@mission-control/core';
 import type { AgentEventEnvelope } from '@mission-control/protocol';
+import type { TranscriptPart } from '@mission-control/tui/state';
 
 /**
  * Minimal structural input for {@link reconstructSessionTranscript}. Narrowed from
@@ -10,6 +11,11 @@ import type { AgentEventEnvelope } from '@mission-control/protocol';
 export type SessionTranscriptInput = {
     readonly envelopes: readonly AgentEventEnvelope[];
     readonly codingSteps: readonly CodingReplayStep[];
+};
+
+export type ReconstructedTranscript = {
+    readonly parts: readonly TranscriptPart[];
+    readonly outputText: string;
 };
 
 /**
@@ -64,6 +70,18 @@ export function reconstructSessionTranscript(input: SessionTranscriptInput): str
             continue;
         }
 
+        // Session finalize marker (terminal status line). Rendered after every other line
+        // because the event is appended to the durable stream after `session.stopped`.
+        if (event.type === 'session.finalize' && event.sessionFinalize !== undefined) {
+            const meta = event.sessionFinalize;
+            const line =
+                meta.reason !== undefined && meta.reason.length > 0
+                    ? `Session ${meta.status}: ${meta.reason}`
+                    : `Session ${meta.status}`;
+            parts.push(`${line}\n`);
+            continue;
+        }
+
         const step = stepsByEventId.get(envelope.eventId);
         if (step === undefined) {
             continue;
@@ -103,6 +121,106 @@ export function reconstructSessionTranscript(input: SessionTranscriptInput): str
 }
 
 /**
+ * Reconstruct typed {@link TranscriptPart} rows from a session's replay projection.
+ * Produces the same row types the live renderer emits (user, assistant, inline-tool,
+ * error) so a resumed session's transcript looks identical to how it looked during
+ * the live run. Used when resuming via `--session <id>` or `/session <id>`.
+ */
+export function reconstructSessionTranscriptParts(input: SessionTranscriptInput): ReconstructedTranscript {
+    if (input.envelopes.length === 0) {
+        return { parts: [], outputText: '' };
+    }
+
+    const stepsByEventId = new Map<string, CodingReplayStep>();
+    for (const step of input.codingSteps) {
+        stepsByEventId.set(step.eventId, step);
+    }
+
+    const toolNamesByCallId = new Map<string, string>();
+    for (const step of input.codingSteps) {
+        if (step.kind === 'provider.tool_call') {
+            toolNamesByCallId.set(step.toolCallId, step.toolName);
+        }
+    }
+
+    const parts: TranscriptPart[] = [];
+    let userPartOccurrence = 0;
+
+    for (const envelope of input.envelopes) {
+        const event = envelope.event;
+
+        if (event.type === 'prompt.promoted' && event.message !== undefined && event.message.length > 0) {
+            userPartOccurrence += 1;
+            parts.push({
+                id: `resume:user:${userPartOccurrence}`,
+                type: 'user',
+                text: event.message,
+            });
+            continue;
+        }
+
+        if (event.type === 'session.finalize' && event.sessionFinalize !== undefined) {
+            continue;
+        }
+
+        const step = stepsByEventId.get(envelope.eventId);
+        if (step === undefined) {
+            continue;
+        }
+
+        switch (step.kind) {
+            case 'provider.message': {
+                if (step.message.length === 0) {
+                    break;
+                }
+                parts.push({
+                    id: `resume:assistant:${envelope.eventId}`,
+                    type: 'assistant',
+                    text: step.message,
+                    status: 'completed',
+                    messageId: step.messageId,
+                });
+                break;
+            }
+            case 'provider.failure': {
+                parts.push({
+                    id: `resume:error:${envelope.eventId}`,
+                    type: 'error',
+                    text: step.error.message,
+                    error: step.error.message,
+                    status: 'failed',
+                });
+                break;
+            }
+            case 'tool.result': {
+                const toolName = toolNamesByCallId.get(step.toolCallId) ?? step.toolCallId;
+                const isFailed = step.status === 'failed';
+                const output = step.output;
+                const errorMessage = isFailed ? (step.error?.message ?? 'unknown error') : undefined;
+                parts.push({
+                    id: `resume:tool:${envelope.eventId}`,
+                    type: 'inline-tool',
+                    toolCallId: step.toolCallId,
+                    toolName,
+                    text: output ?? errorMessage ?? toolName,
+                    status: isFailed ? 'failed' : 'completed',
+                    ...(output !== undefined ? { output } : {}),
+                    ...(errorMessage !== undefined ? { error: errorMessage } : {}),
+                });
+                break;
+            }
+            default:
+                break;
+        }
+    }
+
+    return {
+        parts,
+        outputText: reconstructSessionTranscript(input),
+    };
+}
+
+/**
  * Read a session's durable replay from the mission-control data dir and reconstruct its
  * transcript text. Returns an empty string when the log is missing, empty, or
  * corrupt so callers can resume unconditionally without a try/catch.
@@ -120,6 +238,25 @@ export async function loadSessionTranscript(
     } catch (error: unknown) {
         if (error instanceof Error) {
             return '';
+        }
+        throw error;
+    }
+}
+
+export async function loadSessionTranscriptParts(
+    sessionId: string,
+    observabilityRedactor?: ObservabilityRedactor,
+): Promise<ReconstructedTranscript> {
+    const empty: ReconstructedTranscript = { parts: [], outputText: '' };
+    try {
+        const replay = await readLocalSessionReplay({
+            sessionId,
+            ...(observabilityRedactor !== undefined ? { observabilityRedactor } : {}),
+        });
+        return replay.kind === 'found' ? reconstructSessionTranscriptParts(replay.replay.projection) : empty;
+    } catch (error: unknown) {
+        if (error instanceof Error) {
+            return empty;
         }
         throw error;
     }

@@ -2,7 +2,7 @@ import type { CodingReplayStep } from '@mission-control/core';
 import type { AgentEvent, AgentEventEnvelope } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { writeLocalSessionEvents } from './session-test-support';
-import { loadSessionTranscript, reconstructSessionTranscript } from './session-transcript-reconstruction';
+import { loadSessionTranscript, reconstructSessionTranscript, reconstructSessionTranscriptParts } from './session-transcript-reconstruction';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -76,6 +76,7 @@ function toolResultStep(
     toolCallId: string,
     status: 'completed' | 'failed',
     error?: { readonly message: string },
+    output?: string,
 ): CodingReplayStep {
     return {
         kind: 'tool.result',
@@ -83,6 +84,7 @@ function toolResultStep(
         timestamp: NOW,
         toolCallId,
         status,
+        ...(output !== undefined ? { output } : {}),
         ...(error !== undefined ? { error: { code: 'unknown', ...error, retryable: false } } : {}),
     };
 }
@@ -96,6 +98,33 @@ describe('reconstructSessionTranscript', () => {
         const envelopes = [envelope(1, userPromptEvent('hello world'))];
         const result = reconstructSessionTranscript({ envelopes, codingSteps: [] });
         expect(result).toBe('You: hello world\n');
+    });
+
+    it('renders session.finalize as the final Session <status>[: reason] line', () => {
+        const envelopes = [
+            envelope(1, userPromptEvent('hello')),
+            envelope(2, {
+                type: 'session.finalize',
+                timestamp: NOW,
+                message: 'Session complete',
+                sessionFinalize: { status: 'complete' },
+            }),
+        ];
+        const result = reconstructSessionTranscript({ envelopes, codingSteps: [] });
+        expect(result).toBe('You: hello\nSession complete\n');
+    });
+
+    it('renders session.finalize reason when present', () => {
+        const envelopes = [
+            envelope(1, {
+                type: 'session.finalize',
+                timestamp: NOW,
+                message: 'Session failed: provider error',
+                sessionFinalize: { status: 'failed', reason: 'provider error' },
+            }),
+        ];
+        const result = reconstructSessionTranscript({ envelopes, codingSteps: [] });
+        expect(result).toBe('Session failed: provider error\n');
     });
 
     it('emits Assistant: lines for non-empty provider.message steps', () => {
@@ -223,5 +252,88 @@ describe('reconstructSessionTranscript', () => {
 
         // Then
         expect(transcript).toBe(`You: ${persistedReplayPayload}\n`);
+    });
+});
+
+describe('reconstructSessionTranscriptParts', () => {
+    it('returns empty parts and text for an empty session', () => {
+        const result = reconstructSessionTranscriptParts({ envelopes: [], codingSteps: [] });
+        expect(result.parts).toEqual([]);
+        expect(result.outputText).toBe('');
+    });
+
+    it('produces typed user, assistant, tool, and error parts in order', () => {
+        const envelopes = [
+            envelope(1, userPromptEvent('look at this')),
+            envelope(2, { type: 'model.call.completed', timestamp: NOW }),
+            envelope(3, { type: 'tool.completed', timestamp: NOW }),
+            envelope(4, { type: 'model.call.completed', timestamp: NOW }),
+            envelope(5, { type: 'model.call.failed', timestamp: NOW }),
+        ];
+        const steps: CodingReplayStep[] = [
+            providerMessageStep(2, 'I will search'),
+            toolCallStep(3, 'call_grep', 'grep'),
+            toolResultStep(3, 'call_grep', 'completed', undefined, 'result line'),
+            providerMessageStep(4, 'Here is the answer'),
+            providerFailureStep(5, 'bad model'),
+        ];
+        const result = reconstructSessionTranscriptParts({ envelopes, codingSteps: steps });
+
+        expect(result.parts).toHaveLength(5);
+        expect(result.parts[0]).toEqual(
+            expect.objectContaining({ type: 'user', text: 'look at this' }),
+        );
+        expect(result.parts[1]).toEqual(
+            expect.objectContaining({ type: 'assistant', text: 'I will search', status: 'completed' }),
+        );
+        expect(result.parts[2]).toEqual(
+            expect.objectContaining({
+                type: 'inline-tool',
+                toolCallId: 'call_grep',
+                toolName: 'grep',
+                status: 'completed',
+                text: 'result line',
+            }),
+        );
+        expect(result.parts[3]).toEqual(
+            expect.objectContaining({ type: 'assistant', text: 'Here is the answer', status: 'completed' }),
+        );
+        expect(result.parts[4]).toEqual(
+            expect.objectContaining({ type: 'error', status: 'failed', text: 'bad model' }),
+        );
+    });
+
+    it('includes failed tool results as typed parts', () => {
+        const envelopes = [
+            envelope(1, userPromptEvent('try the tool')),
+            envelope(2, { type: 'tool.failed', timestamp: NOW }),
+        ];
+        const steps: CodingReplayStep[] = [
+            toolCallStep(2, 'call_fail', 'file.patch'),
+            toolResultStep(2, 'call_fail', 'failed', { message: 'patch rejected' }),
+        ];
+        const result = reconstructSessionTranscriptParts({ envelopes, codingSteps: steps });
+
+        expect(result.parts).toHaveLength(2);
+        expect(result.parts[1]).toEqual(
+            expect.objectContaining({
+                type: 'inline-tool',
+                toolName: 'file.patch',
+                status: 'failed',
+                error: 'patch rejected',
+            }),
+        );
+    });
+
+    it('also returns legacy outputText alongside typed parts', () => {
+        const envelopes = [
+            envelope(1, userPromptEvent('hello')),
+            envelope(2, { type: 'model.call.completed', timestamp: NOW }),
+        ];
+        const steps: CodingReplayStep[] = [providerMessageStep(2, 'world')];
+        const result = reconstructSessionTranscriptParts({ envelopes, codingSteps: steps });
+
+        expect(result.outputText).toContain('You: hello');
+        expect(result.outputText).toContain('Assistant: world');
     });
 });
