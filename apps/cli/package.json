@@ -47,8 +47,8 @@
     "@mission-control/tui": "workspace:*"
   },
   "devDependencies": {
-    "@ai-sdk/provider": "^3.0.10",
-    "ai": "^6.0.208",
+    "@ai-sdk/provider": "^4.0.3",
+    "ai": "^7.0.33",
     "vite": "^8.0.16",
     "zod": "^4.1.13"
   }
