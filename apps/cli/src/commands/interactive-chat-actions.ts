@@ -29,6 +29,7 @@ import {
     runSkillAction,
 } from './interactive-prompt-actions';
 import { runWorkflowAction } from './interactive-workflow-actions';
+import { runKickAction } from './interactive-kick-action';
 import { runInterruptAction, runRetryAction, runWorkResumeAction } from './interactive-workflow-resume-actions';
 
 export { loadDashboardAgentEntries } from './interactive-agent-actions';
@@ -245,6 +246,8 @@ export async function runChatAction(
             return runWorkResumeAction(chatOutput, currentModelProviderSelection, coding);
         case 'retry':
             return runRetryAction(runtime, chatOutput, currentModelProviderSelection, coding);
+        case 'kick':
+            return runKickAction(chatOutput, currentModelProviderSelection, coding);
         default:
             throw new Error(`Unexpected chat action: ${String(action)}`);
     }

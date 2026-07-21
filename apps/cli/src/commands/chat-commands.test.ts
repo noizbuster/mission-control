@@ -285,6 +285,14 @@ describe('chat command parser', () => {
         });
     });
 
+    it('parses /kick as a no-argument stalled-connection reset command', () => {
+        expect(parseChatLine('/kick')).toEqual({ kind: 'kick' });
+        expect(parseChatLine('/kick now')).toEqual({
+            kind: 'invalid',
+            message: '/kick does not accept arguments',
+        });
+    });
+
     it('parses /resume as a no-argument session attach command', () => {
         expect(parseChatLine('/resume')).toEqual({ kind: 'resume' });
     });

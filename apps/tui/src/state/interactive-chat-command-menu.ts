@@ -171,9 +171,19 @@ export const slashCommandChoices = [
         description: 'Auto-approve everything',
     },
     {
+        id: '/kick',
+        insertText: '/kick',
+        description: 'Reset stalled running agents/jobs silent >5m and resume',
+    },
+    {
         id: '/interrupt',
         insertText: '/interrupt',
         description: 'Interrupt the active run',
+    },
+    {
+        id: '/retry',
+        insertText: '/retry',
+        description: 'Retry the last failed workflow with its original prompt',
     },
     {
         id: '/exit',
