@@ -122,6 +122,27 @@ describe('RuntimeAgentRegistry', () => {
         expect(() => registry.update('ghost', { status: 'idle' })).not.toThrow();
     });
 
+    it('touch stamps lastActivity and optional activity text', () => {
+        const registry = new RuntimeAgentRegistry();
+        registry.adopt(makeAdoptInput('sub-touch'));
+        registry.update('sub-touch', { lastActivity: '2020-01-01T00:00:00.000Z' });
+
+        registry.touch('sub-touch', 'reading file');
+
+        const ref = registry.lookup('sub-touch');
+        expect(Date.parse(ref?.lastActivity ?? '')).toBeGreaterThan(Date.parse('2020-01-01T00:00:00.000Z'));
+        expect(ref?.activity).toBe('reading file');
+    });
+
+    it('listAll returns every tracked ref including advisors', () => {
+        const registry = new RuntimeAgentRegistry();
+        registry.adopt(makeAdoptInput('sub-a'));
+        registry.adopt(makeAdoptInput('adv-a', { kind: 'advisor' }));
+
+        const all = registry.listAll();
+        expect(all.map((r) => r.id).sort()).toEqual(['adv-a', 'sub-a']);
+    });
+
     it('clear empties the registry', () => {
         const registry = new RuntimeAgentRegistry();
         registry.adopt(makeAdoptInput('sub-a'));

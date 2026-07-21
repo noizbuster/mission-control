@@ -52,6 +52,17 @@ export {
     type RuntimeAgentRegistryOptions,
 } from './runtime-registry';
 export {
+    DEFAULT_STALL_THRESHOLD_MS,
+    findStalledTargets,
+    formatSilentDuration,
+    isSilentLongerThan,
+    type StallDetectionInput,
+    type StalledAgentTarget,
+    type StalledJobTarget,
+    type StalledMainTurnTarget,
+    type StalledTarget,
+} from './stall-detection';
+export {
     createSqlTaskRuntimeServices,
     type SqlTaskRuntimeServices,
     type SqlTaskRuntimeServicesOptions,

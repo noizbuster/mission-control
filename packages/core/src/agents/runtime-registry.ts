@@ -115,15 +115,39 @@ export class RuntimeAgentRegistry {
      * Merge a partial patch into an existing ref. Only `status`,
      * `lastActivity`, `activity`, and `sessionFile` are mutable. Fields absent
      * from the patch are left untouched. Unknown ids are a no-op.
+     *
+     * When `status` changes and `lastActivity` is omitted, `lastActivity` is
+     * stamped to now so stall detection sees the transition as a packet.
      */
     update(id: string, patch: AgentUpdatePatch): void {
         const ref = this.refs.get(id);
         if (ref === undefined) return;
         if (patch.status !== undefined) ref.status = patch.status;
-        if (patch.lastActivity !== undefined) ref.lastActivity = patch.lastActivity;
+        if (patch.lastActivity !== undefined) {
+            ref.lastActivity = patch.lastActivity;
+        } else if (patch.status !== undefined) {
+            ref.lastActivity = new Date().toISOString();
+        }
         if (patch.activity !== undefined) ref.activity = patch.activity;
         if (patch.sessionFile !== undefined) ref.sessionFile = patch.sessionFile;
         this.mirror?.recordRuntimeAgent(ref);
+    }
+
+    /**
+     * Record a live packet / heartbeat for a tracked agent without changing
+     * status. Unknown ids are a no-op.
+     */
+    touch(id: string, activity?: string): void {
+        const ref = this.refs.get(id);
+        if (ref === undefined) return;
+        ref.lastActivity = new Date().toISOString();
+        if (activity !== undefined) ref.activity = activity;
+        this.mirror?.recordRuntimeAgent(ref);
+    }
+
+    /** Every tracked ref, including advisors (operator/observability surface). */
+    listAll(): readonly AgentRef[] {
+        return Array.from(this.refs.values());
     }
 
     /** Remove every tracked ref. */
