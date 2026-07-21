@@ -17,6 +17,15 @@ import { createObservabilityRedactor } from '../../providers/observability-redac
 import type { SessionControlEpoch } from '../../runtime/session-control-cancellation';
 import type { AskUserQuestionRequest } from '../../tools/ask-user-schemas';
 import { ASK_USER_BLOCKED_ANSWER, createAskUserToolRegistration } from '../../tools/ask-user-tool';
+import type {
+    ChildAskUserParentAnswerer,
+    ChildAskUserSourceFields,
+} from '../../tools/child-ask-user-router';
+import {
+    formatChildAskUserHeader,
+    routeChildAskUser,
+    withChildAskUserSource,
+} from '../../tools/child-ask-user-router';
 import type { TaskOutput } from '../../tools/task-tool';
 import type { ToolRegistry } from '../../tools/tool-registry';
 import { createCodingAgentGraph } from '../coding-agent-graph';
@@ -43,6 +52,16 @@ export type ChildHostCallbacks = {
     readonly onSignal?: (signal: AbgSignal) => void | Promise<void>;
     readonly onDurableEvent?: (event: AgentEvent) => void;
     readonly observabilityRedactor?: ObservabilityRedactor;
+    /**
+     * Optional parent-first answerer for child ask_user. When present, the child
+     * routes through {@linkcode routeChildAskUser} before the user overlay.
+     */
+    readonly parentAskUserAnswerer?: ChildAskUserParentAnswerer;
+    /**
+     * Resolve per-child source metadata (agent name, category, title) for ask_user
+     * overlay labeling. Called with the child session id at registration time.
+     */
+    readonly resolveChildAskUserSource?: (sessionId: string) => ChildAskUserSourceFields | undefined;
 };
 
 export type SpawnChildInput = {
@@ -125,7 +144,8 @@ export async function spawnChildCodingAgent(input: SpawnChildInput): Promise<Tas
  * Replace any ask_user registration on the child tool surface with one of two shapes:
  *  - When the host supplies a `requestUserQuestion` callback (parent TUI is attached), wrap it
  *    in a per-spawn mutex so concurrent child ask_user calls serialize through the host's
- *    single overlay slot.
+ *    single overlay slot. Parent-first routing stamps source metadata and may short-circuit
+ *    via {@linkcode ChildHostCallbacks.parentAskUserAnswerer}.
  *  - When no host surface is attached (non-interactive hosts, pure-test paths), register the
  *    tool in non-interactive mode so it returns the {@linkcode ASK_USER_BLOCKED_ANSWER}
  *    sentinel instead of awaiting a callback that would never resolve and deadlocking the
@@ -138,18 +158,47 @@ function registerChildAskUserTool(
 ): void {
     const hostRequestUserQuestion = hostCallbacks?.requestUserQuestion;
     if (hostRequestUserQuestion !== undefined) {
+        const sourceFields = hostCallbacks?.resolveChildAskUserSource?.(sessionId);
+        const source = {
+            sessionId,
+            ...(sourceFields?.agentName !== undefined ? { agentName: sourceFields.agentName } : {}),
+            ...(sourceFields?.category !== undefined ? { category: sourceFields.category } : {}),
+            ...(sourceFields?.title !== undefined ? { title: sourceFields.title } : {}),
+        };
+        const parentAnswerer = hostCallbacks?.parentAskUserAnswerer;
         let lock: Promise<unknown> = Promise.resolve();
+        const routed = async (request: AskUserQuestionRequest): Promise<string> => {
+            const stamped = withChildAskUserSource(request, source);
+            return routeChildAskUser({
+                request: stamped,
+                requestUserQuestion: hostRequestUserQuestion,
+                ...(parentAnswerer !== undefined ? { parentAnswerer } : {}),
+            });
+        };
         const serialized = async (request: AskUserQuestionRequest): Promise<string> => {
-            const next = lock.then(() => hostRequestUserQuestion(request));
+            const next = lock.then(() => routed(request));
             // Swallow rejections on the lock so one failed prompt cannot wedge subsequent ones.
             lock = next.catch(() => undefined);
             return next;
         };
         const hostRequestUserQuestions = hostCallbacks?.requestUserQuestions;
+        const batchCallback =
+            parentAnswerer === undefined && hostRequestUserQuestions !== undefined
+                ? async (requests: readonly AskUserQuestionRequest[]): Promise<string[]> => {
+                      const stamped = requests.map((request) => {
+                          const withSource = withChildAskUserSource(request, source);
+                          const header = formatChildAskUserHeader(withSource);
+                          return header !== undefined && header !== withSource.header
+                              ? { ...withSource, header }
+                              : withSource;
+                      });
+                      return hostRequestUserQuestions(stamped);
+                  }
+                : undefined;
         registry.register(
             createAskUserToolRegistration({
                 requestUserQuestion: serialized,
-                ...(hostRequestUserQuestions !== undefined ? { requestUserQuestions: hostRequestUserQuestions } : {}),
+                ...(batchCallback !== undefined ? { requestUserQuestions: batchCallback } : {}),
             }),
         );
         return;

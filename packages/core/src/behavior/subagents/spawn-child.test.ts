@@ -31,8 +31,58 @@ describe('registerChildAskUserTool', () => {
 
         expect(calls).toHaveLength(1);
         expect(calls[0]?.question).toBe('which?');
+        expect(calls[0]?.source?.sessionId).toBe('child-forward');
+        expect(calls[0]?.header).toBe('From subagent');
         expect(settlement.result.status).toBe('completed');
         expect(settlement.structuredOutput).toMatchObject({ answer: 'host-answered' });
+    });
+
+    it('stamps source metadata and parent-answers without hitting the user overlay', async () => {
+        const userCalls: AskUserQuestionRequest[] = [];
+        const hostCallbacks: ChildHostCallbacks = {
+            requestUserQuestion: async (request) => {
+                userCalls.push(request);
+                return 'user';
+            },
+            parentAskUserAnswerer: {
+                tryAnswer: async () => ({ kind: 'answer', answer: 'parent-ok' }),
+            },
+            resolveChildAskUserSource: () => ({ agentName: 'deep', title: 'Auth work' }),
+        };
+        const registry = new ToolRegistry();
+        registerChildAskUserTool(registry, 'child-parent', hostCallbacks);
+
+        const settlement = await invokeAsk(registry, { question: 'which?', options: [] });
+
+        expect(settlement.structuredOutput).toMatchObject({ answer: 'parent-ok' });
+        expect(userCalls).toEqual([]);
+    });
+
+    it('escalates requires_user_confirmation to the user with a source header', async () => {
+        const userCalls: AskUserQuestionRequest[] = [];
+        const hostCallbacks: ChildHostCallbacks = {
+            requestUserQuestion: async (request) => {
+                userCalls.push(request);
+                return 'user-confirmed';
+            },
+            parentAskUserAnswerer: {
+                tryAnswer: async () => ({ kind: 'answer', answer: 'should-not-run' }),
+            },
+            resolveChildAskUserSource: () => ({ agentName: 'deep' }),
+        };
+        const registry = new ToolRegistry();
+        registerChildAskUserTool(registry, 'child-confirm', hostCallbacks);
+
+        const settlement = await invokeAsk(registry, {
+            question: 'Approve deploy?',
+            options: [],
+            requires_user_confirmation: true,
+        });
+
+        expect(settlement.structuredOutput).toMatchObject({ answer: 'user-confirmed' });
+        expect(userCalls).toHaveLength(1);
+        expect(userCalls[0]?.header).toBe('From subagent deep');
+        expect(userCalls[0]?.requiresUserConfirmation).toBe(true);
     });
 
     it('serializes concurrent ask_user invocations under a per-spawn mutex', async () => {
@@ -106,7 +156,11 @@ describe('registerChildAskUserTool', () => {
 
 async function invokeAsk(
     registry: ToolRegistry,
-    input: { readonly question: string; readonly options?: readonly unknown[] },
+    input: {
+        readonly question: string;
+        readonly options?: readonly unknown[];
+        readonly requires_user_confirmation?: boolean;
+    },
 ): Promise<ToolInvocationSettlement> {
     const advertisement = registry.advertise().find((tool) => tool.name === 'ask_user');
     if (advertisement === undefined) {
