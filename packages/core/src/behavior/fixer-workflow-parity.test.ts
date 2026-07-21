@@ -1,4 +1,4 @@
-// allow: SIZE_OK -- HEAD 393 -> current ~596 pure LOC; one byte-parity and progress-contract matrix for the declarative fixer workflow graph.
+// allow: SIZE_OK -- HEAD 657 -> current 658 pure LOC; one byte-parity and progress-contract matrix for the declarative fixer workflow graph, plus updated capability assertions for read-only bash on research-explore/maturity-sample/evidence-check.
 /**
  * Fixer workflow parity — behavioral proofs for the richer intent routing
  * (intent-gated implement/fix path with 5-class gate and verification loop).
@@ -224,20 +224,21 @@ describe('fixer workflow parity — five richer intent classes route correctly',
 });
 
 describe('fixer workflow parity — exploratory-research routes read-only, never edits', () => {
-    it('research-explore declares exact read+subagent+network capabilities (no write/edit/patch/bash)', () => {
+    it('research-explore declares read+subagent+network+bash (read-only mutations, no write/edit/patch)', () => {
         const graph = createFixerWorkflowGraph();
         const capabilities = findNode(graph, 'research-explore').capabilities ?? [];
-        expect(capabilities).toEqual(['read', 'subagent', 'network']);
-        const forbidden = ['write', 'edit', 'patch', 'bash'];
+        expect(capabilities).toEqual(['read', 'subagent', 'network', 'bash']);
+        const forbidden = ['write', 'edit', 'patch'];
         for (const cap of forbidden) {
             expect(capabilities, `research-explore must not declare ${cap}`).not.toContain(cap);
         }
     });
 
-    it('research-explore prompt forbids edits and carries explore/librarian + readonly child context', () => {
+    it('research-explore prompt forbids mutations but allows read-only bash, carries explore/librarian + readonly child context', () => {
         const graph = createFixerWorkflowGraph();
         const prompt = configString(findNode(graph, 'research-explore'), 'systemPrompt') ?? '';
-        expect(/must not edit|never edit|read-only/i.test(prompt)).toBe(true);
+        expect(/READ-ONLY FOR MUTATIONS/i.test(prompt)).toBe(true);
+        expect(/read-only bash/i.test(prompt)).toBe(true);
         expect(prompt).toContain(READONLY_TASK_CHILD_CONTEXT);
         expect(prompt).toContain('category:"explore"');
         expect(prompt).toContain('category:"librarian"');
@@ -356,13 +357,13 @@ describe('fixer workflow parity — explicit-implementation creates todos + dele
     it('maturity-sample is a short read-only hybrid gate before classify', () => {
         const graph = createFixerWorkflowGraph();
         const node = findNode(graph, 'maturity-sample');
-        expect(node.capabilities).toEqual(['read']);
+        expect(node.capabilities).toEqual(['read', 'bash']);
         expect(configString(node, 'outputKey')).toBe('explore.sampled');
         expect(configString(node, 'outputShape')).toBe('boolean');
         expect(configValue(node, 'loopActiveSoftLandAttempts')).toBe(5);
         const prompt = configString(node, 'systemPrompt') ?? '';
         expect(/sample/i.test(prompt)).toBe(true);
-        expect(/read-only|READ-ONLY/i.test(prompt)).toBe(true);
+        expect(/read-only for mutations/i.test(prompt)).toBe(true);
     });
 
     it('maturity-classify is a pure structured enum gate after sampling', () => {

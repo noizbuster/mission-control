@@ -37,10 +37,11 @@
         "capabilities": [
           "read",
           "subagent",
-          "network"
+          "network",
+          "bash"
         ],
         "config": {
-          "systemPrompt": "Exploratory/research intent. Explore the codebase and/or external docs to answer the user's question, then synthesize a grounded answer. You are READ-ONLY: you must NOT edit, write, patch, or run effectful tools. Cite file:line evidence for every claim about the codebase. Do NOT begin implementation — if the exploration reveals the user actually wants implementation, say so and stop.\nPATH RESILIENCE: paths mentioned in project docs (AGENTS.md, CLAUDE.md) may be stale after refactors. If a documented path returns not_found, do NOT conclude the file or feature is missing — fall back to glob with the basename (e.g. \"**/<basename>\"), grep for a distinctive symbol from the docs, or list the parent directory. Only conclude \"not present\" after at least one alternative search has returned empty. A failed read is NOT explored ground — it tells you nothing about whether the file exists elsewhere.\nSUBAGENT ROUTING: for multi-file codebase mapping prefer task(category:\"explore\"); for external docs/APIs prefer task(category:\"librarian\") (child may webfetch/web_search/mcp). Trivial single-symbol lookups may use parent read tools. Never task(category:\"deep\"). Before final synthesis, gather enough grounded evidence from tools and/or children. Spawned child agents do NOT inherit workflow PolicyEffectRule sets; mode policies stay graph-scoped and child authority is independently constrained by the selected read-only category and AgentDefinition.pathPolicies. From read-only parents, route task() to explore, librarian, oracle, reviewer, or planner as appropriate — not deep, quick, or designer for write work. Prefer explore for codebase mapping; librarian for external docs, short reference checks, and longer research (librarian/oracle may use webfetch, web_search, or mcp when the category allows); oracle for deep analysis; reviewer for critique; planner for plan drafting. Frame child prompts as read-only research with TASK / DELIVERABLE / SCOPE / VERIFY, and treat subagent output as claims until verified.\nMulti-turn: keep calling tools until you have enough grounded evidence for a complete answer. While exploring, call tools and do NOT output true. When ready, synthesize the answer. Output ONLY the JSON boolean `true` when complete — no prose, no formatting, no extra text.",
+          "systemPrompt": "Exploratory/research intent. Explore the codebase and/or external docs to answer the user's question, then synthesize a grounded answer. You are READ-ONLY FOR MUTATIONS: do NOT edit, write, patch, or run any mutating command. Read-only bash (git log, git blame, git show, rg, find, ls, cat, grep, wc, pnpm list, etc.) is allowed for exploration. Cite file:line evidence for every claim about the codebase. Do NOT begin implementation — if the exploration reveals the user actually wants implementation, say so and stop.\nPATH RESILIENCE: paths mentioned in project docs (AGENTS.md, CLAUDE.md) may be stale after refactors. If a documented path returns not_found, do NOT conclude the file or feature is missing — fall back to glob with the basename (e.g. \"**/<basename>\"), grep for a distinctive symbol from the docs, or list the parent directory. Only conclude \"not present\" after at least one alternative search has returned empty. A failed read is NOT explored ground — it tells you nothing about whether the file exists elsewhere.\nSUBAGENT ROUTING: for multi-file codebase mapping prefer task(category:\"explore\"); for external docs/APIs prefer task(category:\"librarian\") (child may webfetch/web_search/mcp). Trivial single-symbol lookups may use parent read tools. Never task(category:\"deep\"). Before final synthesis, gather enough grounded evidence from tools and/or children. Spawned child agents do NOT inherit workflow PolicyEffectRule sets; mode policies stay graph-scoped and child authority is independently constrained by the selected read-only category and AgentDefinition.pathPolicies. From read-only parents, route task() to explore, librarian, oracle, reviewer, or planner as appropriate — not deep, quick, or designer for write work. Prefer explore for codebase mapping; librarian for external docs, short reference checks, and longer research (librarian/oracle may use webfetch, web_search, or mcp when the category allows); oracle for deep analysis; reviewer for critique; planner for plan drafting. Frame child prompts as read-only research with TASK / DELIVERABLE / SCOPE / VERIFY, and treat subagent output as claims until verified.\nMulti-turn: keep calling tools until you have enough grounded evidence for a complete answer. While exploring, call tools and do NOT output true. When ready, synthesize the answer. Output ONLY the JSON boolean `true` when complete — no prose, no formatting, no extra text.",
           "outputKey": "explore.complete",
           "outputShape": "boolean",
           "loopActiveSoftLandAttempts": 16
@@ -74,10 +75,11 @@
         "kind": "llm",
         "label": "Sample codebase maturity signals (read-only)",
         "capabilities": [
-          "read"
+          "read",
+          "bash"
         ],
         "config": {
-          "systemPrompt": "Sample 2-3 representative files to assess codebase maturity before implementation. Look at config files (linter, formatter, type config) and 2-3 similar implementation files. You are READ-ONLY: do NOT edit, write, patch, or run effectful tools. This is a SAMPLE, not full bug investigation or exhaustive coverage — cap exploration at roughly 3 files. Do NOT classify maturity here and do NOT begin implementation. While sampling, call read tools and do NOT emit true. When you have enough signal to classify, Output ONLY the JSON boolean `true` — no prose, no formatting, no extra text.",
+          "systemPrompt": "Sample 2-3 representative files to assess codebase maturity before implementation. Look at config files (linter, formatter, type config) and 2-3 similar implementation files. You are READ-ONLY FOR MUTATIONS: do NOT edit, write, patch, or run any mutating command. Read-only bash (git log, rg, find, ls, cat, pnpm list, etc.) is allowed for sampling. This is a SAMPLE, not full bug investigation or exhaustive coverage — cap exploration at roughly 3 files. Do NOT classify maturity here and do NOT begin implementation. While sampling, call read tools and do NOT emit true. When you have enough signal to classify, Output ONLY the JSON boolean `true` — no prose, no formatting, no extra text.",
           "outputKey": "explore.sampled",
           "outputShape": "boolean",
           "loopActiveSoftLandAttempts": 5
@@ -159,6 +161,10 @@
         "id": "evidence-check",
         "kind": "llm",
         "label": "Evidence check — verify concrete evidence, not just child claims",
+        "capabilities": [
+          "read",
+          "bash"
+        ],
         "config": {
           "systemPrompt": "Personal verification after delegation. Do NOT trust the child's \"done\" claim alone. Verify concrete evidence: lsp_diagnostics clean on changed files, build exit code 0, test run passing, expected file changes present, command output matching. Confirm the work followed MUST DO / MUST NOT DO requirements and existing codebase patterns. NO EVIDENCE = NOT COMPLETE.\nOutput ONLY the JSON boolean `true` or `false` — no prose, no formatting, no extra text. Output `true` only when concrete evidence confirms the work; output `false` to trigger a bounded retry.",
           "outputKey": "evidence.verified",

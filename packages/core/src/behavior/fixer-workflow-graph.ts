@@ -1,4 +1,4 @@
-// allow: SIZE_OK -- HEAD 452 -> current 511 pure LOC; one declarative fixer-workflow graph whose node and edge tables stay together.
+// allow: SIZE_OK -- HEAD 511 -> current 516 pure LOC; one declarative fixer-workflow graph whose node and edge tables stay together, plus read-only bash on research/sampling/evidence nodes for direct inspection without task() round-trips.
 /**
  * The Fixer workflow graph: the intent-gated implement/fix path (ABG graph).
  * Inspired by orchestrator discipline for bounded implementation with verification;
@@ -124,14 +124,16 @@ export function createFixerWorkflowGraph(options: FixerWorkflowGraphOptions = {}
                 id: 'research-explore',
                 kind: 'llm',
                 label: 'Exploratory research — read-only, NO edits',
-                capabilities: ['read', 'subagent', 'network'],
+                capabilities: ['read', 'subagent', 'network', 'bash'],
                 config: {
                     systemPrompt:
                         'Exploratory/research intent. Explore the codebase and/or external docs to answer the ' +
-                        "user's question, then synthesize a grounded answer. You are READ-ONLY: you must NOT " +
-                        'edit, write, patch, or run effectful tools. Cite file:line evidence for every claim ' +
-                        'about the codebase. Do NOT begin implementation — if the exploration reveals the user ' +
-                        'actually wants implementation, say so and stop.\n' +
+                        "user's question, then synthesize a grounded answer. You are READ-ONLY FOR MUTATIONS: " +
+                        'do NOT edit, write, patch, or run any mutating command. Read-only bash (git log, ' +
+                        'git blame, git show, rg, find, ls, cat, grep, wc, pnpm list, etc.) is allowed for ' +
+                        'exploration. Cite file:line evidence for every claim about the codebase. Do NOT begin ' +
+                        'implementation — if the exploration reveals the user actually wants implementation, ' +
+                        'say so and stop.\n' +
                         'PATH RESILIENCE: paths mentioned in project docs (AGENTS.md, CLAUDE.md) may be stale ' +
                         'after refactors. If a documented path returns not_found, do NOT conclude the file or ' +
                         'feature is missing — fall back to glob with the basename (e.g. "**/<basename>"), grep ' +
@@ -182,16 +184,18 @@ export function createFixerWorkflowGraph(options: FixerWorkflowGraphOptions = {}
                 id: 'maturity-sample',
                 kind: 'llm',
                 label: 'Sample codebase maturity signals (read-only)',
-                capabilities: ['read'],
+                capabilities: ['read', 'bash'],
                 config: {
                     systemPrompt:
                         'Sample 2-3 representative files to assess codebase maturity before implementation. ' +
                         'Look at config files (linter, formatter, type config) and 2-3 similar implementation ' +
-                        'files. You are READ-ONLY: do NOT edit, write, patch, or run effectful tools. ' +
-                        'This is a SAMPLE, not full bug investigation or exhaustive coverage — cap exploration ' +
-                        'at roughly 3 files. Do NOT classify maturity here and do NOT begin implementation. ' +
-                        'While sampling, call read tools and do NOT emit true. When you have enough signal to ' +
-                        'classify, Output ONLY the JSON boolean `true` — no prose, no formatting, no extra text.',
+                        'files. You are READ-ONLY FOR MUTATIONS: do NOT edit, write, patch, or run any ' +
+                        'mutating command. Read-only bash (git log, rg, find, ls, cat, pnpm list, etc.) is ' +
+                        'allowed for sampling. This is a SAMPLE, not full bug investigation or exhaustive ' +
+                        'coverage — cap exploration at roughly 3 files. Do NOT classify maturity here and ' +
+                        'do NOT begin implementation. While sampling, call read tools and do NOT emit true. ' +
+                        'When you have enough signal to classify, Output ONLY the JSON boolean `true` — no ' +
+                        'prose, no formatting, no extra text.',
                     outputKey: 'explore.sampled',
                     outputShape: 'boolean',
                     loopActiveSoftLandAttempts: 5,
@@ -306,6 +310,7 @@ export function createFixerWorkflowGraph(options: FixerWorkflowGraphOptions = {}
                 id: 'evidence-check',
                 kind: 'llm',
                 label: 'Evidence check — verify concrete evidence, not just child claims',
+                capabilities: ['read', 'bash'],
                 config: {
                     systemPrompt:
                         'Personal verification after delegation. Do NOT trust the child\'s "done" claim alone. ' +
