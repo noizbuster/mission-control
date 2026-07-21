@@ -180,22 +180,17 @@ function AppMain(props: AppProps): JSX.Element {
                             showWelcome={showWelcome()}
                             welcomeData={welcomeData}
                             statusBarProps={statusBarProps()}
-                            transcript={(() => {
-                                const activeAssistantMessageId = snapshot().activeAssistantMessageId;
-                                return (
-                                    <ChatTranscript
-                                        blocks={messageBlocks()}
-                                        transcriptParts={snapshot().transcriptParts}
-                                        scrollboxRef={scrollboxHandle}
-                                        generating={snapshot().generating}
-                                        showThinking={snapshot().showThinking}
-                                        toolOutputExpanded={snapshot().toolOutputExpanded}
-                                        {...(activeAssistantMessageId !== undefined
-                                            ? { activeAssistantMessageId }
-                                            : {})}
-                                    />
-                                );
-                            })()}
+                            transcript={
+                                <ChatTranscript
+                                    blocks={messageBlocks()}
+                                    transcriptParts={snapshot().transcriptParts}
+                                    scrollboxRef={scrollboxHandle}
+                                    generating={snapshot().generating}
+                                    showThinking={snapshot().showThinking}
+                                    toolOutputExpanded={snapshot().toolOutputExpanded}
+                                    activeAssistantMessageId={snapshot().activeAssistantMessageId}
+                                />
+                            }
                             showAbgMinimap={showAbgMinimap()}
                             abgOverlayController={abgOverlayController}
                             stickyNotice={snapshot().stickyNotice}

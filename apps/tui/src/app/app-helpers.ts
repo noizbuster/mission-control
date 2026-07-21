@@ -8,8 +8,34 @@ import type { StatusBarProps } from '../components/StatusBar';
 /**
  * Reuse previous block references when content (kind + element-wise lines) is unchanged.
  * Precondition for memoized MessageBlock rendering: without reference stability, memo never skips.
+ *
+ * Returns the previous array reference when length and every element are identical, so the
+ * surrounding `createMemo` is referentially stable across unrelated ChatStore publishes (typing,
+ * stream coalesce ticks, etc). This stops downstream `<Index each={blocks}>` from reconciling
+ * and prevents the OpenTUI scrollbox from re-measuring scrollHeight on every keystroke, which
+ * surfaced as a 1-row screen shift / scrollbar flicker whenever the transcript had content.
  */
 export function preserveBlockReferences(fresh: readonly ChatBlock[], prev: readonly ChatBlock[]): readonly ChatBlock[] {
+    if (fresh.length === prev.length) {
+        let unchanged = true;
+        for (let i = 0; i < fresh.length; i += 1) {
+            const block = fresh[i];
+            const old = prev[i];
+            if (block === undefined || old === undefined) {
+                unchanged = false;
+                break;
+            }
+            if (
+                block.kind !== old.kind ||
+                block.lines.length !== old.lines.length ||
+                !block.lines.every((line, j) => line === old.lines[j])
+            ) {
+                unchanged = false;
+                break;
+            }
+        }
+        if (unchanged) return prev;
+    }
     return fresh.map((block, i) => {
         const old = prev[i];
         if (

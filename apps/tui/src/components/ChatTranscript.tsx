@@ -48,7 +48,7 @@ export type ChatTranscriptProps = {
     readonly generating: boolean;
     readonly showThinking: boolean;
     readonly toolOutputExpanded: boolean;
-    readonly activeAssistantMessageId?: string;
+    readonly activeAssistantMessageId: string | undefined;
 };
 
 export type ChatTranscriptScrollboxProps = {
