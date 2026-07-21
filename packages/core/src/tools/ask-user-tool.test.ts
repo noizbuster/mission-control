@@ -52,6 +52,26 @@ describe('createAskUserToolRegistration', () => {
             expect(calls).toEqual([{ question: 'Deploy now?', options: ['yes', 'no'] }]);
         });
 
+        it('passes requires_user_confirmation through to the host request', async () => {
+            const { calls, fn } = createRecordingCallback(['yes']);
+            const registration = createAskUserToolRegistration({ requestUserQuestion: fn });
+            const input: AskUserInput = {
+                question: 'Deploy now?',
+                options: ['yes', 'no'],
+                requires_user_confirmation: true,
+            };
+
+            await registration.execute(input, createContext());
+
+            expect(calls).toEqual([
+                {
+                    question: 'Deploy now?',
+                    options: ['yes', 'no'],
+                    requiresUserConfirmation: true,
+                },
+            ]);
+        });
+
         it('passes an empty options array to the callback when no options are supplied', async () => {
             const { calls, fn } = createRecordingCallback(['maybe']);
             const registration = createAskUserToolRegistration({ requestUserQuestion: fn });

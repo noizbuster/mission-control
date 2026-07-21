@@ -35,6 +35,7 @@ export const askUserQuestionSchema = z
         // recommended marks the option surfaced first; the tool reorders it to
         // index 0 so the host treats position 0 as the default selection.
         recommended: z.number().int().min(0).optional(),
+        requires_user_confirmation: z.boolean().optional(),
     })
     .strict()
     .refine(
@@ -49,6 +50,7 @@ export const askUserInputSchema = z
         question: z.string().min(1).max(4_000),
         options: z.array(askUserLegacyOptionSchema).max(50).default([]),
         questions: z.array(askUserQuestionSchema).max(50).optional(),
+        requires_user_confirmation: z.boolean().optional(),
     })
     .strict();
 
@@ -70,16 +72,29 @@ export type AskUserQuestion = {
     readonly options?: readonly AskUserOption[] | undefined;
     readonly multiple?: boolean | undefined;
     readonly recommended?: number | undefined;
+    readonly requires_user_confirmation?: boolean | undefined;
 };
 
 export type AskUserInput = {
     readonly question: string;
     readonly options: readonly (string | AskUserOption)[];
     readonly questions?: readonly AskUserQuestion[] | undefined;
+    readonly requires_user_confirmation?: boolean | undefined;
 };
 
 export type AskUserOutput = {
     readonly answer: string;
+};
+
+/**
+ * Source metadata stamped when a child/subagent session raises ask_user so the
+ * parent host can label the overlay and apply parent-first routing.
+ */
+export type AskUserQuestionSource = {
+    readonly sessionId: string;
+    readonly agentName?: string;
+    readonly category?: string;
+    readonly title?: string;
 };
 
 /**
@@ -92,6 +107,8 @@ export type AskUserQuestionRequest = {
     readonly options: readonly (string | AskUserOption)[];
     readonly header?: string;
     readonly multiple?: boolean;
+    readonly source?: AskUserQuestionSource;
+    readonly requiresUserConfirmation?: boolean;
 };
 
 export type AskUserUserInputWaitContext = {
@@ -213,11 +230,24 @@ export function askUserParametersJsonSchema(): Readonly<Record<string, unknown>>
                                 'The option is moved to the first position so the host can default-select it. ' +
                                 'Must be a valid index into a non-empty options array.',
                         },
+                        requires_user_confirmation: {
+                            type: 'boolean',
+                            description:
+                                'When true, skip parent-agent auto-answer and always surface this question ' +
+                                'to the human (personal preference, secrets, or explicit approval).',
+                        },
                     },
                     required: ['question'],
                     additionalProperties: false,
                 },
                 description: 'Multi-question mode. When provided, takes precedence over `question`/`options`.',
+            },
+            requires_user_confirmation: {
+                type: 'boolean',
+                description:
+                    'When true, skip parent-agent auto-answer and always surface this question ' +
+                    'to the human (personal preference, secrets, or explicit approval). ' +
+                    'Applies to single-question mode; in multi-question mode prefer the per-entry field.',
             },
         },
         required: ['question'],

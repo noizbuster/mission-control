@@ -18,6 +18,7 @@ export type {
     AskUserInput,
     AskUserOutput,
     AskUserQuestionRequest,
+    AskUserQuestionSource,
     AskUserToolOptions,
     AskUserUserInputWaitContext,
     AskUserUserInputWaitMirror,
@@ -70,6 +71,9 @@ function buildQuestionRequest(question: AskUserQuestion): AskUserQuestionRequest
         options: ordered,
         ...(question.header !== undefined && { header: question.header }),
         ...(question.multiple !== undefined && { multiple: question.multiple }),
+        ...(question.requires_user_confirmation !== undefined && {
+            requiresUserConfirmation: question.requires_user_confirmation,
+        }),
     };
 }
 
@@ -130,7 +134,15 @@ export function createAskUserToolRegistration(
             // sequentially.
             const requests: AskUserQuestionRequest[] = multiMode
                 ? input.questions.map(buildQuestionRequest)
-                : [{ question: input.question, options: input.options }];
+                : [
+                      {
+                          question: input.question,
+                          options: input.options,
+                          ...(input.requires_user_confirmation !== undefined && {
+                              requiresUserConfirmation: input.requires_user_confirmation,
+                          }),
+                      },
+                  ];
 
             // Non-interactive hosts (--no-tui/--json) cannot block on a human.
             // Emit the ask-blocked event then return a sentinel — never await a
@@ -159,10 +171,11 @@ export function createAskUserToolRegistration(
                     );
                     return { answer: labeled.join('\n') };
                 }
-                const answer = await options.requestUserQuestion({
-                    question: input.question,
-                    options: input.options,
-                });
+                const singleRequest = requests[0];
+                if (singleRequest === undefined) {
+                    return { answer: '' };
+                }
+                const answer = await options.requestUserQuestion(singleRequest);
                 return { answer };
             } finally {
                 if (wait !== undefined) {
