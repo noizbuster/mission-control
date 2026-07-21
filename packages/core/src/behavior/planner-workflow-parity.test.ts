@@ -1,4 +1,4 @@
-// allow: SIZE_OK -- HEAD 336 -> current 336 pure LOC; one byte-parity and behavior contract for the declarative planner workflow graph.
+// allow: SIZE_OK -- HEAD 433 -> current 445 pure LOC; one byte-parity and behavior contract for the declarative planner workflow graph, plus updated capability assertions for read-only bash on explore/research and a scoped exec/write/edit/patch ban.
 /**
  * Planner workflow planner-mechanics parity suite (plan Task 7).
  *
@@ -106,12 +106,25 @@ describe('planner workflow parity: sticky plan mode', () => {
         expect(intake).toMatch(/not implement/i);
     });
 
-    it('no planner node declares an exec or bash capability that could implement', () => {
+    it('no planner node declares exec; bash appears only on explore/research', () => {
         const graph = createPlannerWorkflowGraph();
         for (const node of graph.nodes) {
             const caps = node.capabilities ?? [];
-            expect(caps).not.toContain('exec');
-            expect(caps).not.toContain('bash');
+            expect(caps, `${node.id} must not declare exec`).not.toContain('exec');
+            if (caps.includes('bash')) {
+                expect(['explore', 'research']).toContain(node.id);
+            }
+        }
+    });
+
+    it('write/edit capabilities appear only on draft-plan and write-plan (planner-readonly allows only .mc artifact roots)', () => {
+        const graph = createPlannerWorkflowGraph();
+        for (const node of graph.nodes) {
+            const caps = node.capabilities ?? [];
+            const declaresWrite = caps.some((cap) => cap === 'write' || cap === 'edit' || cap === 'patch');
+            if (declaresWrite) {
+                expect(['draft-plan', 'write-plan']).toContain(node.id);
+            }
         }
     });
 });
@@ -294,19 +307,19 @@ describe('planner workflow parity: independently constrained child consultations
         expect(PLANNER_READONLY_CHILD_CONTEXT).not.toMatch(/category\s*:\s*["']deep["']/i);
     });
 
-    it('explore and research advertise read + subagent + network for task/network tools', () => {
+    it('explore and research advertise read + subagent + network + bash for task/network/read-only-bash tools', () => {
         const graph = createPlannerWorkflowGraph();
-        expect(findNode(graph, 'explore').capabilities).toEqual(['read', 'subagent', 'network']);
-        expect(findNode(graph, 'research').capabilities).toEqual(['read', 'subagent', 'network']);
+        expect(findNode(graph, 'explore').capabilities).toEqual(['read', 'subagent', 'network', 'bash']);
+        expect(findNode(graph, 'research').capabilities).toEqual(['read', 'subagent', 'network', 'bash']);
     });
 
-    it('materializeWorkflow with planner-readonly keeps explore/research subagent capability', async () => {
+    it('materializeWorkflow with planner-readonly keeps explore/research subagent + bash capability', async () => {
         const spec = WorkflowSpecSchema.parse(await loadPlannerSpec());
         const executed = materializeWorkflow(spec);
         const explore = executed.nodes.find((node) => node.id === 'explore');
         const research = executed.nodes.find((node) => node.id === 'research');
-        expect(explore?.capabilities).toEqual(['read', 'subagent', 'network']);
-        expect(research?.capabilities).toEqual(['read', 'subagent', 'network']);
+        expect(explore?.capabilities).toEqual(['read', 'subagent', 'network', 'bash']);
+        expect(research?.capabilities).toEqual(['read', 'subagent', 'network', 'bash']);
     });
 
     it('explore prompt carries the planner-readonly child context', () => {

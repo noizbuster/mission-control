@@ -1,4 +1,4 @@
-// allow: SIZE_OK -- deep autonomous planner-workflow graph; one declarative graph whose routing tables are reviewed together.
+// allow: SIZE_OK -- HEAD 920 -> current 926 pure LOC; deep autonomous planner-workflow graph whose routing tables are reviewed together, plus read-only bash on explore/research for direct inspection without task() round-trips and a matching planner-readonly overlay note.
 /**
  * The planner workflow graph — deep autonomous planning craft.
  *
@@ -129,7 +129,9 @@ export const PLANNER_READONLY_MODE: Mode = {
         'product code and NEVER begin execution — that belongs to #executer (or #executer) or an ' +
         'explicit start command. You are READ-ONLY: you must not edit source files. You may only write plan ' +
         'artifacts to .mc/plans/, spec artifacts to .mc/specs/, and draft artifacts to ' +
-        '.mc/drafts/. Goal-oriented: optimize for objectives and outcomes, not recipe steps. ' +
+        '.mc/drafts/. Read-only bash (git log, rg, find, ls, cat, pnpm list, etc.) is allowed for ' +
+        'exploration and maturity sampling on the explore/research nodes; do NOT mutate files or ' +
+        'run state-changing commands via bash — that breaks plan-mode. Goal-oriented: optimize for objectives and outcomes, not recipe steps. ' +
         'Explore hierarchy before any question: (1) use read tools yourself, (2) delegate ' +
         'explore/librarian agents via task when breadth is needed, (3) only then ask ONE ' +
         'high-signal clarifying question as a last resort. Never stop early — produce an ' +
@@ -327,13 +329,15 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
                 id: 'explore',
                 kind: 'llm',
                 label: 'Explore the codebase to ground the plan',
-                capabilities: ['read', 'subagent', 'network'],
+                capabilities: ['read', 'subagent', 'network', 'bash'],
                 config: {
                     systemPrompt:
                         'Deep exploration to ground an execution-ready plan. Hierarchy: (1) use read ' +
                         'tools yourself first, (2) when breadth is needed delegate explore/librarian ' +
                         'via task with TASK / DELIVERABLE / SCOPE / VERIFY framing, (3) never ask the ' +
-                        'user during this node. Cite file:line evidence for every claim. ' +
+                        'user during this node. Cite file:line evidence for every claim. Read-only bash ' +
+                        '(git log, rg, find, pnpm list, etc.) is allowed for exploration; do NOT mutate ' +
+                        'files via bash — that breaks plan-mode. ' +
                         PLANNER_READONLY_CHILD_CONTEXT +
                         PLANNER_READONLY_EXPLORATION_CHILD_LIMIT +
                         ' Multi-turn: keep going until exploration is grounded — do not stop early. ' +
@@ -384,13 +388,15 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
                 id: 'research',
                 kind: 'llm',
                 label: 'Research best practices for an unclear request',
-                capabilities: ['read', 'subagent', 'network'],
+                capabilities: ['read', 'subagent', 'network', 'bash'],
                 config: {
                     systemPrompt:
                         'The request outcome is fuzzy. Research best practices and prior art to make ' +
                         'it plannable WITHOUT interrogating the user — adopt and ANNOUNCE defensible ' +
                         'defaults (industry standard or repo convention) with rationale. Prefer tools ' +
-                        'and explore/librarian agents over questions. ' +
+                        'and explore/librarian agents over questions. Read-only bash (git log, rg, ' +
+                        'find, pnpm list, etc.) is allowed for research; do NOT mutate files via ' +
+                        'bash — that breaks plan-mode. ' +
                         PLANNER_READONLY_CHILD_CONTEXT +
                         PLANNER_READONLY_EXPLORATION_CHILD_LIMIT +
                         ' Multi-turn: keep going until research is grounded — do not stop early. While ' +
