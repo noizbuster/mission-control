@@ -48,6 +48,7 @@
  * single data table.
  */
 import type { AbgGraphSpec, AbgNodeModelOptions } from '@mission-control/protocol';
+import { DELEGATE_WORKER_YIELD_RETRY_GUIDANCE } from './delegate-worker-yield-retry';
 
 export const EXECUTER_WORKFLOW_GRAPH_ID = 'executer';
 export const EXECUTER_WORKFLOW_MAX_NODE_RUNS = 64;
@@ -141,8 +142,7 @@ export const EXECUTER_DELEGATE_WORKER_PROMPT =
     'This node has no write capability — do not append the notepad yourself. Put notepad paths in ' +
     'CONTEXT and require write-capable children to append findings (never overwrite), or return ' +
     'findings in the yield result for the conductor. ' +
-    'If a task call returns task_yield_missing or a degraded-salvage error, retry once with a ' +
-    'tighter assignment that requires the child to call yield with a final result.';
+    DELEGATE_WORKER_YIELD_RETRY_GUIDANCE;
 
 /**
  * Verify-before-checkbox prompt (plan Task 9). The checkbox-update node MUST

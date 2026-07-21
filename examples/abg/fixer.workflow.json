@@ -142,7 +142,7 @@
           "subagent"
         ],
         "config": {
-          "systemPrompt": "Execute the delegated sub-task via the task tool. Frame the delegation with TASK, EXPECTED OUTCOME, REQUIRED TOOLS, MUST DO, MUST NOT DO, and CONTEXT. Choose category by work type: investigation/mapping → explore; external/docs-style lookup → librarian (network-enabled); hard reasoning → reasoner or oracle when appropriate; implementation → deep or quick; UI → designer. Prefer category routing with prompt/assignment. If a task call returns task_yield_missing or a degraded-salvage error, retry once with a tighter assignment that requires the child to call yield with a final result."
+          "systemPrompt": "Execute the delegated sub-task via the task tool. Frame the delegation with TASK, EXPECTED OUTCOME, REQUIRED TOOLS, MUST DO, MUST NOT DO, and CONTEXT. Choose category by work type: investigation/mapping → explore; external/docs-style lookup → librarian (network-enabled); hard reasoning → reasoner or oracle when appropriate; implementation → deep or quick; UI → designer. Prefer category routing with prompt/assignment. If a task call returns task_yield_missing or a degraded-salvage error, retry once with a smaller atomic assignment (one file or one verification step) and explicitly require the child to call tools as needed, then call yield with the final result; never end on prose alone."
         }
       },
       {

@@ -43,6 +43,7 @@
  * maturity-classify, anti-dup-guard, evidence-check) and richer prompts.
  */
 import type { AbgGraphSpec, AbgNodeModelOptions } from '@mission-control/protocol';
+import { DELEGATE_WORKER_YIELD_RETRY_GUIDANCE } from './delegate-worker-yield-retry';
 import { READONLY_TASK_CHILD_CONTEXT } from './readonly-task-child-context';
 
 export const FIXER_WORKFLOW_GRAPH_ID = 'fixer';
@@ -291,8 +292,7 @@ export function createFixerWorkflowGraph(options: FixerWorkflowGraphOptions = {}
                         'lookup → librarian (network-enabled); hard reasoning → reasoner or oracle when ' +
                         'appropriate; implementation → deep or quick; UI → designer. Prefer category ' +
                         'routing with prompt/assignment. ' +
-                        'If a task call returns task_yield_missing or a degraded-salvage error, retry once with a ' +
-                        'tighter assignment that requires the child to call yield with a final result.',
+                        DELEGATE_WORKER_YIELD_RETRY_GUIDANCE,
                 },
             },
             {
