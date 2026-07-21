@@ -71,6 +71,42 @@ describe('SqlAgentJobMirror', () => {
         });
     });
 
+    it('round-trips category and title and writes session identity columns', async () => {
+        await withMirror(async (mirror) => {
+            const registry = new RuntimeAgentRegistry({ mirror });
+            registry.adopt({
+                id: 'agent-identity',
+                displayName: 'deep',
+                kind: 'sub',
+                parentId: 'Main',
+                category: 'deep',
+                title: 'Investigate auth',
+                status: 'running',
+                sessionId: 'child-session-identity',
+            });
+            await mirror.flush();
+
+            const loaded = await mirror.loadRuntimeAgents();
+            const reopened = new RuntimeAgentRegistry({ initialRefs: loaded });
+            const ref = reopened.lookup('agent-identity');
+            expect(ref?.category).toBe('deep');
+            expect(ref?.title).toBe('Investigate auth');
+            expect(ref?.displayName).toBe('deep');
+
+            const sessionRows = await mirror.client.execute({
+                sql: 'SELECT title, category, agent_name FROM sessions WHERE session_id = ?',
+                args: ['child-session-identity'],
+            });
+            expect(sessionRows.rows).toEqual([
+                {
+                    title: 'Investigate auth',
+                    category: 'deep',
+                    agent_name: 'deep',
+                },
+            ]);
+        });
+    });
+
     it('mirrors async jobs with parent-child lineage and yielded result output', async () => {
         // Given
         await withMirror(async (mirror) => {

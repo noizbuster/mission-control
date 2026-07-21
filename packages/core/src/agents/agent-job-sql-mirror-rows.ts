@@ -10,6 +10,8 @@ const runtimeAgentMetadataSchema = z
         sessionFile: z.string().min(1).optional(),
         authorityFingerprint: z.string().min(1).optional(),
         taskDepth: z.number().int().nonnegative().optional(),
+        category: z.string().min(1).optional(),
+        title: z.string().min(1).optional(),
     })
     .strict();
 
@@ -94,6 +96,8 @@ export function parseAgentRef(row: unknown): AgentRef | undefined {
         ...(metadata.sessionFile !== undefined ? { sessionFile: metadata.sessionFile } : {}),
         ...(metadata.authorityFingerprint !== undefined ? { authorityFingerprint: metadata.authorityFingerprint } : {}),
         ...(metadata.taskDepth !== undefined ? { taskDepth: metadata.taskDepth } : {}),
+        ...(metadata.category !== undefined ? { category: metadata.category } : {}),
+        ...(metadata.title !== undefined ? { title: metadata.title } : {}),
         createdAt: parsed.data.created_at,
         lastActivity: parsed.data.updated_at,
         ...(parsed.data.activity !== null && parsed.data.activity !== undefined

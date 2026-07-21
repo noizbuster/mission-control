@@ -1,5 +1,6 @@
 import type { Client } from '@libsql/client';
 import { ensurePublicSessionRow } from '../memory/session-awaiting-sql';
+import { ensureSessionWithIdentity } from '../memory/session-identity-sql';
 import { runtimeStatusToDb } from './agent-job-sql-mirror-rows';
 import type { BackgroundJobHandle } from './async-job-manager';
 import type { AgentRef } from './runtime-registry';
@@ -9,6 +10,15 @@ export async function upsertRuntimeAgentRow(input: { readonly client: Client; re
         client: input.client,
         sessionId: input.ref.sessionId,
         now: input.ref.lastActivity,
+    });
+    await ensureSessionWithIdentity({
+        client: input.client,
+        sessionId: input.ref.sessionId,
+        now: input.ref.lastActivity,
+        agentName: input.ref.displayName,
+        ...(input.ref.title !== undefined ? { title: input.ref.title } : {}),
+        ...(input.ref.category !== undefined ? { category: input.ref.category } : {}),
+        ...(input.ref.parentId !== undefined ? { parentSessionId: input.ref.parentId } : {}),
     });
     await input.client.execute({
         sql:
@@ -34,6 +44,8 @@ export async function upsertRuntimeAgentRow(input: { readonly client: Client; re
                     ? { authorityFingerprint: input.ref.authorityFingerprint }
                     : {}),
                 ...(input.ref.taskDepth !== undefined ? { taskDepth: input.ref.taskDepth } : {}),
+                ...(input.ref.category !== undefined ? { category: input.ref.category } : {}),
+                ...(input.ref.title !== undefined ? { title: input.ref.title } : {}),
             }),
         ],
     });
