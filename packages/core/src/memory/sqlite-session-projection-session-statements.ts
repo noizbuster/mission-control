@@ -6,8 +6,9 @@ export function insertSessionStatement(record: SessionProjectionSessionRecord): 
         sql: `
             INSERT INTO sessions (
                 session_id, status, created_at, updated_at, last_activity_at, stopped_at,
-                last_event_seq, awaiting_reason, primary_wait_id, legacy_jsonl_path, metadata_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                last_event_seq, awaiting_reason, primary_wait_id, workspace_path,
+                parent_session_id, legacy_jsonl_path, metadata_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(session_id) DO UPDATE SET
                 status = excluded.status,
                 updated_at = excluded.updated_at,
@@ -16,6 +17,8 @@ export function insertSessionStatement(record: SessionProjectionSessionRecord): 
                 last_event_seq = excluded.last_event_seq,
                 awaiting_reason = excluded.awaiting_reason,
                 primary_wait_id = excluded.primary_wait_id,
+                workspace_path = COALESCE(excluded.workspace_path, sessions.workspace_path),
+                parent_session_id = COALESCE(excluded.parent_session_id, sessions.parent_session_id),
                 legacy_jsonl_path = COALESCE(excluded.legacy_jsonl_path, sessions.legacy_jsonl_path),
                 metadata_json = excluded.metadata_json
         `,
@@ -29,11 +32,19 @@ export function insertSessionStatement(record: SessionProjectionSessionRecord): 
             record.lastSequence ?? 0,
             record.awaiting?.reason ?? null,
             primaryAwaitingSource(record)?.sourceId ?? null,
+            record.cwd ?? null,
+            record.parentSessionId ?? null,
             record.sourcePath,
             JSON.stringify({
                 eventCount: record.eventCount,
                 lastEventId: record.lastEventId ?? null,
                 lastEventType: record.lastEventType ?? null,
+                ...(record.cwd !== undefined ? { cwd: record.cwd } : {}),
+                ...(record.trustedRoot !== undefined ? { trustedRoot: record.trustedRoot } : {}),
+                ...(record.workspaceTrust !== undefined ? { workspaceTrust: record.workspaceTrust } : {}),
+                ...(record.name !== undefined ? { name: record.name } : {}),
+                ...(record.messageCount !== undefined ? { messageCount: record.messageCount } : {}),
+                ...(record.activeLeafId !== undefined ? { activeLeafId: record.activeLeafId } : {}),
                 ...(record.abortMarker !== undefined
                     ? {
                           abortMarkerAt: record.abortMarker.completedAt,

@@ -186,7 +186,7 @@ class LibsqlSessionProjectionStore implements SqliteSessionProjectionStore {
 function sessionSelectSql(suffix: string): string {
     return `
         SELECT s.session_id, s.status, s.created_at, s.stopped_at, s.last_event_seq, s.updated_at,
-               s.parent_session_id, s.title, s.category, s.agent_name,
+               s.parent_session_id, s.title, s.category, s.agent_name, s.workspace_path,
                s.awaiting_reason, s.primary_wait_id, s.legacy_jsonl_path, s.metadata_json,
                w.source_kind AS wait_source_kind, w.source_id AS wait_source_id,
                w.run_id AS wait_run_id, w.tool_call_id AS wait_tool_call_id,

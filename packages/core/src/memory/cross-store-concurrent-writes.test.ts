@@ -135,12 +135,12 @@ describe('cross-store concurrent writes', () => {
                     {
                         session_id: firstSessionId,
                         last_event_seq: 1,
-                        metadata_json: '{"eventCount":2,"lastEventId":"first_1","lastEventType":"task.completed"}',
+                        metadata_json: '{"eventCount":2,"lastEventId":"first_1","lastEventType":"task.completed","messageCount":1}',
                     },
                     {
                         session_id: secondSessionId,
                         last_event_seq: 1,
-                        metadata_json: '{"eventCount":2,"lastEventId":"second_1","lastEventType":"task.completed"}',
+                        metadata_json: '{"eventCount":2,"lastEventId":"second_1","lastEventType":"task.completed","messageCount":1}',
                     },
                 ]);
                 expect(

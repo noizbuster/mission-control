@@ -115,6 +115,8 @@ function eventSequence(eventId: string, sequenceByEventId: ReadonlyMap<string, n
 function sessionRecord(projection: SessionReplayProjection, filePath: string): SessionProjectionRecord {
     const lastEnvelope = projection.envelopes.at(-1);
     const abortMarker = activeAbortMarker(projection);
+    const tree = projection.sessionTree;
+    const messageCount = projection.events.filter((event) => event.message !== undefined).length;
     return {
         kind: 'session',
         sessionId: projection.sessionId,
@@ -128,6 +130,13 @@ function sessionRecord(projection: SessionReplayProjection, filePath: string): S
         ...(lastEnvelope !== undefined ? { lastEventType: lastEnvelope.event.type } : {}),
         updatedAt: lastEnvelope?.createdAt ?? projection.snapshot.startedAt,
         sourcePath: filePath,
+        ...(tree.parentSessionId !== undefined ? { parentSessionId: tree.parentSessionId } : {}),
+        ...(tree.cwd !== undefined ? { cwd: tree.cwd } : {}),
+        ...(tree.trustedRoot !== undefined ? { trustedRoot: tree.trustedRoot } : {}),
+        ...(tree.workspaceTrust !== undefined ? { workspaceTrust: tree.workspaceTrust } : {}),
+        ...(tree.sessionName !== undefined ? { name: tree.sessionName } : {}),
+        messageCount,
+        ...(tree.activeLeafId !== undefined ? { activeLeafId: tree.activeLeafId } : {}),
         ...(abortMarker !== undefined ? { abortMarker } : {}),
     };
 }

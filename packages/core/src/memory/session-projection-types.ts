@@ -29,6 +29,12 @@ export type SessionProjectionSessionRecord = {
     readonly title?: string | undefined;
     readonly category?: string | undefined;
     readonly agentName?: string | undefined;
+    readonly cwd?: string | undefined;
+    readonly trustedRoot?: string | undefined;
+    readonly workspaceTrust?: 'trusted' | 'denied' | 'unknown' | undefined;
+    readonly name?: string | undefined;
+    readonly messageCount?: number | undefined;
+    readonly activeLeafId?: string | undefined;
     readonly abortMarker?: {
         readonly completedAt: string;
         readonly operationId: string;

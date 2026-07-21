@@ -85,6 +85,7 @@ describe('sqlite session projection', () => {
                     eventCount: 10,
                     lastEventId: 'event_session_stopped',
                     lastEventType: 'session.stopped',
+                    messageCount: 10,
                 }),
             },
         ]);

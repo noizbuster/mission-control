@@ -74,7 +74,7 @@ describe('SQLite session event transaction rollback', () => {
                 ).toEqual([
                     {
                         last_event_seq: 0,
-                        metadata_json: '{"eventCount":1,"lastEventId":"event_0","lastEventType":"session.started"}',
+                        metadata_json: '{"eventCount":1,"lastEventId":"event_0","lastEventType":"session.started","messageCount":0}',
                     },
                 ]);
                 expect(

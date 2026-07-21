@@ -27,6 +27,7 @@ import {
 export function sessionRecordFromRow(row: z.infer<typeof sessionRowSchema>): SessionProjectionSessionRecord {
     const metadata = sessionMetadata(row.metadata_json);
     const awaiting = awaitingDetailsFromRow(row);
+    const cwd = row.workspace_path ?? metadata.cwd;
     return {
         kind: 'session',
         sessionId: row.session_id,
@@ -44,6 +45,12 @@ export function sessionRecordFromRow(row: z.infer<typeof sessionRowSchema>): Ses
         ...(row.title !== null && row.title !== undefined ? { title: row.title } : {}),
         ...(row.category !== null && row.category !== undefined ? { category: row.category } : {}),
         ...(row.agent_name !== null && row.agent_name !== undefined ? { agentName: row.agent_name } : {}),
+        ...(cwd !== undefined && cwd !== null ? { cwd } : {}),
+        ...(metadata.trustedRoot !== undefined ? { trustedRoot: metadata.trustedRoot } : {}),
+        ...(metadata.workspaceTrust !== undefined ? { workspaceTrust: metadata.workspaceTrust } : {}),
+        ...(metadata.name !== undefined ? { name: metadata.name } : {}),
+        ...(metadata.messageCount !== undefined ? { messageCount: metadata.messageCount } : {}),
+        ...(metadata.activeLeafId !== undefined ? { activeLeafId: metadata.activeLeafId } : {}),
     };
 }
 
@@ -183,6 +190,12 @@ function sessionMetadata(value: string | null): {
     readonly eventCount: number;
     readonly lastEventId?: string | undefined;
     readonly lastEventType?: z.infer<typeof AgentEventTypeSchema> | undefined;
+    readonly cwd?: string | undefined;
+    readonly trustedRoot?: string | undefined;
+    readonly workspaceTrust?: 'trusted' | 'denied' | 'unknown' | undefined;
+    readonly name?: string | undefined;
+    readonly messageCount?: number | undefined;
+    readonly activeLeafId?: string | undefined;
 } {
     const parsed = parseJson(
         value ?? '{}',
@@ -190,6 +203,12 @@ function sessionMetadata(value: string | null): {
             eventCount: z.number().default(0),
             lastEventId: z.string().nullable().optional(),
             lastEventType: AgentEventTypeSchema.nullable().optional(),
+            cwd: z.string().nullable().optional(),
+            trustedRoot: z.string().nullable().optional(),
+            workspaceTrust: z.enum(['trusted', 'denied', 'unknown']).nullable().optional(),
+            name: z.string().nullable().optional(),
+            messageCount: z.number().nullable().optional(),
+            activeLeafId: z.string().nullable().optional(),
         }),
     );
     return {
@@ -197,6 +216,20 @@ function sessionMetadata(value: string | null): {
         ...(parsed.lastEventId !== undefined && parsed.lastEventId !== null ? { lastEventId: parsed.lastEventId } : {}),
         ...(parsed.lastEventType !== undefined && parsed.lastEventType !== null
             ? { lastEventType: parsed.lastEventType }
+            : {}),
+        ...(parsed.cwd !== undefined && parsed.cwd !== null ? { cwd: parsed.cwd } : {}),
+        ...(parsed.trustedRoot !== undefined && parsed.trustedRoot !== null
+            ? { trustedRoot: parsed.trustedRoot }
+            : {}),
+        ...(parsed.workspaceTrust !== undefined && parsed.workspaceTrust !== null
+            ? { workspaceTrust: parsed.workspaceTrust }
+            : {}),
+        ...(parsed.name !== undefined && parsed.name !== null ? { name: parsed.name } : {}),
+        ...(parsed.messageCount !== undefined && parsed.messageCount !== null
+            ? { messageCount: parsed.messageCount }
+            : {}),
+        ...(parsed.activeLeafId !== undefined && parsed.activeLeafId !== null
+            ? { activeLeafId: parsed.activeLeafId }
             : {}),
     };
 }

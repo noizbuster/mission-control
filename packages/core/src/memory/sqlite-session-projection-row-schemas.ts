@@ -20,6 +20,7 @@ export const sessionRowSchema = z.object({
     title: z.string().nullable().optional(),
     category: z.string().nullable().optional(),
     agent_name: z.string().nullable().optional(),
+    workspace_path: z.string().nullable().optional(),
     awaiting_reason: SessionAwaitingReasonSchema.nullable(),
     primary_wait_id: z.string().nullable(),
     wait_source_kind: z.enum(['approval', 'run', 'tool_call', 'job', 'child_session', 'operator']).nullable(),
