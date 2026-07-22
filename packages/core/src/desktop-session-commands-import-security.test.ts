@@ -1,31 +1,32 @@
 import { defaultModelProviderSelection } from '@mission-control/config';
+import { AgentEventEnvelopeSchema, type AgentEvent } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import { createDesktopSessionCommandService } from './desktop-session-commands';
 import { fixedNow, readReplay } from './desktop-session-commands-test-support';
-import { JsonlSessionEventStore } from './memory/jsonl-session-event-store';
+import { importSessionEnvelopesToLocalStore } from './memory/session-archive-import';
 import type { ProviderAdapter, ProviderTurnRequest } from './providers/provider-turn-types';
 import { mkdtemp, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 describe('desktop session imported approval security', () => {
-    it('does not execute an approval restored from a legacy archive without local proposal authority', async () => {
+    it('does not execute an approval replayed without local proposal authority', async () => {
         const dataDir = await mkdtemp(join(tmpdir(), 'mctrl-desktop-no-continuation-'));
         const workspaceRoot = await mkdtemp(join(tmpdir(), 'mctrl-desktop-no-continuation-workspace-'));
         const providerRequests: ProviderTurnRequest[] = [];
         const sessionId = 'session_desktop_no_continuation';
-        const store = await JsonlSessionEventStore.open({ dataDir, sessionId, now: fixedNow });
+        const archiveEvents: AgentEvent[] = [];
 
-        try {
-            await store.append({
+        archiveEvents.push(
+            {
                 type: 'session.started',
                 timestamp: fixedNow(),
                 sessionId,
                 message: 'desktop session started',
                 nativeSidecarStatus: 'mock',
                 modelProviderSelection: defaultModelProviderSelection,
-            });
-            await store.append({
+            },
+            {
                 type: 'model.call.completed',
                 timestamp: fixedNow(),
                 sessionId,
@@ -51,8 +52,8 @@ describe('desktop session imported approval security', () => {
                         }),
                     },
                 },
-            });
-            await store.append({
+            },
+            {
                 type: 'permission.requested',
                 timestamp: fixedNow(),
                 sessionId,
@@ -69,8 +70,8 @@ describe('desktop session imported approval security', () => {
                     status: 'requires_approval',
                     reason: 'approval required',
                 },
-            });
-            await store.append({
+            },
+            {
                 type: 'approval.requested',
                 timestamp: fixedNow(),
                 sessionId,
@@ -86,8 +87,8 @@ describe('desktop session imported approval security', () => {
                     requestedAt: fixedNow(),
                     reason: 'approve file.patch',
                 },
-            });
-            await store.append({
+            },
+            {
                 type: 'run.blocked',
                 timestamp: fixedNow(),
                 sessionId,
@@ -101,10 +102,23 @@ describe('desktop session imported approval security', () => {
                     reason: 'waiting for approval: file.patch',
                     toolCallId: 'call_patch_no_continuation',
                 },
-            });
-        } finally {
-            await store.close();
-        }
+            },
+        );
+        const imported = await importSessionEnvelopesToLocalStore({
+            dataDir,
+            sessionId,
+            envelopes: archiveEvents.map((event, sequence) =>
+                AgentEventEnvelopeSchema.parse({
+                    eventId: `archive_event_${sequence}`,
+                    sequence,
+                    createdAt: fixedNow(),
+                    sessionId,
+                    durability: 'durable',
+                    event,
+                }),
+            ),
+        });
+        expect(imported).toBe('imported');
 
         try {
             const service = createDesktopSessionCommandService({

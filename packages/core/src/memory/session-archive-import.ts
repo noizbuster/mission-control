@@ -24,7 +24,7 @@ export async function importSessionEnvelopesToLocalStore(input: {
             return 'session_exists';
         }
         for (const envelope of input.envelopes) {
-            await store.appendEnvelope(envelope);
+            await store.appendEnvelopeWithStoreSequence(envelope);
         }
         return 'imported';
     } finally {
