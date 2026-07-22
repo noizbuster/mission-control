@@ -90,7 +90,10 @@ export function parseToolArgumentsJson(
     try {
         return { ok: true, value: JSON.parse(input.argumentsJson) };
     } catch (error: unknown) {
-        return { ok: false, error: protocolError('schema_invalid', errorMessage(error), true) };
+        if (error instanceof SyntaxError) {
+            return { ok: false, error: protocolError('schema_invalid', error.message, true) };
+        }
+        throw error;
     }
 }
 
@@ -174,10 +177,6 @@ function boundModelOutput(content: string, limit: number): ToolModelOutput {
         originalLength: content.length,
         limit,
     };
-}
-
-function errorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
 }
 
 function stableJson(value: unknown): string {
