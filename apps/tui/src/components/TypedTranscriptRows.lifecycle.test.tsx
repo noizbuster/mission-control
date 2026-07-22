@@ -1,4 +1,4 @@
- /** @jsxImportSource @opentui/solid */
+/** @jsxImportSource @opentui/solid */
 
 import { testRender } from '@opentui/solid';
 import { describe, expect, it } from 'vitest';
@@ -14,42 +14,46 @@ describe('typed transcript lifecycle expansion', () => {
                     <TypedToolRow
                         part={{
                             id: 'tool-active-one',
-                            type: 'inline-tool',
+                            type: 'block-tool',
                             title: 'tool-active-one',
                             text: 'tool-active-one-body',
                             status: 'running',
                         }}
                         expanded={true}
+                        viewportColumns={120}
                     />
                     <TypedToolRow
                         part={{
                             id: 'tool-active-many',
-                            type: 'inline-tool',
+                            type: 'block-tool',
                             title: 'tool-active-many',
                             text: 'tool-active-many-first\ntool-active-many-last',
                             status: 'running',
                         }}
                         expanded={true}
+                        viewportColumns={120}
                     />
                     <TypedToolRow
                         part={{
                             id: 'tool-settled-one',
-                            type: 'inline-tool',
+                            type: 'block-tool',
                             title: 'tool-settled-one',
                             text: 'tool-settled-one-body',
                             status: 'completed',
                         }}
                         expanded={true}
+                        viewportColumns={120}
                     />
                     <TypedToolRow
                         part={{
                             id: 'tool-settled-many',
-                            type: 'inline-tool',
+                            type: 'block-tool',
                             title: 'tool-settled-many',
                             text: 'tool-settled-many-first\ntool-settled-many-last',
                             status: 'completed',
                         }}
                         expanded={true}
+                        viewportColumns={120}
                     />
                     <TypedSubagentRow
                         part={{
@@ -125,7 +129,7 @@ describe('typed transcript lifecycle expansion', () => {
                     <TranscriptPartRenderer
                         part={{
                             id: 'tool-active-many',
-                            type: 'inline-tool',
+                            type: 'block-tool',
                             title: 'tool-active-many',
                             text: 'tool-active-many-first\ntool-active-many-last',
                             status: 'running',
@@ -177,7 +181,7 @@ describe('typed transcript lifecycle expansion', () => {
                     <TranscriptPartRenderer
                         part={{
                             id: 'tool-active-many',
-                            type: 'inline-tool',
+                            type: 'block-tool',
                             title: 'tool-active-many',
                             text: 'tool-active-many-first\ntool-active-many-last',
                             status: 'running',
@@ -230,12 +234,13 @@ describe('typed transcript lifecycle expansion', () => {
                     <TypedToolRow
                         part={{
                             id: 'tool-active-many',
-                            type: 'inline-tool',
+                            type: 'block-tool',
                             title: 'tool-active-many',
                             text: 'tool-active-many-first\ntool-active-many-last',
                             status: 'running',
                         }}
                         expanded={false}
+                        viewportColumns={120}
                     />
                     <TypedCodeRow
                         part={{

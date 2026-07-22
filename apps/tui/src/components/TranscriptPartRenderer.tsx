@@ -54,13 +54,31 @@ function TranscriptPartContent(props: TranscriptPartRendererProps): JSX.Element 
                 />
             );
         case 'inline-tool':
-            return <TypedToolRow part={props.part} expanded={props.toolOutputExpanded} />;
+            return (
+                <TypedToolRow
+                    part={props.part}
+                    expanded={props.toolOutputExpanded}
+                    viewportColumns={props.viewportColumns}
+                />
+            );
         case 'block-tool':
-            return <TypedToolRow part={props.part} expanded={props.toolOutputExpanded} />;
+            return (
+                <TypedToolRow
+                    part={props.part}
+                    expanded={props.toolOutputExpanded}
+                    viewportColumns={props.viewportColumns}
+                />
+            );
         case 'diff':
             return <TypedDiffRow part={props.part} expanded={props.toolOutputExpanded} />;
         case 'code':
-            return <TypedCodeRow part={props.part} expanded={props.toolOutputExpanded} viewportColumns={props.viewportColumns} />;
+            return (
+                <TypedCodeRow
+                    part={props.part}
+                    expanded={props.toolOutputExpanded}
+                    viewportColumns={props.viewportColumns}
+                />
+            );
         case 'command':
             return <TypedCommandRow part={props.part} expanded={props.toolOutputExpanded} />;
         case 'subagent':

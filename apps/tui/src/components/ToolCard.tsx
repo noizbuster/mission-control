@@ -14,6 +14,9 @@ import {
     toolIconForTitle,
 } from './chat-theme';
 import { DiffView } from './diff/DiffView';
+import { darkTheme } from './markdown/interactive-theme';
+import { Markdown } from './markdown/Markdown';
+import { buildFencedCodeMarkdown, transcriptContentWidth } from './transcript-part-presentation';
 
 export type ToolCardProps = {
     readonly lines: readonly string[];
@@ -21,9 +24,12 @@ export type ToolCardProps = {
     readonly expanded: boolean;
     readonly status?: TranscriptPartStatus;
     readonly bodyMode?: ToolCardBodyMode;
+    readonly language?: string;
+    readonly viewportColumns?: number;
+    readonly streaming?: boolean;
 };
 
-export type ToolCardBodyMode = 'auto' | 'plain';
+export type ToolCardBodyMode = 'auto' | 'plain' | 'code';
 
 export type ToolStatusPresentation = {
     readonly label: string | undefined;
@@ -72,6 +78,7 @@ export function shouldRenderToolBodyAsDiff(lines: readonly string[], mode: ToolC
         case 'auto':
             return hasDiffContent(lines);
         case 'plain':
+        case 'code':
             return false;
         default:
             return assertNever(mode, 'tool body mode');
@@ -91,7 +98,7 @@ export function buildHeaderLabel(title: string | undefined): string {
 /**
  * OpenCode-style tool row:
  * - Collapsed / non-diff: inline icon + muted title (InlineTool)
- * - Expanded with body: left-accent BlockTool panel + body (diff or prose)
+ * - Expanded with body: flat title row + body (diff or prose)
  */
 export function ToolCard(props: ToolCardProps): JSX.Element {
     const title = () => props.title;
@@ -106,6 +113,11 @@ export function ToolCard(props: ToolCardProps): JSX.Element {
     };
     const icon = () => toolIconForTitle(title());
     const showBlock = () => expanded() && lines().length > 0;
+    const showCodeBody = () =>
+        bodyMode() === 'code' &&
+        !shouldRenderToolBodyAsDiff(lines(), bodyMode()) &&
+        props.viewportColumns !== undefined;
+    const codeWidth = () => transcriptContentWidth(props.viewportColumns ?? 80, 0);
 
     return (
         <Show
@@ -132,6 +144,13 @@ export function ToolCard(props: ToolCardProps): JSX.Element {
                 </box>
                 {shouldRenderToolBodyAsDiff(lines(), bodyMode()) ? (
                     <DiffView diff={lines().join('\n')} />
+                ) : showCodeBody() ? (
+                    <Markdown
+                        text={buildFencedCodeMarkdown(lines().join('\n'), props.language)}
+                        theme={darkTheme}
+                        width={codeWidth()}
+                        streaming={props.streaming ?? false}
+                    />
                 ) : (
                     <For each={lines()}>
                         {(line) => (

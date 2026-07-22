@@ -196,6 +196,8 @@ describe('TranscriptPartRenderer component topology', () => {
         expect(source).toContain('expanded={props.toolOutputExpanded}');
         expect(source).toContain('toolOutputExpanded={props.toolOutputExpanded}');
         expect(source).not.toContain('shouldHideToolPart');
+        expect(source).toContain('readonly transcriptParts: readonly TranscriptPart[]');
+        expect(source).toContain('readonly activeAssistantMessageId?: string');
         expect(source).toContain('viewportColumns={props.viewportColumns}');
 
         const rowsSource = readFileSync(
@@ -206,7 +208,7 @@ describe('TranscriptPartRenderer component topology', () => {
         expect(rowsSource).toContain('<Show when={props.showThinking}>');
         expect(rowsSource).toContain('<DiffView');
         expect(rowsSource).toContain('diff={props.part.text}');
-        // Lifecycle gates still consume the row-level expanded prop.
+        // Tool rows consume the shared Ctrl+O expansion prop.
         expect(rowsSource).toContain('expanded={props.expanded}');
         expect(rowsSource).toContain('parseMessageBlocks(props.part.text)');
         expect(rowsSource).not.toContain('AssistantMessageFooter');

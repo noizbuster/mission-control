@@ -30,10 +30,11 @@ import {
 import { darkTheme } from './markdown/interactive-theme';
 import { Markdown } from './markdown/Markdown';
 import type { TerminalMarkdownTheme } from './markdown/theme';
-import { ToolCard } from './ToolCard';
+import { ToolCard, type ToolCardBodyMode } from './ToolCard';
 import { TypedBlockPanel } from './TypedBlockPanel';
 import {
     buildFencedCodeMarkdown,
+    inferToolOutputLanguage,
     isFinalLegacyPartStreaming,
     isTranscriptPartStreaming,
     presentTranscriptPart,
@@ -97,13 +98,23 @@ export function TypedReasoningRow(props: {
 export function TypedToolRow(props: {
     readonly part: InlineToolTranscriptPart | BlockToolTranscriptPart;
     readonly expanded: boolean;
+    readonly viewportColumns: number;
 }): JSX.Element {
     const presentation = () => presentTranscriptPart(props.part);
+    const isInline = props.part.type === 'inline-tool';
+    const toolBodyMode: ToolCardBodyMode = isInline ? 'code' : 'auto';
+    const toolLanguage = isInline
+        ? inferToolOutputLanguage(props.part.toolName, props.part.output ?? props.part.detail ?? '')
+        : undefined;
     return (
         <ToolCard
             lines={presentation().lines}
             title={presentation().title}
             expanded={props.expanded}
+            viewportColumns={props.viewportColumns}
+            streaming={isTranscriptPartStreaming(props.part.status)}
+            {...(toolBodyMode === 'auto' ? {} : { bodyMode: toolBodyMode })}
+            {...(toolLanguage === undefined ? {} : { language: toolLanguage })}
             {...(props.part.status === undefined ? {} : { status: props.part.status })}
         />
     );

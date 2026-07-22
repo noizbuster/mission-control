@@ -172,6 +172,7 @@ describe('TranscriptPartRenderer mounted reactivity', () => {
 
         try {
             await setup.renderOnce();
+            await setup.renderOnce();
             const parent = setup.renderer.root.getChildren().at(0);
             if (parent === undefined) {
                 throw new Error('Expected the mounted transcript parent');
