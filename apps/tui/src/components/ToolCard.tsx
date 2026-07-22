@@ -4,22 +4,16 @@ import { For, type JSX, Show } from 'solid-js';
 import type { TranscriptPartStatus } from '../state/transcript-part';
 import {
     buildInlineToolLabel,
-    CHAT_ASSISTANT_PAD_LEFT,
     CHAT_ERROR,
-    CHAT_PANEL_BG,
     CHAT_SECONDARY,
     CHAT_SUCCESS,
     CHAT_TEXT,
     CHAT_TEXT_MUTED,
     CHAT_TOOL_ICON_WIDTH,
-    CHAT_USER_MARGIN_TOP,
-    CHAT_USER_PAD_X,
-    CHAT_USER_PAD_Y,
     CHAT_WARNING,
     toolIconForTitle,
 } from './chat-theme';
 import { DiffView } from './diff/DiffView';
-import { LEFT_ACCENT_BORDER } from './overlay-theme';
 
 export type ToolCardProps = {
     readonly lines: readonly string[];
@@ -122,7 +116,7 @@ export function ToolCard(props: ToolCardProps): JSX.Element {
         <Show
             when={showBlock()}
             fallback={
-                <box paddingLeft={CHAT_ASSISTANT_PAD_LEFT} flexDirection="row" flexShrink={0}>
+                <box flexDirection="row" flexShrink={0}>
                     <text width={CHAT_TOOL_ICON_WIDTH} fg={status().color}>
                         {icon()}
                     </text>
@@ -132,19 +126,8 @@ export function ToolCard(props: ToolCardProps): JSX.Element {
                 </box>
             }
         >
-            <box
-                border={['left']}
-                customBorderChars={LEFT_ACCENT_BORDER}
-                borderColor={CHAT_PANEL_BG}
-                paddingTop={CHAT_USER_PAD_Y}
-                paddingBottom={CHAT_USER_PAD_Y}
-                paddingLeft={CHAT_USER_PAD_X}
-                backgroundColor={CHAT_PANEL_BG}
-                flexDirection="column"
-                flexShrink={0}
-                gap={CHAT_USER_MARGIN_TOP}
-            >
-                <box flexDirection="row" paddingLeft={CHAT_ASSISTANT_PAD_LEFT}>
+            <box flexDirection="column" flexShrink={0}>
+                <box flexDirection="row">
                     <text width={CHAT_TOOL_ICON_WIDTH} fg={status().color}>
                         {icon()}
                     </text>

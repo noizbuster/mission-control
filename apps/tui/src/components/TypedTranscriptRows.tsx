@@ -102,14 +102,12 @@ export function TypedToolRow(props: {
     const isActive = () =>
         props.part.status === 'pending' || props.part.status === 'running' || props.part.status === 'streaming';
     return (
-        <box marginTop={CHAT_USER_MARGIN_TOP}>
-            <ToolCard
-                lines={presentation().lines}
-                title={presentation().title}
-                expanded={props.expanded && (presentation().lines.length > 1 || !isActive())}
-                {...(props.part.status === undefined ? {} : { status: props.part.status })}
-            />
-        </box>
+        <ToolCard
+            lines={presentation().lines}
+            title={presentation().title}
+            expanded={props.expanded && (presentation().lines.length > 1 || !isActive())}
+            {...(props.part.status === undefined ? {} : { status: props.part.status })}
+        />
     );
 }
 
@@ -157,15 +155,13 @@ export function TypedCommandRow(props: {
 }): JSX.Element {
     const presentation = () => presentTranscriptPart(props.part);
     return (
-        <box marginTop={CHAT_USER_MARGIN_TOP}>
-            <ToolCard
-                lines={presentation().lines}
-                title={presentation().title}
-                expanded={props.expanded}
-                bodyMode="plain"
-                {...(props.part.status === undefined ? {} : { status: props.part.status })}
-            />
-        </box>
+        <ToolCard
+            lines={presentation().lines}
+            title={presentation().title}
+            expanded={props.expanded}
+            bodyMode="plain"
+            {...(props.part.status === undefined ? {} : { status: props.part.status })}
+        />
     );
 }
 
@@ -177,14 +173,12 @@ export function TypedSubagentRow(props: {
     const isActive = () =>
         props.part.status === 'pending' || props.part.status === 'running' || props.part.status === 'streaming';
     return (
-        <box marginTop={CHAT_USER_MARGIN_TOP}>
-            <ToolCard
-                lines={presentation().lines}
-                title={presentation().title}
-                expanded={props.expanded && !isActive()}
-                {...(props.part.status === undefined ? {} : { status: props.part.status })}
-            />
-        </box>
+        <ToolCard
+            lines={presentation().lines}
+            title={presentation().title}
+            expanded={props.expanded && !isActive()}
+            {...(props.part.status === undefined ? {} : { status: props.part.status })}
+        />
     );
 }
 

@@ -114,11 +114,16 @@ describe('ToolCard component', () => {
         expect(source).toMatch(/<text selectable fg=\{CHAT_TEXT\}>\s*\{line\}\s*<\/text>/);
     });
 
-    it('uses OpenCode inline icon row when collapsed and a left-accent panel when expanded', () => {
-        expect(source).toContain("border={['left']}");
-        expect(source).toContain('LEFT_ACCENT_BORDER');
+    it('uses the existing tool icon with flat rows in both collapsed and expanded forms', () => {
         expect(source).toContain('toolIconForTitle');
         expect(source).toContain('CHAT_TOOL_ICON_WIDTH');
+        expect(source).not.toContain("border={['left']}");
+        expect(source).not.toContain('LEFT_ACCENT_BORDER');
+        expect(source).not.toContain('backgroundColor={CHAT_PANEL_BG}');
+        expect(source).not.toContain('paddingTop={CHAT_USER_PAD_Y}');
+        expect(source).not.toContain('paddingBottom={CHAT_USER_PAD_Y}');
+        expect(source).not.toContain('paddingLeft={CHAT_USER_PAD_X}');
+        expect(source).not.toContain('gap={CHAT_USER_MARGIN_TOP}');
     });
 
     it('keeps failed and denied tool state visible through a glyph and label, not color alone', () => {

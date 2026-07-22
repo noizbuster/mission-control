@@ -177,16 +177,14 @@ export function LegacyMessageBlock(props: LegacyMessageBlockProps): JSX.Element 
                 </box>
             </Match>
             <Match when={kind() === 'tool'}>
-                <box marginTop={CHAT_USER_MARGIN_TOP}>
-                    <ToolCard
-                        lines={lines()}
-                        expanded={props.toolOutputExpanded}
-                        {...(() => {
-                            const title = readToolBlockTitle(lines());
-                            return title === undefined ? {} : { title };
-                        })()}
-                    />
-                </box>
+                <ToolCard
+                    lines={lines()}
+                    expanded={props.toolOutputExpanded}
+                    {...(() => {
+                        const title = readToolBlockTitle(lines());
+                        return title === undefined ? {} : { title };
+                    })()}
+                />
             </Match>
             <Match when={kind() === 'thinking'}>
                 <box

@@ -44,6 +44,11 @@ describe('typed transcript selection contract', () => {
         expect(toolCardSource).toMatch(/<text selectable fg=\{CHAT_TEXT\}>\s*\{line\}\s*<\/text>/);
         expect(typedRowsSource).toContain('<TypedBlockPanel');
         expect(typedBlockPanelSource).toContain('const status = () => toolStatusPresentation(props.status);');
+        expect(typedBlockPanelSource).not.toContain("border={['left']}");
+        expect(typedBlockPanelSource).not.toContain('backgroundColor={CHAT_PANEL_BG}');
+        expect(typedBlockPanelSource).not.toContain('paddingTop={CHAT_USER_PAD_Y}');
+        expect(typedBlockPanelSource).not.toContain('paddingLeft={CHAT_USER_PAD_X}');
+        expect(typedBlockPanelSource).not.toContain('gap={CHAT_USER_MARGIN_TOP}');
         expect(typedBlockPanelSource).toContain('<text selectable flexGrow={1} fg={status().color}>');
         expect(diffViewSource).toContain(
             '<text selectable {...rowStyle} {...(span.inverse ? { inverse: true } : {})}>',
