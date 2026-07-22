@@ -3,19 +3,18 @@ import {
     createObservabilityRedactor,
     redactAgentEventForObservability,
 } from '@mission-control/core';
-import type {
-    AgentEvent,
-    ModelProviderSelection,
-} from '@mission-control/protocol';
+import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import { darkTheme, noColorTheme } from '@mission-control/tui/markdown-theme';
 import { joinBlocks, renderBlock } from './block-renderer';
-import { createBlockAccumulator } from './output-blocks';
-import type { AgentUIRenderer } from './ui-adapter';
 import { JsonMachineStateTracker } from './json-machine-state';
+import { createBlockAccumulator } from './output-blocks';
+import { formatSessionFinalizeLineFromInfo, type SessionFinalizeInfo } from './session-finalize';
+import type { AgentUIRenderer } from './ui-adapter';
 
 abstract class BufferedRenderer implements AgentUIRenderer {
     protected readonly events: AgentEvent[] = [];
     private readonly observabilityRedactor = createObservabilityRedactor();
+    private finalized: SessionFinalizeInfo | undefined;
 
     async start(_runtime: AgentRuntime): Promise<void> {}
 
@@ -26,6 +25,22 @@ abstract class BufferedRenderer implements AgentUIRenderer {
     async stop(): Promise<void> {}
 
     abstract getOutput(): string;
+
+    finalize(info: SessionFinalizeInfo): void {
+        if (this.finalized !== undefined) {
+            return;
+        }
+        this.finalized = info;
+        this.writeFinalize(info);
+    }
+
+    protected writeFinalize(info: SessionFinalizeInfo): void {
+        process.stdout.write(`${formatSessionFinalizeLineFromInfo(info)}\n`);
+    }
+
+    protected get finalizeInfo(): SessionFinalizeInfo | undefined {
+        return this.finalized;
+    }
 
     protected redactEvent(event: AgentEvent): AgentEvent {
         return redactAgentEventForObservability(event, this.observabilityRedactor);
@@ -105,6 +120,10 @@ export class PlainRenderer extends BufferedRenderer {
     }
 
     getOutput(): string {
+        const info = this.finalizeInfo;
+        if (info !== undefined) {
+            return joinBlocks([...this.rendered, `${formatSessionFinalizeLineFromInfo(info)}\n`]);
+        }
         return joinBlocks(this.rendered);
     }
 }
@@ -133,6 +152,10 @@ export class TuiRenderer extends BufferedRenderer {
     }
 
     getOutput(): string {
+        const info = this.finalizeInfo;
+        if (info !== undefined) {
+            return joinBlocks([...this.rendered, `${formatSessionFinalizeLineFromInfo(info)}\n`]);
+        }
         return joinBlocks(this.rendered);
     }
 }
@@ -141,6 +164,16 @@ export class JsonRenderer extends BufferedRenderer {
     getOutput(): string {
         const tracker = new JsonMachineStateTracker();
         return `${this.events.map((event) => JSON.stringify(tracker.recordFor(event))).join('\n')}\n`;
+    }
+
+    /**
+     * Override the no-op base to a true no-op without stdout writes. The durable
+     * `session.finalize` AgentEvent is appended to `events[]` through the normal
+     * render path and surfaces as a JSON line in `getOutput()`, so emitting a
+     * second plain-text line would corrupt the JSON event stream.
+     */
+    protected writeFinalize(_info: SessionFinalizeInfo): void {
+        // intentionally no-op
     }
 }
 
