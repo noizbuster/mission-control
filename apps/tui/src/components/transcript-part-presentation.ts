@@ -37,6 +37,99 @@ export function buildFencedCodeMarkdown(code: string, language: string | undefin
     return `${fence}${safeLanguage ?? ''}\n${code}\n${fence}`;
 }
 
+const EXTENSION_LANGUAGE_MAP: Readonly<Record<string, string>> = {
+    ts: 'typescript',
+    tsx: 'tsx',
+    mts: 'typescript',
+    cts: 'typescript',
+    js: 'javascript',
+    jsx: 'jsx',
+    mjs: 'javascript',
+    cjs: 'javascript',
+    json: 'json',
+    jsonc: 'json',
+    py: 'python',
+    pyi: 'python',
+    rs: 'rust',
+    go: 'go',
+    rb: 'ruby',
+    md: 'markdown',
+    markdown: 'markdown',
+    yml: 'yaml',
+    yaml: 'yaml',
+    sh: 'bash',
+    bash: 'bash',
+    zsh: 'bash',
+    fish: 'bash',
+    css: 'css',
+    scss: 'css',
+    less: 'css',
+    html: 'html',
+    htm: 'html',
+    xml: 'xml',
+    svg: 'xml',
+    sql: 'sql',
+    toml: 'toml',
+    ini: 'ini',
+    cfg: 'ini',
+    c: 'c',
+    h: 'c',
+    cpp: 'cpp',
+    cc: 'cpp',
+    hpp: 'cpp',
+    java: 'java',
+    kt: 'kotlin',
+    kts: 'kotlin',
+    swift: 'swift',
+    dart: 'dart',
+    lua: 'lua',
+    php: 'php',
+    vim: 'vim',
+    dockerfile: 'dockerfile',
+    graphql: 'graphql',
+    gql: 'graphql',
+    proto: 'proto',
+    zig: 'zig',
+    ex: 'elixir',
+    exs: 'elixir',
+    erl: 'erlang',
+    hs: 'haskell',
+    clj: 'clojure',
+    cljs: 'clojure',
+    scala: 'scala',
+    groovy: 'groovy',
+    gradle: 'groovy',
+    ps1: 'powershell',
+    psml: 'powershell',
+    r: 'r',
+    jl: 'julia',
+    pl: 'perl',
+    pm: 'perl',
+};
+
+export function inferLanguageFromPath(filePath: string): string | undefined {
+    const lower = filePath.toLowerCase();
+    if (lower.endsWith('dockerfile') || lower.endsWith('.dockerfile')) return 'dockerfile';
+    if (lower.endsWith('makefile') || lower.endsWith('.mk')) return 'makefile';
+    const dotIndex = lower.lastIndexOf('.');
+    if (dotIndex <= 0 || dotIndex === lower.length - 1) return undefined;
+    const ext = lower.slice(dotIndex + 1);
+    if (ext.length > 10) return undefined;
+    return EXTENSION_LANGUAGE_MAP[ext];
+}
+
+export function inferToolOutputLanguage(toolName: string | undefined, output: string): string | undefined {
+    if (toolName === undefined) return undefined;
+    for (const line of output.split('\n').slice(0, 8)) {
+        const match = line.match(/([\w@./-]+\.[a-zA-Z]\w{0,9})\b/);
+        if (match !== null && match[1] !== undefined) {
+            const inferred = inferLanguageFromPath(match[1]);
+            if (inferred !== undefined) return inferred;
+        }
+    }
+    return undefined;
+}
+
 export function presentTranscriptPart(part: TranscriptPart): TranscriptPartPresentation {
     switch (part.type) {
         case 'user':
