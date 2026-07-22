@@ -4,6 +4,7 @@
 // requires to live together (todos 2-9 all import from this one path).
 
 import type {
+    AbgEmitMetadata,
     AbgGraphSnapshot,
     AbgGraphStatus,
     AbgNodeStatus,
@@ -700,14 +701,14 @@ export function extractContextTokensUsed(event: AgentEvent): number | undefined 
         return flat.inputTokens;
     }
     const emit = event.abg?.emit;
-    if (emit === undefined || emit.type !== 'llm.turn.completed') {
+    return emit === undefined ? undefined : extractContextTokensUsedFromAbgEmit(emit);
+}
+
+export function extractContextTokensUsedFromAbgEmit(emit: AbgEmitMetadata): number | undefined {
+    if (emit.type !== 'llm.turn.completed' || !isRecord(emit.payload)) {
         return undefined;
     }
-    const payload = emit.payload;
-    if (payload === undefined || payload === null || typeof payload !== 'object') {
-        return undefined;
-    }
-    return readUsageInputTokens((payload as { readonly usage?: unknown }).usage);
+    return readUsageInputTokens(emit.payload['usage']);
 }
 
 /**
@@ -716,21 +717,20 @@ export function extractContextTokensUsed(event: AgentEvent): number | undefined 
  * (`inputTokens: { total: number }`).
  */
 function readUsageInputTokens(usage: unknown): number | undefined {
-    if (usage === undefined || usage === null || typeof usage !== 'object') {
+    if (!isRecord(usage)) {
         return undefined;
     }
-    const record = usage as Record<string, unknown>;
-    const direct = record['inputTokens'];
+    const direct = usage['inputTokens'];
     if (typeof direct === 'number' && Number.isFinite(direct) && direct >= 0) {
         return Math.trunc(direct);
     }
-    if (direct !== null && typeof direct === 'object') {
-        const total = (direct as Record<string, unknown>)['total'];
+    if (isRecord(direct)) {
+        const total = direct['total'];
         if (typeof total === 'number' && Number.isFinite(total) && total >= 0) {
             return Math.trunc(total);
         }
     }
-    const totalTokens = record['totalTokens'];
+    const totalTokens = usage['totalTokens'];
     if (typeof totalTokens === 'number' && Number.isFinite(totalTokens) && totalTokens >= 0) {
         return Math.trunc(totalTokens);
     }
