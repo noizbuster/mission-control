@@ -44,17 +44,7 @@ function TranscriptPartContent(props: TranscriptPartRendererProps): JSX.Element 
         case 'user':
             return <TypedUserRow part={props.part} isFirst={props.isFirst} />;
         case 'assistant':
-            return (
-                <TypedAssistantRow
-                    part={props.part}
-                    viewportColumns={props.viewportColumns}
-                    transcriptParts={props.transcriptParts}
-                    toolOutputExpanded={props.toolOutputExpanded}
-                    {...(props.activeAssistantMessageId !== undefined
-                        ? { activeAssistantMessageId: props.activeAssistantMessageId }
-                        : {})}
-                />
-            );
+            return <TypedAssistantRow part={props.part} viewportColumns={props.viewportColumns} />;
         case 'reasoning':
             return (
                 <TypedReasoningRow

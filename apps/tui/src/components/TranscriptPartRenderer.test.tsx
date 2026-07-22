@@ -212,8 +212,8 @@ describe('TranscriptPartRenderer component topology', () => {
         // Lifecycle gates still consume the row-level expanded prop.
         expect(rowsSource).toContain('expanded={props.expanded}');
         expect(rowsSource).toContain('parseMessageBlocks(props.part.text)');
-        expect(rowsSource).toContain('AssistantMessageFooter');
-        expect(rowsSource).toContain('attributionKeyForAssistantPart');
+        expect(rowsSource).not.toContain('AssistantMessageFooter');
+        expect(rowsSource).not.toContain('attributionKeyForAssistantPart');
 
         const typedCodeRowSource = rowsSource.slice(
             rowsSource.indexOf('export function TypedCodeRow'),
