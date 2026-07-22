@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-    CHAT_PRIMARY,
-    CHAT_PANEL_BG,
-    CHAT_ELEMENT_BG,
-    buildInlineToolLabel,
-    toolIconForTitle,
-} from './chat-theme';
+import { buildInlineToolLabel, CHAT_ELEMENT_BG, CHAT_PANEL_BG, CHAT_PRIMARY, toolIconForTitle } from './chat-theme';
 
 describe('chat-theme tokens', () => {
     it('keeps OpenCode dark-step primary and panel fills', () => {
