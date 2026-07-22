@@ -195,7 +195,7 @@ describe('TranscriptPartRenderer component topology', () => {
         // Ctrl+O drives all tool-body expansion paths, with no footer-only bypass.
         expect(source).toContain('expanded={props.toolOutputExpanded}');
         expect(source).toContain('toolOutputExpanded={props.toolOutputExpanded}');
-        expect(source).toContain('shouldHideToolPart');
+        expect(source).not.toContain('shouldHideToolPart');
         expect(source).toContain('transcriptParts={props.transcriptParts}');
         expect(source).toContain('viewportColumns={props.viewportColumns}');
 

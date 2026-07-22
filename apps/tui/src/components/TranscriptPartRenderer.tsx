@@ -4,7 +4,6 @@ import { TOOL_AGGREGATE_DISPLAY_PATTERN } from '@mission-control/tui/chat';
 import { type JSX, Show } from 'solid-js';
 import { sanitizeTranscriptPartForDisplay } from '../state/terminal-display-sanitizer';
 import type { TranscriptPart } from '../state/transcript-part';
-import { shouldHideToolPart } from '../state/transcript-visibility';
 import {
     TypedAssistantRow,
     TypedCodeRow,
@@ -55,21 +54,16 @@ function TranscriptPartContent(props: TranscriptPartRendererProps): JSX.Element 
                 />
             );
         case 'inline-tool':
-            if (shouldHideToolPart(props.part, props.activeAssistantMessageId)) return null;
             return <TypedToolRow part={props.part} expanded={props.toolOutputExpanded} />;
         case 'block-tool':
-            if (shouldHideToolPart(props.part, props.activeAssistantMessageId)) return null;
             return <TypedToolRow part={props.part} expanded={props.toolOutputExpanded} />;
         case 'diff':
-            if (shouldHideToolPart(props.part, props.activeAssistantMessageId)) return null;
             return <TypedDiffRow part={props.part} expanded={props.toolOutputExpanded} />;
         case 'code':
             return <TypedCodeRow part={props.part} expanded={props.toolOutputExpanded} viewportColumns={props.viewportColumns} />;
         case 'command':
-            if (shouldHideToolPart(props.part, props.activeAssistantMessageId)) return null;
             return <TypedCommandRow part={props.part} expanded={props.toolOutputExpanded} />;
         case 'subagent':
-            if (shouldHideToolPart(props.part, props.activeAssistantMessageId)) return null;
             return <TypedSubagentRow part={props.part} expanded={props.toolOutputExpanded} />;
         case 'status':
             if (TOOL_AGGREGATE_DISPLAY_PATTERN.test(props.part.text)) return null;
@@ -79,7 +73,6 @@ function TranscriptPartContent(props: TranscriptPartRendererProps): JSX.Element 
         case 'error':
             return <TypedErrorRow part={props.part} />;
         case 'legacy':
-            // Legacy tool blocks also ignore the chip flag so Ctrl+O never collapses bodies.
             return (
                 <TypedLegacyRow
                     part={props.part}

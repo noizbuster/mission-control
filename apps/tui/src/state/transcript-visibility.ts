@@ -10,10 +10,8 @@ const SUCCESS_TOOL_STATUSES = new Set<TranscriptPartStatus>([
 
 const HIDEABLE_TOOL_PART_TYPES = new Set<TranscriptPart['type']>([
     'inline-tool',
-    'block-tool',
     'command',
     'subagent',
-    'diff',
 ]);
 
 function isSuccessfulToolStatus(status: TranscriptPartStatus | undefined): boolean {

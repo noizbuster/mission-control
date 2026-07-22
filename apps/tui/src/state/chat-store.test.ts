@@ -921,7 +921,7 @@ describe('chat-store — activeAssistantMessageId and tool visibility', () => {
             ),
         ).toBe(false);
 
-        // Successful diff for past turn hides
+        // Successful diff for past turn stays visible (diff content always shown)
         expect(
             shouldHideToolPart(
                 {
@@ -933,7 +933,7 @@ describe('chat-store — activeAssistantMessageId and tool visibility', () => {
                 },
                 activeB,
             ),
-        ).toBe(true);
+        ).toBe(false);
 
         // Pending diff stays visible
         expect(
