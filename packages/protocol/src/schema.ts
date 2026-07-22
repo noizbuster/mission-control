@@ -8,13 +8,9 @@ import { PermissionDecisionSchema, PermissionReplySchema, PermissionRequestSchem
 import { ModelProviderSelectionSchema } from './provider-auth';
 import { ProviderStreamChunkSchema, ToolResultSchema } from './provider-events';
 import { OperatorAbortedRunEventMetadataSchema, RunCoordinatorEventMetadataSchema } from './run-coordinator';
-import {
-    refineSessionAwaitingContract,
-    SessionAwaitingDetailsSchema,
-    SessionStatusSchema,
-} from './session-lifecycle';
+import { SessionFinalizeEventMetadataSchema } from './session-finalize-event';
+import { refineSessionAwaitingContract, SessionAwaitingDetailsSchema, SessionStatusSchema } from './session-lifecycle';
 import { SessionAbortCompletedMetadataSchema } from './session-stop';
-import { SESSION_FINALIZE_STATUSES, SessionFinalizeEventMetadataSchema } from './session-finalize-event';
 import { SESSION_TREE_EVENT_TYPES, SessionTreeEventMetadataSchema } from './session-tree';
 import { NativeSidecarStatusSchema } from './sidecar';
 import { PromptCancelledEventMetadataSchema, TranscriptEventMetadataSchema } from './transcript';
