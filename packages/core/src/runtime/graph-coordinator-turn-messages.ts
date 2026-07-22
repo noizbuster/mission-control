@@ -1,15 +1,8 @@
 import type { AgentMessage } from '@mission-control/protocol';
-import type { ModelMessage } from 'ai';
+import type { ModelMessage, ToolCallPart } from 'ai';
 
 export function agentMessagesToSeedModelMessages(messages: readonly AgentMessage[]): ModelMessage[] {
     const toolNameByCallId = new Map<string, string>();
-    for (const message of messages) {
-        if (message.role === 'assistant') {
-            for (const call of message.providerToolCalls ?? []) {
-                toolNameByCallId.set(call.toolCallId, call.toolName);
-            }
-        }
-    }
     const seed: ModelMessage[] = [];
     for (const message of messages) {
         if (message.role === 'system') {
@@ -17,12 +10,45 @@ export function agentMessagesToSeedModelMessages(messages: readonly AgentMessage
         } else if (message.role === 'user') {
             seed.push({ role: 'user', content: message.content });
         } else if (message.role === 'assistant') {
-            seed.push({ role: 'assistant', content: message.content });
+            const providerToolCalls = message.providerToolCalls ?? [];
+            const toolCallParts: ToolCallPart[] = [];
+            for (const call of providerToolCalls) {
+                let input: unknown;
+                try {
+                    input = JSON.parse(call.argumentsJson);
+                } catch (error) {
+                    if (error instanceof SyntaxError) {
+                        continue;
+                    }
+                    throw error;
+                }
+                toolCallParts.push({
+                    type: 'tool-call',
+                    toolCallId: call.toolCallId,
+                    toolName: call.toolName,
+                    input,
+                });
+                toolNameByCallId.set(call.toolCallId, call.toolName);
+            }
+            if (toolCallParts.length === 0 && providerToolCalls.length > 0 && message.content === '') {
+                continue;
+            }
+            seed.push({
+                role: 'assistant',
+                content:
+                    toolCallParts.length === 0
+                        ? message.content
+                        : [
+                              ...(message.content === '' ? [] : [{ type: 'text' as const, text: message.content }]),
+                              ...toolCallParts,
+                          ],
+            });
         } else if (message.role === 'tool') {
             const toolName = toolNameByCallId.get(message.toolCallId);
             if (toolName === undefined) {
                 continue;
             }
+            toolNameByCallId.delete(message.toolCallId);
             seed.push({
                 role: 'tool',
                 content: [
