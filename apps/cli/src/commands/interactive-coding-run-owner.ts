@@ -6,6 +6,7 @@ import {
     createCodingAgentNodeRegistry,
     createGraphTurnRunner,
     extractContextTokensUsed,
+    extractContextTokensUsedFromAbgEmit,
     type ObservabilityRedactor,
     ProjectTrustStore,
     projectApprovalContinuationMessages,
@@ -109,8 +110,23 @@ export async function createInteractiveRunOwner(
         });
         childHostCallbacks.observabilityRedactor = redactor;
         const spec = options.graph ?? buildCodingAgentGraphForSelection(options.modelProviderSelection);
-        const extraObservers: readonly InteractiveGraphSignalObserver[] =
-            options.abgOverlayController === undefined ? [] : [(signal) => overlayWiring?.observer(signal)];
+        const onUsage = options.onUsage;
+        const usageObserver: InteractiveGraphSignalObserver | undefined =
+            onUsage === undefined
+                ? undefined
+                : (signal) => {
+                      if (signal.type !== 'emit') return;
+                      const contextTokensUsed = extractContextTokensUsedFromAbgEmit(signal.event);
+                      if (contextTokensUsed !== undefined) {
+                          onUsage(contextTokensUsed);
+                      }
+                  };
+        const overlayObserver: InteractiveGraphSignalObserver | undefined =
+            options.abgOverlayController === undefined ? undefined : (signal) => overlayWiring?.observer(signal);
+        const extraObservers: readonly InteractiveGraphSignalObserver[] = [
+            ...(overlayObserver === undefined ? [] : [overlayObserver]),
+            ...(usageObserver === undefined ? [] : [usageObserver]),
+        ];
         const onSignal = interactiveGraphStreamSignal(
             options.output,
             renderState,
