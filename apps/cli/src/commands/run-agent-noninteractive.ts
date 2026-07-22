@@ -6,6 +6,8 @@ import {
     redactAgentEventForObservability,
 } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
+import type { SessionFinalizeInfo } from '../ui/session-finalize';
+import { createSessionFinalizeEvent } from '../ui/session-finalize';
 import { buildCodingAgentSystemPromptEnv, loadTrustedProjectInstructionResources } from './coding-agent-context';
 import { redactWorkflowError } from './interactive-workflow-run-outcome';
 import type { MissionControlServices } from './mission-control-services';
@@ -30,6 +32,33 @@ import {
     workflowOutcomeFromOwnerStatus,
 } from './run-agent-workflow-run';
 
+const DEFAULT_FINALIZE: SessionFinalizeInfo = { status: 'aborted' };
+
+function finalizeFromOutcome(outcome: WorkflowRunOutcome | undefined): SessionFinalizeInfo {
+    if (outcome === undefined) {
+        return DEFAULT_FINALIZE;
+    }
+    switch (outcome.status) {
+        case 'completed':
+            return { status: 'complete' };
+        case 'blocked':
+            return {
+                status: 'aborted',
+                ...(outcome.reason !== undefined && outcome.reason.length > 0 ? { reason: outcome.reason } : {}),
+            };
+        case 'cancelled':
+            return {
+                status: 'aborted',
+                ...(outcome.reason.length > 0 ? { reason: outcome.reason } : {}),
+            };
+        case 'failed':
+            return {
+                status: 'failed',
+                ...(outcome.reason !== undefined && outcome.reason.length > 0 ? { reason: outcome.reason } : {}),
+            };
+    }
+}
+
 export async function runNoninteractiveAgent(input: RunNoninteractiveAgentInput): Promise<string> {
     const { args, options, runtime, authStore, provider, selectedModelProvider, workspaceRoot, graph } = input;
     const recorder = await createRunEventRecorder(args, {
@@ -44,6 +73,8 @@ export async function runNoninteractiveAgent(input: RunNoninteractiveAgentInput)
     };
     let didStart = false;
     let ownerSettlementAttempted = false;
+    let finalizeInfo: SessionFinalizeInfo = DEFAULT_FINALIZE;
+    let finalizeCalled = false;
     const pricingTable = await loadPricingTable();
     const { effectivePrompt, workflowGraph, workflowSpec } = await resolveNoninteractiveWorkflowSelection({
         args,
@@ -87,6 +118,10 @@ export async function runNoninteractiveAgent(input: RunNoninteractiveAgentInput)
                 status: 'failed',
                 reason: 'workflow runtime setup failed',
             });
+            finalizeInfo = {
+                status: 'failed',
+                reason: error instanceof Error ? error.message : String(error),
+            };
             const surfacedError = error instanceof Error ? error : new Error(String(error));
             throw redactWorkflowError(surfacedError);
         }
@@ -94,7 +129,12 @@ export async function runNoninteractiveAgent(input: RunNoninteractiveAgentInput)
         let workflowOutcome: WorkflowRunOutcome | undefined;
         try {
             if (graph !== undefined) {
-                await runtime.runGraph(graph, undefined, { observabilityRedactor: input.observabilityRedactor });
+                const graphResult = await runtime.runGraph(graph, undefined, {
+                    observabilityRedactor: input.observabilityRedactor,
+                });
+                finalizeInfo = finalizeFromOutcome(
+                    workflowOutcomeFromGraphStatus(graphResult.status, graphResult.reason),
+                );
             } else if (
                 effectivePrompt !== undefined &&
                 recorder.currentStore() !== undefined &&
@@ -168,6 +208,9 @@ export async function runNoninteractiveAgent(input: RunNoninteractiveAgentInput)
                         sessionId,
                         sessionRunId: ownerResult.runId,
                     });
+                    // The outcome was settled onto the durable Run; mirror it to finalize so the
+                    // user-facing status line reflects the actual run outcome, not the default.
+                    finalizeInfo = finalizeFromOutcome(ownerOutcome);
                     workflowOutcome = undefined;
                 }
                 if (ownerResult.status === 'failed' && args.mode === 'plain') {
@@ -192,6 +235,7 @@ export async function runNoninteractiveAgent(input: RunNoninteractiveAgentInput)
                 workflowOutcome = workflowOutcomeFromGraphStatus(graphResult.status, graphResult.reason);
             } else {
                 await runtime.runDemoTask();
+                finalizeInfo = { status: 'complete' };
             }
         } catch (error: unknown) {
             if (!(error instanceof PermissionGateError)) {
@@ -201,16 +245,25 @@ export async function runNoninteractiveAgent(input: RunNoninteractiveAgentInput)
                         reason: error instanceof Error ? error.message : String(error),
                     });
                 }
+                finalizeInfo = {
+                    status: 'failed',
+                    reason: error instanceof Error ? error.message : String(error),
+                };
                 throw redactWorkflowError(error);
             }
             await settleNoninteractiveWorkflowRun(workflowRun, {
                 status: 'blocked',
                 reason: error instanceof Error ? error.message : 'approval required',
             });
+            finalizeInfo = {
+                status: 'aborted',
+                reason: error instanceof Error ? error.message : 'approval required',
+            };
             workflowOutcome = undefined;
         }
         if (workflowOutcome !== undefined) {
             await settleNoninteractiveWorkflowRun(workflowRun, workflowOutcome);
+            finalizeInfo = finalizeFromOutcome(workflowOutcome);
         }
         await runtime.stop();
         didStart = false;
@@ -221,10 +274,30 @@ export async function runNoninteractiveAgent(input: RunNoninteractiveAgentInput)
             }
         } finally {
             try {
+                try {
+                    const finalizeTimestamp = new Date().toISOString();
+                    const finalizeSessionId = recorder.currentSessionId();
+                    emitRuntimeEvent(
+                        createSessionFinalizeEvent(finalizeInfo, {
+                            timestamp: finalizeTimestamp,
+                            ...(finalizeSessionId !== undefined ? { sessionId: finalizeSessionId } : {}),
+                        }),
+                    );
+                } catch {
+                    // session.finalize emit is best-effort; never block cleanup.
+                }
                 unsubscribe();
                 try {
                     await recorder.close();
                 } finally {
+                    if (!finalizeCalled) {
+                        finalizeCalled = true;
+                        try {
+                            renderer.finalize?.(finalizeInfo);
+                        } catch {
+                            // finalize is best-effort; never propagate.
+                        }
+                    }
                     await renderer.stop();
                 }
             } finally {

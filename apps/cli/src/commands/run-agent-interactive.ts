@@ -17,6 +17,7 @@ import type {
 import { closeTreeSitterClient } from '@mission-control/tui/highlight';
 import type { CliArgs } from '../args';
 import type { ProviderAuthStore } from '../auth-store';
+import { createSessionFinalizeEvent } from '../ui/session-finalize';
 import { loadPersistedApprovalLevel, savePersistedApprovalLevel } from './approval-level-store';
 import type { ChatInput, ChatOutput, ModelSelector, PlainPromptGraph } from './interactive-chat';
 import { runInteractiveChatSession } from './interactive-chat';
@@ -82,6 +83,7 @@ export async function runInteractiveAgent(input: RunInteractiveAgentInput): Prom
     };
     const unsubscribeRuntimeEvents = input.runtime.onEvent(emitRuntimeEvent);
     let didStart = false;
+    const sessionFinalizeSink: { info?: import('../ui/session-finalize').SessionFinalizeInfo } = {};
     try {
         await input.runtime.start();
         didStart = true;
@@ -125,10 +127,25 @@ export async function runInteractiveAgent(input: RunInteractiveAgentInput): Prom
             ...(input.options.plainPromptGraph !== undefined
                 ? { plainPromptGraph: input.options.plainPromptGraph }
                 : {}),
+            sessionFinalizeSink,
         });
     } finally {
         if (didStart) {
             await input.runtime.stop();
+        }
+        if (sessionFinalizeSink.info !== undefined) {
+            try {
+                const finalizeTimestamp = new Date().toISOString();
+                const finalizeSessionId = recorder.currentSessionId();
+                emitRuntimeEvent(
+                    createSessionFinalizeEvent(sessionFinalizeSink.info, {
+                        timestamp: finalizeTimestamp,
+                        ...(finalizeSessionId !== undefined ? { sessionId: finalizeSessionId } : {}),
+                    }),
+                );
+            } catch {
+                // session.finalize emit is best-effort; resume readability is not load-bearing.
+            }
         }
         unsubscribeRuntimeEvents?.();
         await recorder.close();
