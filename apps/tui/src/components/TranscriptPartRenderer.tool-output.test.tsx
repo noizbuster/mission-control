@@ -130,12 +130,10 @@ describe('TranscriptPartRenderer tool output presentation', () => {
                     <TypedToolRow
                         part={{ id: 'typed-one', type: 'block-tool', toolName: 'typed-one', text: '' }}
                         expanded={false}
-                        viewportColumns={100}
                     />
                     <TypedToolRow
                         part={{ id: 'typed-two', type: 'block-tool', toolName: 'typed-two', text: '' }}
                         expanded={false}
-                        viewportColumns={100}
                     />
                     <TranscriptPartRenderer
                         part={legacyPart}
