@@ -14,6 +14,7 @@ import {
     SessionStatusSchema,
 } from './session-lifecycle';
 import { SessionAbortCompletedMetadataSchema } from './session-stop';
+import { SESSION_FINALIZE_STATUSES, SessionFinalizeEventMetadataSchema } from './session-finalize-event';
 import { SESSION_TREE_EVENT_TYPES, SessionTreeEventMetadataSchema } from './session-tree';
 import { NativeSidecarStatusSchema } from './sidecar';
 import { PromptCancelledEventMetadataSchema, TranscriptEventMetadataSchema } from './transcript';
@@ -24,6 +25,7 @@ export const AGENT_EVENT_TYPES = [
     'session.started',
     'session.stopped',
     'session.abort.completed',
+    'session.finalize',
     ...SESSION_TREE_EVENT_TYPES,
     'task.started',
     'task.progress',
@@ -127,6 +129,7 @@ export const AgentEventSchema = z
         command: CommandRunEventMetadataSchema.optional(),
         run: RunCoordinatorEventMetadataSchema.optional(),
         sessionStop: SessionAbortCompletedMetadataSchema.optional(),
+        sessionFinalize: SessionFinalizeEventMetadataSchema.optional(),
         sessionTree: SessionTreeEventMetadataSchema.optional(),
         transcript: TranscriptEventMetadataSchema.optional(),
         abg: AbgEventMetadataSchema.optional(),
