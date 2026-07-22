@@ -5,14 +5,14 @@
  * (OpenCode forced generate_object on pure gates), blackboard loop_active ownership.
  */
 import type { AbgNodeSpec, AbgSignal } from '@mission-control/protocol';
+import type { ToolSet } from 'ai';
 import { packContext } from '../../../context/context-packer';
 import { assembleSystemPrompt, type SystemPromptSkill } from '../../../context/system-prompt';
+import { YIELD_TOOL_NAME } from '../../../tools/yield-tool/yield-tool';
 import { createAbgEmitSignal } from '../../abg-emit';
 import type { AbgNodeRunContext, AbgNodeRunner } from '../../node-registry';
-import type { ToolSet } from 'ai';
-import { bridgeAdvertisementsToAiSdk, createAbgToolSettlementLedger } from './abg-tool-bridge';
+import { createAbgToolSettlementLedger, createProposalOnlyToolBridge } from './abg-tool-bridge';
 import { type LlmActorTurnResult, runLlmActor } from './llm-actor-node';
-import { YIELD_TOOL_NAME } from '../../../tools/yield-tool/yield-tool';
 import {
     applyEnumConstraint,
     filterByCapabilities,
@@ -131,15 +131,16 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
     });
     const settlementLedger = createAbgToolSettlementLedger();
     let generateObjectCapture: GenerateObjectCapture | undefined;
-    const workspaceTools: ToolSet | undefined =
+    const proposalOnlyWorkspaceTools =
         suppressTools || context.toolRegistry === undefined
             ? undefined
-            : bridgeAdvertisementsToAiSdk(context.toolRegistry, advertisements, {
+            : createProposalOnlyToolBridge(context.toolRegistry, advertisements, {
                   settlementLedger,
                   ...(context.emitEvent !== undefined ? { onToolEvent: context.emitEvent } : {}),
                   ...(context.serializeToolExecution === true ? { serializeToolExecution: true } : {}),
                   ...(context.controlEpoch !== undefined ? { controlEpoch: context.controlEpoch } : {}),
               });
+    const workspaceTools: ToolSet | undefined = proposalOnlyWorkspaceTools?.tools;
     const pureGateTools = pureStructuredGate
         ? createPureStructuredGateTools(node, (capture) => {
               generateObjectCapture = capture;
@@ -147,6 +148,7 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
         : undefined;
     const tools: ToolSet | undefined = pureGateTools?.tools ?? workspaceTools;
     const toolChoice = pureGateTools?.toolChoice;
+    const providerChunkTimeoutMs = node.model?.timeoutMs ?? context.model?.timeoutMs ?? context.graphTimeoutMs;
     const priorSummary = readPriorSummary(blackboard);
     const packed = packContext({
         messages,
@@ -182,13 +184,18 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
         ...(tools !== undefined ? { tools } : {}),
         ...(toolChoice !== undefined ? { toolChoice } : {}),
         ...(context.abortSignal !== undefined ? { signal: context.abortSignal } : {}),
+        ...(providerChunkTimeoutMs !== undefined ? { timeoutMs: providerChunkTimeoutMs } : {}),
         now: context.now,
-        ...(context.toolRegistry !== undefined || pureStructuredGate
-            ? { settlementLedger }
-            : {}),
+        ...(context.toolRegistry !== undefined || pureStructuredGate ? { settlementLedger } : {}),
         ...(context.haltOnFailedToolSettlement === true ? { haltOnFailedToolSettlement: true } : {}),
         ...(context.observabilityRedactor !== undefined
             ? { observabilityRedactor: context.observabilityRedactor }
+            : {}),
+        ...(proposalOnlyWorkspaceTools !== undefined
+            ? {
+                  settleToolProposals: (proposals) =>
+                      proposalOnlyWorkspaceTools.execute(proposals, context.abortSignal),
+              }
             : {}),
         captureRawTurnResult: (result) => {
             turnResult = result;

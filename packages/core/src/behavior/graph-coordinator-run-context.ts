@@ -27,8 +27,7 @@ export function runContext(
     const nodes = Object.fromEntries(graph.nodes.map((node) => [node.id, node]));
     const model = graph.defaults?.model ?? runtimeModel(input.modelProviderSelection);
     const sdkModel = input.resolveSdkModel !== undefined ? input.resolveSdkModel(model) : undefined;
-    const retryCorrection =
-        options.nodeId !== undefined ? state.correctionByNodeId.get(options.nodeId) : undefined;
+    const retryCorrection = options.nodeId !== undefined ? state.correctionByNodeId.get(options.nodeId) : undefined;
     return {
         graphId: graph.id,
         now: input.now,
@@ -37,6 +36,7 @@ export function runContext(
         nodes,
         policies: graph.policies,
         model,
+        ...(graph.defaults?.timeoutMs !== undefined ? { graphTimeoutMs: graph.defaults.timeoutMs } : {}),
         ...(sdkModel !== undefined ? { sdkModel } : {}),
         blackboard: state.blackboard,
         ...(state.budgetLedger !== undefined ? { budgetLedger: state.budgetLedger } : {}),
@@ -64,9 +64,7 @@ export function runContext(
             ? { projectInstructionResources: input.projectInstructionResources }
             : {}),
         observabilityRedactor: state.observabilityRedactor,
-        ...(retryCorrection !== undefined && retryCorrection.length > 0
-            ? { retryCorrection }
-            : {}),
+        ...(retryCorrection !== undefined && retryCorrection.length > 0 ? { retryCorrection } : {}),
     } satisfies {
         readonly graphId: string;
         readonly now: () => string;
@@ -75,6 +73,7 @@ export function runContext(
         readonly nodes: Readonly<Record<string, AbgNodeSpec | undefined>>;
         readonly policies: readonly AbgPolicySpec[];
         readonly model: AbgNodeModelOptions;
+        readonly graphTimeoutMs?: number;
         readonly sdkModel?: LlmActorModel;
         readonly blackboard: Blackboard;
         readonly budgetLedger?: CostLedger;

@@ -298,6 +298,52 @@ describe('runLlmActorNode — system prompt threading', () => {
     });
 });
 
+describe('runLlmActorNode — provider timeout configuration', () => {
+    it('uses the node model timeout for a stalled provider stream', async () => {
+        const stalledModel = new MockLanguageModelV3({
+            provider: 'test',
+            modelId: 'stalled-provider',
+            doStream: async ({ abortSignal }) => ({
+                stream: new ReadableStream<LanguageModelV3StreamPart>({
+                    start(controller) {
+                        controller.enqueue({ type: 'stream-start', warnings: [] });
+                        abortSignal?.addEventListener('abort', () => controller.error(abortSignal.reason), {
+                            once: true,
+                        });
+                    },
+                }),
+            }),
+        });
+        const blackboard = createBlackboard();
+        blackboard.appendMessages([{ role: 'user', content: 'wait' }]);
+        const outcome = await Promise.race([
+            collectSignals(
+                runLlmActorNode(
+                    {
+                        id: 'timeout-node',
+                        kind: 'llm',
+                        model: { providerID: 'test', modelID: 'stalled-provider', timeoutMs: 10 },
+                    },
+                    {
+                        graphId: 'timeout-graph',
+                        now: () => NOW,
+                        sdkModel: stalledModel,
+                        blackboard,
+                    },
+                ),
+            ),
+            new Promise<'deadline-unenforced'>((resolve) => {
+                setTimeout(() => resolve('deadline-unenforced'), 500);
+            }),
+        ]);
+
+        expect(outcome).not.toBe('deadline-unenforced');
+        if (outcome !== 'deadline-unenforced') {
+            expect(outcome.at(-1)).toMatchObject({ type: 'failure', error: { code: 'provider_timeout' } });
+        }
+    });
+});
+
 describe('runLlmActorNode — outputKey structured-output persistence', () => {
     function textChunks(text: string): LanguageModelV3StreamPart[] {
         return [
@@ -882,6 +928,42 @@ describe('runLlmActorNode — outputKey structured-output persistence', () => {
             doStream: async () => ({ stream: convertArrayToReadableStream(chunks) }),
         });
     }
+
+    it('does not persist a quarantined tool proposal into graph history', async () => {
+        const blackboard = seedBlackboard();
+        const originalMessages = blackboard.getMessages();
+        const context: AbgNodeRunContext = {
+            graphId: 'g_quarantined_tool',
+            now: () => NOW,
+            sdkModel: modelWithToolCall(null),
+            blackboard,
+            toolRegistry: registryWithProbe(),
+            controlEpoch: {
+                dbIdentity: 'd'.repeat(64),
+                sessionId: 'session-quarantined-tool',
+                ownerId: 'owner-quarantined-tool',
+                ownerEpoch: 1,
+                callbackFence: {
+                    operationId: 'operation-quarantined-tool',
+                    settle: async () => ({ accepted: false, allSettled: false }),
+                },
+            },
+        };
+        const node = { id: 'research-explore', kind: 'llm' as const, capabilities: ['read'] };
+
+        const signals = await collectSignals(runLlmActorNode(node, context));
+
+        expect(signals.at(-1)).toMatchObject({ type: 'failure', error: { code: 'tool_settlement_quarantined' } });
+        expect(signals.some((signal) => signal.type === 'success')).toBe(false);
+        expect(
+            signals.some(
+                (signal) =>
+                    signal.type === 'emit' &&
+                    (signal.event.type === 'tool.completed' || signal.event.type === 'tool.failed'),
+            ),
+        ).toBe(false);
+        expect(blackboard.getMessages()).toEqual(originalMessages);
+    });
 
     it('does not write outputKey and keeps loop_active for tool call + empty text', async () => {
         const blackboard = seedBlackboard();

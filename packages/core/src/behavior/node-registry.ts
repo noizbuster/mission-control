@@ -28,6 +28,7 @@ export type AbgNodeRunContext = {
     readonly nodes?: Readonly<Record<string, AbgNodeSpec | undefined>>;
     readonly observedEvents?: readonly AbgObservedGraphEvent[];
     readonly model?: AbgNodeModelOptions;
+    readonly graphTimeoutMs?: number;
     /**
      * The resolved Vercel AI SDK model for this run (`AbgNodeModelOptions` → SDK model).
      * `LLMActor` calls `streamText` with this. Resolved by `resolveSdkModel` on the graph
