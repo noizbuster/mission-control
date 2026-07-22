@@ -143,7 +143,7 @@ describe('TranscriptPartRenderer mounted reactivity', () => {
         }
     });
 
-    it('reveals a settled one-line subagent body after an active one-line tool with the same ID', async () => {
+    it('keeps an expanded active one-line tool body visible before same-ID subagent settlement', async () => {
         // Given: an expanded active one-line tool row with a stable transcript ID.
         const partId = 'stable-one-line-settlement';
         const [part, setPart] = createSignal<TranscriptPart>({
@@ -176,7 +176,7 @@ describe('TranscriptPartRenderer mounted reactivity', () => {
             if (parent === undefined) {
                 throw new Error('Expected the mounted transcript parent');
             }
-            expect(setup.captureCharFrame()).not.toContain('active one-line tool body');
+            expect(setup.captureCharFrame()).toContain('active one-line tool body');
 
             // When: the same ID settles into a one-line subagent result.
             setPart({
