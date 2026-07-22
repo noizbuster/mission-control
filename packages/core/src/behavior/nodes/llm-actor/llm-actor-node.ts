@@ -191,14 +191,8 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
             // carrying a secret does not leak into the `llm.error` emit (rendered + persisted).
             const message = observabilityRedactor.redactText(surfacedMessage);
             const classified = classifyProviderStreamError(error);
-            const timedOutWithoutCallerAbort =
-                !isAbortRequested(input.signal) && classified?.code === 'provider_aborted';
-            const errorCode = timedOutWithoutCallerAbort
-                ? 'provider_timeout'
-                : (classified?.code ?? extractProviderErrorCode(error));
-            const retryable = timedOutWithoutCallerAbort
-                ? true
-                : (classified?.retryable ?? extractProviderErrorRetryable(error));
+            const errorCode = classified?.code ?? extractProviderErrorCode(error);
+            const retryable = classified?.retryable ?? extractProviderErrorRetryable(error);
             const retryExhausted = extractProviderRetryExhausted(error);
             yield createAbgEmitSignal({
                 graphId: input.graphId,

@@ -181,7 +181,7 @@ async function* retryProviderStream(input: RetryingProviderStreamInput): AsyncIt
     const maxAttempts = Math.max(1, Math.trunc(input.retryLimit) + 1);
     for (let attempt = 1; ; attempt += 1) {
         if (input.signal.aborted) {
-            throw new FlatProviderBridgeError(abortedError());
+            throw new FlatProviderBridgeError(abortErrorForSignal(input.signal));
         }
         let error: ProtocolError | undefined;
         let outputEscaped = false;
@@ -270,11 +270,14 @@ function isExternallyVisibleChunk(chunk: ProviderStreamChunk): boolean {
 }
 
 function normalizeRetryError(error: unknown, signal: AbortSignal): ProtocolError {
+    if (isTimeoutAbortReason(signal.reason)) {
+        return timeoutAbortError();
+    }
     if (error instanceof FlatProviderBridgeError || error instanceof ProviderTurnError) {
         return error.error;
     }
     if (signal.aborted) {
-        return { code: 'provider_aborted', message: 'provider turn aborted', retryable: false };
+        return abortedError();
     }
     return {
         code: 'unknown',
@@ -309,11 +312,11 @@ function abortableSleep(delayMs: number, signal: AbortSignal): Promise<void> {
 
 function forwardAbort(source: AbortSignal, target: AbortController): () => void {
     if (source.aborted) {
-        target.abort();
+        target.abort(source.reason);
         return () => undefined;
     }
     const abort = (): void => {
-        target.abort();
+        target.abort(source.reason);
     };
     source.addEventListener('abort', abort, { once: true });
     return () => {
@@ -584,7 +587,7 @@ function bridgeFlatStream(
                     }
                 }
                 if (aborted) {
-                    controller.error(new FlatProviderBridgeError(abortedError()));
+                    controller.error(new FlatProviderBridgeError(abortErrorForSignal(signal)));
                     return;
                 }
             } catch (error: unknown) {
@@ -600,6 +603,18 @@ function bridgeFlatStream(
 
 function abortedError(): ProtocolError {
     return { code: 'provider_aborted', message: 'provider turn aborted', retryable: false };
+}
+
+function abortErrorForSignal(signal: AbortSignal): ProtocolError {
+    return isTimeoutAbortReason(signal.reason) ? timeoutAbortError() : abortedError();
+}
+
+function timeoutAbortError(): ProtocolError {
+    return { code: 'provider_timeout', message: 'provider turn timed out', retryable: true };
+}
+
+function isTimeoutAbortReason(reason: unknown): boolean {
+    return typeof reason === 'object' && reason !== null && 'name' in reason && reason.name === 'TimeoutError';
 }
 
 function assertNeverChunk(value: never): never {

@@ -38,4 +38,40 @@ describe('LLM actor chunk timeout', () => {
             error: { code: 'provider_timeout', retryable: true },
         });
     });
+
+    it('preserves an explicit provider abort when no chunk deadline elapsed', async () => {
+        const model = wrapFlatProviderAsSdkModel({
+            provider: createDeterministicProvider([
+                {
+                    kind: 'response_failed',
+                    error: {
+                        code: 'provider_aborted',
+                        message: 'provider aborted',
+                        retryable: false,
+                    },
+                },
+            ]),
+            providerID: 'local',
+            modelID: 'local-echo',
+            retryLimit: 0,
+        });
+        const signals: AbgSignal[] = [];
+
+        for await (const signal of runLlmActor({
+            graphId: 'provider-abort-graph',
+            nodeId: 'provider-abort-node',
+            model,
+            system: 'Observe an explicit abort.',
+            messages,
+            timeoutMs: 100,
+            now: () => NOW,
+        })) {
+            signals.push(signal);
+        }
+
+        expect(signals.at(-1)).toMatchObject({
+            type: 'failure',
+            error: { code: 'provider_aborted', retryable: false },
+        });
+    });
 });
