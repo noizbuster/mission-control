@@ -50,6 +50,9 @@ describe('mctrl keybind registry', () => {
         it('keeps ctrl+o as tool_expand', () => {
             expect(defaults.tool_expand).toBe('ctrl+o');
         });
+        it('describes ctrl+o as tool output expansion rather than statistics', () => {
+            expect(Definitions.tool_expand.description).toBe('Toggle tool output expansion');
+        });
         it('keeps ctrl+e as editor_open', () => {
             expect(defaults.editor_open).toBe('ctrl+e');
         });
