@@ -1,4 +1,11 @@
 export {
+    SESSION_FINALIZE_STATUSES,
+    type SessionFinalizeEventMetadata,
+    SessionFinalizeEventMetadataSchema,
+    type SessionFinalizeStatus,
+    SessionFinalizeStatusSchema,
+} from './session-finalize-event';
+export {
     SESSION_OWNER_CONTROL_ERROR_CODES,
     SESSION_OWNER_CONTROL_PROTOCOL_VERSION,
     SESSION_OWNER_CONTROL_TOKEN_KIND,
@@ -20,13 +27,6 @@ export {
     type SessionStopReceiptContract,
     SessionStopReceiptSchema,
 } from './session-owner-control';
-export {
-    SESSION_FINALIZE_STATUSES,
-    type SessionFinalizeEventMetadata,
-    SessionFinalizeEventMetadataSchema,
-    type SessionFinalizeStatus,
-    SessionFinalizeStatusSchema,
-} from './session-finalize-event';
 export {
     SESSION_STOP_BARRIER_KINDS,
     SESSION_STOP_ERROR_CODES,
@@ -68,6 +68,8 @@ export {
     TranscriptVisibilitySchema,
 } from './transcript';
 export {
+    type ModelContextPreference,
+    ModelContextPreferenceSchema,
     TUI_KV_VALUE_SCHEMA_KEYS,
     TUI_PLUGIN_CAPABILITIES,
     TUI_PLUGIN_DIAGNOSTIC_LEVELS,
@@ -79,8 +81,6 @@ export {
     TuiKvNamespaceSchema,
     type TuiKvValueSchemaKey,
     TuiKvValueSchemaKeySchema,
-    type ModelContextPreference,
-    ModelContextPreferenceSchema,
     type TuiLocalPreferences,
     TuiLocalPreferencesSchema,
     type TuiPluginCapability,

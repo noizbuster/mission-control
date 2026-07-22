@@ -85,6 +85,13 @@ export {
     RunCoordinatorStateSchema,
 } from './run-coordinator';
 export {
+    SESSION_FINALIZE_STATUSES,
+    type SessionFinalizeEventMetadata,
+    SessionFinalizeEventMetadataSchema,
+    type SessionFinalizeStatus,
+    SessionFinalizeStatusSchema,
+} from './session-finalize-event';
+export {
     SESSION_AWAITING_REASONS,
     SESSION_STATUSES,
     type SessionAwaitingDetails,
@@ -96,13 +103,6 @@ export {
     type SessionStatus,
     SessionStatusSchema,
 } from './session-lifecycle';
-export {
-    SESSION_FINALIZE_STATUSES,
-    type SessionFinalizeEventMetadata,
-    SessionFinalizeEventMetadataSchema,
-    type SessionFinalizeStatus,
-    SessionFinalizeStatusSchema,
-} from './session-finalize-event';
 export {
     SESSION_STOP_BARRIER_KINDS,
     SESSION_STOP_ERROR_CODES,
