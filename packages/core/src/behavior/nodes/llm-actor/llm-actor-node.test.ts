@@ -15,22 +15,25 @@
  * Two provider output shapes (Anthropic-style reasoning; OpenAI-style plain) at the
  * LanguageModelV3 layer — where the SDK's dispatch/loop-control behavior lives.
  */
-import type { AbgSignal } from '@mission-control/protocol';
+
 import type { LanguageModelV3StreamPart } from '@ai-sdk/provider';
+import type { AbgSignal } from '@mission-control/protocol';
 import { stepCountIs, streamText } from 'ai';
 import { MockLanguageModelV3 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
 import { assembleSystemPrompt } from '../../../context/system-prompt';
 import { wrapFlatProviderAsSdkModel } from '../../../providers/ai-sdk/flat-provider-bridge';
 import { createDeterministicProvider } from '../../../providers/deterministic-provider';
-import type { PolicyGateFn } from './abg-tool-bridge';
-import { runLlmActor } from './llm-actor-node';
+import { ToolRegistry } from '../../../tools/tool-registry';
+import { createAbgToolSettlementLedger, createProposalOnlyToolBridge, type PolicyGateFn } from './abg-tool-bridge';
 import type { LlmActorModel } from './llm-actor-node';
+import { runLlmActor } from './llm-actor-node';
 import {
     anthropicShapeChunks,
     buildEchoTools,
     buildMockModel,
     collectSignals,
+    echoRegistration,
     eventTypes,
     messages,
     NOW,
@@ -229,6 +232,74 @@ describe('LLMActor node — Phase 0 gating spike', () => {
         });
     });
 
+    it('keeps a provider chunk deadline out of graph-owned tool execution', async () => {
+        const registry = new ToolRegistry();
+        const advertisement = registry.register({
+            ...echoRegistration,
+            execute: async (input) => {
+                await tick(50);
+                return { text: input.text };
+            },
+        });
+        const bridge = createProposalOnlyToolBridge(registry, [advertisement]);
+        const model = buildMockModel('openai', 'gpt-5', openaiShapeChunks());
+        const signals: AbgSignal[] = [];
+
+        for await (const signal of runLlmActor({
+            graphId: 'g1',
+            nodeId: 'llm-1',
+            model,
+            system: assembleSystemPrompt(),
+            messages,
+            tools: bridge.tools,
+            timeoutMs: 10,
+            settleToolProposals: (proposals) => bridge.execute(proposals, new AbortController().signal),
+            now: () => NOW,
+        })) {
+            signals.push(signal);
+        }
+
+        expect(signals.at(-1)).toMatchObject({ type: 'success' });
+        expect(eventTypes(signals)).toContain('tool.completed');
+        expect(signals.some((signal) => signal.type === 'failure')).toBe(false);
+    });
+
+    it('keeps an unexpected tool exception out of the provider failure path', async () => {
+        const registry = new ToolRegistry();
+        const settlementLedger = createAbgToolSettlementLedger();
+        const advertisement = registry.register({
+            ...echoRegistration,
+            execute: async () => {
+                throw new Error('unexpected tool failure');
+            },
+        });
+        const bridge = createProposalOnlyToolBridge(registry, [advertisement], { settlementLedger });
+        const model = buildMockModel('openai', 'gpt-5', openaiShapeChunks());
+        const signals: AbgSignal[] = [];
+
+        for await (const signal of runLlmActor({
+            graphId: 'g_tool_exception',
+            nodeId: 'llm-tool-exception',
+            model,
+            system: assembleSystemPrompt(),
+            messages,
+            tools: bridge.tools,
+            haltOnFailedToolSettlement: true,
+            settlementLedger,
+            settleToolProposals: (proposals) => bridge.execute(proposals, new AbortController().signal),
+            now: () => NOW,
+        })) {
+            signals.push(signal);
+        }
+
+        expect(signals.at(-1)).toMatchObject({
+            type: 'failure',
+            error: { code: 'tool_settlement_failed', retryable: false },
+        });
+        expect(eventTypes(signals)).toContain('tool.failed');
+        expect(eventTypes(signals)).not.toContain('llm.error');
+    });
+
     it('control: a 2-step budget makes the SDK loop (why stepCountIs(1) is the keystone)', async () => {
         const model = buildMockModel('openai', 'gpt-5', openaiShapeChunks());
         const tools = buildEchoTools(async () => ({ allowed: true }));
@@ -256,10 +327,7 @@ describe('LLMActor node — Phase 0 gating spike', () => {
                 nodeId: 'llm-1',
                 model,
                 system: assembleSystemPrompt(),
-                messages: [
-                    { role: 'system', content: 'runtime-injected reminder' },
-                    ...messages,
-                ],
+                messages: [{ role: 'system', content: 'runtime-injected reminder' }, ...messages],
                 tools,
                 now: () => NOW,
             })) {
@@ -289,9 +357,13 @@ describe('LLMActor node — Phase 0 gating spike', () => {
                     start(controller) {
                         controller.enqueue({ type: 'stream-start', warnings: [] });
                         // intentionally never enqueues again; closes only on abort
-                        abortSignal?.addEventListener('abort', () => {
-                            controller.error(new DOMException('aborted', 'AbortError'));
-                        }, { once: true });
+                        abortSignal?.addEventListener(
+                            'abort',
+                            () => {
+                                controller.error(new DOMException('aborted', 'AbortError'));
+                            },
+                            { once: true },
+                        );
                     },
                 });
                 return { stream };

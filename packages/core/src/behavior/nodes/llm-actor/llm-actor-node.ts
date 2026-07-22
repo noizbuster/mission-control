@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- the single-turn LLM actor owns provider streaming, retry, and post-stream tool settlement.
 /**
  * LLMActor node (ABG §10.1) — wraps a Vercel AI SDK `streamText` call and exposes it as
  * an `AsyncIterable<AbgSignal>`, the universal ABG node contract.
@@ -32,6 +33,7 @@ import {
 } from '../../../providers/provider-retry-policy';
 import { errorToString } from '../../../util/error-to-string';
 import { createAbgEmitSignal } from '../../abg-emit';
+import type { CapturedToolProposal, ExecutedToolProposal } from './abg-tool-proposal-execution';
 import { abgSignalsFromStreamPart, createStreamPartObservabilityState } from './ai-sdk-adapter';
 import type { LlmActorRunInput, LlmActorTurnResult } from './llm-actor-node-types';
 import {
@@ -79,6 +81,8 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
     let turnText = '';
     let turnUsage: unknown;
     let turnResponseMessages: readonly ModelMessage[] = [];
+    let providerResponseMessages: readonly ModelMessage[] = [];
+    const capturedToolProposals: CapturedToolProposal[] = [];
     // Track proposals in stream order so the approval-block check respects proposal order. The
     // SDK dispatches execute in non-deterministic order under a serialized batch; the ledger
     // records in completion order. Using the first-PROPOSED matches flat "first tool call" parity.
@@ -113,6 +117,13 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
 
             for await (const part of result.fullStream) {
                 sawStreamPart = true;
+                if (input.settleToolProposals !== undefined && part.type === 'tool-call') {
+                    capturedToolProposals.push({
+                        toolCallId: part.toolCallId,
+                        toolName: part.toolName,
+                        argumentsJson: serializedToolInput(part.input),
+                    });
+                }
                 for (const signal of abgSignalsFromStreamPart(part, adapterContext)) {
                     if (signal.type === 'emit' && signal.event.type === 'llm.tool_call.proposed') {
                         const proposedId = extractToolCallId(signal.event.payload);
@@ -126,7 +137,7 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
             const [text, usage, response] = await Promise.all([result.text, result.usage, result.response]);
             turnText = text;
             turnUsage = usage;
-            turnResponseMessages = response.messages;
+            providerResponseMessages = response.messages;
             break;
         } catch (error) {
             const surfacedMessage = error instanceof Error ? error.message : errorToString(error);
@@ -180,8 +191,14 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
             // carrying a secret does not leak into the `llm.error` emit (rendered + persisted).
             const message = observabilityRedactor.redactText(surfacedMessage);
             const classified = classifyProviderStreamError(error);
-            const errorCode = classified?.code ?? extractProviderErrorCode(error);
-            const retryable = classified?.retryable ?? extractProviderErrorRetryable(error);
+            const timedOutWithoutCallerAbort =
+                !isAbortRequested(input.signal) && classified?.code === 'provider_aborted';
+            const errorCode = timedOutWithoutCallerAbort
+                ? 'provider_timeout'
+                : (classified?.code ?? extractProviderErrorCode(error));
+            const retryable = timedOutWithoutCallerAbort
+                ? true
+                : (classified?.retryable ?? extractProviderErrorRetryable(error));
             const retryExhausted = extractProviderRetryExhausted(error);
             yield createAbgEmitSignal({
                 graphId: input.graphId,
@@ -215,6 +232,45 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
             return;
         }
     }
+
+    let settledToolProposals: readonly ExecutedToolProposal[];
+    try {
+        settledToolProposals =
+            input.settleToolProposals === undefined ? [] : await input.settleToolProposals(capturedToolProposals);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : errorToString(error);
+        yield {
+            type: 'failure',
+            nodeId,
+            ...graphIdPart,
+            error: observabilityRedactor.redactValue({
+                message: `tool settlement failed: ${message}`,
+                code: 'tool_settlement_failed',
+                retryable: false,
+            }),
+        };
+        return;
+    }
+
+    const quarantinedProposal = settledToolProposals.find((proposal) => proposal.commitState === 'quarantined');
+    if (quarantinedProposal !== undefined) {
+        yield {
+            type: 'failure',
+            nodeId,
+            ...graphIdPart,
+            error: observabilityRedactor.redactValue({
+                message: `tool settlement quarantined: ${quarantinedProposal.settlement.toolCallId}`,
+                code: 'tool_settlement_quarantined',
+                retryable: false,
+            }),
+        };
+        return;
+    }
+
+    for (const settledProposal of settledToolProposals) {
+        yield toolSettlementSignal(input, settledProposal);
+    }
+    turnResponseMessages = [...providerResponseMessages, ...toolResultMessages(settledToolProposals)];
 
     // Approval-block short-circuit: if a tool settled as `approval_required` (a permission gate
     // in `block` mode with no automation), the graph must settle as `blocked` — parity with the
@@ -279,4 +335,59 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
         ...graphIdPart,
         result: observabilityRedactor.redactValue(rawTurnResult),
     };
+}
+
+function serializedToolInput(input: unknown): string {
+    if (typeof input === 'string') return input;
+    return JSON.stringify(input) ?? 'null';
+}
+
+function toolSettlementSignal(input: LlmActorRunInput, settledProposal: ExecutedToolProposal): AbgSignal {
+    const eventType = settledProposal.settlement.status === 'completed' ? 'tool.completed' : 'tool.failed';
+    const payload =
+        settledProposal.settlement.status === 'completed'
+            ? {
+                  toolCallId: settledProposal.settlement.toolCallId,
+                  toolName: settledProposal.settlement.toolName,
+                  ...(settledProposal.settlement.output !== undefined
+                      ? { output: settledProposal.settlement.output }
+                      : {}),
+                  ...(settledProposal.settlement.structuredOutput !== undefined
+                      ? { structuredOutput: settledProposal.settlement.structuredOutput }
+                      : {}),
+              }
+            : {
+                  toolCallId: settledProposal.settlement.toolCallId,
+                  toolName: settledProposal.settlement.toolName,
+                  ...(settledProposal.settlement.error !== undefined
+                      ? { error: settledProposal.settlement.error }
+                      : {}),
+              };
+    return createAbgEmitSignal({
+        graphId: input.graphId,
+        nodeId: input.nodeId,
+        source: 'llm-actor',
+        eventType,
+        timestamp: input.now(),
+        payload,
+    });
+}
+
+function toolResultMessages(settledProposals: readonly ExecutedToolProposal[]): readonly ModelMessage[] {
+    return settledProposals.map(
+        (settledProposal): ModelMessage => ({
+            role: 'tool',
+            content: [
+                {
+                    type: 'tool-result',
+                    toolCallId: settledProposal.settlement.toolCallId,
+                    toolName: settledProposal.settlement.toolName,
+                    output:
+                        settledProposal.settlement.status === 'completed'
+                            ? { type: 'text', value: settledProposal.modelOutput }
+                            : { type: 'error-text', value: settledProposal.modelOutput },
+                },
+            ],
+        }),
+    );
 }

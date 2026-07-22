@@ -1,6 +1,7 @@
 import type { ModelMessage, streamText, ToolSet } from 'ai';
 import type { ObservabilityRedactor } from '../../../providers/observability-redactor';
 import type { AbgToolSettlementLedger } from './abg-tool-bridge';
+import type { CapturedToolProposal, ExecutedToolProposal } from './abg-tool-proposal-execution';
 
 type StreamTextParameters = Parameters<typeof streamText>[0];
 
@@ -26,6 +27,9 @@ export type LlmActorRunInput = {
     readonly timeoutMs?: number;
     readonly now: () => string;
     readonly settlementLedger?: AbgToolSettlementLedger;
+    readonly settleToolProposals?: (
+        proposals: readonly CapturedToolProposal[],
+    ) => Promise<readonly ExecutedToolProposal[]>;
     readonly haltOnFailedToolSettlement?: boolean;
     readonly observabilityRedactor?: ObservabilityRedactor;
     readonly captureRawTurnResult?: (result: LlmActorTurnResult) => void;
