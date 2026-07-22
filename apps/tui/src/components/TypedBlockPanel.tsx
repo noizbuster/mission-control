@@ -12,10 +12,8 @@ export function TypedBlockPanel(props: {
 }): JSX.Element {
     const status = () => toolStatusPresentation(props.status);
     const header = () => {
-        const presentation = status();
-        return presentation.label === undefined || presentation.glyph === undefined
-            ? props.title
-            : `[${presentation.glyph}] ${presentation.label}: ${props.title}`;
+        const glyph = status().glyph;
+        return glyph === undefined ? props.title : `${props.title} [${glyph}]`;
     };
     return (
         <box flexDirection="column" flexShrink={0}>

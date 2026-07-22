@@ -37,16 +37,11 @@ describe('toolIconForTitle', () => {
 });
 
 describe('buildInlineToolLabel', () => {
-    it('uses a plain title when expanded (no > prefix)', () => {
-        expect(buildInlineToolLabel('file.edit', 5, true)).toBe('file.edit');
-    });
-
-    it('appends a line-count hint when collapsed', () => {
-        expect(buildInlineToolLabel('file.edit', 5, false)).toBe('file.edit (5 lines)');
+    it('uses the same plain title for collapsed and expanded tool rows', () => {
+        expect(buildInlineToolLabel('file.edit')).toBe('file.edit');
     });
 
     it('falls back to a generic label when title is undefined', () => {
-        expect(buildInlineToolLabel(undefined, 3, true)).toBe('Tool output');
-        expect(buildInlineToolLabel(undefined, 3, false)).toBe('Tool output (3 lines)');
+        expect(buildInlineToolLabel(undefined)).toBe('Tool output');
     });
 });

@@ -22,7 +22,7 @@ function textByPlainText(renderables: readonly TextRenderable[], plainText: stri
 }
 
 describe('TranscriptPartRenderer mounted reactivity', () => {
-    it('updates a mounted command status from Running to Interrupted without remounting its parent', async () => {
+    it('keeps a mounted command title bare across status settlement without remounting its parent', async () => {
         // Given: one mounted current-turn command row with a stable transcript ID.
         const partId = 'stable-interrupted-command';
         const [part, setPart] = createSignal<TranscriptPart>({
@@ -56,7 +56,7 @@ describe('TranscriptPartRenderer mounted reactivity', () => {
             if (parent === undefined) {
                 throw new Error('Expected the mounted transcript parent');
             }
-            expect(setup.captureCharFrame()).toContain('Running');
+            expect(setup.captureCharFrame()).toContain('pnpm typecheck');
 
             // When: interruption upserts the same typed row with only its status changed.
             setPart({
@@ -69,10 +69,10 @@ describe('TranscriptPartRenderer mounted reactivity', () => {
             });
             await setup.renderOnce();
 
-            // Then: the mounted row visibly settles while its parent and command metadata remain intact.
+            // Then: the mounted row keeps its bare title while its parent and command metadata remain intact.
             const frame = setup.captureCharFrame();
             expect(frame).not.toContain('Running');
-            expect(frame).toContain('Interrupted');
+            expect(frame).not.toContain('Interrupted');
             expect(frame).toContain('pnpm typecheck');
             expect(setup.renderer.root.getChildren().at(0)).toBe(parent);
         } finally {

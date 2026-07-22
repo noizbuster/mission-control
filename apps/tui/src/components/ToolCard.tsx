@@ -38,22 +38,20 @@ export function toolStatusPresentation(status: TranscriptPartStatus | undefined)
         case 'pending':
         case 'running':
         case 'streaming':
-            return { label: 'Running', glyph: '~', color: CHAT_WARNING };
+            return { label: undefined, glyph: '~', color: CHAT_WARNING };
         case 'completed':
-            return { label: 'Completed', glyph: '+', color: CHAT_SUCCESS };
+            return { label: undefined, glyph: '+', color: CHAT_SUCCESS };
         case 'failed':
-            return { label: 'Failed', glyph: '!', color: CHAT_ERROR };
         case 'denied':
-            return { label: 'Denied', glyph: 'x', color: CHAT_ERROR };
+            return { label: undefined, glyph: '!', color: CHAT_ERROR };
         case 'cancelled':
         case 'interrupted':
-            return { label: 'Interrupted', glyph: 'x', color: CHAT_WARNING };
+            return { label: undefined, glyph: 'x', color: CHAT_WARNING };
         case 'background':
-            return { label: 'Background', glyph: '>', color: CHAT_SECONDARY };
+            return { label: undefined, glyph: '>', color: CHAT_SECONDARY };
         case 'informational':
-            return { label: 'Info', glyph: 'i', color: CHAT_TEXT_MUTED };
         case 'historical':
-            return { label: 'Historical', glyph: 'i', color: CHAT_TEXT_MUTED };
+            return { label: undefined, glyph: 'i', color: CHAT_TEXT_MUTED };
         default:
             return assertNever(status, 'tool status');
     }
@@ -81,14 +79,13 @@ export function shouldRenderToolBodyAsDiff(lines: readonly string[], mode: ToolC
 }
 
 /**
- * Build the header label text. OpenCode-style: plain title, with a
- * `(N lines)` hint when collapsed. The leading `>` prefix is gone so the
- * transcript matches ref/opencode InlineTool rows.
+ * Build the header label text. OpenCode-style: bare title, with no `>` prefix
+ * or statistics, so collapsed and expanded rows match.
  *
  * Kept as `buildHeaderLabel` for existing unit-test imports.
  */
-export function buildHeaderLabel(title: string | undefined, lineCount: number, expanded: boolean): string {
-    return buildInlineToolLabel(title, lineCount, expanded);
+export function buildHeaderLabel(title: string | undefined): string {
+    return buildInlineToolLabel(title);
 }
 
 /**
@@ -103,11 +100,9 @@ export function ToolCard(props: ToolCardProps): JSX.Element {
     const bodyMode = () => props.bodyMode ?? 'auto';
     const status = () => toolStatusPresentation(props.status);
     const header = () => {
-        const base = buildHeaderLabel(title(), lines().length, expanded());
-        const current = status();
-        return current.label === undefined || current.glyph === undefined
-            ? base
-            : `[${current.glyph}] ${current.label}: ${base}`;
+        const base = buildHeaderLabel(title());
+        const glyph = status().glyph;
+        return glyph === undefined ? base : `${base} [${glyph}]`;
     };
     const icon = () => toolIconForTitle(title());
     const showBlock = () => expanded() && lines().length > 0;

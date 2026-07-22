@@ -29,7 +29,7 @@ function expectFrameFits72Columns(frame: string): void {
 }
 
 describe('TranscriptPartRenderer typed block status', () => {
-    it('updates a same-ID diff header from Running to Interrupted without remounting', async () => {
+    it('updates a same-ID diff suffix glyph and color without prepending lifecycle text or remounting', async () => {
         // Given: a mounted diff preview whose stable ID remains active across a status settlement.
         const partId = 'stable-interrupted-diff';
         const [part, setPart] = createSignal<TranscriptPart>({
@@ -62,7 +62,7 @@ describe('TranscriptPartRenderer typed block status', () => {
             if (parent === undefined) {
                 throw new Error('Expected the mounted transcript parent');
             }
-            const runningHeader = '[~] Running: Diff: 현재-상태.txt';
+            const runningHeader = 'Diff: 현재-상태.txt [~]';
             expect(setup.captureCharFrame()).toContain(runningHeader);
             expect(
                 textByPlainText(collectTextRenderables(setup.renderer.root), runningHeader).fg.equals(
@@ -80,10 +80,13 @@ describe('TranscriptPartRenderer typed block status', () => {
             });
             await setup.renderOnce();
 
-            // Then: the visible semantic status changes in place and the narrow terminal frame still fits.
-            const interruptedHeader = '[x] Interrupted: Diff: 현재-상태.txt';
+            // Then: semantic color changes in place while the title remains bare before its suffix glyph.
+            const interruptedHeader = 'Diff: 현재-상태.txt [x]';
             const frame = setup.captureCharFrame();
             expect(frame).not.toContain('Running');
+            expect(frame).not.toContain('Interrupted');
+            expect(frame).not.toContain('[~]');
+            expect(frame).toContain('[x]');
             expect(frame).toContain(interruptedHeader);
             expect(
                 textByPlainText(collectTextRenderables(setup.renderer.root), interruptedHeader).fg.equals(
@@ -97,11 +100,26 @@ describe('TranscriptPartRenderer typed block status', () => {
         }
     });
 
-    it('renders semantic code status headers while an undefined diff status stays neutral', async () => {
+    it('renders running, completed, and failed bare titles with suffix glyphs and semantic status colors', async () => {
         // Given: completed and failed typed code blocks next to a statusless diff control.
         const setup = await testRender(
             () => (
                 <box flexDirection="column">
+                    <TranscriptPartRenderer
+                        part={{
+                            id: 'running-code',
+                            type: 'code',
+                            filePath: 'src/running.ts',
+                            text: 'const running = true;',
+                            status: 'running',
+                        }}
+                        showThinking={true}
+                        toolOutputExpanded={true}
+                        transcriptParts={[]}
+                        viewportColumns={72}
+                        isFirst={true}
+                        isLast={false}
+                    />
                     <TranscriptPartRenderer
                         part={{
                             id: 'completed-code',
@@ -122,7 +140,7 @@ describe('TranscriptPartRenderer typed block status', () => {
                             },
                         ]}
                         viewportColumns={72}
-                        isFirst={true}
+                        isFirst={false}
                         isLast={false}
                     />
                     <TranscriptPartRenderer
@@ -180,13 +198,20 @@ describe('TranscriptPartRenderer typed block status', () => {
             // When: typed code and diff blocks render through their shared panel.
             const frame = setup.captureCharFrame();
             const renderables = collectTextRenderables(setup.renderer.root);
-            const completedHeader = '[+] Completed: Code: src/complete.ts';
-            const failedHeader = '[!] Failed: Code: src/failure.ts';
+            const runningHeader = 'Code: src/running.ts [~]';
+            const completedHeader = 'Code: src/complete.ts [+]';
+            const failedHeader = 'Code: src/failure.ts [!]';
 
-            // Then: defined statuses use ToolCard's semantic vocabulary, while undefined preserves the legacy header.
+            // Then: titles remain bare before a suffix glyph while status colors remain semantic.
+            expect(frame).toContain(runningHeader);
             expect(frame).toContain(completedHeader);
             expect(frame).toContain(failedHeader);
-            expect(frame).toContain('> Diff: src/neutral.ts');
+            expect(frame).toContain('Diff: src/neutral.ts');
+            expect(frame).not.toMatch(/(?:Running|Completed|Failed|Interrupted):/u);
+            expect(frame).toContain('[~]');
+            expect(frame).toContain('[+]');
+            expect(frame).toContain('[!]');
+            expect(textByPlainText(renderables, runningHeader).fg.equals(RGBA.fromHex(CHAT_WARNING))).toBe(true);
             expect(textByPlainText(renderables, completedHeader).fg.equals(RGBA.fromHex(CHAT_SUCCESS))).toBe(true);
             expect(textByPlainText(renderables, failedHeader).fg.equals(RGBA.fromHex(CHAT_ERROR))).toBe(true);
             expect(textByPlainText(renderables, 'Diff: src/neutral.ts').plainText).toBe('Diff: src/neutral.ts');

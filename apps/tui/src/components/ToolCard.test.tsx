@@ -61,28 +61,12 @@ describe('hasDiffContent', () => {
 });
 
 describe('buildHeaderLabel', () => {
-    it('uses the provided title when expanded (OpenCode inline, no > prefix)', () => {
-        expect(buildHeaderLabel('file.edit', 5, true)).toBe('file.edit');
-    });
-
-    it('appends a line-count hint when collapsed', () => {
-        expect(buildHeaderLabel('file.edit', 5, false)).toBe('file.edit (5 lines)');
+    it('uses the provided bare title for collapsed and expanded tool rows', () => {
+        expect(buildHeaderLabel('file.edit')).toBe('file.edit');
     });
 
     it('falls back to a generic label when title is undefined', () => {
-        expect(buildHeaderLabel(undefined, 3, true)).toBe('Tool output');
-    });
-
-    it('shows the line-count hint with the fallback title when collapsed', () => {
-        expect(buildHeaderLabel(undefined, 3, false)).toBe('Tool output (3 lines)');
-    });
-
-    it('produces different output for collapsed vs expanded (body-present flag)', () => {
-        const expandedHeader = buildHeaderLabel('patch.ts', 10, true);
-        const collapsedHeader = buildHeaderLabel('patch.ts', 10, false);
-        expect(expandedHeader).not.toBe(collapsedHeader);
-        expect(expandedHeader).toBe('patch.ts');
-        expect(collapsedHeader).toBe('patch.ts (10 lines)');
+        expect(buildHeaderLabel(undefined)).toBe('Tool output');
     });
 });
 
@@ -126,10 +110,10 @@ describe('ToolCard component', () => {
         expect(source).not.toContain('gap={CHAT_USER_MARGIN_TOP}');
     });
 
-    it('keeps failed and denied tool state visible through a glyph and label, not color alone', () => {
-        expect(toolStatusPresentation('failed').label).toBe('Failed');
+    it('retains semantic status colors with glyphs that can suffix bare tool titles', () => {
+        expect(toolStatusPresentation('running').label).toBeUndefined();
+        expect(toolStatusPresentation('running').glyph).toBe('~');
+        expect(toolStatusPresentation('failed').label).toBeUndefined();
         expect(toolStatusPresentation('failed').glyph).toBe('!');
-        expect(toolStatusPresentation('denied').label).toBe('Denied');
-        expect(toolStatusPresentation('denied').glyph).toBe('x');
     });
 });

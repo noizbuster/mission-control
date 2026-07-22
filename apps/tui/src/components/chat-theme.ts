@@ -81,11 +81,8 @@ export function toolIconForTitle(title: string | undefined): string {
 }
 
 /**
- * Build the collapsed/expanded inline tool header text (OpenCode-style, no `>`).
- * Collapsed appends a line-count hint; expanded is title only.
+ * Build the inline tool header text (OpenCode-style, no `>`).
  */
-export function buildInlineToolLabel(title: string | undefined, lineCount: number, expanded: boolean): string {
-    const label = title !== undefined && title.length > 0 ? title : 'Tool output';
-    if (expanded) return label;
-    return `${label} (${lineCount} lines)`;
+export function buildInlineToolLabel(title: string | undefined): string {
+    return title !== undefined && title.length > 0 ? title : 'Tool output';
 }
