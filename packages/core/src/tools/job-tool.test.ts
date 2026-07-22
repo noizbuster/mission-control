@@ -270,7 +270,7 @@ describe('job tool — model output formatting', () => {
 });
 
 describe('job tool — child surface exclusion', () => {
-    it('is NOT present in a built child tool surface (alongside task)', async () => {
+    it('omits task and job from a terminal child tool surface', async () => {
         const child: AgentDefinition = {
             name: 'child-agent',
             description: 'child',
@@ -300,6 +300,7 @@ describe('job tool — child surface exclusion', () => {
             workspaceRoot: '/tmp/ws',
             parentToolRegistry: parentRegistry,
             parentAgent: parent,
+            parentSessionId: 'sess-terminal-parent',
             spawnFn: async (context) => {
                 capturedAds = context.childToolRegistry.advertise();
                 return { sessionId: context.sessionId, status: 'completed', output: 'ok' };
