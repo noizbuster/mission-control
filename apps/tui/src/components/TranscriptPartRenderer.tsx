@@ -53,25 +53,23 @@ function TranscriptPartContent(props: TranscriptPartRendererProps): JSX.Element 
                     viewportColumns={props.viewportColumns}
                 />
             );
-        // Chip flag (toolOutputExpanded / Ctrl+O) is footer-only. Typed body rows always
-        // pass expanded=true; lifecycle gates inside TypedToolRow/Subagent still apply.
         case 'inline-tool':
             if (shouldHideToolPart(props.part, props.activeAssistantMessageId)) return null;
-            return <TypedToolRow part={props.part} expanded={true} />;
+            return <TypedToolRow part={props.part} expanded={props.toolOutputExpanded} />;
         case 'block-tool':
             if (shouldHideToolPart(props.part, props.activeAssistantMessageId)) return null;
-            return <TypedToolRow part={props.part} expanded={true} />;
+            return <TypedToolRow part={props.part} expanded={props.toolOutputExpanded} />;
         case 'diff':
             if (shouldHideToolPart(props.part, props.activeAssistantMessageId)) return null;
-            return <TypedDiffRow part={props.part} expanded={true} />;
+            return <TypedDiffRow part={props.part} expanded={props.toolOutputExpanded} />;
         case 'code':
-            return <TypedCodeRow part={props.part} expanded={true} viewportColumns={props.viewportColumns} />;
+            return <TypedCodeRow part={props.part} expanded={props.toolOutputExpanded} viewportColumns={props.viewportColumns} />;
         case 'command':
             if (shouldHideToolPart(props.part, props.activeAssistantMessageId)) return null;
-            return <TypedCommandRow part={props.part} expanded={true} />;
+            return <TypedCommandRow part={props.part} expanded={props.toolOutputExpanded} />;
         case 'subagent':
             if (shouldHideToolPart(props.part, props.activeAssistantMessageId)) return null;
-            return <TypedSubagentRow part={props.part} expanded={true} />;
+            return <TypedSubagentRow part={props.part} expanded={props.toolOutputExpanded} />;
         case 'status':
             return <TypedNoticeRow part={props.part} />;
         case 'event':
@@ -84,7 +82,7 @@ function TranscriptPartContent(props: TranscriptPartRendererProps): JSX.Element 
                 <TypedLegacyRow
                     part={props.part}
                     generating={props.generating === true}
-                    toolOutputExpanded={true}
+                    toolOutputExpanded={props.toolOutputExpanded}
                     viewportColumns={props.viewportColumns}
                     isFirst={props.isFirst}
                     isLast={props.isLast}

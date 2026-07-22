@@ -99,13 +99,11 @@ export function TypedToolRow(props: {
     readonly expanded: boolean;
 }): JSX.Element {
     const presentation = () => presentTranscriptPart(props.part);
-    const isActive = () =>
-        props.part.status === 'pending' || props.part.status === 'running' || props.part.status === 'streaming';
     return (
         <ToolCard
             lines={presentation().lines}
             title={presentation().title}
-            expanded={props.expanded && (presentation().lines.length > 1 || !isActive())}
+            expanded={props.expanded}
             {...(props.part.status === undefined ? {} : { status: props.part.status })}
         />
     );
@@ -170,13 +168,11 @@ export function TypedSubagentRow(props: {
     readonly expanded: boolean;
 }): JSX.Element {
     const presentation = () => presentTranscriptPart(props.part);
-    const isActive = () =>
-        props.part.status === 'pending' || props.part.status === 'running' || props.part.status === 'streaming';
     return (
         <ToolCard
             lines={presentation().lines}
             title={presentation().title}
-            expanded={props.expanded && !isActive()}
+            expanded={props.expanded}
             {...(props.part.status === undefined ? {} : { status: props.part.status })}
         />
     );

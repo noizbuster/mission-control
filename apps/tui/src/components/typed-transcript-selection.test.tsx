@@ -127,9 +127,8 @@ describe('typed transcript selection contract', () => {
         }
     });
 
-    it('keeps retained semantic diff expanded when chip flag is collapsed without re-emission', async () => {
-        // Given: one semantic diff retained while chip expand (Ctrl+O) is collapsed.
-        // toolOutputExpanded is chip-only; typed body rows always expand (lifecycle gates still apply).
+    it('keeps retained semantic diff collapsed when Ctrl+O output expansion is off without re-emission', async () => {
+        // Given: one semantic diff retained while Ctrl+O output expansion is collapsed.
         const store = createChatStore();
         if (store.getSnapshot().toolOutputExpanded) {
             store.toggleToolOutputExpanded();
@@ -148,7 +147,7 @@ describe('typed transcript selection contract', () => {
         const retainedPart = store.getSnapshot().transcriptParts.at(0);
         if (retainedPart === undefined) throw new Error('Expected retained transcript part');
 
-        // When: the part is rendered with the chip flag collapsed vs forced header-only.
+        // When: the part is rendered with output expansion collapsed vs forced header-only.
         const chipCollapsed = await testRender(
             () => (
                 <TranscriptPartRenderer
@@ -183,11 +182,11 @@ describe('typed transcript selection contract', () => {
             await chipCollapsed.renderOnce();
             await headerOnly.renderOnce();
 
-            // Then: chip-collapsed render matches expanded body structure, not header-only; no re-emission.
+            // Then: collapsed output matches header-only structure without re-emission.
             const chipFrame = chipCollapsed.captureCharFrame();
             const headerFrame = headerOnly.captureCharFrame();
             expect(chipFrame).toContain('Diff: src/retained.ts');
-            expect(chipFrame).not.toBe(headerFrame);
+            expect(chipFrame).toBe(headerFrame);
             expect(store.getSnapshot().transcriptParts.at(0)).toBe(retainedPart);
             expect(emitTranscriptPart).toHaveBeenCalledTimes(1);
         } finally {

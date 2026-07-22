@@ -6,9 +6,8 @@ import { TranscriptPartRenderer } from './TranscriptPartRenderer';
 import { TypedCodeRow, TypedDiffRow, TypedSubagentRow, TypedToolRow } from './TypedTranscriptRows';
 
 describe('typed transcript lifecycle expansion', () => {
-    it('shows settled one-line bodies while preserving active and multiline tool and subagent behavior', async () => {
+    it('shows every tool and subagent body when expanded', async () => {
         // Given: expanded tool and subagent rows spanning active/settled and one-line/multiline states.
-        // Row-level expanded=true is what TranscriptPartRenderer always passes (chip flag is footer-only).
         const setup = await testRender(
             () => (
                 <box flexDirection="column">
@@ -101,14 +100,14 @@ describe('typed transcript lifecycle expansion', () => {
             // When: the expanded rows are mounted into the OpenTUI renderer.
             await setup.renderOnce();
 
-            // Then: settled one-line bodies are visible, active one-line rows stay compact, and multiline paths retain their behavior.
+            // Then: row expansion controls all tool and subagent bodies uniformly.
             const frame = setup.captureCharFrame();
-            expect(frame).not.toContain('tool-active-one-body');
+            expect(frame).toContain('tool-active-one-body');
             expect(frame).toContain('tool-active-many-last');
             expect(frame).toContain('tool-settled-one-body');
             expect(frame).toContain('tool-settled-many-last');
-            expect(frame).not.toContain('subagent-active-one-body');
-            expect(frame).not.toContain('subagent-active-many-last');
+            expect(frame).toContain('subagent-active-one-body');
+            expect(frame).toContain('subagent-active-many-last');
             expect(frame).toContain('subagent-settled-one-body');
             expect(frame).toContain('subagent-settled-many-last');
         } finally {
@@ -116,9 +115,8 @@ describe('typed transcript lifecycle expansion', () => {
         }
     });
 
-    it('keeps active multiline tool/code/diff bodies expanded when chip flag is collapsed', async () => {
-        // Given: chip expand (toolOutputExpanded) is false. Typed bodies must still expand;
-        // Ctrl+O must not be the sole reason any typed body collapses.
+    it('toggles active multiline tool/code/diff bodies with the Ctrl+O output state', async () => {
+        // Given: identical active tool rows rendered with each Ctrl+O output state.
         // Native <diff>/<Markdown> may not paint body glyphs into captureCharFrame; assert
         // tool body text plus code/diff panel structure matching expanded=true (not header-only).
         const chipCollapsed = await testRender(
@@ -274,14 +272,13 @@ describe('typed transcript lifecycle expansion', () => {
             const expandedFrame = chipExpanded.captureCharFrame();
             const headerOnlyFrame = headerOnly.captureCharFrame();
 
-            // Then: chip flag does not change typed bodies; tool body text stays visible; not header-only.
-            expect(collapsedFrame).toContain('tool-active-many-last');
+            // Then: the collapsed output state matches header-only content, while expanded reveals bodies.
+            expect(collapsedFrame).not.toContain('tool-active-many-last');
             expect(expandedFrame).toContain('tool-active-many-last');
-            expect(headerOnlyFrame).not.toContain('tool-active-many-last');
-            expect(collapsedFrame).toBe(expandedFrame);
-            expect(collapsedFrame).not.toBe(headerOnlyFrame);
-            expect(collapsedFrame).toContain('Running: Code (ts)');
-            expect(collapsedFrame).toContain('Running: Diff: src/active.ts');
+            expect(collapsedFrame).toBe(headerOnlyFrame);
+            expect(expandedFrame).not.toBe(headerOnlyFrame);
+            expect(expandedFrame).toContain('Code (ts)');
+            expect(expandedFrame).toContain('Diff: src/active.ts');
         } finally {
             chipCollapsed.renderer.destroy();
             chipExpanded.renderer.destroy();

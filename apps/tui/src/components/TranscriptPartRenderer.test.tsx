@@ -192,10 +192,8 @@ describe('TranscriptPartRenderer component topology', () => {
             expect(source).toContain(variantCase);
         }
         expect(source).toContain('return assertNever(props.part)');
-        // Chip flag no longer drives typed body expand; bodies always get expanded={true}.
-        expect(source).toContain('expanded={true}');
-        expect(source).toContain('toolOutputExpanded={true}');
-        expect(source).not.toContain('expanded={props.toolOutputExpanded}');
+        // Ctrl+O drives all tool-body expansion paths, with no footer-only bypass.
+        expect(source).toContain('expanded={props.toolOutputExpanded}');
         expect(source).toContain('toolOutputExpanded={props.toolOutputExpanded}');
         expect(source).toContain('shouldHideToolPart');
         expect(source).toContain('transcriptParts={props.transcriptParts}');
