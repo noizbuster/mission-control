@@ -27,12 +27,12 @@ new CSS variables or a request to duplicate literal colors in components.
 | Semantic role | Existing token | Value | Usage |
 | --- | --- | --- | --- |
 | Transcript canvas | `CHAT_BG` | `#0a0a0a` | Root terminal background and neutral depth floor. |
-| Raised transcript/tool panel | `CHAT_PANEL_BG` | `#141414` | User and block-tool fill. |
+| Raised transcript panel | `CHAT_PANEL_BG` | `#141414` | User message fill. |
 | Composer surface | `CHAT_ELEMENT_BG` | `#1e1e1e` | Native textarea fill. |
 | User identity/accent rail | `CHAT_PRIMARY` | `#fab283` | User left border and prompt emphasis. |
 | Secondary reference | `CHAT_SECONDARY` | `#5c9cf5` | Links and secondary badges. |
 | Assistant markdown/body | `CHAT_TEXT` | `#eeeeee` | Assistant, tool body, and readable primary text. |
-| Status/event/de-emphasis | `CHAT_TEXT_MUTED` | `#808080` | System rows, tool headers, completed detail, and metadata. |
+| Status/event/de-emphasis | `CHAT_TEXT_MUTED` | `#808080` | System rows, tool titles, completed detail, and metadata. |
 | Reasoning/warning | `CHAT_WARNING` | `#e5c07b` | Reasoning header and caution semantics. |
 | Error | `CHAT_ERROR` | `#e06c75` | Error rail and error body. |
 | Success/diff addition | `CHAT_SUCCESS` / `CHAT_DIFF_ADDED` | `#7fd88f` | Completed affirmative state and additions. |
@@ -64,7 +64,7 @@ sizes. Hierarchy comes from terminal-native text treatments and renderer choice.
 | User message | Selectable plain text in `UserMessagePanel` | Preserve literal user input after the legacy `You: ` prefix. |
 | Assistant answer | Streaming-aware `Markdown` with `darkTheme` | Markdown owns paragraphs, code, tables, and syntax spans. |
 | Reasoning | Markdown under a dim italic `Thinking` / `Thought` header | Keep reasoning visually secondary to the answer. |
-| Inline tool/status | Muted one-line text with a two-cell icon column | Optimize for scanability and first-line recognition. |
+| Inline tool/status | Muted one-line title with a two-cell icon column and trailing status glyph | Optimize for scanability and non-color lifecycle recognition. |
 | Block tool/diff/code/command | Plain terminal rows, `DiffView`, or markdown/code pipeline | Preserve command and diff whitespace exactly. |
 | Error | Selectable body text in the error semantic token | Keep the error readable and copyable. |
 | Legacy fallback | `parseMessageBlocks(outputText)` | Retain byte-exact text behavior until a typed part is present. |
@@ -139,25 +139,29 @@ clip, or horizontally scroll the primary transcript.
 
 ### Inline Tool Part
 
-- **Structure**: Two-cell icon lane plus muted one-line title.
+- **Structure**: Two-cell icon lane plus muted one-line title and trailing
+  status glyph.
 - **States**: Pending/running, completed, failed, denied, subagent-result,
   collapsed.
 - **Contract**: Read/search/network/task/agent operations stay compact until a
-  body is useful. A failed or denied result remains discoverable without
-  changing its first-seen transcript order.
+  body is useful. A status glyph (`[~]`, `[+]`, `[!]`, `[x]`) follows the bare
+  title without lifecycle words. A failed or denied result remains discoverable
+  without changing its first-seen transcript order.
 
 ### Block Tool Part
 
-- **Structure**: Left accent border, panel fill, muted title, and expanded body.
+- **Structure**: Flat icon/title row with a trailing status glyph and an optional
+  expanded body.
 - **States**: Expanded, collapsed, command output, code output, diff output,
   error result.
-- **Contract**: Use the existing `ToolCard` grammar. Expanded diff payloads
-  route to `DiffView`; prose and command output retain line order.
+- **Contract**: Use the existing `ToolCard` grammar without a panel rail, fill,
+  padding, or aggregate statistics. Expanded diff payloads route to `DiffView`;
+  prose and command output retain line order.
 
 ### Diff, Code, and Command Parts
 
-- **Structure**: Block-tool body rendered by `DiffView`, Markdown/code, or plain
-  command rows.
+- **Structure**: Flat tool title and trailing status glyph followed by `DiffView`,
+  Markdown/code, or plain command rows when expanded.
 - **States**: Addition, removal, context, hunk/meta, running command, completed
   command, failed command.
 - **Contract**: Diff additions use `CHAT_DIFF_ADDED`, removals use
@@ -166,8 +170,8 @@ clip, or horizontally scroll the primary transcript.
 
 ### Subagent Result Part
 
-- **Structure**: Inline tool while running or concise; block tool when expanded
-  result detail is present.
+- **Structure**: Flat tool title with trailing status glyph and optional result
+  detail when expanded.
 - **States**: Running, completed, cancelled, failed, background result.
 - **Contract**: Agent identity and result state remain semantic metadata. The
   current legacy parser may show these as generic tools until the typed
@@ -213,10 +217,10 @@ rendering.
 The depth strategy is tonal shift plus single-cell semantic rails:
 
 - `CHAT_BG` is the canvas.
-- `CHAT_PANEL_BG` lifts user and block-tool information one tonal step.
+- `CHAT_PANEL_BG` lifts user information one tonal step.
 - `CHAT_ELEMENT_BG` identifies the editable composer as a distinct native
   control.
-- Left borders carry user/error identity; they are not decorative card borders.
+- Left borders carry user/error identity; tool rows stay flat.
 - Status rows use the existing navy `STATUS_LINE_BG` to separate persistent
   context from transcript history.
 
@@ -229,7 +233,8 @@ material system.
 ### Constraints
 
 - All transcript text remains selectable and copyable; color is never the sole
-  carrier of error, completion, pending, or denied state.
+  carrier of error, completion, pending, or denied state. Tool rows pair their
+  bare title with a trailing status glyph.
 - CJK, mixed-width punctuation, emoji, and combining marks use terminal display
   width rather than JavaScript string length. The 72-column CJK streaming case
   must preserve content and row order through resize.
