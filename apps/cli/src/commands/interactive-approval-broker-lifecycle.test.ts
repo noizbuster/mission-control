@@ -69,23 +69,28 @@ describe('interactive approval broker request lifecycle', () => {
         expect(output()).toBe('');
     });
 
-    it('does not let a concurrent request consume an answer from another request', async () => {
-        // Given
+    it('queues a concurrent requires_approval request and processes it after the first settles', async () => {
         const session = new DeferredPermissionSession();
         const { broker } = brokerHarness(session);
         const first = broker.requestPermission(patchRequest('permission_concurrent_first'));
         const second = broker.requestPermission(patchRequest('permission_concurrent_second'));
 
-        // When
         const acceptedBeforeVisibility = broker.answer('once');
         session.releaseAll();
         await Promise.resolve();
-        if (broker.hasPending()) broker.answer('deny');
 
-        // Then
         expect(acceptedBeforeVisibility).toBe(false);
+        expect(broker.hasPending()).toBe(true);
+        broker.answer('deny');
         await expect(first).resolves.toMatchObject({ status: 'deny' });
-        await expect(second).resolves.toMatchObject({ status: 'deny', reason: 'another approval is already pending' });
+
+        await flushMicrotasks();
+        session.releaseAll();
+        await flushMicrotasks();
+        expect(broker.hasPending()).toBe(true);
+        broker.answer('deny');
+
+        await expect(second).resolves.toMatchObject({ status: 'deny' });
     });
 
     it('settles one visible request once and preserves lifecycle event order', async () => {
@@ -138,20 +143,77 @@ describe('interactive approval broker request lifecycle', () => {
     });
 
     it('does not leak cancellation authority to the next request', async () => {
-        // Given
         const session = new DeferredPermissionSession();
         const { broker } = brokerHarness(session);
         broker.cancel('previous turn cancelled');
 
-        // When
         const decision = broker.requestPermission(patchRequest('permission_after_cancel'));
         session.releaseAll();
         await Promise.resolve();
         const accepted = broker.answer('once');
 
-        // Then
         expect(accepted).toBe(true);
         await expect(decision).resolves.toMatchObject({ status: 'allow', reason: 'interactive CLI approval' });
+    });
+
+    it('auto-allows a rule-resolved read while a patch approval is visible', async () => {
+        const session = new PermissionSession({
+            builtInRules: [
+                { permission: 'read', pattern: '*', decision: 'always' },
+                { permission: 'patch', pattern: '*', decision: 'ask' },
+            ],
+        });
+        const { broker } = brokerHarness(session);
+
+        const patchPromise = broker.requestPermission(patchRequest('permission_patch_while_read'));
+        await flushMicrotasks();
+        expect(broker.hasPending()).toBe(true);
+
+        const readPromise = broker.requestPermission(readRequest('permission_read_while_patch'));
+        await expect(readPromise).resolves.toMatchObject({ status: 'allow' });
+
+        broker.answer('deny');
+        await expect(patchPromise).resolves.toMatchObject({ status: 'deny' });
+    });
+
+    it('auto-allows a queued request when the first answer was "always" for the same pattern', async () => {
+        const session = new PermissionSession({
+            builtInRules: [{ permission: 'patch', pattern: '*', decision: 'ask' }],
+        });
+        const { broker } = brokerHarness(session);
+
+        const first = broker.requestPermission(patchRequest('permission_always_queue_first'));
+        await flushMicrotasks();
+        expect(broker.hasPending()).toBe(true);
+
+        const second = broker.requestPermission(patchRequest('permission_always_queue_second'));
+        await flushMicrotasks();
+
+        broker.answer('always');
+        await expect(first).resolves.toMatchObject({ status: 'allow' });
+
+        await expect(second).resolves.toMatchObject({ status: 'allow' });
+        expect(broker.hasPending()).toBe(false);
+    });
+
+    it('denies queued requests on cancel', async () => {
+        const session = new DeferredPermissionSession();
+        const { broker } = brokerHarness(session);
+
+        const first = broker.requestPermission(patchRequest('permission_cancel_queued_first'));
+        session.releaseAll();
+        await flushMicrotasks();
+        expect(broker.hasPending()).toBe(true);
+
+        const second = broker.requestPermission(patchRequest('permission_cancel_queued_second'));
+        await flushMicrotasks();
+
+        broker.cancel('turn cancelled');
+        session.releaseAll();
+        await flushMicrotasks();
+
+        await expect(first).resolves.toMatchObject({ status: 'deny', reason: 'turn cancelled' });
+        await expect(second).resolves.toMatchObject({ status: 'deny', reason: 'turn cancelled' });
     });
 });
 
@@ -193,6 +255,15 @@ function patchRequest(id: string): PermissionRequest {
     };
 }
 
+function readRequest(id: string): PermissionRequest {
+    return {
+        id,
+        action: 'repo.read',
+        reason: 'read file',
+        permission: { kind: 'read', patterns: ['src/app.ts'] },
+    };
+}
+
 function deferred<Value>(): Deferred<Value> {
     let resolveValue: ((value: Value) => void) | undefined;
     const promise = new Promise<Value>((resolve) => {
@@ -204,4 +275,8 @@ function deferred<Value>(): Deferred<Value> {
 
 class BrokerLifecycleTestError extends Error {
     readonly name = 'BrokerLifecycleTestError';
+}
+
+async function flushMicrotasks(): Promise<void> {
+    for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
 }

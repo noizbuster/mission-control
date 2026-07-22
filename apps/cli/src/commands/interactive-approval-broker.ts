@@ -21,6 +21,10 @@ import {
 } from './interactive-approval-helpers';
 import type { InteractiveToolOptions } from './interactive-coding-tools';
 
+type SettlingApprovalAttempt = Extract<ApprovalAttempt, { state: 'settling' }>;
+
+type ActiveApprovalAttempt = VisibleApprovalAttempt | SettlingApprovalAttempt;
+
 export type InteractiveApprovalBroker = {
     readonly requestApproval: (request: PermissionRequest) => Promise<PermissionDecision>;
     readonly requestPermission: (request: PermissionRequest) => Promise<PermissionDecision>;
@@ -69,39 +73,27 @@ export function createInteractiveApprovalBroker(
             builtInRules: approvalLevelRules(options.approvalLevel ?? 'safe'),
             persistedRuleStore: new PermissionRuleStore(),
         });
-    let activeAttempt: ApprovalAttempt | undefined;
+    let activeAttempt: ActiveApprovalAttempt | undefined;
     const primedApprovals = new Map<string, string | undefined>();
 
+    type QueuedApproval = {
+        readonly request: PermissionRequest;
+        readonly resolve: (decision: PermissionDecision) => void;
+    };
+    const approvalQueue: QueuedApproval[] = [];
+    let draining = false;
+    type EvaluatingEntry = { cancelled: boolean; reason: string };
+    const evaluatingRequests = new Map<symbol, EvaluatingEntry>();
+
     const request = (permissionRequest: PermissionRequest): Promise<PermissionDecision> => {
-        if (activeAttempt !== undefined) {
-            return Promise.resolve({
-                requestId: permissionRequest.id,
-                status: 'deny',
-                reason: 'another approval is already pending',
-            });
-        }
-        const identity = Symbol(permissionRequest.id);
-        activeAttempt = { state: 'evaluating', identity, request: permissionRequest };
-        return evaluateAttempt(permissionRequest, identity);
+        return handleRequest(permissionRequest);
     };
 
-    async function evaluateAttempt(
-        permissionRequest: PermissionRequest,
-        identity: symbol,
-    ): Promise<PermissionDecision> {
-        const initialAttempt = activeAttempt;
-        if (initialAttempt?.identity !== identity) {
-            return deniedDecision(permissionRequest, 'approval request is no longer active');
-        }
-        if (initialAttempt.state === 'cancelled') {
-            activeAttempt = undefined;
-            return deniedDecision(permissionRequest, initialAttempt.reason);
-        }
+    async function handleRequest(permissionRequest: PermissionRequest): Promise<PermissionDecision> {
         const requestFingerprint = permissionRequestFingerprint(permissionRequest);
         if (primedApprovals.has(requestFingerprint)) {
             const reason = primedApprovals.get(requestFingerprint);
             primedApprovals.delete(requestFingerprint);
-            activeAttempt = undefined;
             return {
                 requestId: permissionRequest.id,
                 status: 'allow',
@@ -109,26 +101,46 @@ export function createInteractiveApprovalBroker(
             };
         }
 
+        const identity = Symbol(permissionRequest.id);
+        evaluatingRequests.set(identity, { cancelled: false, reason: '' });
         const evaluated = await permissionSession.evaluate(permissionRequest, observableOptions.sessionId);
-        const evaluatedAttempt = activeAttempt;
-        if (evaluatedAttempt?.identity !== identity) {
-            return deniedDecision(permissionRequest, 'approval request is no longer active');
+        const evaluatingEntry = evaluatingRequests.get(identity);
+        evaluatingRequests.delete(identity);
+        if (evaluatingEntry?.cancelled) {
+            return deniedDecision(permissionRequest, evaluatingEntry.reason);
         }
-        if (evaluatedAttempt.state === 'cancelled') {
-            activeAttempt = undefined;
-            return deniedDecision(permissionRequest, evaluatedAttempt.reason);
-        }
+
         permissionSession.consumeOnceRules(observableOptions.sessionId, evaluated.consumeOnceRules);
+        observableOptions.emitEvent(eventWithPermission(observableOptions, permissionRequest, evaluated.decision));
+
         if (evaluated.decision.status !== 'requires_approval') {
-            activeAttempt = undefined;
             return evaluated.decision;
         }
 
-        const approval = approvalRecordForRequest(permissionRequest, evaluated.decision);
-        const decision = new Promise<PermissionDecision>((resolve) => {
-            activeAttempt = { state: 'visible', identity, request: permissionRequest, record: approval, resolve };
+        if (activeAttempt !== undefined || draining) {
+            return new Promise<PermissionDecision>((resolve) => {
+                approvalQueue.push({ request: permissionRequest, resolve });
+            });
+        }
+
+        return showApprovalPrompt(permissionRequest, evaluated.decision, identity);
+    }
+
+    function showApprovalPrompt(
+        permissionRequest: PermissionRequest,
+        decision: PermissionDecision,
+        identity: symbol,
+    ): Promise<PermissionDecision> {
+        const approval = approvalRecordForRequest(permissionRequest, decision);
+        const promise = new Promise<PermissionDecision>((resolve) => {
+            activeAttempt = {
+                state: 'visible',
+                identity,
+                request: permissionRequest,
+                record: approval,
+                resolve,
+            };
         });
-        observableOptions.emitEvent(eventWithPermission(observableOptions, permissionRequest, evaluated.decision));
         observableOptions.emitEvent(
             eventWithApproval(
                 observableOptions,
@@ -139,7 +151,43 @@ export function createInteractiveApprovalBroker(
         );
         observableOptions.output.write(`Approve ${permissionRequest.action}? [once/always/deny]:`);
         observableOptions.output.showApproval?.(permissionRequest.action, permissionRequest.reason);
-        return decision;
+        return promise;
+    }
+
+    function drainQueue(): void {
+        const next = approvalQueue.shift();
+        if (next === undefined) return;
+        draining = true;
+        void processQueuedRequest(next);
+    }
+
+    async function processQueuedRequest(entry: QueuedApproval): Promise<void> {
+        const identity = Symbol(entry.request.id);
+        evaluatingRequests.set(identity, { cancelled: false, reason: '' });
+        const evaluated = await permissionSession.evaluate(entry.request, observableOptions.sessionId);
+        const evaluatingEntry = evaluatingRequests.get(identity);
+        evaluatingRequests.delete(identity);
+
+        if (evaluatingEntry?.cancelled) {
+            draining = false;
+            entry.resolve(deniedDecision(entry.request, evaluatingEntry.reason));
+            drainQueue();
+            return;
+        }
+
+        permissionSession.consumeOnceRules(observableOptions.sessionId, evaluated.consumeOnceRules);
+
+        if (evaluated.decision.status !== 'requires_approval') {
+            draining = false;
+            entry.resolve(evaluated.decision);
+            drainQueue();
+            return;
+        }
+
+        draining = false;
+        void showApprovalPrompt(entry.request, evaluated.decision, identity).then((decision) => {
+            entry.resolve(decision);
+        });
     }
 
     async function settleAttempt(
@@ -180,6 +228,7 @@ export function createInteractiveApprovalBroker(
         }
         activeAttempt = undefined;
         attempt.resolve(settleApprovalReply(observableOptions, attempt.request, attempt.record, finalReply));
+        drainQueue();
     }
 
     function tryClaimAuthority(identity: symbol): boolean {
@@ -198,19 +247,28 @@ export function createInteractiveApprovalBroker(
 
     function cancelAttempt(reason: string): void {
         primedApprovals.clear();
+        draining = false;
+
+        for (const entry of evaluatingRequests.values()) {
+            entry.cancelled = true;
+            entry.reason = reason;
+        }
+
+        while (approvalQueue.length > 0) {
+            const queued = approvalQueue.shift();
+            if (queued !== undefined) {
+                queued.resolve(deniedDecision(queued.request, reason));
+            }
+        }
+
         const current = activeAttempt;
         if (current === undefined) return;
-        if (current.state === 'evaluating') {
-            activeAttempt = { state: 'cancelled', identity: current.identity, request: current.request, reason };
-            return;
-        }
         if (current.state === 'settling') {
             if (current.commitState === 'open' && current.cancellationReason === undefined) {
                 activeAttempt = { ...current, cancellationReason: reason };
             }
             return;
         }
-        if (current.state !== 'visible') return;
         activeAttempt = {
             state: 'settling',
             identity: current.identity,
