@@ -21,6 +21,13 @@ export {
     SessionStopReceiptSchema,
 } from './session-owner-control';
 export {
+    SESSION_FINALIZE_STATUSES,
+    type SessionFinalizeEventMetadata,
+    SessionFinalizeEventMetadataSchema,
+    type SessionFinalizeStatus,
+    SessionFinalizeStatusSchema,
+} from './session-finalize-event';
+export {
     SESSION_STOP_BARRIER_KINDS,
     SESSION_STOP_ERROR_CODES,
     SESSION_STOP_OUTCOMES,
