@@ -5,18 +5,14 @@ import type { ChatInput, ChatInputEvent } from './interactive-chat-io';
 import type { ActiveCodingAgentTurn, ActiveCodingAgentTurnOutcome } from './interactive-coding-agent-types';
 import {
     FORCE_INTERRUPT_SETTLE_TIMEOUT_MS,
-    interruptActiveTurnBounded as interruptActiveTurnBoundedImpl,
     INTERRUPT_SETTLE_TIMEOUT_MS,
+    interruptActiveTurnBounded as interruptActiveTurnBoundedImpl,
     PROCESS_SIGNAL_FORCE_EXIT_MS,
     registerProcessTerminalCleanup as registerProcessTerminalCleanupImpl,
     stopActiveTurn as stopActiveTurnImpl,
 } from './interactive-interrupt-settlement';
 
-export {
-    FORCE_INTERRUPT_SETTLE_TIMEOUT_MS,
-    INTERRUPT_SETTLE_TIMEOUT_MS,
-    PROCESS_SIGNAL_FORCE_EXIT_MS,
-};
+export { FORCE_INTERRUPT_SETTLE_TIMEOUT_MS, INTERRUPT_SETTLE_TIMEOUT_MS, PROCESS_SIGNAL_FORCE_EXIT_MS };
 
 export async function stopActiveTurn(activeTurn: ActiveCodingAgentTurn | undefined): Promise<undefined> {
     return stopActiveTurnImpl(activeTurn);
@@ -45,10 +41,19 @@ export function suspendChatInputWhileSelectingModel(selectModel: ModelSelector, 
     };
 }
 
-export function registerProcessTerminalCleanup(input: ChatInput): () => void {
-    return registerProcessTerminalCleanupImpl(input, () => {
-        void closeTreeSitterClient();
-    });
+export function registerProcessTerminalCleanup(
+    input: ChatInput,
+    options: { readonly onForceExit?: () => void } = {},
+): () => void {
+    return registerProcessTerminalCleanupImpl(
+        {
+            close: () => input.close(),
+            ...(options.onForceExit !== undefined ? { onForceExit: options.onForceExit } : {}),
+        },
+        () => {
+            void closeTreeSitterClient();
+        },
+    );
 }
 
 type ChatLoopEvent =

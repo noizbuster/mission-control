@@ -55,6 +55,13 @@ async function settleTurnOrTimeout(activeTurn: InterruptibleTurn, timeoutMs: num
 
 export type ProcessCleanupInput = {
     readonly close: () => void;
+    /**
+     * Optional synchronous callback invoked immediately before `process.exit`
+     * on the force-exit path (second signal or force-exit timer). Use it to
+     * emit a final status line so the user sees a session-end marker even
+     * when the chat loop did not get a chance to exit cleanly.
+     */
+    readonly onForceExit?: () => void;
 };
 
 /**
@@ -62,10 +69,7 @@ export type ProcessCleanupInput = {
  * signal exits immediately. Soft keyboard Ctrl+C in raw TUI mode is handled separately as an
  * interrupt event — this path covers out-of-band kill and non-raw terminals.
  */
-export function registerProcessTerminalCleanup(
-    input: ProcessCleanupInput,
-    onCleanupExtra?: () => void,
-): () => void {
+export function registerProcessTerminalCleanup(input: ProcessCleanupInput, onCleanupExtra?: () => void): () => void {
     let cleaned = false;
     let signalCount = 0;
     let forceExitTimer: ReturnType<typeof setTimeout> | undefined;
@@ -79,6 +83,11 @@ export function registerProcessTerminalCleanup(
     };
     const forceExit = (code: number) => {
         cleanup();
+        try {
+            input.onForceExit?.();
+        } catch {
+            // force-exit hook must never prevent process termination
+        }
         process.exit(code);
     };
     const onSignal = (signal: NodeJS.Signals) => {

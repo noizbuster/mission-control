@@ -68,4 +68,46 @@ describe('registerProcessTerminalCleanup', () => {
             unregister();
         }
     });
+
+    it('invokes onForceExit synchronously before process.exit on the second signal', () => {
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+        const close = vi.fn();
+        const onForceExit = vi.fn();
+        const unregister = registerProcessTerminalCleanup({ close, onForceExit });
+
+        try {
+            process.emit('SIGINT');
+            process.emit('SIGINT');
+
+            expect(onForceExit).toHaveBeenCalledTimes(1);
+            expect(exitSpy).toHaveBeenCalledWith(130);
+            const onForceExitOrder = onForceExit.mock.invocationCallOrder[0];
+            const exitOrder = exitSpy.mock.invocationCallOrder[0];
+            expect(onForceExitOrder).not.toBeUndefined();
+            expect(exitOrder).not.toBeUndefined();
+            if (onForceExitOrder !== undefined && exitOrder !== undefined) {
+                expect(onForceExitOrder).toBeLessThan(exitOrder);
+            }
+        } finally {
+            unregister();
+        }
+    });
+
+    it('survives a throwing onForceExit hook and still exits', () => {
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+        const close = vi.fn();
+        const onForceExit = vi.fn(() => {
+            throw new Error('hook blew up');
+        });
+        const unregister = registerProcessTerminalCleanup({ close, onForceExit });
+
+        try {
+            process.emit('SIGINT');
+            process.emit('SIGINT');
+
+            expect(exitSpy).toHaveBeenCalledWith(130);
+        } finally {
+            unregister();
+        }
+    });
 });
