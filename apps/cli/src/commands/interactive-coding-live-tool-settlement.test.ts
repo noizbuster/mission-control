@@ -1,9 +1,7 @@
 import { AbgSignalSchema } from '@mission-control/protocol';
+import type { TranscriptPart, TranscriptPartStatus } from '@mission-control/tui/state';
 import { describe, expect, it } from 'vitest';
-import {
-    interactiveGraphStreamSignal,
-    renderInteractiveGraphDurableEvent,
-} from './interactive-coding-graph-rendering';
+import { interactiveGraphStreamSignal, renderInteractiveGraphDurableEvent } from './interactive-coding-graph-rendering';
 import { createProviderRenderState } from './interactive-coding-transcript-render-state';
 import {
     createRichRecording,
@@ -42,14 +40,16 @@ function toolCompletedSignal(nodeId: string, toolCallId: string, toolName: strin
     });
 }
 
-function findPart(toolCallId: string) {
-    return (part: { readonly toolCallId?: string }): boolean => part.toolCallId === toolCallId;
+type ToolCarryingPart = TranscriptPart & { readonly toolCallId?: string; readonly status?: TranscriptPartStatus };
+
+function isToolCarryingPart(part: TranscriptPart): part is ToolCarryingPart {
+    return 'toolCallId' in part;
 }
 
-function lastPartForToolCall(parts: readonly { readonly toolCallId?: string }[], toolCallId: string) {
+function lastPartForToolCall(parts: readonly TranscriptPart[], toolCallId: string): ToolCarryingPart | undefined {
     for (let index = parts.length - 1; index >= 0; index -= 1) {
         const part = parts[index];
-        if (part !== undefined && part.toolCallId === toolCallId) return part;
+        if (part !== undefined && isToolCarryingPart(part) && part.toolCallId === toolCallId) return part;
     }
     return undefined;
 }
