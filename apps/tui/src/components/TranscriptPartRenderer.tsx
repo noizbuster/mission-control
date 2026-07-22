@@ -1,5 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 
+import { TOOL_AGGREGATE_DISPLAY_PATTERN } from '@mission-control/tui/chat';
 import { type JSX, Show } from 'solid-js';
 import { sanitizeTranscriptPartForDisplay } from '../state/terminal-display-sanitizer';
 import type { TranscriptPart } from '../state/transcript-part';
@@ -71,6 +72,7 @@ function TranscriptPartContent(props: TranscriptPartRendererProps): JSX.Element 
             if (shouldHideToolPart(props.part, props.activeAssistantMessageId)) return null;
             return <TypedSubagentRow part={props.part} expanded={props.toolOutputExpanded} />;
         case 'status':
+            if (TOOL_AGGREGATE_DISPLAY_PATTERN.test(props.part.text)) return null;
             return <TypedNoticeRow part={props.part} />;
         case 'event':
             return <TypedNoticeRow part={props.part} />;

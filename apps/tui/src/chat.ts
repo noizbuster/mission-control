@@ -30,6 +30,7 @@ export const TOOL_LINE_PREFIXES: readonly string[] = [
 
 export const TOOL_FAILURE_PATTERN = /^[A-Za-z][\w.-]* failed: /u;
 export const TOOL_SUMMARY_PATTERN = /^\u2713 \d+ tools? /u;
+export const TOOL_AGGREGATE_DISPLAY_PATTERN = /^\u2713 \d+ tools?(?: \([^\n]*\))?$/u;
 export const THINKING_PREFIX = 'Thinking: ';
 
 export function classifyLine(line: string): ChatBlock['kind'] {
@@ -78,6 +79,7 @@ export function parseMessageBlocks(outputText: string): readonly ChatBlock[] {
     };
 
     for (const line of rawLines) {
+        if (TOOL_AGGREGATE_DISPLAY_PATTERN.test(line)) continue;
         const classified = classifyLine(line);
         // Continuation absorption keeps multi-line blocks together. Tool blocks
         // absorb any non-strong-boundary line (unchanged). Assistant and thinking
@@ -86,13 +88,13 @@ export function parseMessageBlocks(outputText: string): readonly ChatBlock[] {
         // tool/user/error/thinking lines, which start new blocks instead.
         const absorbable =
             currentKind !== undefined &&
-            ((currentKind === 'tool' && !isStrongBoundary(classified)) ||
+            ((currentKind === 'tool' && classified === 'system') ||
                 ((currentKind === 'assistant' || currentKind === 'thinking') && classified === 'system'));
         if (absorbable) {
             currentLines.push(line);
             continue;
         }
-        if (classified !== currentKind) {
+        if ((currentKind === 'tool' && classified === 'tool') || classified !== currentKind) {
             flush();
             currentKind = classified;
         }
