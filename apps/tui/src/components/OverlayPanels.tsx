@@ -731,13 +731,12 @@ export function SessionPickerOverlay({ store }: SessionPickerOverlayProps): JSX.
             )}
             <For each={view().visibleEntries}>
                 {(entry, index) => {
-                    const globalIndex = view().startIndex + index();
-                    const isSelected = globalIndex === view().selectedIndex;
+                    const isSelected = () => view().startIndex + index() === view().selectedIndex;
                     const titleText = entry.label.length > 0 ? entry.label : entry.sessionId;
                     const timestampText = entry.updatedAt ?? '';
                     return (
-                        <box flexDirection="row" {...(isSelected ? { bg: SELECTED_BG } : {})}>
-                            <text>{isSelected ? '> ' : '  '}</text>
+                        <box flexDirection="row" {...(isSelected() ? { bg: SELECTED_BG } : {})}>
+                            <text>{isSelected() ? '> ' : '  '}</text>
                             <text flexGrow={1}>{titleText}</text>
                             {timestampText.length > 0 ? (
                                 <text attributes={TextAttributes.DIM}>{timestampText}</text>
