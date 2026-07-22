@@ -49,10 +49,7 @@ import {
 } from './models-overlay-state';
 import { sanitizeTerminalDisplayText } from './terminal-display-sanitizer';
 import { extractOccurrenceNumber, type TranscriptPart, upsertTranscriptPart } from './transcript-part';
-import {
-    activeAssistantMessageIdFromParts,
-    attributionKeyForAssistantPart,
-} from './transcript-visibility';
+import { activeAssistantMessageIdFromParts, attributionKeyForAssistantPart } from './transcript-visibility';
 
 export type { HistoryPickerEntry, HistoryPickerState } from './history-picker-state';
 
@@ -187,7 +184,7 @@ export type ChatStoreState = {
     readonly generating: boolean;
     readonly agentStatusText: string;
     readonly showThinking: boolean;
-    /** Element B chip expansion (Ctrl+O); not active ToolCard body expansion. */
+    /** Tool output expansion (Ctrl+O). */
     readonly toolOutputExpanded: boolean;
     readonly approvalLevel: ApprovalLevel | undefined;
     readonly workflowNames: readonly string[];
@@ -385,7 +382,7 @@ export class ChatStore {
             generating: false,
             agentStatusText: '',
             showThinking: true,
-            // Element B chip expansion default: collapsed until Ctrl+O.
+            // Tool output is collapsed until Ctrl+O.
             toolOutputExpanded: false,
             approvalLevel: options?.initialApprovalLevel,
             workflowNames: [],
