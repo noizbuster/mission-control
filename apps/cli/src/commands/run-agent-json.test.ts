@@ -317,11 +317,13 @@ function parseJsonRecords(output: string): readonly JsonOutputRecord[] {
 }
 
 function lastRecord(records: readonly JsonOutputRecord[]): JsonOutputRecord {
-    const record = records.at(-1);
-    if (record === undefined) {
-        throw new Error('expected at least one JSON record');
+    for (let i = records.length - 1; i >= 0; i -= 1) {
+        const candidate = records[i];
+        if (candidate !== undefined && candidate.type !== 'session.finalize') {
+            return candidate;
+        }
     }
-    return record;
+    throw new Error('expected at least one JSON record');
 }
 
 async function readReplay(sessionId: string) {

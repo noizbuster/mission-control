@@ -150,11 +150,13 @@ function parseJsonRecords(output: string): readonly Record<string, unknown>[] {
 }
 
 function lastRecord(records: readonly Record<string, unknown>[]): Record<string, unknown> {
-    const record = records.at(-1);
-    if (record === undefined) {
-        throw new Error('expected at least one JSON record');
+    for (let i = records.length - 1; i >= 0; i -= 1) {
+        const candidate = records[i];
+        if (candidate !== undefined && Reflect.get(candidate, 'type') !== 'session.finalize') {
+            return candidate;
+        }
     }
-    return record;
+    throw new Error('expected at least one JSON record');
 }
 
 function addFilePatch(path: string, content: string): string {
