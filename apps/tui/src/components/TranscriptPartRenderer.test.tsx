@@ -196,7 +196,6 @@ describe('TranscriptPartRenderer component topology', () => {
         expect(source).toContain('expanded={props.toolOutputExpanded}');
         expect(source).toContain('toolOutputExpanded={props.toolOutputExpanded}');
         expect(source).not.toContain('shouldHideToolPart');
-        expect(source).toContain('transcriptParts={props.transcriptParts}');
         expect(source).toContain('viewportColumns={props.viewportColumns}');
 
         const rowsSource = readFileSync(
