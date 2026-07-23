@@ -17,20 +17,10 @@ import {
 } from '../state/models-overlay-state';
 import { buildModelContextPrefLines } from './model-context-pref-lines';
 import { OverlayFrame } from './OverlayFrame';
+import { printableCharFromKey } from './overlay-key-input';
 import { SELECTED_BG } from './overlay-theme';
 
 const MODELS_OVERLAY_MAX_VISIBLE = 12;
-
-/**
- * Printable characters accepted by the search input: letters, digits, and the
- * model-string delimiters `/ - _ . #`. opentui delivers printable keys with a
- * single-char `key.name`; the `!ctrl && !meta` guard avoids hijiking chords.
- */
-const SEARCH_INPUT_PATTERN = /^[a-zA-Z0-9/_\-.#]$/;
-
-function isSearchInputKey(key: { readonly name: string; readonly ctrl: boolean; readonly meta: boolean }): boolean {
-    return !key.ctrl && !key.meta && SEARCH_INPUT_PATTERN.test(key.name);
-}
 
 export type ModelsOverlayProps = { readonly store: ChatStore };
 
@@ -77,28 +67,6 @@ export function ModelsOverlay({ store }: ModelsOverlayProps): JSX.Element {
         if (key.name === 'down') {
             key.preventDefault();
             store.navigateModelsOverlay(1);
-            return;
-        }
-        if (key.name === '-' || key.name === '=' || key.name === '+' || key.name === '[' || key.name === ']') {
-            const selection = focusedSelection();
-            if (selection === undefined) return;
-            key.preventDefault();
-            const catalogDefault = getModelContextLimit(selection.providerID, selection.modelID);
-            if (key.name === '-' || key.name === '=' || key.name === '+') {
-                void localPreferences.stepModelContextLimit(
-                    selection,
-                    key.name === '-' ? -1 : 1,
-                    catalogDefault,
-                ).then(() => {
-                    const lines = buildModelContextPrefLines(
-                        selection,
-                        localPreferences.preferences().modelContextPrefs,
-                    );
-                    store.setContextTokensMax(lines.effectiveContextLimit);
-                });
-                return;
-            }
-            void localPreferences.stepModelAutoCompactThreshold(selection, key.name === '[' ? -1 : 1);
             return;
         }
         if (key.name === 'left' || key.name === 'right') {
@@ -167,8 +135,10 @@ export function ModelsOverlay({ store }: ModelsOverlayProps): JSX.Element {
             }
             return;
         }
-        if (isSearchInputKey(key)) {
-            store.setModelsOverlaySearchQuery(slice().searchQuery + key.name);
+        const character = printableCharFromKey(key);
+        if (character !== undefined) {
+            key.preventDefault();
+            store.setModelsOverlaySearchQuery(slice().searchQuery + character);
             return;
         }
         if (key.name === 'escape') {
@@ -185,7 +155,7 @@ export function ModelsOverlay({ store }: ModelsOverlayProps): JSX.Element {
     const footer = createMemo(() =>
         hasPending()
             ? '⏎ confirm assign · Tab/Esc/⌫ cancel · ↑↓ pick role'
-            : '← → provider · Shift+←→ context · Ctrl+←→ compact · -/= [ ] · ↑↓ · Tab · ⏎ assign · Esc',
+            : '← → provider · Shift+←→ context · Ctrl+←→ compact · type search · ↑↓ · Tab · ⏎ assign · Esc',
     );
 
     return (
