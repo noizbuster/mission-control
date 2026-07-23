@@ -17,10 +17,8 @@ import type {
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
 import type { ModelPattern } from '../agents/model-resolver';
-import {
-    buildResolveModelFn,
-    createFullParityTaskToolRegistrationForCli,
-} from './task-tool-full-parity-factory';
+import { makeTaskRuntimeServices } from '../agents/task-tool-runtime-background-test-support';
+import { buildResolveModelFn, createFullParityTaskToolRegistrationForCli } from './task-tool-full-parity-factory';
 import { ToolRegistry } from './tool-registry';
 
 const parentModel: AbgNodeModelOptions = { providerID: 'local', modelID: 'local-echo' };
@@ -298,5 +296,27 @@ describe('createFullParityTaskToolRegistrationForCli end-to-end spawn', () => {
 
         expect(result.status).toBe('completed');
         expect(result.output).toBe('factory yielded result');
+    });
+
+    it('stamps the first child of a durable CLI root session at depth 1', async () => {
+        // Given
+        const callCount = { value: 0 };
+        const services = makeTaskRuntimeServices();
+        const registration = await createFullParityTaskToolRegistrationForCli({
+            ...buildFactoryOptions(callCount, () => yieldChunks('durable root child done')),
+            parentSessionId: 'durable-cli-root',
+            isCliRootParent: true,
+            services,
+        });
+
+        // When
+        const result = await registration.execute(
+            { agent: 'deep', assignment: 'do the thing', load_skills: [] },
+            { toolCallId: 'tc_durable_root', toolName: 'task', signal: new AbortController().signal },
+        );
+
+        // Then
+        expect(result.status).toBe('completed');
+        expect(services.runtimeRegistry.lookup(result.sessionId)?.taskDepth).toBe(1);
     });
 });

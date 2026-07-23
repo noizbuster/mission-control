@@ -53,6 +53,7 @@ export type FullParityTaskToolOptions = {
     readonly parentActiveModel?: AbgNodeModelOptions;
     readonly parentToolRegistry: ToolRegistry;
     readonly parentSessionId?: string;
+    readonly isCliRootParent?: true;
     readonly summaryLimit?: number;
     readonly agentIndex?: AgentIndex;
     readonly parentAgent?: AgentDefinition;
@@ -132,6 +133,7 @@ export async function createFullParityTaskToolRegistrationForCli(
             parentAgent,
             resolveSdkModel: options.resolveSdkModel,
             ...(options.parentSessionId !== undefined ? { parentSessionId: options.parentSessionId } : {}),
+            ...(options.isCliRootParent === true ? { isCliRootParent: true } : {}),
             ...(options.summaryLimit !== undefined ? { summaryLimit: options.summaryLimit } : {}),
             ...(options.services !== undefined ? { services: options.services } : {}),
             ...(options.hostCallbacks !== undefined ? { hostCallbacks: options.hostCallbacks } : {}),
