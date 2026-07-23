@@ -8,11 +8,13 @@ import {
     describeRetryableFailure,
     formatNodeRetryStatus,
     formatNodeWorkingStatus,
+    formatProviderWaitStatus,
     formatThinkingStatus,
 } from './interactive-coding-graph-status';
 import {
     extractSignalError,
     readDeltaFromSignal,
+    readNumberField,
     readReasoningDeltaFromSignal,
     readStringField,
     readToolCallProposal,
@@ -122,6 +124,19 @@ function renderInteractiveGraphSignal(
             },
             '',
         );
+        return;
+    }
+    if (signal.type === 'emit' && signal.event.type === 'llm.provider_wait') {
+        const delayMs = readNumberField(signal.event.payload, 'delayMs');
+        const attempt = readNumberField(signal.event.payload, 'attempt');
+        if (delayMs === undefined || delayMs < 0 || attempt === undefined || attempt < 1) return;
+        const statusText = formatProviderWaitStatus(sanitizeTerminalDisplayText(signal.nodeId), attempt);
+        const retryAt = Date.now() + delayMs;
+        if (output.setAgentRetryStatus === undefined) {
+            output.setAgentStatus?.(statusText);
+        } else {
+            output.setAgentRetryStatus(statusText, retryAt);
+        }
         return;
     }
     if (signal.type === 'emit' && signal.event.type === 'llm.turn.started') {

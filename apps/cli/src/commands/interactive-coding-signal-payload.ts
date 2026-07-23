@@ -35,6 +35,12 @@ export function readStringField(payload: unknown, field: string): string | undef
     return typeof value === 'string' ? value : undefined;
 }
 
+export function readNumberField(payload: unknown, field: string): number | undefined {
+    if (!isPlainObject(payload)) return undefined;
+    const value = payload[field];
+    return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
 export function readErrorMessage(payload: unknown): string | undefined {
     if (!isErrorPayload(payload)) return undefined;
     return typeof payload.error === 'string' ? payload.error : readStringField(payload.error, 'message');

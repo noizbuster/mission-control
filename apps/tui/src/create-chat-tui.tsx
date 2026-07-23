@@ -39,6 +39,7 @@ export function createChatTuiHandle(store: ChatStore, unmountFn: () => void): Ch
         showQuestionBatch: (entries) => store.showQuestionBatch(entries),
         setGenerating: (value) => store.setGenerating(value),
         setAgentStatus: (text) => store.setAgentStatus(text),
+        setAgentRetryStatus: (text, retryAt) => store.setAgentRetryStatus(text, retryAt),
         clearAgentStatus: () => store.clearAgentStatus(),
         showTransientNotice: (text) => store.showTransientNotice(text),
         setStickyNotice: (message) => store.setStickyNotice(message),

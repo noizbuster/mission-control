@@ -48,6 +48,7 @@ export type ChatTuiHandle = {
     readonly setWorkflowNames: (names: readonly string[]) => void;
     readonly setSkillNames: (names: readonly string[]) => void;
     readonly setAgentStatus: (text: string) => void;
+    readonly setAgentRetryStatus: (text: string, retryAt: number) => void;
     readonly clearAgentStatus: () => void;
     readonly showTransientNotice: (message: string) => void;
     readonly setStickyNotice: (message: string | null) => void;

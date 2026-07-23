@@ -2,13 +2,8 @@
 
 import type { KeyEvent, PasteEvent, TextareaRenderable } from '@opentui/core';
 import { defaultTextareaKeyBindings } from '@opentui/core';
-import { type JSX, onCleanup } from 'solid-js';
-import {
-    CHAT_ELEMENT_BG,
-    CHAT_PLACEHOLDER,
-    CHAT_PRIMARY,
-    CHAT_TEXT,
-} from './chat-theme';
+import { createEffect, type JSX, onCleanup } from 'solid-js';
+import { CHAT_ELEMENT_BG, CHAT_PLACEHOLDER, CHAT_PRIMARY, CHAT_TEXT } from './chat-theme';
 import { LEFT_ACCENT_BORDER } from './overlay-theme';
 
 export interface ChatTextareaHandle {
@@ -21,6 +16,8 @@ export interface ChatTextareaSurface {
     readonly plainText: string;
     cursorOffset: number;
     readonly focused: boolean;
+    focus(): void;
+    blur(): void;
     insertText(text: string): void;
     setText(text: string): void;
     clear(): void;
@@ -39,6 +36,23 @@ export type ChatInputTextareaProps = {
     readonly textareaRef: ChatTextareaHandle;
     readonly focused: boolean;
 };
+
+/**
+ * The textarea can retain native focus after an overlay changes its `focused`
+ * prop. Explicitly moving focus prevents its keydown handler from consuming
+ * printable overlay search input before the overlay keyboard sink sees it.
+ */
+export function synchronizeTextareaFocus(
+    textarea: Pick<ChatTextareaSurface, 'focus' | 'blur'> | undefined,
+    focused: boolean,
+): void {
+    if (textarea === undefined) return;
+    if (focused) {
+        textarea.focus();
+        return;
+    }
+    textarea.blur();
+}
 
 /**
  * OpenCode-style prompt frame: left `┃` accent only (no right border),
@@ -60,6 +74,10 @@ export function ChatInputTextareaBase(props: ChatInputTextareaProps): JSX.Elemen
     };
 
     onCleanup(() => props.textareaRef.clear());
+
+    createEffect(() => {
+        synchronizeTextareaFocus(props.textareaRef.get(), props.focused);
+    });
 
     return (
         <box

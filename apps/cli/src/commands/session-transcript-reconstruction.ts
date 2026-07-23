@@ -1,6 +1,12 @@
-import type { CodingReplayStep } from '@mission-control/core';
-import { type ObservabilityRedactor, readLocalSessionReplay } from '@mission-control/core';
-import type { AgentEventEnvelope } from '@mission-control/protocol';
+import {
+    type CodingReplayStep,
+    type LocalSessionEventStore,
+    type ObservabilityRedactor,
+    projectSessionReplay,
+    readLocalSessionReplay,
+    redactAgentEventForObservability,
+} from '@mission-control/core';
+import type { AgentEvent, AgentEventEnvelope } from '@mission-control/protocol';
 import type { TranscriptPart } from '@mission-control/tui/state';
 
 /**
@@ -223,6 +229,56 @@ export function reconstructSessionTranscriptParts(input: SessionTranscriptInput)
         parts,
         outputText: reconstructSessionTranscript(input),
     };
+}
+
+/**
+ * Reconstruct a transcript from the already-open session store. Resume must read
+ * from the same store that the next turn will use; reopening the default data
+ * directory can select a different database and make a valid attached session
+ * appear empty.
+ */
+export function reconstructSessionTranscriptPartsFromEvents(
+    sessionId: string,
+    events: readonly AgentEvent[],
+    observabilityRedactor?: ObservabilityRedactor,
+): ReconstructedTranscript {
+    const envelopes: AgentEventEnvelope[] = [];
+    for (const [sequence, event] of events.entries()) {
+        if (event.sessionId !== sessionId) {
+            continue;
+        }
+        const visibleEvent =
+            observabilityRedactor === undefined ? event : redactAgentEventForObservability(event, observabilityRedactor);
+        envelopes.push({
+            eventId: `resume:${sequence}`,
+            sequence,
+            createdAt: visibleEvent.timestamp,
+            sessionId,
+            durability: 'durable',
+            event: visibleEvent,
+        });
+    }
+    return reconstructSessionTranscriptParts(projectSessionReplay({ sessionId, envelopes }));
+}
+
+export async function loadSessionTranscriptPartsFromStore(
+    store: LocalSessionEventStore,
+    sessionId: string,
+    observabilityRedactor?: ObservabilityRedactor,
+): Promise<ReconstructedTranscript> {
+    const empty: ReconstructedTranscript = { parts: [], outputText: '' };
+    try {
+        return reconstructSessionTranscriptPartsFromEvents(
+            sessionId,
+            await store.getEvents(sessionId),
+            observabilityRedactor,
+        );
+    } catch (error: unknown) {
+        if (error instanceof Error) {
+            return empty;
+        }
+        throw error;
+    }
 }
 
 /**

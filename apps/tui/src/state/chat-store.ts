@@ -184,6 +184,7 @@ export type ChatStoreState = {
     readonly inputMirror: string;
     readonly generating: boolean;
     readonly agentStatusText: string;
+    readonly agentRetryAt: number | undefined;
     readonly showThinking: boolean;
     /** Tool output expansion (Ctrl+O). */
     readonly toolOutputExpanded: boolean;
@@ -382,6 +383,7 @@ export class ChatStore {
             inputMirror: '',
             generating: false,
             agentStatusText: '',
+            agentRetryAt: undefined,
             showThinking: true,
             // Tool output is collapsed until Ctrl+O.
             toolOutputExpanded: false,
@@ -877,11 +879,19 @@ export class ChatStore {
 
     setAgentStatus(text: string): void {
         this.state.agentStatusText = text;
+        this.state.agentRetryAt = undefined;
+        this.publish();
+    }
+
+    setAgentRetryStatus(text: string, retryAt: number): void {
+        this.state.agentStatusText = text;
+        this.state.agentRetryAt = retryAt;
         this.publish();
     }
 
     clearAgentStatus(): void {
         this.state.agentStatusText = '';
+        this.state.agentRetryAt = undefined;
         this.publish();
     }
 

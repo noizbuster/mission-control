@@ -112,6 +112,7 @@ export function createStoreChatOutput(store: ChatStore): ChatOutput {
         writeTranscriptFallback: (text) => store.emitTranscriptFallback(text),
         getOutput: () => store.getOutput(),
         setAgentStatus: (text: string) => store.setAgentStatus(text),
+        setAgentRetryStatus: (text: string, retryAt: number) => store.setAgentRetryStatus(text, retryAt),
         clearAgentStatus: () => store.clearAgentStatus(),
         isShowThinking: () => store.getSnapshot().showThinking,
         isToolOutputExpanded: () => store.getSnapshot().toolOutputExpanded,

@@ -9,7 +9,6 @@ import {
     extractContextTokensUsedFromAbgEmit,
     type ObservabilityRedactor,
     ProjectTrustStore,
-    projectApprovalContinuationMessages,
     type SdkModelResolver,
     SessionRunOwner,
     type ToolInvocationSettlement,
@@ -183,11 +182,6 @@ export async function createInteractiveRunOwner(
             provider: options.provider,
             modelProviderSelection: options.modelProviderSelection,
             projectContext: { workspaceRoot: options.workspaceRoot },
-            readMessages: async () =>
-                projectApprovalContinuationMessages(
-                    await options.store.getEvents(options.sessionId),
-                    options.sessionId,
-                ),
             toolRegistry,
             runProviderTurn,
             observabilityRedactor,

@@ -31,6 +31,10 @@ export function formatNodeRetryStatus(input: {
     return `${label} hit ${input.shortReason} — retrying${progress}…`;
 }
 
+export function formatProviderWaitStatus(nodeId: string, attempt: number): string {
+    return `${formatNodeLabel(nodeId)} retry ${attempt}`;
+}
+
 export function formatNodeWorkingStatus(nodeId: string, attempt?: number): string {
     const label = formatNodeLabel(nodeId);
     if (attempt !== undefined && attempt > 1) {

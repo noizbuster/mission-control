@@ -30,19 +30,23 @@ function createRecordingOutput(): {
     readonly textWrites: string[];
     readonly transcriptWrites: TranscriptWrite[];
     readonly statuses: string[];
+    readonly retryStatuses: { readonly text: string; readonly retryAt: number }[];
 } {
     const textWrites: string[] = [];
     const transcriptWrites: TranscriptWrite[] = [];
     const statuses: string[] = [];
+    const retryStatuses: { readonly text: string; readonly retryAt: number }[] = [];
     return {
         output: {
             write: (text) => textWrites.push(text),
             writeTranscriptPart: (part, fallbackText) => transcriptWrites.push({ part, fallbackText }),
             setAgentStatus: (text) => statuses.push(text),
+            setAgentRetryStatus: (text, retryAt) => retryStatuses.push({ text, retryAt }),
         },
         textWrites,
         transcriptWrites,
         statuses,
+        retryStatuses,
     };
 }
 
@@ -186,6 +190,30 @@ describe('interactive typed transcript emission', () => {
         expect(recording.transcriptWrites.map(({ part }) => part)).toContainEqual(expect.objectContaining({
             id: 'graph:outer-emission:event:event-workflow-transition', type: 'event', eventId: 'event-workflow-transition', eventType: 'workflow.transitioned', timestamp,
         }));
+    });
+
+    it('projects a provider wait into the countdown status surface', async () => {
+        const recording = createRecordingOutput();
+        const waitStartedAt = Date.now();
+
+        await interactiveGraphStreamSignal(recording.output, renderState(), '/workspace')(
+            AbgSignalSchema.parse({
+                type: 'emit',
+                nodeId: 'direct-respond',
+                event: {
+                    id: 'event-provider-wait',
+                    type: 'llm.provider_wait',
+                    source: 'test',
+                    timestamp,
+                    payload: { attempt: 2, delayMs: 3_000 },
+                },
+            }),
+        );
+
+        expect(recording.retryStatuses).toEqual([
+            expect.objectContaining({ text: 'Responding retry 2' }),
+        ]);
+        expect(recording.retryStatuses[0]?.retryAt).toBeGreaterThanOrEqual(waitStartedAt + 3_000);
     });
 
     it('emits running status with stable graph node identity', () => {

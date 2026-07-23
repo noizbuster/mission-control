@@ -78,6 +78,34 @@ describe('interactive chat actions', () => {
         expect(result.persistModelProviderSelection).toBeUndefined();
     });
 
+    it('replaces typed TUI transcript parts when attaching a session', async () => {
+        const runtime = new AgentRuntime();
+        const output = createOutput();
+        const replaceSessionTranscript = vi.fn();
+        const navigation = createNavigationController({
+            switchSession: async ({ sessionId }) => ({
+                message: `Switched to session: ${sessionId}\n`,
+                sessionId,
+            }),
+        });
+
+        await runChatAction(
+            runtime,
+            output,
+            { kind: 'session', sessionId: 'session_other' },
+            currentSelection,
+            async () => undefined,
+            [],
+            createCodingContext({
+                sessionNavigation: navigation,
+                useTui: true,
+                replaceSessionTranscript,
+            }),
+        );
+
+        expect(replaceSessionTranscript).toHaveBeenCalledWith([], '');
+    });
+
     it('/sessions opens the picker modal in TUI mode and attaches to the selected session', async () => {
         const runtime = new AgentRuntime();
         const output = createOutput();
@@ -671,9 +699,7 @@ describe('interactive chat actions', () => {
             expect(onSkillsReloaded).toHaveBeenCalledTimes(1);
             const reloaded = onSkillsReloaded.mock.calls[0]?.[0];
             expect(Array.isArray(reloaded)).toBe(true);
-            expect(reloaded).toEqual(
-                expect.arrayContaining([expect.objectContaining({ name: 'reload-cb-skill' })]),
-            );
+            expect(reloaded).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'reload-cb-skill' })]));
             expect(output.getOutput()).toContain('Reloaded 1 skill');
         });
     });
@@ -1258,6 +1284,9 @@ function createCodingContext(overrides: Partial<CodingActionContext> = {}): Codi
         ...(overrides.workflowRegistry !== undefined ? { workflowRegistry: overrides.workflowRegistry } : {}),
         ...(overrides.approvalLevel !== undefined ? { approvalLevel: overrides.approvalLevel } : {}),
         ...(overrides.selectApprovalLevel !== undefined ? { selectApprovalLevel: overrides.selectApprovalLevel } : {}),
+        ...(overrides.replaceSessionTranscript !== undefined
+            ? { replaceSessionTranscript: overrides.replaceSessionTranscript }
+            : {}),
         ...(overrides.listWorkspaceSessions !== undefined
             ? { listWorkspaceSessions: overrides.listWorkspaceSessions }
             : {}),

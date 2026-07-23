@@ -88,6 +88,7 @@ const CHAT_TUI_HANDLE_METHODS = [
     'setWorkflowNames',
     'setSkillNames',
     'setAgentStatus',
+    'setAgentRetryStatus',
     'clearAgentStatus',
     'showTransientNotice',
     'setStickyNotice',

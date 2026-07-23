@@ -68,6 +68,7 @@ export function createRecordingTextarea(initial = '', cursorOffset?: number): Re
     let gotoBufferEndCount = 0;
     let submitCount = 0;
     let deleteCharCount = 0;
+    let focused = true;
     return {
         get plainText(): string {
             return text;
@@ -79,7 +80,15 @@ export function createRecordingTextarea(initial = '', cursorOffset?: number): Re
             cursor = Math.min(Math.max(0, value), text.length);
         },
         get focused(): boolean {
-            return true;
+            return focused;
+        },
+        focus(): void {
+            calls.push({ method: 'focus', args: [] });
+            focused = true;
+        },
+        blur(): void {
+            calls.push({ method: 'blur', args: [] });
+            focused = false;
         },
         insertText(t: string): void {
             calls.push({ method: 'insertText', args: [t] });

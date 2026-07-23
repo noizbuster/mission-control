@@ -42,6 +42,7 @@ export type ChatOutput = {
     readonly writeTranscriptFallback?: (text: string) => void;
     readonly getOutput?: () => string;
     readonly setAgentStatus?: (text: string) => void;
+    readonly setAgentRetryStatus?: (text: string, retryAt: number) => void;
     readonly clearAgentStatus?: () => void;
     readonly showNotice?: (message: string) => void;
     readonly setStickyNotice?: (message: string | null) => void;

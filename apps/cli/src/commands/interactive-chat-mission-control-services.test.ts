@@ -1,4 +1,4 @@
-import { AgentRuntime, createDeterministicProvider } from '@mission-control/core';
+import { AgentRuntime, createDeterministicProvider, openLocalSessionEventStore } from '@mission-control/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { runInteractiveChatSession } from './interactive-chat';
 import { disposeAllMissionControlServices } from './mission-control-services';
@@ -48,6 +48,48 @@ describe('runInteractiveChatSession MissionControlServices error handling', () =
         });
 
         expect(output).toContain('Exiting mission-control chat');
+    });
+
+    it('restores an attached session transcript before accepting new input', async () => {
+        const dataDir = await tempRoot('mctrl-interactive-attached-session-data-');
+        const workspaceRoot = await tempRoot('mctrl-interactive-attached-session-workspace-');
+        const sessionId = 'session_attached_interactive_resume';
+        const store = await openLocalSessionEventStore({ dataDir, sessionId });
+        await store.append({
+            type: 'prompt.promoted',
+            timestamp: '2026-07-23T00:00:00.000Z',
+            sessionId,
+            message: 'remember this conversation',
+        });
+        await store.append({
+            type: 'model.call.completed',
+            timestamp: '2026-07-23T00:00:01.000Z',
+            sessionId,
+            abg: {
+                graphId: 'attached-session-graph',
+                nodeId: 'assistant',
+                nodeKind: 'llm',
+                emit: { type: 'llm.turn.completed', payload: { text: 'I remember it.' } },
+            },
+        });
+        const chatOutput = createBufferedChatOutput();
+
+        try {
+            const output = await runInteractiveChatSession(new AgentRuntime(), {
+                input: createScriptedChatInput([{ type: 'line', value: '/exit' }], 0),
+                output: chatOutput.output,
+                modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
+                provider: createDeterministicProvider([]),
+                sessionId,
+                sessionStore: store,
+                workspaceRoot,
+            });
+
+            expect(output).toContain('You: remember this conversation');
+            expect(output).toContain('Assistant: I remember it.');
+        } finally {
+            await store.close();
+        }
     });
 
     it('rejects when MissionControlServices creation fails after .mc resolves', async () => {

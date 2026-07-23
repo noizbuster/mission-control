@@ -1,9 +1,14 @@
-import type { CodingReplayStep } from '@mission-control/core';
+import { openLocalSessionEventStore, type CodingReplayStep } from '@mission-control/core';
 import type { AgentEvent, AgentEventEnvelope } from '@mission-control/protocol';
 import { shouldHideToolPart } from '@mission-control/tui/state';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { writeLocalSessionEvents } from './session-test-support';
-import { loadSessionTranscript, reconstructSessionTranscript, reconstructSessionTranscriptParts } from './session-transcript-reconstruction';
+import {
+    loadSessionTranscript,
+    loadSessionTranscriptPartsFromStore,
+    reconstructSessionTranscript,
+    reconstructSessionTranscriptParts,
+} from './session-transcript-reconstruction';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -253,6 +258,44 @@ describe('reconstructSessionTranscript', () => {
 
         // Then
         expect(transcript).toBe(`You: ${persistedReplayPayload}\n`);
+    });
+
+    it('reconstructs from the attached store rather than the default data directory', async () => {
+        const dataDir = await mkdtemp(join(tmpdir(), 'mctrl-session-transcript-attached-'));
+        tempRoots.push(dataDir);
+        const sessionId = 'session_attached_store_replay';
+        await writeLocalSessionEvents({
+            dataDir,
+            sessionId,
+            events: [
+                { ...userPromptEvent('remember this'), sessionId },
+                {
+                    type: 'model.call.completed',
+                    timestamp: NOW,
+                    sessionId,
+                    abg: {
+                        graphId: 'graph_attached',
+                        nodeId: 'assistant',
+                        nodeKind: 'llm',
+                        emit: { type: 'llm.turn.completed', payload: { text: 'I remember.' } },
+                    },
+                },
+            ],
+        });
+        const store = await openLocalSessionEventStore({ dataDir, sessionId });
+        try {
+            const transcript = await loadSessionTranscriptPartsFromStore(store, sessionId);
+
+            expect(transcript.outputText).toBe('You: remember this\nAssistant: I remember.\n');
+            expect(transcript.parts).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({ type: 'user', text: 'remember this' }),
+                    expect.objectContaining({ type: 'assistant', text: 'I remember.' }),
+                ]),
+            );
+        } finally {
+            await store.close();
+        }
     });
 });
 

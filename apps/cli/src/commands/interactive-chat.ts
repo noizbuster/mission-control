@@ -47,6 +47,7 @@ import {
 } from '@mission-control/tui/state';
 import type { ProviderAuthStore } from '../auth-store';
 import { getVersion } from '../cli-version';
+import { formatSessionFinalizeLineFromInfo, type SessionFinalizeInfo } from '../ui/session-finalize';
 import { toggleDisabled } from './agents-disabled-config';
 import { parseModelPatternString, setOverride } from './agents-model-overrides-config';
 import { chatActionShowsWorkingStatus, parseChatLine } from './chat-commands';
@@ -88,20 +89,16 @@ import { createUndoRedoStack, type UndoRedoStack } from './interactive-chat-undo
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent';
 import { interactiveSessionCliStdout } from './interactive-session-cli-stdout';
 import { emitTranscriptFallback } from './interactive-transcript-emission';
-import { loadEffectiveContextLimit, maybeStartAutoCompaction } from './model-context-session';
 import {
     getOrCreateMissionControlServices,
     isMcRootNotFoundError,
     type MissionControlServices,
 } from './mission-control-services';
+import { loadEffectiveContextLimit, maybeStartAutoCompaction } from './model-context-session';
 import { loadPricingTable } from './pricing-table-store';
 import type { EnsuredSession } from './run-agent-session';
 import { listSessionCatalogEntriesForWorkspace } from './session-catalog';
-import { loadSessionTranscript, loadSessionTranscriptParts } from './session-transcript-reconstruction';
-import {
-    formatSessionFinalizeLineFromInfo,
-    type SessionFinalizeInfo,
-} from '../ui/session-finalize';
+import { loadSessionTranscriptParts, loadSessionTranscriptPartsFromStore } from './session-transcript-reconstruction';
 import {
     detectGitBranch,
     detectGitWorktree,
@@ -286,6 +283,7 @@ export async function runInteractiveChatSession(
                   writeTranscriptFallback: (text) => tuiHandle.emitTranscriptFallback(text),
                   getOutput: () => tuiHandle.getOutput(),
                   setAgentStatus: (text) => tuiHandle.setAgentStatus(text),
+                  setAgentRetryStatus: (text, retryAt) => tuiHandle.setAgentRetryStatus(text, retryAt),
                   clearAgentStatus: () => tuiHandle.clearAgentStatus(),
                   showNotice: (text) => tuiHandle.showTransientNotice(text),
                   setStickyNotice: (message) => tuiHandle.setStickyNotice(message),
@@ -470,16 +468,17 @@ export async function runInteractiveChatSession(
         }
     };
 
-    const unregisterProcessCleanup = tuiHandle === undefined
-        ? registerProcessTerminalCleanup(chatInput, {
-            onForceExit: () => {
-                if (!sessionFinalizeWritten) {
-                    sessionFinalizeInfo = { status: 'aborted', reason: 'interrupted by signal' };
-                }
-                writeSessionFinalize();
-            },
-        })
-        : undefined;
+    const unregisterProcessCleanup =
+        tuiHandle === undefined
+            ? registerProcessTerminalCleanup(chatInput, {
+                  onForceExit: () => {
+                      if (!sessionFinalizeWritten) {
+                          sessionFinalizeInfo = { status: 'aborted', reason: 'interrupted by signal' };
+                      }
+                      writeSessionFinalize();
+                  },
+              })
+            : undefined;
 
     const syncSessionDisplayName = async (sessionId: string | undefined): Promise<void> => {
         const sid = sessionId ?? '';
@@ -644,19 +643,24 @@ export async function runInteractiveChatSession(
             chatOutput.write('Press Ctrl+C twice or /exit to exit\n\n');
         }
 
-        // Best-effort: load the prior conversation so it's visible on resume. A missing or
-        // corrupt log leaves the transcript blank and resume still proceeds.
+        // Restore from the attached store when available. It is the authoritative
+        // event source for both the visible transcript and the following model turn.
         if (currentSessionId !== undefined) {
+            const resumed =
+                currentSessionStore === undefined
+                    ? await loadSessionTranscriptParts(currentSessionId, options.observabilityRedactor)
+                    : await loadSessionTranscriptPartsFromStore(
+                          currentSessionStore,
+                          currentSessionId,
+                          options.observabilityRedactor,
+                      );
             if (tuiHandle !== undefined) {
-                const resumed = await loadSessionTranscriptParts(currentSessionId, options.observabilityRedactor);
                 if (resumed.parts.length > 0 || resumed.outputText.length > 0) {
+                    conversationText = resumed.outputText;
                     tuiHandle.replaceTranscript(resumed.parts, resumed.outputText);
                 }
-            } else {
-                const resumedTranscript = await loadSessionTranscript(currentSessionId, options.observabilityRedactor);
-                if (resumedTranscript.length > 0) {
-                    chatOutput.write(resumedTranscript);
-                }
+            } else if (resumed.outputText.length > 0) {
+                chatOutput.write(resumed.outputText);
             }
         }
 
@@ -854,6 +858,14 @@ export async function runInteractiveChatSession(
                     onSessionRenamed: applyManualSessionRename,
                     undoRedo: undoRedoController,
                     ...(sessionNavigation !== undefined ? { sessionNavigation } : {}),
+                    ...(tuiHandle !== undefined
+                        ? {
+                              replaceSessionTranscript: (parts, outputText) => {
+                                  conversationText = outputText;
+                                  tuiHandle.replaceTranscript(parts, outputText);
+                              },
+                          }
+                        : {}),
                     ...(options.engine !== undefined ? { engine: options.engine } : {}),
                     ...(options.resolveSdkModel !== undefined ? { resolveSdkModel: options.resolveSdkModel } : {}),
                     ...(abgOverlayController !== undefined ? { abgOverlayController } : {}),

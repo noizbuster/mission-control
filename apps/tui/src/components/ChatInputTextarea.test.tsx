@@ -1,6 +1,6 @@
 import { defaultTextareaKeyBindings } from '@opentui/core';
 import { describe, expect, it } from 'vitest';
-import { ChatInputTextarea, ChatInputTextareaBase } from './ChatInputTextarea';
+import { ChatInputTextarea, ChatInputTextareaBase, synchronizeTextareaFocus } from './ChatInputTextarea';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -13,6 +13,21 @@ describe('ChatInputTextarea', () => {
         it('exports the callable Solid component aliases', () => {
             expect(ChatInputTextarea).toBe(ChatInputTextareaBase);
             expect(typeof ChatInputTextareaBase).toBe('function');
+        });
+    });
+
+    describe('overlay focus handoff', () => {
+        it('moves focus away from the textarea while an overlay owns keyboard input', () => {
+            const calls: string[] = [];
+            const textarea = {
+                focus: () => calls.push('focus'),
+                blur: () => calls.push('blur'),
+            };
+
+            synchronizeTextareaFocus(textarea, false);
+            synchronizeTextareaFocus(textarea, true);
+
+            expect(calls).toEqual(['blur', 'focus']);
         });
     });
 
@@ -42,9 +57,7 @@ describe('ChatInputTextarea', () => {
         it('uses a Solid callback ref to update the production handle shape', () => {
             const source = readTextareaSource();
 
-            expect(source).toContain(
-                'ref={(renderable: TextareaRenderable) => props.textareaRef.set(renderable)}',
-            );
+            expect(source).toContain('ref={(renderable: TextareaRenderable) => props.textareaRef.set(renderable)}');
             expect(source).not.toContain('.current');
         });
     });
@@ -52,10 +65,7 @@ describe('ChatInputTextarea', () => {
     describe('disabled key guard', () => {
         it('prevents default and returns before forwarding when disabled', () => {
             const source = readTextareaSource();
-            const disabledBlock = source.slice(
-                source.indexOf('const handleKeyDown'),
-                source.indexOf('return ('),
-            );
+            const disabledBlock = source.slice(source.indexOf('const handleKeyDown'), source.indexOf('return ('));
 
             expect(disabledBlock).toContain('if (props.disabled)');
             expect(disabledBlock).toContain('key.preventDefault();');

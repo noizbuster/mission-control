@@ -2,6 +2,7 @@
 
 import { useTerminalDimensions } from '@opentui/solid';
 import { type JSX, Show } from 'solid-js';
+import { AgentSpinner } from '../app/AgentSpinner';
 import { useSolidStoreSelector } from '../platform/use-solid-store-selector';
 import type { ChatAppActions } from '../state/chat-app-actions';
 import type { ChatStore, ChatStoreState } from '../state/chat-store';
@@ -9,7 +10,6 @@ import type { HistoryPickerEntry, HistoryPickerState } from '../state/history-pi
 import type { SlashCommandMenuState } from '../state/interactive-chat-command-menu';
 import type { FileAutocompleteState } from '../state/interactive-chat-file-autocomplete';
 import { resolveSeparatorState } from '../state/separator-state';
-import { AgentSpinner } from '../app/AgentSpinner';
 import { ChatInputArea } from './ChatInputArea';
 import type { ChatTextareaHandle } from './ChatInputTextarea';
 import type { ChatScrollboxHandle } from './ChatTranscript';
@@ -46,6 +46,7 @@ export type ChatBottomDockSlice = {
     readonly separatorState: SeparatorState;
     readonly generating: boolean;
     readonly agentStatusText: string;
+    readonly agentRetryAt: number | undefined;
 };
 
 export type ChatBottomDockProps = {
@@ -98,6 +99,7 @@ export function selectChatBottomDockSlice(snapshot: ChatStoreState): ChatBottomD
         }),
         generating: snapshot.generating,
         agentStatusText: snapshot.agentStatusText,
+        agentRetryAt: snapshot.agentRetryAt,
     };
 }
 
@@ -121,7 +123,8 @@ export function chatBottomDockSliceEqual(left: ChatBottomDockSlice, right: ChatB
         left.approvalLevel === right.approvalLevel &&
         left.separatorState === right.separatorState &&
         left.generating === right.generating &&
-        left.agentStatusText === right.agentStatusText
+        left.agentStatusText === right.agentStatusText &&
+        left.agentRetryAt === right.agentRetryAt
     );
 }
 
@@ -255,7 +258,9 @@ export function ChatBottomDockBase(props: ChatBottomDockBaseProps): JSX.Element 
 
     return (
         <box flexDirection="column" flexShrink={0} width="100%">
-            <Show when={agentStatusLine()}>{(text) => <AgentSpinner text={text()} />}</Show>
+            <Show when={agentStatusLine()}>
+                {(text) => <AgentSpinner text={text()} retryAt={props.dockSlice.agentRetryAt} />}
+            </Show>
             <Show when={topStatusBarProps()}>{(top) => <TopStatusBar {...top()} />}</Show>
             {renderPromptAdjacentPanels({
                 dockSlice: props.dockSlice,

@@ -7,6 +7,7 @@ import type {
     MissionPanelRow,
     ModelsOverlayRoleRow,
     SessionPickerEntry,
+    TranscriptPart,
 } from '@mission-control/tui/state';
 import type { ProviderAuthStore } from '../auth-store';
 import type { PlainPromptGraph } from './interactive-chat';
@@ -27,6 +28,7 @@ export type CodingActionContext = PromptTurnContext & {
     readonly sessionDisplayName?: SessionDisplayNameController;
     readonly onSessionRenamed?: (name: string) => Promise<void>;
     readonly undoRedo?: UndoRedoConversationController;
+    readonly replaceSessionTranscript?: (parts: readonly TranscriptPart[], outputText: string) => void;
     readonly selectApprovalLevel?: (currentLevel?: ApprovalLevel) => Promise<ApprovalLevel | undefined>;
     readonly listWorkspaceSessions?: () => Promise<readonly SessionPickerEntry[]>;
     readonly selectSessionForAttach?: (entries: readonly SessionPickerEntry[]) => Promise<string | undefined>;

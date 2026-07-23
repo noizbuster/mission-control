@@ -4,11 +4,8 @@ import type { CodingActionContext } from './interactive-chat-actions';
 import type { ChatOutput } from './interactive-chat-io';
 import type { SessionNavigationResult } from './interactive-chat-session-navigation';
 import { isSessionNavigationError } from './interactive-chat-session-navigation-store';
-import {
-    applySessionAttachProjection,
-    projectSessionAttachFromEvents,
-} from './session-attach-projection';
-import { loadSessionTranscript } from './session-transcript-reconstruction';
+import { applySessionAttachProjection, projectSessionAttachFromEvents } from './session-attach-projection';
+import { loadSessionTranscriptParts, loadSessionTranscriptPartsFromStore } from './session-transcript-reconstruction';
 
 export function runBranchContinueAction(
     chatOutput: ChatOutput,
@@ -52,8 +49,22 @@ export async function runSessionNavigationAction(
             return actionResult(modelProviderSelection);
         }
         if (result.sessionId !== undefined) {
-            const transcript = await loadSessionTranscript(result.sessionId, coding.observabilityRedactor);
-            coding.undoRedo?.replaceOutputText(transcript);
+            const transcript =
+                result.sessionStore === undefined
+                    ? await loadSessionTranscriptParts(result.sessionId, coding.observabilityRedactor)
+                    : await loadSessionTranscriptPartsFromStore(
+                          result.sessionStore,
+                          result.sessionId,
+                          coding.observabilityRedactor,
+                      );
+            if (coding.replaceSessionTranscript !== undefined) {
+                coding.replaceSessionTranscript(transcript.parts, transcript.outputText);
+            } else {
+                if (!coding.useTui && transcript.outputText.length > 0) {
+                    chatOutput.write(transcript.outputText);
+                }
+                coding.undoRedo?.replaceOutputText(transcript.outputText);
+            }
             const events = await loadAttachEvents(result.sessionId, result.sessionStore ?? coding.sessionStore);
             applySessionAttachProjection({
                 events,

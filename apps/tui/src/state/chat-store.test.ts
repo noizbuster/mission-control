@@ -1403,8 +1403,11 @@ describe('chat-store — status actions', () => {
         const store = createChatStore();
         store.setGenerating(true);
         expect(store.getSnapshot().generating).toBe(true);
+        store.setAgentRetryStatus('Retrying…', 12_000);
+        expect(store.getSnapshot().agentRetryAt).toBe(12_000);
         store.setAgentStatus('Running tool...');
         expect(store.getSnapshot().agentStatusText).toBe('Running tool...');
+        expect(store.getSnapshot().agentRetryAt).toBeUndefined();
         store.clearAgentStatus();
         expect(store.getSnapshot().agentStatusText).toBe('');
     });
