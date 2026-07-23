@@ -1,7 +1,13 @@
 import type { PolicyEffectRule } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import { buildChildPermissions } from '../tools/task/task-tool-routing';
+import { ToolRegistry } from '../tools/tool-registry';
+import { ToolExecutionError } from '../tools/tool-registry-types';
+import { AgentIndex } from './agent-registry';
 import { PRODUCTION_MAX_TASK_DEPTH } from './recursion-policy';
+import { MAIN_AGENT_ID } from './runtime-registry';
+import { type ChildSpawnContext, ConcreteTaskToolRuntime } from './task-tool-runtime';
+import { childAuthorityFingerprint } from './task-tool-runtime-authority';
 import {
     buildRuntimeWithServices,
     makeBackgroundRequest,
@@ -15,11 +21,58 @@ import {
     makePermissionRequest,
     makePermissionTool,
 } from './task-tool-runtime-permissions-test-support';
-import { childAuthorityFingerprint } from './task-tool-runtime-authority';
-import { ConcreteTaskToolRuntime } from './task-tool-runtime';
-import { AgentIndex } from './agent-registry';
-import { ToolRegistry } from '../tools/tool-registry';
-import { MAIN_AGENT_ID } from './runtime-registry';
+
+function buildNonRootDepthRuntime(input: {
+    readonly parentSessionId: string;
+    readonly services: ReturnType<typeof makeTaskRuntimeServices>;
+}): {
+    readonly runtime: ConcreteTaskToolRuntime;
+    readonly contexts: ChildSpawnContext[];
+} {
+    const agentIndex = new AgentIndex();
+    agentIndex.register(makePermissionAgent());
+    const executed = { value: 0 };
+    const parentToolRegistry = new ToolRegistry();
+    parentToolRegistry.register(makePermissionTool('task', ['subagent'], executed));
+    parentToolRegistry.register(makePermissionTool('job', ['subagent'], executed));
+    const contexts: ChildSpawnContext[] = [];
+    return {
+        runtime: new ConcreteTaskToolRuntime({
+            agentIndex,
+            resolveModel: () => ({ providerID: 'test', modelID: 'test-model' }),
+            workspaceRoot: '/tmp/workspace',
+            parentToolRegistry,
+            parentAgent: makePermissionAgent({ name: 'parent-agent', spawns: '*' }),
+            parentSessionId: input.parentSessionId,
+            services: input.services,
+            spawnFn: async (context) => {
+                contexts.push(context);
+                return { sessionId: context.sessionId, status: 'completed', output: 'complete' };
+            },
+        }),
+        contexts,
+    };
+}
+
+async function expectNonRetryableTaskRejection(action: Promise<unknown>): Promise<void> {
+    const error = await action.then(
+        () => undefined,
+        (reason: unknown) => reason,
+    );
+    expect(error).toBeInstanceOf(ToolExecutionError);
+    expect(error).toMatchObject({ error: { code: 'tool_failed', retryable: false } });
+}
+
+async function invokeNestedTask(childToolRegistry: ToolRegistry, toolCallId: string, agent: string): Promise<void> {
+    const task = childToolRegistry.advertise().find((advertisement) => advertisement.name === 'task');
+    if (task === undefined) throw new Error('nested task tool was not registered');
+    await childToolRegistry.invoke({
+        toolCallId,
+        toolName: task.name,
+        advertisedVersion: task.version,
+        argumentsJson: JSON.stringify({ agent, assignment: 'perform nested work', load_skills: [] }),
+    });
+}
 
 describe('ConcreteTaskToolRuntime child authority', () => {
     it('enforces the parent agent spawn allowlist', async () => {
@@ -72,9 +125,7 @@ describe('ConcreteTaskToolRuntime child authority', () => {
         expect(names).toContain('task');
         expect(names).toContain('job');
         expect(childPermissions.at(-1)).toEqual({ action: 'subagent', resource: '**', effect: 'deny' });
-        expect(contexts[0]?.childPermissions.some((r) => r.action === 'subagent' && r.effect === 'deny')).toBe(
-            false,
-        );
+        expect(contexts[0]?.childPermissions.some((r) => r.action === 'subagent' && r.effect === 'deny')).toBe(false);
     });
 
     it('rejects resume when the effective parent tool surface changed', async () => {
@@ -127,6 +178,77 @@ describe('ConcreteTaskToolRuntime child authority', () => {
         expect(names).toContain('task');
         expect(contexts[0]?.childPermissions.some((r) => r.action === 'subagent' && r.effect === 'deny')).toBe(false);
         expect(PRODUCTION_MAX_TASK_DEPTH).toBe(3);
+    });
+
+    it('rejects an unknown non-root parent before spawning', async () => {
+        // Given
+        const services = makeTaskRuntimeServices();
+        const { runtime, contexts } = buildNonRootDepthRuntime({
+            parentSessionId: 'unknown-parent',
+            services,
+        });
+        const request = { ...makePermissionRequest(allowAllChildPermissions), sessionId: 'unknown-child' };
+
+        // When
+        const action = runtime.runChildSession(request);
+
+        // Then
+        await expectNonRetryableTaskRejection(action);
+        expect(contexts).toEqual([]);
+        expect(services.runtimeRegistry.lookup(request.sessionId)).toBeUndefined();
+    });
+
+    it('rejects a registered non-root parent without taskDepth before spawning', async () => {
+        // Given
+        const services = makeTaskRuntimeServices();
+        services.runtimeRegistry.adopt({
+            id: 'incomplete-parent',
+            displayName: 'incomplete parent',
+            kind: 'sub',
+            parentId: MAIN_AGENT_ID,
+            status: 'idle',
+            sessionId: 'incomplete-parent',
+        });
+        const { runtime, contexts } = buildNonRootDepthRuntime({
+            parentSessionId: 'incomplete-parent',
+            services,
+        });
+        const request = { ...makePermissionRequest(allowAllChildPermissions), sessionId: 'incomplete-child' };
+
+        // When
+        const action = runtime.runChildSession(request);
+
+        // Then
+        await expectNonRetryableTaskRejection(action);
+        expect(contexts).toEqual([]);
+        expect(services.runtimeRegistry.lookup(request.sessionId)).toBeUndefined();
+    });
+
+    it('rejects a child depth above PRODUCTION_MAX_TASK_DEPTH before spawning', async () => {
+        // Given
+        const services = makeTaskRuntimeServices();
+        services.runtimeRegistry.adopt({
+            id: 'leaf-parent',
+            displayName: 'leaf parent',
+            kind: 'sub',
+            parentId: MAIN_AGENT_ID,
+            taskDepth: PRODUCTION_MAX_TASK_DEPTH,
+            status: 'idle',
+            sessionId: 'leaf-parent',
+        });
+        const { runtime, contexts } = buildNonRootDepthRuntime({
+            parentSessionId: 'leaf-parent',
+            services,
+        });
+        const request = { ...makePermissionRequest(allowAllChildPermissions), sessionId: 'over-depth-child' };
+
+        // When
+        const action = runtime.runChildSession(request);
+
+        // Then
+        await expectNonRetryableTaskRejection(action);
+        expect(contexts).toEqual([]);
+        expect(services.runtimeRegistry.lookup(request.sessionId)).toBeUndefined();
     });
 
     it('childAuthorityFingerprint includes taskDepth and PRODUCTION_MAX_TASK_DEPTH', () => {
@@ -215,24 +337,28 @@ describe('ConcreteTaskToolRuntime child authority', () => {
         expect(services.runtimeRegistry.lookup(request.sessionId)?.taskDepth).toBe(3);
     });
 
-    it('nested runtime parentSessionId and parentAgent are the intermediate child', async () => {
+    it('does not inherit the CLI root marker into nested runtimes', async () => {
         const services = makeTaskRuntimeServices();
         const agentIndex = new AgentIndex();
         agentIndex.register(makePermissionAgent({ name: 'mid-agent', spawns: '*' }));
         agentIndex.register(makePermissionAgent({ name: 'leaf-agent', spawns: '*' }));
+        agentIndex.register(makePermissionAgent({ name: 'terminal-agent', spawns: '*' }));
 
         const parentToolRegistry = new ToolRegistry();
         parentToolRegistry.register(makePermissionTool('repo.read', ['repo.read'], { value: 0 }));
         parentToolRegistry.register(makePermissionTool('task', ['subagent'], { value: 0 }));
 
         const spawnChain: { sessionId: string; hasTask: boolean; agentName: string }[] = [];
+        let midChildToolRegistry: ToolRegistry | undefined;
+        let leafChildToolRegistry: ToolRegistry | undefined;
         const rootRuntime = new ConcreteTaskToolRuntime({
             agentIndex,
             resolveModel: () => ({ providerID: 'test', modelID: 'model' }),
             workspaceRoot: '/tmp/workspace',
             parentToolRegistry,
             parentAgent: makePermissionAgent({ name: 'root-agent', spawns: '*' }),
-            parentSessionId: MAIN_AGENT_ID,
+            parentSessionId: 'durable-cli-root',
+            isCliRootParent: true,
             services,
             spawnFn: async (context) => {
                 spawnChain.push({
@@ -240,6 +366,8 @@ describe('ConcreteTaskToolRuntime child authority', () => {
                     hasTask: context.childToolRegistry.advertise().some((t) => t.name === 'task'),
                     agentName: context.agent.name,
                 });
+                if (context.agent.name === 'mid-agent') midChildToolRegistry = context.childToolRegistry;
+                if (context.agent.name === 'leaf-agent') leafChildToolRegistry = context.childToolRegistry;
                 return { sessionId: context.sessionId, status: 'completed', output: 'done' };
             },
         });
@@ -255,46 +383,24 @@ describe('ConcreteTaskToolRuntime child authority', () => {
         expect(spawnChain[0]?.agentName).toBe('mid-agent');
         expect(spawnChain[0]?.hasTask).toBe(true);
         expect(services.runtimeRegistry.lookup('mid-session')?.taskDepth).toBe(1);
-        expect(services.runtimeRegistry.lookup('mid-session')?.parentId).toBe(MAIN_AGENT_ID);
+        expect(services.runtimeRegistry.lookup('mid-session')?.parentId).toBe('durable-cli-root');
 
-        const midRef = services.runtimeRegistry.lookup('mid-session');
-        expect(midRef).toBeDefined();
-        services.runtimeRegistry.update('mid-session', { status: 'idle' });
-
-        const midSurface = spawnChain[0];
-        expect(midSurface?.hasTask).toBe(true);
-
-        const midParentRegistry = new ToolRegistry();
-        midParentRegistry.register(makePermissionTool('repo.read', ['repo.read'], { value: 0 }));
-        const midRuntime = new ConcreteTaskToolRuntime({
-            agentIndex,
-            resolveModel: () => ({ providerID: 'test', modelID: 'model' }),
-            workspaceRoot: '/tmp/workspace',
-            parentToolRegistry: midParentRegistry,
-            parentAgent: makePermissionAgent({ name: 'mid-agent', spawns: '*' }),
-            parentSessionId: 'mid-session',
-            services,
-            spawnFn: async (context) => {
-                spawnChain.push({
-                    sessionId: context.sessionId,
-                    hasTask: context.childToolRegistry.advertise().some((t) => t.name === 'task'),
-                    agentName: context.agent.name,
-                });
-                return { sessionId: context.sessionId, status: 'completed', output: 'leaf' };
-            },
-        });
-
-        await midRuntime.runChildSession({
-            sessionId: 'leaf-session',
-            prompt: 'leaf work',
-            loadSkills: [],
-            childPermissions: allowAllChildPermissions,
-            subagentType: 'leaf-agent',
-        });
+        if (midChildToolRegistry === undefined) throw new Error('mid child tool registry was not captured');
+        await invokeNestedTask(midChildToolRegistry, 'mid-task', 'leaf-agent');
+        if (leafChildToolRegistry === undefined) throw new Error('leaf child tool registry was not captured');
+        await invokeNestedTask(leafChildToolRegistry, 'leaf-task', 'terminal-agent');
 
         expect(spawnChain[1]?.agentName).toBe('leaf-agent');
         expect(spawnChain[1]?.hasTask).toBe(true);
-        expect(services.runtimeRegistry.lookup('leaf-session')?.taskDepth).toBe(2);
-        expect(services.runtimeRegistry.lookup('leaf-session')?.parentId).toBe('mid-session');
+        const leafSessionId = spawnChain[1]?.sessionId;
+        if (leafSessionId === undefined) throw new Error('leaf child session was not captured');
+        expect(services.runtimeRegistry.lookup(leafSessionId)?.taskDepth).toBe(2);
+        expect(services.runtimeRegistry.lookup(leafSessionId)?.parentId).toBe('mid-session');
+        expect(spawnChain[2]?.agentName).toBe('terminal-agent');
+        expect(spawnChain[2]?.hasTask).toBe(false);
+        const terminalSessionId = spawnChain[2]?.sessionId;
+        if (terminalSessionId === undefined) throw new Error('terminal child session was not captured');
+        expect(services.runtimeRegistry.lookup(terminalSessionId)?.taskDepth).toBe(3);
+        expect(services.runtimeRegistry.lookup(terminalSessionId)?.parentId).toBe(leafSessionId);
     });
 });

@@ -10,6 +10,7 @@ import type {
 import { createFullParityTaskToolRegistration } from '../tools/task/task-tool';
 import { withNestSubagentPermission } from '../tools/task/task-tool-routing';
 import { ToolRegistry } from '../tools/tool-registry';
+import { ToolExecutionError } from '../tools/tool-registry-types';
 import type { AgentIndex } from './agent-registry';
 import { canSpawnAtDepth, PRODUCTION_MAX_TASK_DEPTH } from './recursion-policy';
 import { getRuntimeRegistry, MAIN_AGENT_ID, type RuntimeAgentRegistry } from './runtime-registry';
@@ -34,7 +35,6 @@ import type { TaskToolSubagentMirror } from './task-tool-runtime-types';
 import { randomBytes } from 'node:crypto';
 
 export { PRODUCTION_MAX_TASK_DEPTH } from './recursion-policy';
-
 export type {
     ChildSpawnContext,
     ConcreteTaskToolRuntimeOptions,
@@ -65,6 +65,7 @@ export class ConcreteTaskToolRuntime implements TaskToolRuntime {
     private readonly services: TaskToolRuntimeServices | undefined;
     private readonly hostCallbacks: ChildHostCallbacks | undefined;
     private readonly parentSessionId: string;
+    private readonly isCliRootParent: true | undefined;
 
     constructor(options: ConcreteTaskToolRuntimeOptions) {
         this.agentIndex = options.agentIndex;
@@ -76,6 +77,7 @@ export class ConcreteTaskToolRuntime implements TaskToolRuntime {
         this.services = options.services;
         this.hostCallbacks = options.hostCallbacks;
         this.parentSessionId = options.parentSessionId ?? MAIN_AGENT_ID;
+        this.isCliRootParent = options.isCliRootParent;
     }
 
     async runChildSession(request: ChildSpawnRequest): Promise<ChildSpawnResult> {
@@ -254,12 +256,23 @@ export class ConcreteTaskToolRuntime implements TaskToolRuntime {
     }
 
     private resolveParentDepth(): number {
-        if (this.parentSessionId === MAIN_AGENT_ID) return 0;
-        const ref = this.runtimeRegistry().lookup(this.parentSessionId);
-        if (ref === undefined) {
-            return PRODUCTION_MAX_TASK_DEPTH;
+        if (this.parentSessionId === MAIN_AGENT_ID || this.isCliRootParent) return 0;
+        const taskDepth = this.runtimeRegistry().lookup(this.parentSessionId)?.taskDepth;
+        if (taskDepth === undefined) {
+            throw new ToolExecutionError({
+                code: 'tool_failed',
+                message: `cannot spawn child: parent ${this.parentSessionId} has no verified task depth`,
+                retryable: false,
+            });
         }
-        return ref.taskDepth ?? 0;
+        if (taskDepth >= PRODUCTION_MAX_TASK_DEPTH) {
+            throw new ToolExecutionError({
+                code: 'tool_failed',
+                message: `cannot spawn child: parent ${this.parentSessionId} reached the maximum task depth`,
+                retryable: false,
+            });
+        }
+        return taskDepth;
     }
 
     private assertSpawnAllowed(request: ChildSpawnRequest): void {

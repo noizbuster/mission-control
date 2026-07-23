@@ -48,6 +48,7 @@ export type ConcreteTaskToolRuntimeOptions = {
     readonly spawnFn?: SpawnFn;
     readonly services?: TaskToolRuntimeServices;
     readonly parentSessionId?: string;
+    readonly isCliRootParent?: true;
     readonly resolveSdkModel?: SdkModelResolver;
     readonly summaryLimit?: number;
     readonly hostCallbacks?: ChildHostCallbacks;

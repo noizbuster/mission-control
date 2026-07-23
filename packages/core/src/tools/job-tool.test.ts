@@ -5,7 +5,9 @@ import { z } from 'zod';
 import { AgentIndex } from '../agents/agent-registry';
 import type { JobExecuteFn } from '../agents/async-job-manager';
 import { AsyncJobManager } from '../agents/async-job-manager';
+import { MAIN_AGENT_ID } from '../agents/runtime-registry';
 import { ConcreteTaskToolRuntime } from '../agents/task-tool-runtime';
+import { makeTaskRuntimeServices } from '../agents/task-tool-runtime-background-test-support';
 import { createJobToolRegistration, JOB_TOOL_NAME, jobInputSchema } from './job-tool';
 import type { ChildSpawnRequest } from './task/task-tool';
 import { ToolRegistry } from './tool-registry';
@@ -286,12 +288,22 @@ describe('job tool — child surface exclusion', () => {
         };
         const agentIndex = new AgentIndex();
         agentIndex.register(child);
+        const services = makeTaskRuntimeServices();
+        services.runtimeRegistry.adopt({
+            id: 'sess-terminal-parent',
+            displayName: 'terminal parent',
+            kind: 'sub',
+            parentId: MAIN_AGENT_ID,
+            taskDepth: 2,
+            status: 'idle',
+            sessionId: 'sess-terminal-parent',
+        });
 
         const parentRegistry = new ToolRegistry();
         parentRegistry.register(makeTool('read', ['read']));
         parentRegistry.register(makeTool('task', ['subagent']));
         // Register the real job tool so the child-surface filter is exercised against it.
-        parentRegistry.register(createJobToolRegistration({ jobManager: new AsyncJobManager() }));
+        parentRegistry.register(createJobToolRegistration({ jobManager: services.jobManager }));
 
         let capturedAds: readonly ToolAdvertisement[] = [];
         const runtime = new ConcreteTaskToolRuntime({
@@ -301,6 +313,7 @@ describe('job tool — child surface exclusion', () => {
             parentToolRegistry: parentRegistry,
             parentAgent: parent,
             parentSessionId: 'sess-terminal-parent',
+            services,
             spawnFn: async (context) => {
                 capturedAds = context.childToolRegistry.advertise();
                 return { sessionId: context.sessionId, status: 'completed', output: 'ok' };
@@ -317,6 +330,7 @@ describe('job tool — child surface exclusion', () => {
         await runtime.runChildSession(request);
 
         const names = capturedAds.map((a) => a.name);
+        expect(services.runtimeRegistry.lookup(request.sessionId)?.taskDepth).toBe(3);
         expect(names).toContain('read');
         expect(names).toContain('yield');
         expect(names).not.toContain('task');
