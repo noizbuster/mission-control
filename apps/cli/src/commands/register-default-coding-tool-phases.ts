@@ -126,6 +126,7 @@ export async function registerDefaultTaskTool(
         resolveSdkModel,
         model,
         parentToolRegistry: registry,
+        isCliRootParent: true,
         agentModelOverrides,
         ...(roleConfig !== undefined ? { roleConfig } : {}),
         ...(options.sessionId !== undefined ? { parentSessionId: options.sessionId } : {}),

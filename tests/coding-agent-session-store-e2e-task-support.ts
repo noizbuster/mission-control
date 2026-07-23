@@ -1,4 +1,3 @@
-import type { AgentDefinition } from '@mission-control/protocol';
 import {
     AgentIndex,
     AgentLifecycleManager,
@@ -9,6 +8,7 @@ import {
     type TaskToolRuntimeServices,
     ToolRegistry,
 } from '@mission-control/core';
+import type { AgentDefinition } from '@mission-control/protocol';
 import type { SqlAgentJobMirror } from '../packages/core/src/agents/agent-job-sql-mirror';
 
 export type ForegroundChildWait = {
@@ -63,6 +63,7 @@ function buildTaskRuntime(
         },
         services,
         parentSessionId,
+        isCliRootParent: true,
     });
 }
 
