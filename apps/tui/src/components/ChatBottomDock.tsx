@@ -41,6 +41,7 @@ export type ChatBottomDockSlice = {
     readonly variantID: string | undefined;
     readonly contextTokensUsed: number | undefined;
     readonly contextTokensMax: number | undefined;
+    readonly contextCacheUsage: ChatStoreState['contextCacheUsage'];
     readonly sessionId: string;
     readonly approvalLevel: ChatStoreState['approvalLevel'];
     readonly separatorState: SeparatorState;
@@ -90,6 +91,7 @@ export function selectChatBottomDockSlice(snapshot: ChatStoreState): ChatBottomD
         variantID: snapshot.currentModelVariantID,
         contextTokensUsed: snapshot.contextTokensUsed,
         contextTokensMax: snapshot.contextTokensMax,
+        contextCacheUsage: snapshot.contextCacheUsage,
         sessionId: snapshot.sessionId,
         approvalLevel: snapshot.approvalLevel,
         separatorState: resolveSeparatorState({
@@ -119,6 +121,7 @@ export function chatBottomDockSliceEqual(left: ChatBottomDockSlice, right: ChatB
         left.variantID === right.variantID &&
         left.contextTokensUsed === right.contextTokensUsed &&
         left.contextTokensMax === right.contextTokensMax &&
+        left.contextCacheUsage === right.contextCacheUsage &&
         left.sessionId === right.sessionId &&
         left.approvalLevel === right.approvalLevel &&
         left.separatorState === right.separatorState &&
@@ -212,6 +215,12 @@ export function buildTopStatusBarProps(input: StatusPropsInput): StatusBarProps 
             : {}),
         ...(input.dockSlice.contextTokensMax !== undefined
             ? { contextTokensMax: input.dockSlice.contextTokensMax }
+            : {}),
+        ...(input.dockSlice.contextCacheUsage !== undefined
+            ? {
+                  contextCacheInputTokens: input.dockSlice.contextCacheUsage.inputTokens,
+                  contextCacheReadTokens: input.dockSlice.contextCacheUsage.cacheReadTokens,
+              }
             : {}),
     };
 }

@@ -12,6 +12,8 @@ describe('opentui renderer mount (OpenTUI Solid)', () => {
         expect(source).toContain('createCliRenderer');
         expect(source).toContain('await render(app, renderer)');
         expect(source).toContain('attachResizeFullPaint');
+        expect(source).toContain('useMouse: true');
+        expect(source).toContain('enableMouseMovement: true');
         expect(source.indexOf('await render(app, renderer)')).toBeLessThan(
             source.indexOf('attachResizeFullPaint(renderer)'),
         );

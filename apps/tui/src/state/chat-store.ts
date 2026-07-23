@@ -170,6 +170,12 @@ export type SessionPickerView = {
     readonly searchQuery: string;
 };
 
+/** Cumulative cache accounting for graph LLM turns in the attached session. */
+export type ContextCacheUsage = {
+    readonly inputTokens: number;
+    readonly cacheReadTokens: number;
+};
+
 export type ChatStoreState = {
     readonly outputText: string;
     readonly transcriptParts: readonly TranscriptPart[];
@@ -239,6 +245,7 @@ export type ChatStoreState = {
     readonly missionPanel: MissionPanelState;
     readonly contextTokensUsed: number | undefined;
     readonly contextTokensMax: number | undefined;
+    readonly contextCacheUsage: ContextCacheUsage | undefined;
     readonly historyPickerView: HistoryPickerSnapshot;
     readonly transientNotice: { readonly id: number; readonly message: string } | null;
     readonly stickyNotice: string | null;
@@ -459,6 +466,7 @@ export class ChatStore {
             },
             contextTokensUsed: undefined,
             contextTokensMax: undefined,
+            contextCacheUsage: undefined,
             transientNotice: null,
             stickyNotice: null,
         };
@@ -803,6 +811,11 @@ export class ChatStore {
         this.publish();
     }
 
+    setContextCacheUsage(usage: ContextCacheUsage | undefined): void {
+        this.state.contextCacheUsage = usage;
+        this.publish();
+    }
+
     enqueueEvent(event: ChatInputEvent): void {
         const waiter = this.eventWaiters.shift();
         if (waiter !== undefined) {
@@ -1078,9 +1091,10 @@ export class ChatStore {
         if (!this.state.historyPicker.open) {
             return;
         }
+        const visualDirection = direction === 'up' ? 'down' : 'up';
         const next = reduceHistoryPickerNavigation(
             this.state.historyPicker,
-            direction,
+            visualDirection,
             this.state.historyEntries.length,
         );
         if (next === this.state.historyPicker) {

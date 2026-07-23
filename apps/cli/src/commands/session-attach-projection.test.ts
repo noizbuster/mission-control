@@ -1,13 +1,13 @@
 import type { AgentEvent, GraphCheckpoint } from '@mission-control/protocol';
 import { createAbgOverlayController, createAbgOverlayStore } from '@mission-control/tui/state';
 import { describe, expect, it, vi } from 'vitest';
+import type { ChatOutput } from './interactive-chat-io';
 import {
     applySessionAttachProjection,
     clearStickyAttachBanner,
     projectSessionAttachFromEvents,
     RESUMABLE_ATTACH_BANNER,
 } from './session-attach-projection';
-import type { ChatOutput } from './interactive-chat-io';
 
 const TIMESTAMP = '2026-07-20T12:00:00.000Z';
 const SESSION_ID = 'session_attach';
@@ -165,6 +165,90 @@ describe('applySessionAttachProjection', () => {
         expect(resumeTurn).not.toHaveBeenCalled();
     });
 
+    it('restores the latest persisted context usage when attaching', () => {
+        // Given: an attached graph emitted a completed LLM turn with input usage.
+        const events: AgentEvent[] = [
+            baseEvent('log', {
+                abg: {
+                    graphId: 'graph-main',
+                    nodeId: 'llm-actor',
+                    signalType: 'emit',
+                    emit: {
+                        type: 'llm.turn.completed',
+                        payload: { text: 'done', usage: { inputTokens: 4200, outputTokens: 80 } },
+                    },
+                },
+            }),
+        ];
+        const onUsage = vi.fn();
+        const projection = projectSessionAttachFromEvents(events);
+
+        // When: the cold session projection is attached.
+        applySessionAttachProjection({
+            events,
+            projection,
+            abgOverlayController: undefined,
+            chatOutput: createChatOutput(),
+            onUsage,
+        });
+
+        // Then: the status-bar input usage is restored from the durable event.
+        expect(projection.contextTokensUsed).toBe(4200);
+        expect(onUsage).toHaveBeenCalledExactlyOnceWith(4200);
+    });
+
+    it('restores cumulative cache-read usage for the attached session', () => {
+        // Given: two durable graph turns with cache accounting.
+        const events: AgentEvent[] = [
+            baseEvent('log', {
+                abg: {
+                    graphId: 'graph-main',
+                    nodeId: 'llm-actor',
+                    signalType: 'emit',
+                    emit: {
+                        type: 'llm.turn.completed',
+                        payload: {
+                            text: 'first',
+                            usage: { inputTokens: { total: 4000, noCache: 1000, cacheRead: 3000, cacheWrite: 0 } },
+                        },
+                    },
+                },
+            }),
+            baseEvent('log', {
+                abg: {
+                    graphId: 'graph-main',
+                    nodeId: 'llm-actor',
+                    signalType: 'emit',
+                    emit: {
+                        type: 'llm.turn.completed',
+                        payload: {
+                            text: 'second',
+                            usage: { inputTokens: { total: 8000, noCache: 3000, cacheRead: 5000, cacheWrite: 0 } },
+                        },
+                    },
+                },
+            }),
+        ];
+        const onContextCacheUsage = vi.fn();
+        const projection = projectSessionAttachFromEvents(events);
+
+        // When
+        applySessionAttachProjection({
+            events,
+            projection,
+            abgOverlayController: undefined,
+            chatOutput: createChatOutput(),
+            onContextCacheUsage,
+        });
+
+        // Then: cache ratio input is session-cumulative, not just the latest turn.
+        expect(projection.contextCacheUsage).toEqual({ inputTokens: 12000, cacheReadTokens: 8000 });
+        expect(onContextCacheUsage).toHaveBeenCalledExactlyOnceWith({
+            inputTokens: 12000,
+            cacheReadTokens: 8000,
+        });
+    });
+
     it('clears sticky banner when attach has no resumable run', () => {
         // Given: completed events and a previously sticky notice.
         const events: AgentEvent[] = [
@@ -174,6 +258,7 @@ describe('applySessionAttachProjection', () => {
         const chatOutput = createChatOutput();
         chatOutput.setStickyNotice?.(RESUMABLE_ATTACH_BANNER.approval);
         const projection = projectSessionAttachFromEvents(events);
+        const onUsage = vi.fn();
 
         // When: attach projection is applied for a non-resumable session.
         applySessionAttachProjection({
@@ -181,10 +266,12 @@ describe('applySessionAttachProjection', () => {
             projection,
             abgOverlayController: undefined,
             chatOutput,
+            onUsage,
         });
 
         // Then: sticky banner is cleared.
         expect(chatOutput.sticky.value).toBeNull();
+        expect(onUsage).toHaveBeenCalledExactlyOnceWith(undefined);
     });
 
     it('clearStickyAttachBanner clears the sticky notice channel', () => {

@@ -712,6 +712,39 @@ export function extractContextTokensUsedFromAbgEmit(emit: AbgEmitMetadata): numb
 }
 
 /**
+ * Cache-read usage from a completed graph LLM turn. Flat provider completion
+ * events deliberately expose only normalized totals, so this reads the durable
+ * `llm.turn.completed` payload that retains AI SDK cache accounting.
+ */
+export type ContextCacheUsage = {
+    readonly inputTokens: number;
+    readonly cacheReadTokens: number;
+};
+
+export function extractContextCacheUsage(event: AgentEvent): ContextCacheUsage | undefined {
+    const emit = event.abg?.emit;
+    return emit === undefined ? undefined : extractContextCacheUsageFromAbgEmit(emit);
+}
+
+export function extractContextCacheUsageFromAbgEmit(emit: AbgEmitMetadata): ContextCacheUsage | undefined {
+    if (emit.type !== 'llm.turn.completed' || !isRecord(emit.payload)) {
+        return undefined;
+    }
+    const usage = emit.payload['usage'];
+    const inputTokens = readUsageInputTokens(usage);
+    const cacheReadTokens = readUsageCacheReadTokens(usage);
+    if (
+        inputTokens === undefined ||
+        inputTokens === 0 ||
+        cacheReadTokens === undefined ||
+        cacheReadTokens > inputTokens
+    ) {
+        return undefined;
+    }
+    return { inputTokens, cacheReadTokens };
+}
+
+/**
  * Defensive read of prompt/context tokens from either the flat AI-SDK usage shape
  * (`inputTokens: number`) or the LanguageModelV3 nested shape
  * (`inputTokens: { total: number }`).
@@ -735,6 +768,23 @@ function readUsageInputTokens(usage: unknown): number | undefined {
         return Math.trunc(totalTokens);
     }
     return undefined;
+}
+
+function readUsageCacheReadTokens(usage: unknown): number | undefined {
+    if (!isRecord(usage)) {
+        return undefined;
+    }
+    const inputTokens = usage['inputTokens'];
+    const inputTokenDetails = usage['inputTokenDetails'];
+    const cacheRead = isRecord(inputTokens)
+        ? inputTokens['cacheRead']
+        : isRecord(inputTokenDetails)
+          ? inputTokenDetails['cacheReadTokens']
+          : usage['cachedInputTokens'];
+    if (typeof cacheRead !== 'number' || !Number.isFinite(cacheRead) || cacheRead < 0) {
+        return undefined;
+    }
+    return Math.trunc(cacheRead);
 }
 
 type BudgetPayload = {

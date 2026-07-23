@@ -180,11 +180,13 @@ export async function flushGraphTurnEvents(
 }
 
 /**
- * Events retained when flushing after abort. Lifecycle/run/approval/tool boundaries stay; pure
- * `log` rows (including residual streaming noise) are dropped so interrupt can complete promptly.
+ * Events retained when flushing after abort. Keep lifecycle boundaries plus
+ * canonical ABG emits: completed turns, proposed/settled tools, failures, and
+ * blackboard/context state are bounded summaries needed by resume. Raw `log`
+ * rows without `abg.emit` are observational noise and remain droppable.
  */
 export function isInterruptFlushEvent(event: AgentEvent): boolean {
-    return event.type !== 'log';
+    return event.type !== 'log' || event.abg?.emit !== undefined;
 }
 
 /**

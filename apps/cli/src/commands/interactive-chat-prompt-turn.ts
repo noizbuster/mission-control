@@ -4,6 +4,7 @@ import {
     type AskUserQuestionRequest,
     type CommandExecutionRequest,
     type CommandExecutionResult,
+    type ContextCacheUsage,
     type LocalSessionEventStore,
     type ObservabilityRedactor,
     type PermissionSession,
@@ -48,6 +49,8 @@ export type PromptTurnContext = {
     readonly graph?: AbgGraphSpec;
     readonly permissionSession?: PermissionSession;
     readonly onUsage?: (inputTokens: number | undefined) => void;
+    readonly onContextCacheUsage?: (usage: ContextCacheUsage) => void;
+    readonly onSessionCacheUsage?: (usage: ContextCacheUsage | undefined) => void;
     readonly authStore?: ProviderAuthStore;
     readonly workflowRegistry?: WorkflowRegistry;
     readonly onWorkflowStarted?: WorkflowStartedCallback;
@@ -161,6 +164,7 @@ export async function startPromptTurn(
         ...(coding.graph !== undefined ? { graph: coding.graph } : {}),
         ...(coding.permissionSession !== undefined ? { permissionSession: coding.permissionSession } : {}),
         ...(coding.onUsage !== undefined ? { onUsage: coding.onUsage } : {}),
+        ...(coding.onContextCacheUsage !== undefined ? { onContextCacheUsage: coding.onContextCacheUsage } : {}),
         ...(coding.authStore !== undefined ? { authStore: coding.authStore } : {}),
         ...(coding.workflowRegistry !== undefined ? { workflowRegistry: coding.workflowRegistry } : {}),
         ...(coding.onWorkflowStarted !== undefined ? { onWorkflowStarted: coding.onWorkflowStarted } : {}),

@@ -5,7 +5,13 @@ import type { AbgOverlayController } from './abg-overlay-controller';
 import type { ApprovalLevel } from './approval-level';
 import type { ChatAppActions } from './chat-app-actions';
 import type { ChatInputEvent } from './chat-input-event';
-import type { DashboardAgentEntry, HistoryPickerEntry, MissionPanelRow, SessionPickerEntry } from './chat-store';
+import type {
+    ContextCacheUsage,
+    DashboardAgentEntry,
+    HistoryPickerEntry,
+    MissionPanelRow,
+    SessionPickerEntry,
+} from './chat-store';
 import type { ModelChoice } from './interactive-chat-model';
 import type { MissionControlServicesLike } from './mission-services-types';
 import type { ModelsOverlayRoleRow } from './models-overlay-state';
@@ -39,6 +45,7 @@ export type ChatTuiHandle = {
     readonly setSessionDisplayName: (name: string | undefined) => void;
     readonly setContextTokensUsed: (used: number | undefined) => void;
     readonly setContextTokensMax: (max: number | undefined) => void;
+    readonly setContextCacheUsage: (usage: ContextCacheUsage | undefined) => void;
     readonly setModelCycleChoices: (choices: readonly ModelChoice[]) => void;
     /** Push a selection from any path; syncs the store's currentModelSelection and modelCycleIndex. */
     readonly setModelSelection: (selection: ModelProviderSelection) => void;

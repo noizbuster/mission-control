@@ -42,6 +42,7 @@ describe('projectAbgSignalToEvent — emit payload preservation', () => {
             ['tool.completed', { toolCallId: 'call_1', toolName: 'file.patch' }],
             ['tool.failed', { toolCallId: 'call_1', toolName: 'file.patch' }],
             ['llm.error', { error: 'boom' }],
+            ['context.packed', { estimatedTokens: 4200, cutPointIndex: 3, summarizedMessageCount: 2 }],
         ] as const;
 
         for (const [type, payload] of cases) {

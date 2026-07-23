@@ -1,5 +1,8 @@
 import {
+    type ContextCacheUsage,
     deriveAbgGraphSnapshot,
+    extractContextCacheUsage,
+    extractContextTokensUsed,
     findResumableRun,
     latestGraphIdFromEvents,
     mergeGraphSnapshot,
@@ -19,6 +22,8 @@ export type SessionAttachProjection = {
     readonly resumable: ResumableRunSnapshot | undefined;
     readonly stickyBannerMessage: string | undefined;
     readonly overlayRunState: RunState | undefined;
+    readonly contextTokensUsed: number | undefined;
+    readonly contextCacheUsage: ContextCacheUsage | undefined;
 };
 
 export function projectSessionAttachFromEvents(events: readonly AgentEvent[]): SessionAttachProjection {
@@ -29,6 +34,8 @@ export function projectSessionAttachFromEvents(events: readonly AgentEvent[]): S
         resumable,
         stickyBannerMessage: stickyBannerForResumable(resumable),
         overlayRunState: overlayRunStateForResumable(resumable),
+        contextTokensUsed: latestContextTokensUsed(events),
+        contextCacheUsage: sessionContextCacheUsage(events),
     };
 }
 
@@ -37,9 +44,13 @@ export function applySessionAttachProjection(input: {
     readonly projection: SessionAttachProjection;
     readonly abgOverlayController: AbgOverlayController | undefined;
     readonly chatOutput: ChatOutput;
+    readonly onUsage?: (inputTokens: number | undefined) => void;
+    readonly onContextCacheUsage?: (usage: ContextCacheUsage | undefined) => void;
 }): void {
     projectAbgOverlayOnAttach(input.abgOverlayController, input.events, input.projection);
     setStickyAttachBanner(input.chatOutput, input.projection.stickyBannerMessage);
+    input.onUsage?.(input.projection.contextTokensUsed);
+    input.onContextCacheUsage?.(input.projection.contextCacheUsage);
 }
 
 export function clearStickyAttachBanner(chatOutput: ChatOutput): void {
@@ -49,6 +60,33 @@ export function clearStickyAttachBanner(chatOutput: ChatOutput): void {
     }
 }
 
+function latestContextTokensUsed(events: readonly AgentEvent[]): number | undefined {
+    let latest: number | undefined;
+    for (const event of events) {
+        const inputTokens = extractContextTokensUsed(event);
+        if (inputTokens !== undefined) {
+            latest = inputTokens;
+        }
+    }
+    return latest;
+}
+
+function sessionContextCacheUsage(events: readonly AgentEvent[]): ContextCacheUsage | undefined {
+    let inputTokens = 0;
+    let cacheReadTokens = 0;
+    let hasUsage = false;
+    for (const event of events) {
+        const usage = extractContextCacheUsage(event);
+        if (usage === undefined) continue;
+        inputTokens += usage.inputTokens;
+        cacheReadTokens += usage.cacheReadTokens;
+        hasUsage = true;
+    }
+    if (!hasUsage || !Number.isSafeInteger(inputTokens) || !Number.isSafeInteger(cacheReadTokens)) {
+        return undefined;
+    }
+    return { inputTokens, cacheReadTokens };
+}
 function stickyBannerForResumable(resumable: ResumableRunSnapshot | undefined): string | undefined {
     if (resumable === undefined) return undefined;
     switch (resumable.kind) {

@@ -82,6 +82,7 @@ const CHAT_TUI_HANDLE_METHODS = [
     'setSessionDisplayName',
     'setContextTokensUsed',
     'setContextTokensMax',
+    'setContextCacheUsage',
     'setModelCycleChoices',
     'setModelSelection',
     'setGenerating',

@@ -5,6 +5,7 @@ import {
     createChildAskUserParentAnswerer,
     createCodingAgentNodeRegistry,
     createGraphTurnRunner,
+    extractContextCacheUsageFromAbgEmit,
     extractContextTokensUsed,
     extractContextTokensUsedFromAbgEmit,
     type ObservabilityRedactor,
@@ -110,14 +111,19 @@ export async function createInteractiveRunOwner(
         childHostCallbacks.observabilityRedactor = redactor;
         const spec = options.graph ?? buildCodingAgentGraphForSelection(options.modelProviderSelection);
         const onUsage = options.onUsage;
+        const onContextCacheUsage = options.onContextCacheUsage;
         const usageObserver: InteractiveGraphSignalObserver | undefined =
-            onUsage === undefined
+            onUsage === undefined && onContextCacheUsage === undefined
                 ? undefined
                 : (signal) => {
                       if (signal.type !== 'emit') return;
                       const contextTokensUsed = extractContextTokensUsedFromAbgEmit(signal.event);
                       if (contextTokensUsed !== undefined) {
-                          onUsage(contextTokensUsed);
+                          onUsage?.(contextTokensUsed);
+                      }
+                      const contextCacheUsage = extractContextCacheUsageFromAbgEmit(signal.event);
+                      if (contextCacheUsage !== undefined) {
+                          onContextCacheUsage?.(contextCacheUsage);
                       }
                   };
         const overlayObserver: InteractiveGraphSignalObserver | undefined =

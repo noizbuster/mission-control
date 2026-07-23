@@ -1,11 +1,14 @@
-import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
+import type { ModelProviderSelection } from '@mission-control/protocol';
 import { actionResult, type ChatActionResult } from './interactive-chat-action-result';
 import type { CodingActionContext } from './interactive-chat-actions';
 import type { ChatOutput } from './interactive-chat-io';
 import type { SessionNavigationResult } from './interactive-chat-session-navigation';
 import { isSessionNavigationError } from './interactive-chat-session-navigation-store';
 import { applySessionAttachProjection, projectSessionAttachFromEvents } from './session-attach-projection';
-import { loadSessionTranscriptParts, loadSessionTranscriptPartsFromStore } from './session-transcript-reconstruction';
+import {
+    loadSessionTranscriptParts,
+    loadSessionTranscriptPartsAndEventsFromStore,
+} from './session-transcript-reconstruction';
 
 export function runBranchContinueAction(
     chatOutput: ChatOutput,
@@ -49,14 +52,17 @@ export async function runSessionNavigationAction(
             return actionResult(modelProviderSelection);
         }
         if (result.sessionId !== undefined) {
-            const transcript =
-                result.sessionStore === undefined
-                    ? await loadSessionTranscriptParts(result.sessionId, coding.observabilityRedactor)
-                    : await loadSessionTranscriptPartsFromStore(
-                          result.sessionStore,
+            const attachedStore = result.sessionStore ?? coding.sessionStore;
+            const attached =
+                attachedStore === undefined
+                    ? undefined
+                    : await loadSessionTranscriptPartsAndEventsFromStore(
+                          attachedStore,
                           result.sessionId,
                           coding.observabilityRedactor,
                       );
+            const transcript =
+                attached ?? (await loadSessionTranscriptParts(result.sessionId, coding.observabilityRedactor));
             if (coding.replaceSessionTranscript !== undefined) {
                 coding.replaceSessionTranscript(transcript.parts, transcript.outputText);
             } else {
@@ -65,12 +71,16 @@ export async function runSessionNavigationAction(
                 }
                 coding.undoRedo?.replaceOutputText(transcript.outputText);
             }
-            const events = await loadAttachEvents(result.sessionId, result.sessionStore ?? coding.sessionStore);
+            const events = attached?.events ?? [];
             applySessionAttachProjection({
                 events,
                 projection: projectSessionAttachFromEvents(events),
                 abgOverlayController: coding.abgOverlayController,
                 chatOutput,
+                ...(coding.onUsage !== undefined ? { onUsage: coding.onUsage } : {}),
+                ...(coding.onSessionCacheUsage !== undefined
+                    ? { onContextCacheUsage: coding.onSessionCacheUsage }
+                    : {}),
             });
         }
         chatOutput.write(result.message);
@@ -85,14 +95,6 @@ export async function runSessionNavigationAction(
         chatOutput.write(`${error.message}\n`);
         return actionResult(modelProviderSelection);
     }
-}
-
-async function loadAttachEvents(
-    sessionId: string,
-    sessionStore: CodingActionContext['sessionStore'],
-): Promise<readonly AgentEvent[]> {
-    if (sessionStore === undefined) return [];
-    return sessionStore.getEvents(sessionId);
 }
 
 export function emitPromptAdmission(

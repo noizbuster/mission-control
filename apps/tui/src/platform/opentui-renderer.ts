@@ -37,6 +37,10 @@ export async function mountOpenTui(app: () => JSX.Element): Promise<OpenTuiMount
         externalOutputMode: 'passthrough',
         targetFps: 60,
         exitOnCtrlC: false,
+        // The transcript scrollbar uses pointer capture while dragging; keep
+        // both click and drag tracking enabled instead of relying on defaults.
+        useMouse: true,
+        enableMouseMovement: true,
         useKittyKeyboard: {},
         autoFocus: false,
         openConsoleOnError: false,

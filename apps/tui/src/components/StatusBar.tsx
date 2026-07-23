@@ -24,6 +24,8 @@ export type StatusBarProps = {
     readonly approvalLevel?: ApprovalLevel;
     readonly contextTokensUsed?: number;
     readonly contextTokensMax?: number;
+    readonly contextCacheInputTokens?: number;
+    readonly contextCacheReadTokens?: number;
     readonly onCopySessionID?: () => void;
     readonly statusLayout?: StatusBarLayout;
 };
@@ -34,6 +36,7 @@ export type TopStatusShape = {
     readonly model: string;
     readonly variant: string | undefined;
     readonly contextLabel: string | undefined;
+    readonly cacheHitLabel: string | undefined;
 };
 
 /** Structured view of the bottom status line (pure, for unit tests + render). */
@@ -130,6 +133,20 @@ export function contextUsagePercent(used: number, max: number): number | undefin
     return Math.round((used / max) * 100);
 }
 
+/** Whole-number cache-read percentage for a session's model-request input tokens. */
+export function contextCacheHitPercent(cacheReadTokens: number, inputTokens: number): number | undefined {
+    if (
+        !(inputTokens > 0) ||
+        !Number.isFinite(inputTokens) ||
+        !Number.isFinite(cacheReadTokens) ||
+        cacheReadTokens < 0 ||
+        cacheReadTokens > inputTokens
+    ) {
+        return undefined;
+    }
+    return Math.round((cacheReadTokens / inputTokens) * 100);
+}
+
 /** Resolve the ramp color for an approval level; `undefined` for an unknown level. */
 export function approvalLevelColor(level: ApprovalLevel | undefined): string | undefined {
     if (level === undefined) {
@@ -164,6 +181,11 @@ function buildProjectLabel(
 
 /** Pure view-model for the top status line. The context segment hides unless the max is known. */
 export function formatTopStatus(props: StatusBarProps): TopStatusShape {
+    let cacheHitLabel: string | undefined;
+    if (props.contextCacheInputTokens !== undefined && props.contextCacheReadTokens !== undefined) {
+        const percent = contextCacheHitPercent(props.contextCacheReadTokens, props.contextCacheInputTokens);
+        cacheHitLabel = percent === undefined ? undefined : `cache ${percent}%`;
+    }
     let contextLabel: string | undefined;
     if (props.contextTokensMax !== undefined) {
         const used = props.contextTokensUsed ?? 0;
@@ -171,14 +193,13 @@ export function formatTopStatus(props: StatusBarProps): TopStatusShape {
         const maxLabel = humanizeTokens(props.contextTokensMax);
         const percent = contextUsagePercent(used, props.contextTokensMax);
         contextLabel =
-            percent === undefined
-                ? `${usedLabel} / ${maxLabel}`
-                : `${usedLabel} / ${maxLabel} (${percent}%)`;
+            percent === undefined ? `${usedLabel} / ${maxLabel}` : `${usedLabel} / ${maxLabel} (${percent}%)`;
     }
     return {
         provider: props.providerID,
         model: props.modelID,
         variant: props.variantID,
+        cacheHitLabel,
         contextLabel,
     };
 }
@@ -195,16 +216,19 @@ export function formatBottomStatus(props: StatusBarProps): BottomStatusShape {
 
 export function formatTopStatusRow(props: StatusBarProps): TopStatusRowShape {
     const layout = resolveStatusBarLayout(props);
-    const { provider, model, variant, contextLabel: rawContextLabel } = formatTopStatus(props);
+    const { provider, model, variant, cacheHitLabel, contextLabel: rawContextLabel } = formatTopStatus(props);
     const variantLabel = variant?.replace(/^(reasoning|thinking)-/, '');
     const contextLabel = layout.status.showContextUsage ? rawContextLabel : undefined;
-    const leftText = `${provider} ${model}${variantLabel !== undefined ? ` - ${variantLabel}` : ''}`;
+    const leftText = `${provider} ${model}${variantLabel !== undefined ? ` - ${variantLabel}` : ''}${
+        cacheHitLabel !== undefined ? ` · ${cacheHitLabel}` : ''
+    }`;
     const rightSegments = contextLabel !== undefined ? [contextLabel] : [];
     return {
         provider,
         model,
         variant,
         variantLabel,
+        cacheHitLabel,
         contextLabel,
         leftText,
         fillCount: statusRowFillCount({ columns: layout.columns, leftText, rightSegments }),
@@ -243,9 +267,11 @@ export function TopStatusBar(props: StatusBarProps): JSX.Element {
     return (
         <box backgroundColor={STATUS_LINE_BG} flexDirection="row" flexShrink={0} width="100%">
             <text selectable>
-                <span style={{ dim: true }}>{row().provider}</span>{' '}
-                <span style={{ bold: true }}>{row().model}</span>
+                <span style={{ dim: true }}>{row().provider}</span> <span style={{ bold: true }}>{row().model}</span>
                 {row().variantLabel !== undefined ? ` - ${row().variantLabel}` : null}
+                {row().cacheHitLabel !== undefined ? (
+                    <span style={{ dim: true }}>{` · ${row().cacheHitLabel}`}</span>
+                ) : null}
             </text>
             <text selectable> </text>
             <text selectable attributes={TextAttributes.DIM}>

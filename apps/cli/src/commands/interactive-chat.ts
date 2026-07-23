@@ -4,6 +4,7 @@ import {
     type AskUserQuestionRequest,
     type CommandExecutionRequest,
     type CommandExecutionResult,
+    type ContextCacheUsage,
     discoverSkills,
     discoverWorkflows,
     type LocalSessionEventStore,
@@ -97,8 +98,12 @@ import {
 import { loadEffectiveContextLimit, maybeStartAutoCompaction } from './model-context-session';
 import { loadPricingTable } from './pricing-table-store';
 import type { EnsuredSession } from './run-agent-session';
+import { applySessionAttachProjection, projectSessionAttachFromEvents } from './session-attach-projection';
 import { listSessionCatalogEntriesForWorkspace } from './session-catalog';
-import { loadSessionTranscriptParts, loadSessionTranscriptPartsFromStore } from './session-transcript-reconstruction';
+import {
+    loadSessionTranscriptParts,
+    loadSessionTranscriptPartsAndEventsFromStore,
+} from './session-transcript-reconstruction';
 import {
     detectGitBranch,
     detectGitWorktree,
@@ -358,6 +363,25 @@ export async function runInteractiveChatSession(
     let pendingInterrupt = false;
     let activeTurn: ActiveCodingAgentTurn | undefined;
     let lastContextTokensUsed: number | undefined;
+    let sessionCacheUsage: ContextCacheUsage | undefined;
+    const setSessionCacheUsage = (usage: ContextCacheUsage | undefined): void => {
+        sessionCacheUsage = usage;
+        tuiHandle?.setContextCacheUsage(usage);
+    };
+    const addSessionCacheUsage = (usage: ContextCacheUsage): void => {
+        const previous = sessionCacheUsage;
+        if (previous === undefined) {
+            setSessionCacheUsage(usage);
+            return;
+        }
+        const inputTokens = previous.inputTokens + usage.inputTokens;
+        const cacheReadTokens = previous.cacheReadTokens + usage.cacheReadTokens;
+        setSessionCacheUsage(
+            Number.isSafeInteger(inputTokens) && Number.isSafeInteger(cacheReadTokens)
+                ? { inputTokens, cacheReadTokens }
+                : undefined,
+        );
+    };
     let lastCodingContext: CodingActionContext | undefined;
     let turnCounter = 0;
     const inputPump = new ChatInputPump(chatInput);
@@ -644,16 +668,19 @@ export async function runInteractiveChatSession(
         }
 
         // Restore from the attached store when available. It is the authoritative
-        // event source for both the visible transcript and the following model turn.
+        // event source for the transcript, ABG overlay, context usage, and the
+        // following model turn.
         if (currentSessionId !== undefined) {
-            const resumed =
+            const attached =
                 currentSessionStore === undefined
-                    ? await loadSessionTranscriptParts(currentSessionId, options.observabilityRedactor)
-                    : await loadSessionTranscriptPartsFromStore(
+                    ? undefined
+                    : await loadSessionTranscriptPartsAndEventsFromStore(
                           currentSessionStore,
                           currentSessionId,
                           options.observabilityRedactor,
                       );
+            const resumed =
+                attached ?? (await loadSessionTranscriptParts(currentSessionId, options.observabilityRedactor));
             if (tuiHandle !== undefined) {
                 if (resumed.parts.length > 0 || resumed.outputText.length > 0) {
                     conversationText = resumed.outputText;
@@ -662,6 +689,20 @@ export async function runInteractiveChatSession(
             } else if (resumed.outputText.length > 0) {
                 chatOutput.write(resumed.outputText);
             }
+            const events = attached?.events ?? [];
+            applySessionAttachProjection({
+                events,
+                projection: projectSessionAttachFromEvents(events),
+                abgOverlayController,
+                chatOutput,
+                onUsage: (inputTokens) => {
+                    lastContextTokensUsed = inputTokens;
+                    tuiHandle?.setContextTokensUsed(inputTokens);
+                },
+                onContextCacheUsage: (usage) => {
+                    setSessionCacheUsage(usage);
+                },
+            });
         }
 
         await seedTurnCounterFromStore(currentSessionStore, currentSessionId);
@@ -881,6 +922,12 @@ export async function runInteractiveChatSession(
                               onUsage: (inputTokens: number | undefined) => {
                                   lastContextTokensUsed = inputTokens;
                                   tuiHandle.setContextTokensUsed(inputTokens);
+                              },
+                              onContextCacheUsage: (usage) => {
+                                  addSessionCacheUsage(usage);
+                              },
+                              onSessionCacheUsage: (usage) => {
+                                  setSessionCacheUsage(usage);
                               },
                           }
                         : {}),

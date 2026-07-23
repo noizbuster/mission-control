@@ -2,6 +2,7 @@ import type {
     AskUserQuestionRequest,
     CommandExecutionRequest,
     CommandExecutionResult,
+    ContextCacheUsage,
     LocalSessionEventStore,
     LspClient,
     PermissionSession,
@@ -61,6 +62,7 @@ export type CodingAgentTurnOptions = {
     readonly graph?: AbgGraphSpec;
     readonly permissionSession?: PermissionSession;
     readonly onUsage?: (inputTokens: number | undefined) => void;
+    readonly onContextCacheUsage?: (usage: ContextCacheUsage) => void;
     readonly workflowRegistry?: WorkflowRegistry;
     readonly onWorkflowStarted?: (spec: WorkflowSpec, prompt: string) => void;
     readonly profileName?: string;

@@ -71,6 +71,7 @@ describe('ChatTranscript component exports', () => {
     });
 });
 
+
 describe('ChatTranscript stream-stability topology', () => {
     it('lists blocks with Index (position) not For (identity) to avoid remount flicker', () => {
         const source = readFileSync(resolve(process.cwd(), 'apps/tui/src/components/ChatTranscript.tsx'), 'utf8');

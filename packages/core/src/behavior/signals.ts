@@ -43,6 +43,7 @@ const EMIT_TYPES_WITH_PERSISTED_PAYLOAD: ReadonlySet<string> = new Set([
     'tool.completed',
     'tool.failed',
     'llm.error',
+    'context.packed',
     // v2: persisted so the overlay Cost&Policy pane can read `cents`, `budgetCents`,
     // and token totals off `event.abg.emit.payload` instead of staying at $0.00.
     'policy.budget.accumulated',

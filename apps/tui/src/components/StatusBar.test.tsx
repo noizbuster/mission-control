@@ -4,6 +4,7 @@ import { bottomDockPolicy } from './chat-bottom-dock-policy';
 import {
     approvalLevelColor,
     buildStatusDivider,
+    contextCacheHitPercent,
     contextUsagePercent,
     formatBottomStatus,
     formatBottomStatusRow,
@@ -64,6 +65,19 @@ describe('contextUsagePercent', () => {
     });
 });
 
+describe('contextCacheHitPercent', () => {
+    it('rounds the cache-read portion of session input tokens', () => {
+        expect(contextCacheHitPercent(8000, 12000)).toBe(67);
+        expect(contextCacheHitPercent(0, 12000)).toBe(0);
+    });
+
+    it('hides unavailable or inconsistent cache accounting', () => {
+        expect(contextCacheHitPercent(1, 0)).toBeUndefined();
+        expect(contextCacheHitPercent(-1, 100)).toBeUndefined();
+        expect(contextCacheHitPercent(101, 100)).toBeUndefined();
+    });
+});
+
 describe('approvalLevelColor', () => {
     it('maps every level onto its ramp color', () => {
         const expected: Record<ApprovalLevel, string> = {
@@ -95,6 +109,7 @@ describe('formatTopStatus', () => {
             model: 'claude-sonnet-4-6',
             variant: 'thinking-high',
             contextLabel: undefined,
+            cacheHitLabel: undefined,
         });
     });
 
@@ -120,6 +135,19 @@ describe('formatTopStatus', () => {
     it('shows 0 used and 0% before the first turn rather than undefined', () => {
         const out = formatTopStatus({ ...baseProps, contextTokensMax: 200000 });
         expect(out.contextLabel).toBe('0 / 200k (0%)');
+    });
+
+    it('places the cumulative cache-hit label immediately after the normalized variant', () => {
+        const row = formatTopStatusRow({
+            providerID: 'anthropic',
+            modelID: 'claude-sonnet-4-6',
+            variantID: 'thinking-high',
+            contextCacheInputTokens: 12000,
+            contextCacheReadTokens: 8000,
+        });
+
+        expect(row.cacheHitLabel).toBe('cache 67%');
+        expect(row.leftText).toBe('anthropic claude-sonnet-4-6 - high · cache 67%');
     });
 });
 

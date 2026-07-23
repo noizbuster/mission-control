@@ -18,11 +18,7 @@ import {
 } from './chat-store';
 import type { ModelChoice } from './interactive-chat-model';
 import type { TranscriptPart as RichTranscriptPart } from './transcript-part';
-import {
-    attributionKeyForAssistantPart,
-    getVisibleTranscriptParts,
-    shouldHideToolPart,
-} from './transcript-visibility';
+import { attributionKeyForAssistantPart, getVisibleTranscriptParts, shouldHideToolPart } from './transcript-visibility';
 
 const hostileDisplayPayload =
     'credential sk-displayblocker123 OSC:\u001b]52;c;UE9D\u0007 C0:\u0001 C1:\u009b DEL:\u007f CR:\r TAB:\t BIDI:\u202e\n한국어 가족\u200D그림';
@@ -569,30 +565,30 @@ describe('chat-store — typed streaming publication', () => {
         ]);
     });
 
-    it.each([
-        'completed',
-        'failed',
-    ] as const)('publishes %s parts immediately and cancels the streaming timer', (status) => {
-        const store = createChatStore();
-        const listener = vi.fn();
-        store.subscribe(listener);
-        store.emitTranscriptPart(
-            { id: 'assistant-terminal', type: 'assistant', text: 'hel', status: 'streaming' },
-            'Assistant: hel',
-        );
+    it.each(['completed', 'failed'] as const)(
+        'publishes %s parts immediately and cancels the streaming timer',
+        (status) => {
+            const store = createChatStore();
+            const listener = vi.fn();
+            store.subscribe(listener);
+            store.emitTranscriptPart(
+                { id: 'assistant-terminal', type: 'assistant', text: 'hel', status: 'streaming' },
+                'Assistant: hel',
+            );
 
-        store.emitTranscriptPart({ id: 'assistant-terminal', type: 'assistant', text: 'hello', status }, 'lo\n');
+            store.emitTranscriptPart({ id: 'assistant-terminal', type: 'assistant', text: 'hello', status }, 'lo\n');
 
-        expect(listener).toHaveBeenCalledTimes(1);
-        expect(vi.getTimerCount()).toBe(0);
-        expect(store.getOutput()).toBe('Assistant: hello\n');
-        expect(store.getSnapshot().transcriptParts).toEqual([
-            { id: 'assistant-terminal', type: 'assistant', text: 'hello', status },
-        ]);
+            expect(listener).toHaveBeenCalledTimes(1);
+            expect(vi.getTimerCount()).toBe(0);
+            expect(store.getOutput()).toBe('Assistant: hello\n');
+            expect(store.getSnapshot().transcriptParts).toEqual([
+                { id: 'assistant-terminal', type: 'assistant', text: 'hello', status },
+            ]);
 
-        vi.advanceTimersByTime(50);
-        expect(listener).toHaveBeenCalledTimes(1);
-    });
+            vi.advanceTimersByTime(50);
+            expect(listener).toHaveBeenCalledTimes(1);
+        },
+    );
 
     it('publishes an output replacement immediately and cancels the streaming timer', () => {
         const store = createChatStore();
@@ -1435,6 +1431,7 @@ describe('chat-store — context token tracking', () => {
         const snapshot = store.getSnapshot();
         expect(snapshot.contextTokensUsed).toBeUndefined();
         expect(snapshot.contextTokensMax).toBeUndefined();
+        expect(snapshot.contextCacheUsage).toBeUndefined();
     });
 
     it('setContextTokensUsed updates the snapshot', () => {
@@ -1447,6 +1444,12 @@ describe('chat-store — context token tracking', () => {
         const store = createChatStore();
         store.setContextTokensMax(200000);
         expect(store.getSnapshot().contextTokensMax).toBe(200000);
+    });
+
+    it('setContextCacheUsage updates both cache counters atomically', () => {
+        const store = createChatStore();
+        store.setContextCacheUsage({ inputTokens: 12000, cacheReadTokens: 8000 });
+        expect(store.getSnapshot().contextCacheUsage).toEqual({ inputTokens: 12000, cacheReadTokens: 8000 });
     });
 
     it('setContextTokensUsed(undefined) clears the value', () => {
@@ -1587,7 +1590,6 @@ describe('chat-store — ABG minimap toggle', () => {
         expect(second).not.toBe(first);
         expect(second.abgMinimapVisible).toBe(true);
     });
-
 });
 
 describe('chat-store — onModelCycleSelect callback', () => {
@@ -2441,7 +2443,7 @@ describe('chat-store — history picker + timestamped entries', () => {
         expect(store.getSnapshot().inputMirror).toBe('draft');
 
         store.openHistoryPicker('draft');
-        store.navigateHistoryPicker('down');
+        store.navigateHistoryPicker('up');
         expect(store.getSnapshot().historyPicker.selectedIndex).toBe(1);
         expect(store.confirmHistoryPicker()).toBe('older');
         expect(store.getSnapshot().inputMirror).toBe('draft');
@@ -2524,9 +2526,7 @@ describe('ChatStore sticky notice', () => {
         store.setStickyNotice('Resumable run: interrupted. Type /continue to resume work.');
 
         // Then: sticky is set and transient remains empty.
-        expect(store.getSnapshot().stickyNotice).toBe(
-            'Resumable run: interrupted. Type /continue to resume work.',
-        );
+        expect(store.getSnapshot().stickyNotice).toBe('Resumable run: interrupted. Type /continue to resume work.');
         expect(store.getSnapshot().transientNotice).toBeNull();
 
         // When: sticky is cleared.

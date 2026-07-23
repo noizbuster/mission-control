@@ -23,6 +23,9 @@ export type ReconstructedTranscript = {
     readonly parts: readonly TranscriptPart[];
     readonly outputText: string;
 };
+export type ReconstructedSessionAttach = ReconstructedTranscript & {
+    readonly events: readonly AgentEvent[];
+};
 
 /**
  * Reconstruct the chat transcript text (the `outputText` the TUI renders) from a
@@ -214,9 +217,7 @@ export function reconstructSessionTranscriptParts(input: SessionTranscriptInput)
                     status: isFailed ? 'failed' : 'completed',
                     ...(output !== undefined ? { output } : {}),
                     ...(errorMessage !== undefined ? { error: errorMessage } : {}),
-                    ...(currentAssistantMessageId !== undefined
-                        ? { messageId: currentAssistantMessageId }
-                        : {}),
+                    ...(currentAssistantMessageId !== undefined ? { messageId: currentAssistantMessageId } : {}),
                 });
                 break;
             }
@@ -248,7 +249,9 @@ export function reconstructSessionTranscriptPartsFromEvents(
             continue;
         }
         const visibleEvent =
-            observabilityRedactor === undefined ? event : redactAgentEventForObservability(event, observabilityRedactor);
+            observabilityRedactor === undefined
+                ? event
+                : redactAgentEventForObservability(event, observabilityRedactor);
         envelopes.push({
             eventId: `resume:${sequence}`,
             sequence,
@@ -261,24 +264,38 @@ export function reconstructSessionTranscriptPartsFromEvents(
     return reconstructSessionTranscriptParts(projectSessionReplay({ sessionId, envelopes }));
 }
 
-export async function loadSessionTranscriptPartsFromStore(
+/**
+ * Load both transcript rows and the raw event history from the already-open store.
+ * Attach projection and transcript reconstruction must use one snapshot so a
+ * concurrent append cannot make the restored UI internally inconsistent.
+ */
+export async function loadSessionTranscriptPartsAndEventsFromStore(
     store: LocalSessionEventStore,
     sessionId: string,
     observabilityRedactor?: ObservabilityRedactor,
-): Promise<ReconstructedTranscript> {
-    const empty: ReconstructedTranscript = { parts: [], outputText: '' };
+): Promise<ReconstructedSessionAttach> {
+    const empty: ReconstructedSessionAttach = { events: [], parts: [], outputText: '' };
     try {
-        return reconstructSessionTranscriptPartsFromEvents(
-            sessionId,
-            await store.getEvents(sessionId),
-            observabilityRedactor,
-        );
+        const events = await store.getEvents(sessionId);
+        return {
+            events,
+            ...reconstructSessionTranscriptPartsFromEvents(sessionId, events, observabilityRedactor),
+        };
     } catch (error: unknown) {
         if (error instanceof Error) {
             return empty;
         }
         throw error;
     }
+}
+
+export async function loadSessionTranscriptPartsFromStore(
+    store: LocalSessionEventStore,
+    sessionId: string,
+    observabilityRedactor?: ObservabilityRedactor,
+): Promise<ReconstructedTranscript> {
+    const attached = await loadSessionTranscriptPartsAndEventsFromStore(store, sessionId, observabilityRedactor);
+    return { parts: attached.parts, outputText: attached.outputText };
 }
 
 /**

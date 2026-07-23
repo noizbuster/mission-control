@@ -1,14 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createChatSelectorStore } from '../state/chat-selector-store';
 import { createChatStore } from '../state/chat-store';
-import { createSlashCommandMenuState } from '../state/interactive-chat-command-menu';
-import { createSkillCommandMenuView } from '../state/interactive-chat-command-menu';
+import { createSkillCommandMenuView, createSlashCommandMenuState } from '../state/interactive-chat-command-menu';
 import {
     buildBottomStatusBarProps,
     buildTopStatusBarProps,
+    type ChatBottomDockSlice,
     chatBottomDockSliceEqual,
     createStableChatBottomDockSelector,
-    type ChatBottomDockSlice,
     selectChatBottomDockSlice,
 } from './ChatBottomDock';
 import { bottomDockPolicy } from './chat-bottom-dock-policy';
@@ -70,7 +69,9 @@ describe('ChatBottomDockBase source topology', () => {
         expect(block.indexOf('renderPromptAdjacentPanels')).toBeLessThan(
             block.indexOf("props.dockSlice.inputMode === 'question'"),
         );
-        expect(block.indexOf("props.dockSlice.inputMode === 'question'")).toBeLessThan(block.indexOf('<BottomStatusBar'));
+        expect(block.indexOf("props.dockSlice.inputMode === 'question'")).toBeLessThan(
+            block.indexOf('<BottomStatusBar'),
+        );
         expect(block).toContain('<QuestionOverlay store={props.store} />');
         expect(block).toContain('<ChatInputArea');
         expect(block).toContain('textareaRef={props.textareaRef}');
@@ -158,6 +159,17 @@ describe('stable chat bottom dock slice', () => {
         expect(second).not.toBe(first);
         expect(second.generating).toBe(true);
     });
+
+    it('returns a new slice when cumulative cache usage changes', () => {
+        const store = createChatStore();
+        const select = createStableChatBottomDockSelector();
+        const first = select(store.getSnapshot());
+        store.setContextCacheUsage({ inputTokens: 12000, cacheReadTokens: 8000 });
+        const second = select(store.getSnapshot());
+
+        expect(second).not.toBe(first);
+        expect(second.contextCacheUsage).toEqual({ inputTokens: 12000, cacheReadTokens: 8000 });
+    });
 });
 
 describe('ChatBottomDockBase status props', () => {
@@ -168,6 +180,7 @@ describe('ChatBottomDockBase status props', () => {
             variantID: 'reasoning-high',
             contextTokensUsed: 12345,
             contextTokensMax: 200000,
+            contextCacheUsage: { inputTokens: 12000, cacheReadTokens: 8000 },
         });
 
         const props = buildTopStatusBarProps({ statusBarProps: baseStatusProps(), statusLayout, dockSlice });
@@ -178,6 +191,8 @@ describe('ChatBottomDockBase status props', () => {
             variantID: 'reasoning-high',
             contextTokensUsed: 12345,
             contextTokensMax: 200000,
+            contextCacheInputTokens: 12000,
+            contextCacheReadTokens: 8000,
             statusLayout,
         });
     });
@@ -245,6 +260,7 @@ describe('selectChatBottomDockSlice', () => {
         store.setApprovalLevel('safe');
         store.setContextTokensUsed(12345);
         store.setContextTokensMax(200000);
+        store.setContextCacheUsage({ inputTokens: 12000, cacheReadTokens: 8000 });
 
         expect(selectChatBottomDockSlice(store.getSnapshot())).toMatchObject({
             inputMode: 'input',
@@ -253,6 +269,7 @@ describe('selectChatBottomDockSlice', () => {
             variantID: 'reasoning-high',
             contextTokensUsed: 12345,
             contextTokensMax: 200000,
+            contextCacheUsage: { inputTokens: 12000, cacheReadTokens: 8000 },
             sessionId: 'session_123',
             approvalLevel: 'safe',
             separatorState: 'idle',

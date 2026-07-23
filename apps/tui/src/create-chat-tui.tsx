@@ -54,6 +54,7 @@ export function createChatTuiHandle(store: ChatStore, unmountFn: () => void): Ch
         setSessionDisplayName: (name) => store.setSessionDisplayName(name),
         setContextTokensUsed: (used) => store.setContextTokensUsed(used),
         setContextTokensMax: (max) => store.setContextTokensMax(max),
+        setContextCacheUsage: (usage) => store.setContextCacheUsage(usage),
         applyAbgOverlayPrefs: (prefs) => store.applyAbgOverlayPrefs(prefs),
         getAbgOverlayPrefsSnapshot: () => store.getAbgOverlayPrefsSnapshot(),
         get onModelCycleSelect(): ((selection: ModelProviderSelection) => void) | undefined {

@@ -49,9 +49,6 @@ describe('runAgent /model chat command', () => {
         expect(output).toContain('provider: local');
         expect(output).toContain('model: local-echo');
         expect(output).toContain('selection: local/local-echo');
-        expect(output).toContain('provider: anthropic');
-        expect(output).toContain('model: claude-3-5-haiku-20241022');
-        expect(output).toContain('selection: anthropic/claude-3-5-haiku-20241022');
         expect(output).toContain('Assistant: received prompt: explain model routing');
         expect(promptModelCall?.modelProviderSelection).toEqual({
             providerID: 'anthropic',

@@ -207,8 +207,8 @@ function linearProbeGraph(graphId: string) {
 }
 
 describe('flushGraphTurnEvents', () => {
-    it('skips pure log events after abort and stops flushing when signal is aborted', async () => {
-        // Given: mixed lifecycle + log events, abort already set
+    it('retains canonical ABG boundary logs after abort while dropping raw log noise', async () => {
+        // Given: mixed lifecycle, raw log, and replay-critical ABG boundary events after abort.
         const controller = new AbortController();
         controller.abort();
         const persisted: AgentEvent[] = [];
@@ -224,6 +224,46 @@ describe('flushGraphTurnEvents', () => {
                 timestamp: NOW,
                 sessionId: 'session_graph_turn',
                 message: 'node emitted event: llm.text.delta',
+            },
+            {
+                type: 'log',
+                timestamp: NOW,
+                sessionId: 'session_graph_turn',
+                message: 'node emitted event: llm.turn.completed',
+                abg: {
+                    graphId: 'graph_resume',
+                    emit: {
+                        type: 'llm.turn.completed',
+                        payload: { text: 'persist this assistant response' },
+                    },
+                },
+            },
+            {
+                type: 'log',
+                timestamp: NOW,
+                sessionId: 'session_graph_turn',
+                message: 'node emitted event: context.packed',
+                abg: {
+                    graphId: 'graph_resume',
+                    emit: {
+                        type: 'context.packed',
+                        payload: { estimatedTokens: 4200, cutPointIndex: 3, summarizedMessageCount: 2 },
+                    },
+                },
+            },
+            {
+                type: 'tool.completed',
+                timestamp: NOW,
+                sessionId: 'session_graph_turn',
+                taskId: 'tool_resume',
+                toolResult: { toolCallId: 'tool_resume', status: 'completed' },
+                abg: {
+                    graphId: 'graph_resume',
+                    emit: {
+                        type: 'tool.completed',
+                        payload: { toolCallId: 'tool_resume', toolName: 'repo.read', output: 'persist tool output' },
+                    },
+                },
             },
             {
                 type: 'node.completed',
@@ -246,9 +286,28 @@ describe('flushGraphTurnEvents', () => {
         // When
         await flushGraphTurnEvents(context, events);
 
-        // Then: only non-log boundary events survive an aborted flush
-        expect(persisted.map((event) => event.type)).toEqual(['node.started', 'node.completed']);
+        // Then: raw stream noise is still skipped, but replay-critical boundaries survive.
+        expect(persisted.map((event) => event.type)).toEqual([
+            'node.started',
+            'log',
+            'log',
+            'tool.completed',
+            'node.completed',
+        ]);
+        expect(persisted[1]?.abg?.emit).toEqual({
+            type: 'llm.turn.completed',
+            payload: { text: 'persist this assistant response' },
+        });
+        expect(persisted[2]?.abg?.emit).toEqual({
+            type: 'context.packed',
+            payload: { estimatedTokens: 4200, cutPointIndex: 3, summarizedMessageCount: 2 },
+        });
+        expect(persisted[3]?.abg?.emit).toEqual({
+            type: 'tool.completed',
+            payload: { toolCallId: 'tool_resume', toolName: 'repo.read', output: 'persist tool output' },
+        });
         expect(isInterruptFlushEvent(events[1] as AgentEvent)).toBe(false);
+        expect(isInterruptFlushEvent(events[2] as AgentEvent)).toBe(true);
     });
 
     it('persists filtered checkpoint and graph failure boundaries through an abort-aware batch', async () => {

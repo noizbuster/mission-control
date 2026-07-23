@@ -38,7 +38,7 @@ describe('ChatInputArea history picker keyboard contract', () => {
         });
         store.setInputMirror('draft');
         store.openHistoryPicker('draft');
-        store.navigateHistoryPicker('down');
+        store.navigateHistoryPicker('up');
         const selected = store.confirmHistoryPicker();
         expect(selected).toBe('older prompt');
         expect(store.isHistoryPickerOpen()).toBe(false);

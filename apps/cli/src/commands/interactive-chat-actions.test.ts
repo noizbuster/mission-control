@@ -82,6 +82,8 @@ describe('interactive chat actions', () => {
         const runtime = new AgentRuntime();
         const output = createOutput();
         const replaceSessionTranscript = vi.fn();
+        const onUsage = vi.fn();
+        const onSessionCacheUsage = vi.fn();
         const navigation = createNavigationController({
             switchSession: async ({ sessionId }) => ({
                 message: `Switched to session: ${sessionId}\n`,
@@ -100,10 +102,14 @@ describe('interactive chat actions', () => {
                 sessionNavigation: navigation,
                 useTui: true,
                 replaceSessionTranscript,
+                onUsage,
+                onSessionCacheUsage,
             }),
         );
 
         expect(replaceSessionTranscript).toHaveBeenCalledWith([], '');
+        expect(onUsage).toHaveBeenCalledExactlyOnceWith(undefined);
+        expect(onSessionCacheUsage).toHaveBeenCalledExactlyOnceWith(undefined);
     });
 
     it('/sessions opens the picker modal in TUI mode and attaches to the selected session', async () => {
@@ -1287,6 +1293,8 @@ function createCodingContext(overrides: Partial<CodingActionContext> = {}): Codi
         ...(overrides.replaceSessionTranscript !== undefined
             ? { replaceSessionTranscript: overrides.replaceSessionTranscript }
             : {}),
+        ...(overrides.onUsage !== undefined ? { onUsage: overrides.onUsage } : {}),
+        ...(overrides.onSessionCacheUsage !== undefined ? { onSessionCacheUsage: overrides.onSessionCacheUsage } : {}),
         ...(overrides.listWorkspaceSessions !== undefined
             ? { listWorkspaceSessions: overrides.listWorkspaceSessions }
             : {}),

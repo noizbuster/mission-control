@@ -6,7 +6,7 @@ import type { JSX } from 'solid-js';
 import { evaluatePaste, makeMarker } from '../platform/keymap/bracketed-paste';
 import { collectDiffEntries } from '../platform/keymap/diff-viewer';
 import { halfPageScrollDelta } from '../platform/keymap/messages-scroll';
-import { useTuiPromptRef } from '../platform/providers/index';
+import { useTuiPromptHistory, useTuiPromptRef } from '../platform/providers/index';
 import { useSolidStoreSelector } from '../platform/use-solid-store-selector';
 import type { ChatAppActions } from '../state/chat-app-actions';
 import type { ChatStore, ChatStoreState } from '../state/chat-store';
@@ -65,6 +65,7 @@ export type ChatInputAreaProps = {
 
 export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
     const snapshot = useSolidStoreSelector(props.store, selectInputAreaSlice);
+    const promptHistory = useTuiPromptHistory();
     const promptRef = useTuiPromptRef();
     const promptMenuInteractionsEnabled = (): boolean => props.promptMenuInteractionsEnabled ?? true;
     let submitting = false;
@@ -162,6 +163,7 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
                     }
 
                     props.store.submitLine(value);
+                    void promptHistory.appendPrompt(value).catch(() => undefined);
                     props.textareaRef.get()?.clear();
                 } finally {
                     submitting = false;
