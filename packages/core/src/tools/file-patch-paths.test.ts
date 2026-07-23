@@ -80,9 +80,8 @@ describe('file.patch workspace path boundaries', () => {
         expect(await readText(outsideRoot, 'notes.txt')).toBe('before\n');
     });
 
-    it('denies generated and reference-repo descendants before approval or mutation', async () => {
+    it('denies generated descendants before approval or mutation', async () => {
         const workspaceRoot = await createGitWorkspace();
-        await mkdir(join(workspaceRoot, 'temp', 'ref-repos', 'opencode'), { recursive: true });
         await mkdir(join(workspaceRoot, 'dist'), { recursive: true });
         await writeFile(join(workspaceRoot, 'dist', 'bundle.txt'), 'before\n', 'utf8');
         const permissionRequests: PermissionRequest[] = [];
@@ -91,24 +90,15 @@ describe('file.patch workspace path boundaries', () => {
             return allowPermission(request);
         });
 
-        const referenceRepo = await invokePatch(
-            registry,
-            addFilePatch('temp/ref-repos/opencode/AGENTS.md', 'OPENCODE_REFERENCE_AGENT_DIRECTIVE'),
-        );
         const generated = await invokePatch(registry, patchFor('dist/bundle.txt', 'before', 'after'));
 
-        expect(referenceRepo.result.error?.message).toContain('workspace_denied');
         expect(generated.result.error?.message).toContain('workspace_denied');
         expect(permissionRequests).toHaveLength(0);
-        await expect(
-            readFile(join(workspaceRoot, 'temp', 'ref-repos', 'opencode', 'AGENTS.md'), 'utf8'),
-        ).rejects.toThrow();
         expect(await readText(workspaceRoot, 'dist/bundle.txt')).toBe('before\n');
     });
 
-    it('denies mixed-case generated and reference-repo descendants before approval or mutation', async () => {
+    it('denies mixed-case generated descendants before approval or mutation', async () => {
         const workspaceRoot = await createGitWorkspace();
-        await mkdir(join(workspaceRoot, 'Temp', 'ref-repos', 'opencode'), { recursive: true });
         await mkdir(join(workspaceRoot, 'Dist'), { recursive: true });
         await writeFile(join(workspaceRoot, 'Dist', 'bundle.txt'), 'before\n', 'utf8');
         const permissionRequests: PermissionRequest[] = [];
@@ -117,18 +107,10 @@ describe('file.patch workspace path boundaries', () => {
             return allowPermission(request);
         });
 
-        const referenceRepo = await invokePatch(
-            registry,
-            addFilePatch('Temp/ref-repos/opencode/AGENTS.md', 'MIXED_CASE_REFERENCE_AGENT_DIRECTIVE'),
-        );
         const generated = await invokePatch(registry, patchFor('Dist/bundle.txt', 'before', 'after'));
 
-        expect(referenceRepo.result.error?.message).toContain('workspace_denied');
         expect(generated.result.error?.message).toContain('workspace_denied');
         expect(permissionRequests).toHaveLength(0);
-        await expect(
-            readFile(join(workspaceRoot, 'Temp', 'ref-repos', 'opencode', 'AGENTS.md'), 'utf8'),
-        ).rejects.toThrow();
         expect(await readText(workspaceRoot, 'Dist/bundle.txt')).toBe('before\n');
     });
 

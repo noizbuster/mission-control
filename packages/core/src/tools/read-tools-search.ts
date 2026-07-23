@@ -59,9 +59,9 @@ export async function searchRepoText(
 }
 
 // The N-API path is preferred when the addon is available. It searches the
-// same workspace-vetted file list the node fallback would walk, so path guards
-// (containment + the `temp/ref-repos` denylist) stay enforced on the TS side.
-// Returns `undefined` to signal "addon unavailable / errored, fall back".
+// same workspace-vetted file list the node fallback would walk, so containment
+// and denylist guards stay enforced on the TS side. Returns `undefined` to
+// signal "addon unavailable / errored, fall back".
 async function searchWithNatives(
     guard: WorkspaceGuard,
     target: WorkspacePath,

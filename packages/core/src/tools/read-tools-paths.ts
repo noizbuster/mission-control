@@ -9,8 +9,9 @@ export type WorkspacePath = {
     readonly stats: Stats;
 };
 
+export const referenceRepositoryPath = 'temp/ref-repos';
+
 export const defaultReadOnlyRepoToolDenylist = [
-    'temp/ref-repos',
     '.mc/evidence',
     '.nx',
     'dist',
@@ -21,8 +22,11 @@ export const defaultReadOnlyRepoToolDenylist = [
     '.git',
 ] as const;
 
+export const defaultAutomatedDiscoveryDenylist = [...defaultReadOnlyRepoToolDenylist, referenceRepositoryPath] as const;
+
 export type WorkspaceGuardOptions = {
     readonly allowDenylistedPaths?: readonly string[];
+    readonly allowDirectDenylistedPaths?: readonly string[];
 };
 
 export type WorkspaceGuard = {
@@ -37,6 +41,7 @@ export type WorkspaceGuard = {
 
 type WorkspaceDenylistPolicy = {
     readonly allowedPaths: readonly string[];
+    readonly directAllowedPaths: readonly string[];
 };
 
 const defaultDenylistRipgrepGlobs = defaultReadOnlyRepoToolDenylist.flatMap((entry) => [
@@ -120,10 +125,13 @@ async function resolveExistingWorkspacePath(
 
 function createDenylistPolicy(root: string, options: WorkspaceGuardOptions): WorkspaceDenylistPolicy {
     return {
-        allowedPaths: (options.allowDenylistedPaths ?? [])
-            .map((path) => normalizeAllowedDenylistedPath(root, path))
-            .sort(),
+        allowedPaths: normalizeAllowedDenylistedPaths(root, options.allowDenylistedPaths),
+        directAllowedPaths: normalizeAllowedDenylistedPaths(root, options.allowDirectDenylistedPaths),
     };
+}
+
+function normalizeAllowedDenylistedPaths(root: string, paths: readonly string[] | undefined): readonly string[] {
+    return (paths ?? []).map((path) => normalizeAllowedDenylistedPath(root, path)).sort();
 }
 
 function normalizeAllowedDenylistedPath(root: string, path: string): string {
@@ -159,13 +167,20 @@ function shouldTraverseAbsolutePath(root: string, denylistPolicy: WorkspaceDenyl
     const relativePath = toRelativePath(root, path);
     return (
         !matchesWorkspaceDenylist(relativePath) ||
-        isAllowedDenylistedPath(denylistPolicy, relativePath) ||
+        isAllowedDenylistedPath(denylistPolicy.allowedPaths, relativePath) ||
         hasAllowedDenylistedDescendant(denylistPolicy, relativePath)
     );
 }
 
 function isDeniedRelativePath(denylistPolicy: WorkspaceDenylistPolicy, relativePath: string): boolean {
-    return matchesWorkspaceDenylist(relativePath) && !isAllowedDenylistedPath(denylistPolicy, relativePath);
+    const canonicalPath = canonicalPolicyPath(relativePath);
+    if (isAllowedDirectDenylistedPath(denylistPolicy.directAllowedPaths, canonicalPath)) {
+        return false;
+    }
+    return defaultReadOnlyRepoToolDenylist
+        .map((entry) => canonicalPolicyPath(entry))
+        .filter((entry) => matchesDenylistEntry(entry, canonicalPath))
+        .some((entry) => !isAllowedForDenylistEntry(denylistPolicy.allowedPaths, entry, canonicalPath));
 }
 
 export function matchesWorkspaceDenylist(relativePath: string): boolean {
@@ -182,11 +197,26 @@ function matchesDenylistEntry(entry: string, relativePath: string): boolean {
     return pathSegments(relativePath).includes(entry);
 }
 
-function isAllowedDenylistedPath(denylistPolicy: WorkspaceDenylistPolicy, relativePath: string): boolean {
+function isAllowedDenylistedPath(allowedPaths: readonly string[], relativePath: string): boolean {
     const canonicalPath = canonicalPolicyPath(relativePath);
-    return denylistPolicy.allowedPaths.some((allowedPath) =>
-        isSameOrDescendant(canonicalPolicyPath(allowedPath), canonicalPath),
-    );
+    return defaultReadOnlyRepoToolDenylist
+        .map((entry) => canonicalPolicyPath(entry))
+        .filter((entry) => matchesDenylistEntry(entry, canonicalPath))
+        .every((entry) => isAllowedForDenylistEntry(allowedPaths, entry, canonicalPath));
+}
+
+function isAllowedForDenylistEntry(allowedPaths: readonly string[], entry: string, relativePath: string): boolean {
+    return allowedPaths.some((allowedPath) => {
+        const canonicalAllowedPath = canonicalPolicyPath(allowedPath);
+        return (
+            isSameOrDescendant(entry, canonicalAllowedPath) && isSameOrDescendant(canonicalAllowedPath, relativePath)
+        );
+    });
+}
+
+function isAllowedDirectDenylistedPath(allowedPaths: readonly string[], relativePath: string): boolean {
+    const canonicalPath = canonicalPolicyPath(relativePath);
+    return allowedPaths.some((allowedPath) => isSameOrDescendant(canonicalPolicyPath(allowedPath), canonicalPath));
 }
 
 function hasAllowedDenylistedDescendant(denylistPolicy: WorkspaceDenylistPolicy, relativePath: string): boolean {

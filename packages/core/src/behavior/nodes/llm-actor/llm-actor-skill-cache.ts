@@ -1,7 +1,7 @@
 import { type SystemPromptSkill } from '../../../context/system-prompt';
 import type { Blackboard } from '../../../memory/blackboard';
 import { discoverSkills, resolveUserConfigDir } from '../../../skills/skill-loader';
-import { defaultReadOnlyRepoToolDenylist, toPosixPath } from '../../../tools/read-tools-paths';
+import { defaultAutomatedDiscoveryDenylist, toPosixPath } from '../../../tools/read-tools-paths';
 import type { Dirent } from 'node:fs';
 import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -10,9 +10,11 @@ type SkillManifest = Map<string, readonly [mtimeMs: number, size: number]>;
 type SkillCacheEntry = { readonly skills: readonly SystemPromptSkill[]; readonly manifest: SkillManifest };
 
 const MAX_MANIFEST_WALK_DEPTH = 10;
-const manifestDenylistNeedles: readonly string[] = defaultReadOnlyRepoToolDenylist.map((entry) => entry.toLowerCase());
+const manifestDenylistNeedles: readonly string[] = defaultAutomatedDiscoveryDenylist.map((entry) =>
+    entry.toLowerCase(),
+);
 const manifestDenylistDirNames: ReadonlySet<string> = new Set(
-    defaultReadOnlyRepoToolDenylist.filter((entry) => !entry.includes('/')).map((entry) => entry.toLowerCase()),
+    defaultAutomatedDiscoveryDenylist.filter((entry) => !entry.includes('/')).map((entry) => entry.toLowerCase()),
 );
 
 let skillCache = new WeakMap<Blackboard, SkillCacheEntry>();

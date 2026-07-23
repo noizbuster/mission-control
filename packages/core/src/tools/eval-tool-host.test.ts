@@ -66,6 +66,19 @@ describe('eval tool host workspace containment', () => {
         expect(result).toBe('SAFE_WORKSPACE_BYTES');
     });
 
+    it('allows direct dependency source reads and listings', async () => {
+        const workspaceRoot = await createTempDir('eval-host-workspace-');
+        await mkdir(join(workspaceRoot, 'node_modules', 'source-pkg'), { recursive: true });
+        await writeFile(join(workspaceRoot, 'node_modules', 'source-pkg', 'index.ts'), 'DEPENDENCY_SOURCE', 'utf8');
+        const host = createEvalToolHost(workspaceRoot);
+
+        const listing = await host('ls', { path: 'node_modules' });
+        const source = await host('read', { path: 'node_modules/source-pkg/index.ts' });
+
+        expect(listing).toEqual(['source-pkg/']);
+        expect(source).toBe('DEPENDENCY_SOURCE');
+    });
+
     async function createTempDir(prefix: string): Promise<string> {
         const directory = await mkdtemp(join(tmpdir(), prefix));
         tempDirs.push(directory);

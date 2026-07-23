@@ -1,6 +1,7 @@
-import { createWorkspaceGuard } from '../tools/read-tools-paths';
+import { createWorkspaceGuard, referenceRepositoryPath } from '../tools/read-tools-paths';
 import type { ProjectTrustDecision, ProjectTrustStore } from '../trust/project-trust-store';
 import { open } from 'node:fs/promises';
+import { resolve } from 'node:path';
 
 export const defaultProjectResourcePaths = ['AGENTS.md', 'AGENTS.MD', 'CLAUDE.md', 'CLAUDE.MD'] as const;
 
@@ -39,6 +40,8 @@ export type ProjectResourceLoadResult =
 
 const defaultMaxResourceBytes = 64 * 1024;
 
+const referenceRepositoryPattern = new RegExp(`(?:^|/)${referenceRepositoryPath}(?:/|$)`, 'iu');
+
 export async function loadProjectResources(input: ProjectResourceLoadInput): Promise<ProjectResourceLoadResult> {
     const trust = await input.trustStore.getDecision(input.workspaceRoot);
     if (trust.decision !== 'trusted') {
@@ -58,8 +61,16 @@ export async function loadProjectResources(input: ProjectResourceLoadInput): Pro
     const maxBytes = input.maxBytes ?? defaultMaxResourceBytes;
 
     for (const path of paths) {
+        if (isReferenceRepositoryPath(trust.workspaceRoot, path)) {
+            deniedResources.push({ path, reason: 'reference_repo_instruction_denied' });
+            continue;
+        }
         try {
             const target = await guard.resolveExisting(path);
+            if (isReferenceRepositoryPath(trust.workspaceRoot, target.absolutePath)) {
+                deniedResources.push({ path, reason: 'reference_repo_instruction_denied' });
+                continue;
+            }
             if (!target.stats.isFile()) {
                 deniedResources.push({ path, reason: 'not_file' });
                 continue;
@@ -103,4 +114,8 @@ async function readTextPrefix(path: string, bytes: number): Promise<string> {
 
 function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
+}
+
+function isReferenceRepositoryPath(workspaceRoot: string, path: string): boolean {
+    return referenceRepositoryPattern.test(resolve(workspaceRoot, path).replaceAll('\\', '/'));
 }

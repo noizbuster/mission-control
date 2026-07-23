@@ -8,7 +8,9 @@ const BRIDGE_READ_CAP_BYTES = 256 * 1024;
 export function createEvalToolHost(workspaceRoot: string): (name: string, args: unknown) => Promise<unknown> {
     let workspaceGuard: Promise<WorkspaceGuard> | undefined;
     return async (name, args) => {
-        workspaceGuard ??= createWorkspaceGuard(workspaceRoot);
+        workspaceGuard ??= createWorkspaceGuard(workspaceRoot, {
+            allowDirectDenylistedPaths: ['node_modules'],
+        });
         const guard = await workspaceGuard;
         const argRecord = isRecord(args) ? args : {};
         switch (name) {

@@ -8,12 +8,12 @@
  *   2. project `<workspace>/.mctrl/workflows/`
  *   3. project `<workspace>/.agents/workflows/`
  *
- * Broken workflows produce diagnostics, never throws. Denylist reuses the
- * read-tools denylist so `temp/ref-repos` / generated-dir guards apply.
+ * Broken workflows produce diagnostics, never throws. The automated-discovery
+ * denylist retains reference-repository and generated-directory guards.
  */
 import { type WorkflowDiscoveryDiagnostic, type WorkflowSpec, WorkflowSpecSchema } from '@mission-control/protocol';
 import { resolveUserConfigDir } from '../skills/skill-loader';
-import { defaultReadOnlyRepoToolDenylist, toPosixPath } from '../tools/read-tools-paths';
+import { defaultAutomatedDiscoveryDenylist, toPosixPath } from '../tools/read-tools-paths';
 import { stripJsoncComments } from './jsonc-parser';
 import type { Dirent } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
@@ -25,11 +25,11 @@ const MAX_WALK_DEPTH = 10;
 const WORKFLOW_FILE_SUFFIX_JSON = '.workflow.json';
 const WORKFLOW_FILE_SUFFIX_JSONC = '.workflow.jsonc';
 
-const denylistAbsolutePathNeedles: readonly string[] = defaultReadOnlyRepoToolDenylist.map((entry) =>
+const denylistAbsolutePathNeedles: readonly string[] = defaultAutomatedDiscoveryDenylist.map((entry) =>
     entry.toLowerCase(),
 );
 const denylistDirNameSet: ReadonlySet<string> = new Set(
-    defaultReadOnlyRepoToolDenylist.filter((entry) => !entry.includes('/')).map((entry) => entry.toLowerCase()),
+    defaultAutomatedDiscoveryDenylist.filter((entry) => !entry.includes('/')).map((entry) => entry.toLowerCase()),
 );
 
 export type DiscoverWorkflowsOptions = {

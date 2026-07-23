@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { registerReadOnlyRepoTools } from './read-tools';
 import { createWorkspaceGuard } from './read-tools-paths';
+import { searchOutputSchema } from './read-tools-schemas';
 import { ToolRegistry } from './tool-registry';
 import { spawn } from 'node:child_process';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -15,66 +16,90 @@ describe('read-only repo tool denylist', () => {
         workspaces.length = 0;
     });
 
-    it('denies generated and reference paths unless explicitly allowed', async () => {
+    it('denies generated paths while allowing reference repository inspection', async () => {
         const workspaceRoot = await createWorkspace();
         await createDenylistFixture(workspaceRoot);
-        const defaultRegistry = await createRegistry(workspaceRoot);
-        const readTool = findAdvertisement(defaultRegistry, 'repo.read');
-        const listTool = findAdvertisement(defaultRegistry, 'repo.list');
-        const searchTool = findAdvertisement(defaultRegistry, 'repo.search');
+        const registry = await createRegistry(workspaceRoot);
+        const readTool = findAdvertisement(registry, 'repo.read');
+        const listTool = findAdvertisement(registry, 'repo.list');
+        const searchTool = findAdvertisement(registry, 'repo.search');
 
-        const deniedRead = await invokeRead(defaultRegistry, readTool.version, 'temp/ref-repos/opencode/README.md');
-        const deniedInstructionRead = await invokeRead(
-            defaultRegistry,
+        const referenceRead = await invokeRead(registry, readTool.version, 'temp/ref-repos/opencode/README.md');
+        const referenceInstructionRead = await invokeRead(
+            registry,
             readTool.version,
             'temp/ref-repos/opencode/AGENTS.md',
         );
-        const deniedList = await invokeList(defaultRegistry, listTool.version, 'dist');
-        const deniedSearchPath = await invokeSearch(defaultRegistry, searchTool.version, 'hidden needle', '.nx');
-        const rootSearch = await invokeSearch(defaultRegistry, searchTool.version, 'needle', '.');
+        const deniedList = await invokeList(registry, listTool.version, 'dist');
+        const deniedSearchPath = await invokeSearch(registry, searchTool.version, 'hidden needle', '.nx');
+        const rootSearch = await invokeSearch(registry, searchTool.version, 'needle', '.');
         const referenceInstructionSearch = await invokeSearch(
-            defaultRegistry,
+            registry,
             searchTool.version,
             'OPENCODE_REFERENCE_AGENT_DIRECTIVE',
             '.',
         );
-        const allowedRegistry = await createRegistry(workspaceRoot, {
-            allowDenylistedPaths: ['temp/ref-repos/opencode'],
-        });
-        const allowedReadTool = findAdvertisement(allowedRegistry, 'repo.read');
-        const stillDenied = await invokeRead(allowedRegistry, allowedReadTool.version, 'dist/bundle.txt');
-        const allowedRead = await invokeRead(
-            allowedRegistry,
-            allowedReadTool.version,
-            'temp/ref-repos/opencode/README.md',
-        );
-        const allowedInstructionRead = await invokeRead(
-            allowedRegistry,
-            allowedReadTool.version,
-            'temp/ref-repos/opencode/AGENTS.md',
-        );
 
-        expect(deniedRead.result.error?.message).toContain('workspace_denied');
-        expect(deniedInstructionRead.result.error?.message).toContain('workspace_denied');
         expect(deniedList.result.error?.message).toContain('workspace_denied');
         expect(deniedSearchPath.result.error?.message).toContain('workspace_denied');
-        expect(rootSearch.structuredOutput).toMatchObject({
-            totalMatches: 1,
-            matches: [{ path: 'visible.txt' }],
-        });
+        const rootSearchOutput = searchOutputSchema.parse(rootSearch.structuredOutput);
+        expect(rootSearchOutput).toMatchObject({ totalMatches: 2 });
+        expect(rootSearchOutput.matches.map((match) => match.path)).toEqual([
+            'temp/ref-repos/opencode/README.md',
+            'visible.txt',
+        ]);
         expect(referenceInstructionSearch.structuredOutput).toMatchObject({
-            totalMatches: 0,
-            matches: [],
+            totalMatches: 1,
+            matches: [{ path: 'temp/ref-repos/opencode/AGENTS.md' }],
         });
-        expect(stillDenied.result.error?.message).toContain('workspace_denied');
-        expect(allowedRead.structuredOutput).toMatchObject({
+        expect(referenceRead.structuredOutput).toMatchObject({
             path: 'temp/ref-repos/opencode/README.md',
             content: 'hidden needle',
         });
-        expect(allowedInstructionRead.structuredOutput).toMatchObject({
+        expect(referenceInstructionRead.structuredOutput).toMatchObject({
             path: 'temp/ref-repos/opencode/AGENTS.md',
             content: 'OPENCODE_REFERENCE_AGENT_DIRECTIVE',
         });
+    });
+
+    it('allows direct dependency source inspection without traversing it from the workspace root', async () => {
+        const workspaceRoot = await createWorkspace();
+        await createDenylistFixture(workspaceRoot);
+        const registry = await createRegistry(workspaceRoot);
+        const listTool = findAdvertisement(registry, 'ls');
+        const readTool = findAdvertisement(registry, 'read');
+        const searchTool = findAdvertisement(registry, 'repo.search');
+
+        const rootListing = await invokeList(registry, findAdvertisement(registry, 'repo.list').version, '.');
+        const dependencyListing = await invokeNamedTool(registry, 'ls', listTool.version, {
+            path: 'node_modules',
+        });
+        const dependencySource = await invokeNamedTool(registry, 'read', readTool.version, {
+            path: 'node_modules/source-pkg/index.ts',
+        });
+        const distributedSource = await invokeRead(
+            registry,
+            findAdvertisement(registry, 'repo.read').version,
+            'node_modules/source-pkg/dist/generated.js',
+        );
+        const rootSearch = await invokeSearch(registry, searchTool.version, 'DEPENDENCY_SOURCE_SENTINEL', '.');
+
+        expect(rootListing.structuredOutput).toMatchObject({
+            entries: expect.arrayContaining([{ name: 'node_modules', kind: 'directory' }]),
+        });
+        expect(dependencyListing.structuredOutput).toMatchObject({
+            path: 'node_modules',
+            entries: [{ name: 'source-pkg', kind: 'directory' }],
+        });
+        expect(dependencySource.structuredOutput).toMatchObject({
+            path: 'node_modules/source-pkg/index.ts',
+            content: 'DEPENDENCY_SOURCE_SENTINEL',
+        });
+        expect(distributedSource.structuredOutput).toMatchObject({
+            path: 'node_modules/source-pkg/dist/generated.js',
+            content: 'generated',
+        });
+        expect(rootSearch.structuredOutput).toMatchObject({ totalMatches: 0, matches: [] });
     });
 
     it('generates ripgrep globs that exclude multi-segment deny entries for absolute targets', async () => {
@@ -97,7 +122,7 @@ describe('read-only repo tool denylist', () => {
 
         expect(rgResult.code).toBe(0);
         expect(rgResult.stdout).toContain('visible.txt');
-        expect(rgResult.stdout).not.toContain('temp/ref-repos');
+        expect(rgResult.stdout).toContain('temp/ref-repos/opencode/README.md');
         expect(rgResult.stdout).not.toContain('.mc/evidence');
     });
 
@@ -113,15 +138,17 @@ describe('read-only repo tool denylist', () => {
         );
     });
 
-    it('characterizes baseline denial for project instructions in reference repos', async () => {
+    it('allows direct project instruction reads in reference repos', async () => {
         const workspaceRoot = await createWorkspace();
         await createDenylistFixture(workspaceRoot);
         const guard = await createWorkspaceGuard(workspaceRoot);
 
-        await expect(guard.resolveExisting('temp/ref-repos/opencode/AGENTS.md')).rejects.toThrow('workspace_denied');
+        await expect(guard.resolveExisting('temp/ref-repos/opencode/AGENTS.md')).resolves.toMatchObject({
+            relativePath: 'temp/ref-repos/opencode/AGENTS.md',
+        });
     });
 
-    it('denies mixed-case generated and reference paths', async () => {
+    it('allows mixed-case reference paths while denying generated paths', async () => {
         const workspaceRoot = await createWorkspace();
         await mkdir(join(workspaceRoot, 'Temp', 'ref-repos', 'opencode'), { recursive: true });
         await mkdir(join(workspaceRoot, 'Dist'), { recursive: true });
@@ -130,15 +157,18 @@ describe('read-only repo tool denylist', () => {
         const registry = await createRegistry(workspaceRoot);
         const readTool = findAdvertisement(registry, 'repo.read');
 
-        const deniedInstruction = await invokeRead(registry, readTool.version, 'Temp/ref-repos/opencode/AGENTS.md');
+        const referenceInstruction = await invokeRead(registry, readTool.version, 'Temp/ref-repos/opencode/AGENTS.md');
         const deniedBundle = await invokeRead(registry, readTool.version, 'Dist/bundle.txt');
 
-        expect(deniedInstruction.result.error?.message).toContain('workspace_denied');
+        expect(referenceInstruction.structuredOutput).toMatchObject({
+            path: 'Temp/ref-repos/opencode/AGENTS.md',
+            content: 'MIXED_CASE_AGENT',
+        });
         expect(deniedBundle.result.error?.message).toContain('workspace_denied');
-        expect(JSON.stringify([deniedInstruction, deniedBundle])).not.toContain('MIXED_CASE');
+        expect(JSON.stringify(deniedBundle)).not.toContain('MIXED_CASE_BUNDLE');
     });
 
-    it('applies the denylist to coding-agent aliases', async () => {
+    it('keeps generated-path denials while aliases inspect reference repositories', async () => {
         const workspaceRoot = await createWorkspace();
         await createDenylistFixture(workspaceRoot);
         const registry = await createRegistry(workspaceRoot);
@@ -147,7 +177,7 @@ describe('read-only repo tool denylist', () => {
         const searchTool = findAdvertisement(registry, 'grep');
         const findTool = findAdvertisement(registry, 'find');
 
-        const deniedRead = await invokeNamedTool(registry, 'read', readTool.version, {
+        const referenceRead = await invokeNamedTool(registry, 'read', readTool.version, {
             path: 'temp/ref-repos/opencode/README.md',
         });
         const deniedList = await invokeNamedTool(registry, 'ls', listTool.version, { path: 'dist' });
@@ -155,15 +185,21 @@ describe('read-only repo tool denylist', () => {
             pattern: 'hidden needle',
             path: '.nx',
         });
-        const deniedFind = await invokeNamedTool(registry, 'find', findTool.version, {
+        const referenceFind = await invokeNamedTool(registry, 'find', findTool.version, {
             pattern: 'OPENCODE_REFERENCE_AGENT_DIRECTIVE',
             path: '.',
         });
 
-        expect(deniedRead.result.error?.message).toContain('workspace_denied');
+        expect(referenceRead.structuredOutput).toMatchObject({
+            path: 'temp/ref-repos/opencode/README.md',
+            content: 'hidden needle',
+        });
         expect(deniedList.result.error?.message).toContain('workspace_denied');
         expect(deniedGrep.result.error?.message).toContain('workspace_denied');
-        expect(deniedFind.structuredOutput).toMatchObject({ totalMatches: 0, matches: [] });
+        expect(referenceFind.structuredOutput).toMatchObject({
+            totalMatches: 1,
+            matches: [{ path: 'temp/ref-repos/opencode/AGENTS.md' }],
+        });
     });
 
     async function createWorkspace(): Promise<string> {
@@ -179,6 +215,7 @@ async function createDenylistFixture(workspaceRoot: string): Promise<void> {
     await mkdir(join(workspaceRoot, 'temp', 'ref-repos', 'opencode'), { recursive: true });
     await mkdir(join(workspaceRoot, '.nx'), { recursive: true });
     await mkdir(join(workspaceRoot, 'dist'), { recursive: true });
+    await mkdir(join(workspaceRoot, 'node_modules', 'source-pkg', 'dist'), { recursive: true });
     await writeFile(join(workspaceRoot, 'temp', 'ref-repos', 'opencode', 'README.md'), 'hidden needle', 'utf8');
     await writeFile(
         join(workspaceRoot, 'temp', 'ref-repos', 'opencode', 'AGENTS.md'),
@@ -187,6 +224,12 @@ async function createDenylistFixture(workspaceRoot: string): Promise<void> {
     );
     await writeFile(join(workspaceRoot, '.nx', 'cache.txt'), 'hidden needle', 'utf8');
     await writeFile(join(workspaceRoot, 'dist', 'bundle.txt'), 'hidden needle', 'utf8');
+    await writeFile(
+        join(workspaceRoot, 'node_modules', 'source-pkg', 'index.ts'),
+        'DEPENDENCY_SOURCE_SENTINEL',
+        'utf8',
+    );
+    await writeFile(join(workspaceRoot, 'node_modules', 'source-pkg', 'dist', 'generated.js'), 'generated', 'utf8');
     await writeFile(join(workspaceRoot, 'visible.txt'), 'visible needle', 'utf8');
 }
 

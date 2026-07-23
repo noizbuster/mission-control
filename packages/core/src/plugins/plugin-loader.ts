@@ -17,7 +17,7 @@ import {
     type PluginManifest,
     PluginManifestSchema,
 } from '@mission-control/protocol';
-import { defaultReadOnlyRepoToolDenylist, toPosixPath } from '../tools/read-tools-paths';
+import { defaultAutomatedDiscoveryDenylist, toPosixPath } from '../tools/read-tools-paths';
 import { stripJsoncComments } from '../workflows/jsonc-parser';
 import { pluginHomeEnvKey, resolvePluginHome } from './plugin-paths';
 import type { Dirent } from 'node:fs';
@@ -29,11 +29,11 @@ export const DEFAULT_MAX_PLUGINS = 256;
 const MANIFEST_FILENAME = 'plugin.json';
 const PLUGINS_DIR_NAME = 'plugins';
 
-const denylistAbsolutePathNeedles: readonly string[] = defaultReadOnlyRepoToolDenylist.map((entry) =>
+const denylistAbsolutePathNeedles: readonly string[] = defaultAutomatedDiscoveryDenylist.map((entry) =>
     entry.toLowerCase(),
 );
 const denylistDirNameSet: ReadonlySet<string> = new Set(
-    defaultReadOnlyRepoToolDenylist.filter((entry) => !entry.includes('/')).map((entry) => entry.toLowerCase()),
+    defaultAutomatedDiscoveryDenylist.filter((entry) => !entry.includes('/')).map((entry) => entry.toLowerCase()),
 );
 
 export type DiscoverPluginsOptions = {

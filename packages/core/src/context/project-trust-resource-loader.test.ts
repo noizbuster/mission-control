@@ -73,7 +73,7 @@ describe('loadProjectResources', () => {
         expect(loaded.deniedResources).toEqual([
             {
                 path: 'temp/ref-repos/opencode/AGENTS.md',
-                reason: expect.stringContaining('workspace_denied'),
+                reason: 'reference_repo_instruction_denied',
             },
         ]);
         expect(JSON.stringify(loaded)).not.toContain('REF_REPO_PROMPT_INJECTION');
@@ -108,7 +108,7 @@ describe('loadProjectResources', () => {
         expect(loaded.deniedResources).toEqual([
             {
                 path: 'Temp/ref-repos/opencode/AGENTS.md',
-                reason: expect.stringContaining('workspace_denied'),
+                reason: 'reference_repo_instruction_denied',
             },
         ]);
         expect(JSON.stringify(loaded)).not.toContain('MIXED_CASE_PROMPT_INJECTION');

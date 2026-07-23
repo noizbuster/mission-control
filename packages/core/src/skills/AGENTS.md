@@ -9,14 +9,14 @@
 | Task | Location | Notes |
 | --- | --- | --- |
 | Metadata schema | `skill-metadata.ts` | `SkillMetadataSchema` (Zod): name (lowercase a-z0-9-), optional description, disableModelInvocation. |
-| Discovery + loader | `skill-loader.ts` | `discoverSkills({workspaceRoot})` — 3-scope scan (global-user → project-mctrl → project-agents), first-wins dedup, denylist (`temp/ref-repos`), symlink defense, 64KB size bound. |
+| Discovery + loader | `skill-loader.ts` | `discoverSkills({workspaceRoot})` — 3-scope scan (global-user → project-mctrl → project-agents), automated-discovery denylist (including `temp/ref-repos`), symlink defense, 64KB size bound. |
 | Frontmatter parser | `skill-loader.ts:parseSkillFrontmatter` | YAML frontmatter between `---` fences + markdown body. Uses `yaml` package. |
 | Barrel export | `index.ts` | `discoverSkills`, `Skill`, `SkillMetadataSchema`. |
 
 ## Conventions
 
 - SKILL.md bodies are DATA, never executed/evaluated/imported as code.
-- Do NOT load skills from `temp/ref-repos/**` — the denylist reuses `read-tools-paths.ts`.
+- Do NOT load skills from `temp/ref-repos/**` — automatic discovery keeps a dedicated guard even though repo tools may inspect reference sources.
 - First-wins by scope priority: global-user > project-mctrl > project-agents.
 - Malformed frontmatter → skip with diagnostic, no throw.
 

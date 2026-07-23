@@ -97,14 +97,37 @@ async function runBashTool(
     const chain = assertAllowedCommandChain(input.commandLine);
     const cwd = await resolveBashCwd(options.workspaceRoot, input.cwd);
     const { env, redactionSecrets } = buildTrustedBashEnv(options.hostEnv, options.envAllowlist);
-    const release = limiter.acquire();
     const displayCommand = flattenChainForDisplay(chain);
+    let release: () => void;
+    try {
+        release = await limiter.acquire(context.signal);
+    } catch (error: unknown) {
+        if (error instanceof BashRunQueueAbortedError) {
+            return commandRunOutput(
+                displayCommand,
+                cwd,
+                interruptedBeforeSpawnResult(),
+                options.maxOutputBytes,
+                redactionSecrets,
+            );
+        }
+        throw error;
+    }
     const started = commandEvent(
         'command.started',
         context.toolCallId,
         commandMetadata(displayCommand, cwd, 'started'),
     );
     try {
+        if (context.signal.aborted) {
+            return commandRunOutput(
+                displayCommand,
+                cwd,
+                interruptedBeforeSpawnResult(),
+                options.maxOutputBytes,
+                redactionSecrets,
+            );
+        }
         await requireApproval(options, context.toolCallId, input.commandLine, chain);
         if (context.signal.aborted) {
             return commandRunOutput(
@@ -494,16 +517,61 @@ function errorCodeForDecision(decision: PermissionDecision): 'approval_denied' |
     return decision.status === 'deny' ? 'approval_denied' : 'approval_required';
 }
 
+class BashRunQueueAbortedError extends Error {}
+
+type BashRunWaiter = {
+    readonly signal: AbortSignal;
+    readonly resolve: (release: () => void) => void;
+    readonly reject: (error: BashRunQueueAbortedError) => void;
+    readonly abort: () => void;
+};
+
 class BashRunLimiter {
     private running = false;
+    private readonly waiters: BashRunWaiter[] = [];
 
-    acquire(): () => void {
+    acquire(signal: AbortSignal): Promise<() => void> {
+        if (signal.aborted) {
+            return Promise.reject(new BashRunQueueAbortedError());
+        }
+        const { promise, resolve, reject } = Promise.withResolvers<() => void>();
+        const abort = () => {
+            const index = this.waiters.findIndex((waiter) => waiter.abort === abort);
+            if (index < 0) {
+                return;
+            }
+            this.waiters.splice(index, 1);
+            reject(new BashRunQueueAbortedError());
+        };
+        const waiter: BashRunWaiter = { signal, resolve, reject, abort };
+        signal.addEventListener('abort', abort, { once: true });
         if (this.running) {
-            throw commandRunFailure('concurrency_limit', 'another bash.run invocation is already running');
+            this.waiters.push(waiter);
+            return promise;
         }
         this.running = true;
-        return () => {
+        this.grant(waiter);
+        return promise;
+    }
+
+    private grant(waiter: BashRunWaiter): void {
+        waiter.signal.removeEventListener('abort', waiter.abort);
+        let released = false;
+        waiter.resolve(() => {
+            if (released) {
+                return;
+            }
+            released = true;
+            this.release();
+        });
+    }
+
+    private release(): void {
+        const next = this.waiters.shift();
+        if (next === undefined) {
             this.running = false;
-        };
+            return;
+        }
+        this.grant(next);
     }
 }

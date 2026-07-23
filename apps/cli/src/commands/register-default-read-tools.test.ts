@@ -37,14 +37,14 @@ describe('default production read tool surface', () => {
         tempRoots.length = 0;
     });
 
-    it('advertises all read names and preserves safe reads plus reference-repo denial in both modes', async () => {
+    it('advertises all read names and permits safe plus reference-repo reads in both modes', async () => {
         // Given
         const configRoot = await createTempRoot(tempRoots, 'mctrl-read-surface-config-');
         const dataRoot = await createTempRoot(tempRoots, 'mctrl-read-surface-data-');
         const workspaceRoot = await createTempRoot(tempRoots, 'mctrl-read-surface-workspace-');
         await writeFile(join(workspaceRoot, 'safe.txt'), 'safe content\n', 'utf8');
         await mkdir(join(workspaceRoot, 'temp', 'ref-repos', 'fixture'), { recursive: true });
-        await writeFile(join(workspaceRoot, 'temp', 'ref-repos', 'fixture', 'README.md'), 'hidden\n', 'utf8');
+        await writeFile(join(workspaceRoot, 'temp', 'ref-repos', 'fixture', 'README.md'), 'inspectable\n', 'utf8');
         vi.stubEnv('MCTRL_CONFIG_DIR', configRoot);
         vi.stubEnv('MCTRL_DATA_DIR', dataRoot);
         vi.stubEnv('EXA_API_KEY', '');
@@ -76,12 +76,15 @@ describe('default production read tool surface', () => {
         // Then
         expect(readNames(interactive)).toEqual(READ_TOOL_NAMES);
         expect(readNames(noninteractive)).toEqual(READ_TOOL_NAMES);
-        for (const [index, settlement] of settlements.entries()) {
-            if (index % 4 < 2) {
-                expect(settlement.result.status).toBe('completed');
-            } else {
-                expect(settlement.result.error?.message).toContain('workspace_denied');
-            }
+        for (const settlement of settlements) {
+            expect(settlement.result.status).toBe('completed');
+        }
+        for (const settlement of [settlements[2], settlements[3], settlements[6], settlements[7]]) {
+            expect(settlement?.structuredOutput).toMatchObject({
+                kind: 'file',
+                path: 'temp/ref-repos/fixture/README.md',
+                content: 'inspectable\n',
+            });
         }
     });
 });
@@ -103,7 +106,7 @@ async function invokeRead(registry: ProductionToolRegistry, toolName: 'read' | '
     const advertisement = registry.registry.advertise().find((tool) => tool.name === toolName);
     if (advertisement === undefined) throw new TypeError(`${toolName} was not advertised`);
     return registry.registry.invoke({
-        toolCallId: `${toolName.replace('.', '_')}_${path.startsWith('safe') ? 'safe' : 'denied'}`,
+        toolCallId: `${toolName.replace('.', '_')}_${path.startsWith('safe') ? 'safe' : 'reference_repo'}`,
         toolName,
         advertisedVersion: advertisement.version,
         argumentsJson: JSON.stringify({ path }),

@@ -4,8 +4,8 @@
  * The static `ripgrepToolRegistration` throws on execute because it has no workspace guard. This
  * factory mirrors `createGlobToolRegistration` + the read-tools guard: it pins the search base to
  * the workspace root, rejects absolute and symlink-escape targets, applies the SAME denylist the
- * read tools use (so `temp/ref-repos`, `node_modules`, `dist`, etc. are filtered out), and stays
- * read-class. The tool name stays `ripgrep`.
+ * read tools use (so `node_modules`, `dist`, and other generated paths are filtered out), and
+ * stays read-class. The tool name stays `ripgrep`.
  *
  * Backend fallback chain (mc convention):
  *

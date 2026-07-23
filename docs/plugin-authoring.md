@@ -400,8 +400,9 @@ File matching and walk rules:
 
 ### Denylisted paths
 
-Discovery reuses the read-only repo tool denylist. A workflow file whose path
-touches any of these is skipped with a `denylisted` diagnostic:
+Discovery uses the automated-discovery denylist. A workflow file whose path
+touches any of these is skipped with a `denylisted` diagnostic. Reference
+repositories remain inspectable through repo tools but are never auto-discovered:
 
 ```
 temp/ref-repos, .mc/evidence, .nx, dist, build, target,
@@ -652,9 +653,9 @@ graphs into reusable components.
 **There is a workflow count cap.** The default is 256 workflows. Once reached,
 further files are skipped with `limit_reached`.
 
-**Denylisted directories are skipped.** Placing workflows under `node_modules`,
-`dist`, `build`, `target`, `.git`, `coverage`, `.nx`, `.mc/evidence`, or
-`temp/ref-repos` will not load them.
+**Denylisted directories are skipped.** Placing workflows under `temp/ref-repos`,
+`node_modules`, `dist`, `build`, `target`, `.git`, `coverage`, `.nx`, or
+`.mc/evidence` will not load them.
 
 **Graph policies and mode policies are different shapes.** Graph `policies`
 use `{ id, capability, decision }` with `decision` in

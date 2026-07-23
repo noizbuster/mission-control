@@ -95,6 +95,7 @@ describe('runAgent interactive coding tool registry', () => {
             'session_info',
             'session_search',
             'glob',
+            'ripgrep',
             'ast_grep',
             'ast_edit',
             'resolve',
@@ -134,15 +135,16 @@ describe('runAgent interactive coding tool registry', () => {
         );
     });
 
-    it('denies read of reference repos without an approval prompt', async () => {
+    it('permits reference-repo reads without an approval prompt', async () => {
         const dataDir = await tempRoot(tempRoots, 'mctrl-tools-data-');
         const workspaceRoot = await tempRoot(tempRoots, 'mctrl-tools-workspace-');
         await mkdir(join(workspaceRoot, 'temp', 'ref-repos', 'opencode'), { recursive: true });
-        await writeFile(join(workspaceRoot, 'temp', 'ref-repos', 'opencode', 'README.md'), 'hidden', 'utf8');
+        await writeFile(join(workspaceRoot, 'temp', 'ref-repos', 'opencode', 'README.md'), 'inspectable', 'utf8');
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
         const chatOutput = createBufferedChatOutput();
+        const events: AgentEvent[] = [];
 
-        const output = await runAgent(parseArgs(['--session', 'session_task4_deny_read']), {
+        const output = await runAgent(parseArgs(['--session', 'session_task4_reference_repo_read']), {
             authStore: createEmptyAuthStore(),
             chatInput: createScriptedChatInput([
                 { type: 'line', value: 'read reference repo' },
@@ -157,27 +159,36 @@ describe('runAgent interactive coding tool registry', () => {
                     [
                         {
                             kind: 'tool_call_completed',
-                            toolCallId: 'read_denied',
+                            toolCallId: 'read_reference_repo',
                             toolName: 'read',
                             argumentsJson: JSON.stringify({ path: 'temp/ref-repos/opencode/README.md' }),
                         },
                         {
                             kind: 'tool_call_completed',
-                            toolCallId: 'repo_read_denied',
+                            toolCallId: 'repo_read_reference_repo',
                             toolName: 'repo.read',
                             argumentsJson: JSON.stringify({ path: 'temp/ref-repos/opencode/README.md' }),
                         },
-                        { kind: 'response_completed', content: 'read denied by registry' },
+                        { kind: 'response_completed', content: 'reference repository inspected by registry' },
                     ],
-                    [{ kind: 'response_completed', content: 'read denied' }],
+                    [{ kind: 'response_completed', content: 'reference repository inspection complete' }],
                 ],
             ),
             plainPromptGraph: 'coding-agent',
+            onRuntimeEvent: (event) => {
+                events.push(event);
+            },
         });
 
         expect(output).not.toContain('Approve read?');
         expect(output).not.toContain('Approve repo.read?');
-        expect(output).toContain('read failed: workspace_denied');
-        expect(output).toContain('repo.read failed: workspace_denied');
+        expect(output).not.toContain('read failed:');
+        expect(output).not.toContain('repo.read failed:');
+        expect(events).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ type: 'tool.completed', taskId: 'read_reference_repo' }),
+                expect.objectContaining({ type: 'tool.completed', taskId: 'repo_read_reference_repo' }),
+            ]),
+        );
     });
 });

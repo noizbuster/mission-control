@@ -12,9 +12,9 @@
  * hint and can use `repo.read` itself. Files are never auto-read here.
  *
  * Denylist is aligned with `packages/core`'s
- * `defaultReadOnlyRepoToolDenylist` (`temp/ref-repos`, `.mc/evidence`, `.nx`,
- * `dist`, `build`, `target`, `coverage`, `node_modules`, `.git`) and extended
- * with `.mc` so the whole agent-state dir stays hidden from the picker.
+ * `defaultReadOnlyRepoToolDenylist` (`.mc/evidence`, `.nx`, `dist`, `build`,
+ * `target`, `coverage`, `node_modules`, `.git`) and extended with `.mc` so the
+ * whole agent-state dir stays hidden from the picker.
  */
 
 import { type Dirent, readdirSync } from 'node:fs';
@@ -46,17 +46,7 @@ export type FileAutocompleteOptions = {
     readonly frecencyKeys?: readonly string[];
 };
 
-const deniedPathEntries = [
-    'node_modules',
-    '.git',
-    '.nx',
-    '.mc',
-    'dist',
-    'build',
-    'target',
-    'coverage',
-    'temp/ref-repos',
-] as const;
+const deniedPathEntries = ['node_modules', '.git', '.nx', '.mc', 'dist', 'build', 'target', 'coverage'] as const;
 
 const whitespacePattern = /\s/u;
 const maxReturnedMatches = 100;

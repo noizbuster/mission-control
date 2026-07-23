@@ -65,7 +65,7 @@ describe('workspace-scoped glob factory', () => {
         expect(JSON.stringify(settlement)).not.toContain('LEAKED_VIA_SYMLINK');
     });
 
-    it('filters temp/ref-repos matches out of results (same denylist as read tools)', async () => {
+    it('includes temp/ref-repos matches in results', async () => {
         const workspaceRoot = await createWorkspace();
         await mkdir(join(workspaceRoot, 'temp', 'ref-repos', 'opencode'), { recursive: true });
         await mkdir(join(workspaceRoot, 'src'), { recursive: true });
@@ -77,11 +77,10 @@ describe('workspace-scoped glob factory', () => {
         const output = settlement.structuredOutput as { paths: readonly string[] };
 
         expect(settlement.result.status).toBe('completed');
-        expect(output.paths.some((path) => path.includes('temp/ref-repos'))).toBe(false);
-        expect(output.paths.some((path) => path.includes('temp'))).toBe(false);
+        expect(output.paths).toContain('temp/ref-repos/opencode/README.md');
     });
 
-    it('denies a glob base directly inside temp/ref-repos', async () => {
+    it('allows a glob base directly inside temp/ref-repos', async () => {
         const workspaceRoot = await createWorkspace();
         await mkdir(join(workspaceRoot, 'temp', 'ref-repos', 'opencode'), { recursive: true });
         await writeFile(join(workspaceRoot, 'temp', 'ref-repos', 'opencode', 'README.md'), 'ref', 'utf8');
@@ -92,8 +91,10 @@ describe('workspace-scoped glob factory', () => {
             path: 'temp/ref-repos/opencode',
         });
 
-        expect(settlement.result.status).toBe('failed');
-        expect(settlement.result.error?.message).toContain('workspace_denied');
+        expect(settlement.result.status).toBe('completed');
+        expect(settlement.structuredOutput).toMatchObject({
+            paths: ['README.md'],
+        });
     });
 
     it('rejects a malformed invocation (missing pattern) before walking the workspace', async () => {

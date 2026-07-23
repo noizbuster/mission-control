@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { registerRipgrepTool } from './ripgrep-tool-factory';
+import { ToolRegistry } from './tool-registry';
 import { spawnSync } from 'node:child_process';
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { registerRipgrepTool } from './ripgrep-tool-factory';
-import { ToolRegistry } from './tool-registry';
 
 const rgAvailable = (() => {
     try {
@@ -135,7 +135,7 @@ describeWithRg('workspace-scoped ripgrep factory', () => {
         expect(JSON.stringify(settlement)).not.toContain('LEAKED_VIA_SYMLINK');
     });
 
-    it('filters temp/ref-repos matches out (same denylist as read tools)', async () => {
+    it('includes temp/ref-repos matches', async () => {
         const workspaceRoot = await createWorkspace();
         await mkdir(join(workspaceRoot, 'temp', 'ref-repos', 'opencode'), { recursive: true });
         await mkdir(join(workspaceRoot, 'src'), { recursive: true });
@@ -150,11 +150,10 @@ describeWithRg('workspace-scoped ripgrep factory', () => {
             matches: ReadonlyArray<{ path: string; line: number; text: string }>;
         };
         const paths = output.matches.map((match) => match.path);
-        expect(paths).not.toContain('temp/ref-repos/opencode/README.md');
-        expect(paths.some((path) => path.includes('temp/ref-repos'))).toBe(false);
+        expect(paths).toContain('temp/ref-repos/opencode/README.md');
     });
 
-    it('denies a ripgrep base directly inside temp/ref-repos', async () => {
+    it('allows a ripgrep base directly inside temp/ref-repos', async () => {
         const workspaceRoot = await createWorkspace();
         await mkdir(join(workspaceRoot, 'temp', 'ref-repos', 'opencode'), { recursive: true });
         await writeFile(join(workspaceRoot, 'temp', 'ref-repos', 'opencode', 'README.md'), 'needle', 'utf8');
@@ -165,8 +164,10 @@ describeWithRg('workspace-scoped ripgrep factory', () => {
             path: 'temp/ref-repos/opencode',
         });
 
-        expect(settlement.result.status).toBe('failed');
-        expect(settlement.result.error?.message).toContain('workspace_denied');
+        expect(settlement.result.status).toBe('completed');
+        expect(settlement.structuredOutput).toMatchObject({
+            matches: [expect.objectContaining({ path: 'temp/ref-repos/opencode/README.md' })],
+        });
     });
 
     it('rejects a malformed invocation (missing pattern) before invoking rg', async () => {
@@ -301,10 +302,13 @@ describe('workspace-scoped ripgrep registration (no rg required)', () => {
     it('rejects the static registration execute path with a guard error', async () => {
         const { ripgrepToolRegistration } = await import('./ripgrep-tool');
         await expect(
-            ripgrepToolRegistration.execute({} as never, {
-                toolCallId: 'rg_static_call',
-                toolName: 'ripgrep',
-            } as never),
+            ripgrepToolRegistration.execute(
+                {} as never,
+                {
+                    toolCallId: 'rg_static_call',
+                    toolName: 'ripgrep',
+                } as never,
+            ),
         ).rejects.toThrow(/workspace guard/);
     });
 

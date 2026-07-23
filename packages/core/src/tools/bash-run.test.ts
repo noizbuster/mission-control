@@ -405,22 +405,68 @@ describe('bash.run tool', () => {
         }
     });
 
-    it('enforces shell concurrency limit one', async () => {
-        const release = deferred<CommandExecutionResult>();
+    it('queues shell invocations until the active command settles', async () => {
+        const firstStarted = deferred<void>();
+        const releaseFirst = deferred<CommandExecutionResult>();
+        const secondStarted = deferred<void>();
+        const commandCalls: CommandExecutionRequest[] = [];
         const registry = await createRegistry({
             requestPermission: allowPermission,
-            executor: async () => release.promise,
+            executor: async (request) => {
+                commandCalls.push(request);
+                if (commandCalls.length === 1) {
+                    firstStarted.resolve();
+                    return releaseFirst.promise;
+                }
+                secondStarted.resolve();
+                return completedResult();
+            },
         });
 
         const first = invokeBash(registry, { commandLine: 'printf first' });
+        await firstStarted.promise;
+        const second = invokeBash(registry, { commandLine: 'printf second' });
         await Promise.resolve();
-        const second = await invokeBash(registry, { commandLine: 'printf second' });
-        release.resolve(completedResult());
-        const firstResult = await first;
 
+        expect(commandCalls).toHaveLength(1);
+
+        releaseFirst.resolve(completedResult());
+        await secondStarted.promise;
+        const [firstResult, secondResult] = await Promise.all([first, second]);
+
+        expect(commandCalls.map((request) => [request.command, ...request.args])).toEqual([
+            ['printf', 'first'],
+            ['printf', 'second'],
+        ]);
         expect(firstResult.result.status).toBe('completed');
-        expect(second.result.status).toBe('failed');
-        expect(second.result.error?.message).toContain('concurrency_limit');
+        expect(secondResult.result.status).toBe('completed');
+    });
+
+    it('removes an aborted invocation from the shell queue', async () => {
+        const firstStarted = deferred<void>();
+        const releaseFirst = deferred<CommandExecutionResult>();
+        const commandCalls: CommandExecutionRequest[] = [];
+        const registry = await createRegistry({
+            requestPermission: allowPermission,
+            executor: async (request) => {
+                commandCalls.push(request);
+                firstStarted.resolve();
+                return releaseFirst.promise;
+            },
+        });
+        const abortController = new AbortController();
+
+        const first = invokeBash(registry, { commandLine: 'printf first' });
+        await firstStarted.promise;
+        const second = invokeBash(registry, { commandLine: 'printf second' }, { signal: abortController.signal });
+        abortController.abort();
+        const secondResult = await second;
+
+        expect(commandCalls).toHaveLength(1);
+        expect(secondResult.result.status).toBe('completed');
+
+        releaseFirst.resolve(completedResult());
+        expect((await first).result.status).toBe('completed');
     });
 
     it('proposes extracted file paths alongside the full command in the permission request', async () => {
@@ -710,9 +756,14 @@ async function createRegistry(input: CreateRegistryInput): Promise<ToolRegistry>
     return registry;
 }
 
+type InvokeBashOptions = {
+    readonly signal?: AbortSignal;
+};
+
 async function invokeBash(
     registry: ToolRegistry,
     input: { readonly commandLine: string; readonly cwd?: string },
+    options: InvokeBashOptions = {},
 ): Promise<ToolInvocationSettlement> {
     const advertisement = registry.advertise().find((tool) => tool.name === 'bash.run');
     if (advertisement === undefined) {
@@ -723,6 +774,7 @@ async function invokeBash(
         toolName: 'bash.run',
         advertisedVersion: advertisement.version,
         argumentsJson: JSON.stringify(input),
+        ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
 }
 

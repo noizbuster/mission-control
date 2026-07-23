@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest';
 import { registerReadOnlyRepoTools, ToolRegistry } from '@mission-control/core';
+import { afterEach, describe, expect, it } from 'vitest';
 import { findForbiddenModuleSpecifiers } from './module-specifier-boundary';
 import { lstatSync, readdirSync, readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -71,7 +71,7 @@ describe('ABG runtime boundaries', () => {
         ]);
     });
 
-    it('reference repos are planning evidence only', async () => {
+    it('reference repos are inspectable planning evidence', async () => {
         const sentinel = 'REFERENCE_REPO_SENTINEL_DO_NOT_LEAK';
         const injectedDirective = `agent directive ${sentinel}`;
         const workspaceRoot = await createWorkspace();
@@ -86,7 +86,7 @@ describe('ABG runtime boundaries', () => {
         const listTool = findAdvertisement(registry, 'repo.list');
         const searchTool = findAdvertisement(registry, 'repo.search');
 
-        const deniedRead = await invokeTool(registry, 'repo.read', readTool.version, {
+        const referenceRead = await invokeTool(registry, 'repo.read', readTool.version, {
             path: 'temp/ref-repos/opencode/AGENTS.md',
         });
         const tempListing = await invokeTool(registry, 'repo.list', listTool.version, { path: 'temp' });
@@ -94,34 +94,58 @@ describe('ABG runtime boundaries', () => {
             pattern: sentinel,
             path: '.',
         });
-        const deniedScopedSearch = await invokeTool(registry, 'repo.search', searchTool.version, {
+        const scopedSearch = await invokeTool(registry, 'repo.search', searchTool.version, {
             pattern: sentinel,
             path: 'temp/ref-repos',
         });
 
-        expect(deniedRead.result.status).toBe('failed');
-        expect(deniedRead.result.error?.message).toContain('workspace_denied');
+        expect(referenceRead.result.status).toBe('completed');
+        expect(referenceRead.structuredOutput).toMatchObject({
+            kind: 'file',
+            path: 'temp/ref-repos/opencode/AGENTS.md',
+            content: injectedDirective,
+        });
         expect(tempListing.result.status).toBe('completed');
         expect(tempListing.structuredOutput).toMatchObject({
             kind: 'directory',
             path: 'temp',
-            entries: [{ name: 'notes.txt', kind: 'file' }],
-            totalEntries: 1,
+            entries: [
+                { name: 'notes.txt', kind: 'file' },
+                { name: 'ref-repos', kind: 'directory' },
+            ],
+            totalEntries: 2,
         });
-        expect(tempListing.result.output).not.toContain('ref-repos');
         expect(rootSearch.result.status).toBe('completed');
-        expect(rootSearch.result.output).not.toContain(injectedDirective);
         expect(rootSearch.structuredOutput).toMatchObject({
             kind: 'search',
             path: '.',
-            totalMatches: 0,
-            matches: [],
+            totalMatches: 1,
+            matches: [
+                {
+                    path: 'temp/ref-repos/opencode/AGENTS.md',
+                    line: 1,
+                    text: injectedDirective,
+                    textTruncated: false,
+                },
+            ],
         });
-        expect(deniedScopedSearch.result.status).toBe('failed');
-        expect(deniedScopedSearch.result.error?.message).toContain('workspace_denied');
+        expect(scopedSearch.result.status).toBe('completed');
+        expect(scopedSearch.structuredOutput).toMatchObject({
+            kind: 'search',
+            path: 'temp/ref-repos',
+            totalMatches: 1,
+            matches: [
+                {
+                    path: 'temp/ref-repos/opencode/AGENTS.md',
+                    line: 1,
+                    text: injectedDirective,
+                    textTruncated: false,
+                },
+            ],
+        });
     });
 
-    it('stale generated payloads cannot influence runtime repo tools', async () => {
+    it('stale generated payloads and dependency trees stay out of root search', async () => {
         const sentinel = 'STALE_GENERATED_PAYLOAD_SENTINEL';
         const workspaceRoot = await createWorkspace();
         await mkdir(join(workspaceRoot, 'dist'), { recursive: true });
@@ -151,7 +175,6 @@ describe('ABG runtime boundaries', () => {
             'dist/bundle.js',
             'coverage/lcov.info',
             '.nx/cache',
-            'node_modules/evil-pkg/inject.js',
             'build/output.js',
             'target/debug',
         ]) {

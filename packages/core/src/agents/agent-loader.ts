@@ -12,7 +12,7 @@
  * diagnostics and are skipped.
  */
 import { type AgentDefinition, type AgentSource } from '@mission-control/protocol';
-import { defaultReadOnlyRepoToolDenylist, toPosixPath } from '../tools/read-tools-paths';
+import { defaultAutomatedDiscoveryDenylist, toPosixPath } from '../tools/read-tools-paths';
 import { AgentParseError, parseAgentFile } from './agent-parser';
 import { BUNDLED_AGENT_TEMPLATES } from './bundled/index';
 import { CapabilityRegistry } from './capability/index';
@@ -28,9 +28,9 @@ const MAX_WALK_DEPTH = 10;
 const AGENT_FILE_SUFFIX = '.md';
 const BUNDLED_PATH = '<bundled>';
 
-const denylistNeedles: readonly string[] = defaultReadOnlyRepoToolDenylist.map((e) => e.toLowerCase());
+const denylistNeedles: readonly string[] = defaultAutomatedDiscoveryDenylist.map((e) => e.toLowerCase());
 const denylistDirNames: ReadonlySet<string> = new Set(
-    defaultReadOnlyRepoToolDenylist.filter((e) => !e.includes('/')).map((e) => e.toLowerCase()),
+    defaultAutomatedDiscoveryDenylist.filter((e) => !e.includes('/')).map((e) => e.toLowerCase()),
 );
 
 export type DiscoverAgentsOptions = {

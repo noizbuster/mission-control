@@ -225,10 +225,9 @@ describe('file.edit tool', () => {
         expect(await readText(workspaceRoot, 'real/notes.txt')).toBe('before\n');
     });
 
-    it('denies generated and reference-repo descendants before approval', async () => {
+    it('denies generated descendants before approval', async () => {
         const workspaceRoot = await createGitWorkspace();
         await mkdir(join(workspaceRoot, 'dist'), { recursive: true });
-        await mkdir(join(workspaceRoot, 'temp', 'ref-repos', 'opencode'), { recursive: true });
         await writeFile(join(workspaceRoot, 'dist', 'bundle.txt'), 'before\n', 'utf8');
         const requests: PermissionRequest[] = [];
         const registry = await createRegistry(workspaceRoot, (request: PermissionRequest) => {
@@ -241,14 +240,8 @@ describe('file.edit tool', () => {
             oldText: 'before',
             newText: 'after',
         });
-        const referenceRepo = await invokeEdit(registry, {
-            path: 'temp/ref-repos/opencode/README.md',
-            oldText: 'before',
-            newText: 'after',
-        });
 
         expect(generated.result.error?.message).toContain('workspace_denied');
-        expect(referenceRepo.result.error?.message).toContain('workspace_denied');
         expect(requests).toHaveLength(0);
         expect(await readText(workspaceRoot, 'dist/bundle.txt')).toBe('before\n');
     });

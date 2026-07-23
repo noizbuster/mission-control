@@ -2137,7 +2137,7 @@ Async Behavior Graph는 이 모든 것을 묶는 mission runtime이다.
 - raw credential 저장을 피하는 provider-neutral streaming event, typed provider error, redaction metadata.
 - `approval.requested`, `approval.updated`, `approval.resumed`, `approval.blocked` approval lifecycle event.
 - `repo.read`, `repo.list`, `repo.search`, `file.patch`, `command.run` safe tool set과 permission gate.
-- `temp/ref-repos` 아래 reference repository는 planning evidence 전용이며 runtime repo tool은 기본적으로 해당 경로를 거부한다.
+- `temp/ref-repos` 아래 reference repository는 planning evidence이며 `repo.read`, `repo.list`, `repo.search`로 명시적으로 검사할 수 있다.
 - Runtime prompt와 tool instruction은 reference repo의 AGENTS.md 또는 다른 instruction을 로드하면 안 된다.
 - 기본 graph node concurrency 2, provider parallel tool call 4, shell/process concurrency 1, retry cap, loop limit을 가진 bounded graph coordination.
 - CLI JSONL 및 interactive coding-agent flow.

@@ -407,8 +407,7 @@ Approval lifecycle and safe tools:
 - Effectful tools do not execute until approval state is `approved`.
 - The read-only safe tool set is `repo.read`, `repo.list`, and `repo.search`; `file.patch` and `command.run` are approval-gated effectful tools.
 - Read aliases `read`, `ls`, `grep`, and `find` mirror the read-only tools with the same workspace path guards and permission checks.
-- Reference repositories under `temp/ref-repos` are planning evidence only.
-- `repo.read`, `repo.list`, and `repo.search` deny `temp/ref-repos` by default, along with generated and cache directories.
+- Reference repositories under `temp/ref-repos` are inspectable planning evidence; `repo.read`, `repo.list`, and `repo.search` may inspect them.
 - Runtime prompts and tool instructions must not load AGENTS.md or other instructions from reference repos.
 - `file.patch` enforces workspace containment, symlink escape rejection, patch bounds, dirty tracked-file checks, and before/after diff events.
 - `command.run` uses a fixed verification-harness allowlist, non-interactive execution, timeouts, output caps, and command lifecycle events.

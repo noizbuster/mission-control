@@ -32,6 +32,8 @@ import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './t
 import { open, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
+const dependencySourcePaths = ['node_modules'] as const;
+
 export type { ReadOnlyRepoToolOptions } from './read-tools-schemas';
 
 type ReadOnlyRepoToolRegistrations = readonly [
@@ -68,6 +70,7 @@ export async function createReadOnlyRepoToolRegistrations(
     const resolved = resolveOptions(options);
     const guard = await createWorkspaceGuard(options.workspaceRoot, {
         allowDenylistedPaths: resolved.allowDenylistedPaths,
+        allowDirectDenylistedPaths: dependencySourcePaths,
     });
     const registrations: ReadOnlyRepoToolRegistrations = [
         createReadTool(guard, resolved),

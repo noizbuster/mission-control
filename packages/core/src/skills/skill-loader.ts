@@ -13,14 +13,14 @@
  * owns on-demand body loading).
  *
  * Trust/denylist stance: project scans are skipped entirely when the workspace
- * root itself sits inside a denylisted path (e.g. `temp/ref-repos/**`), and the
- * recursive walker prunes denylisted directory segments and refuses to follow
- * symlinks (escape defense). This reuses the read-tools denylist so the same
- * `temp/ref-repos` / generated-dir guard covers skill discovery.
+ * root itself sits inside an automated-discovery denylisted path (e.g.
+ * `temp/ref-repos/**`), and the recursive walker prunes denylisted directory
+ * segments and refuses to follow symlinks (escape defense). This preserves the
+ * reference-repository / generated-dir guard independently of repo-tool reads.
  */
 import { appName } from '@mission-control/config';
 import { parse as parseYaml } from 'yaml';
-import { defaultReadOnlyRepoToolDenylist, toPosixPath } from '../tools/read-tools-paths';
+import { defaultAutomatedDiscoveryDenylist, toPosixPath } from '../tools/read-tools-paths';
 import { type SkillMetadata, SkillMetadataSchema, validateSkillMetadata } from './skill-metadata';
 import type { Dirent } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
@@ -41,12 +41,12 @@ export const DEFAULT_MAX_SKILLS = 256;
 const MAX_WALK_DEPTH = 10;
 
 /** Denylist roots expressed as absolute-path needles (multi-segment aware). */
-const denylistAbsolutePathNeedles: readonly string[] = defaultReadOnlyRepoToolDenylist.map((entry) =>
+const denylistAbsolutePathNeedles: readonly string[] = defaultAutomatedDiscoveryDenylist.map((entry) =>
     entry.toLowerCase(),
 );
 /** Single-segment denylist dir names, used to prune the walk cheaply. */
 const denylistDirNameSet: ReadonlySet<string> = new Set(
-    defaultReadOnlyRepoToolDenylist.filter((entry) => !entry.includes('/')).map((entry) => entry.toLowerCase()),
+    defaultAutomatedDiscoveryDenylist.filter((entry) => !entry.includes('/')).map((entry) => entry.toLowerCase()),
 );
 
 export type SkillScope = 'user' | 'project';
