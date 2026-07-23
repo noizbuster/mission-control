@@ -5,7 +5,7 @@ import { openLocalLibsqlDb } from '../db/local-libsql-db';
 import { SESSION_ID } from './session-stop-projection-events-test-support';
 import { SqliteSessionEventStore } from './sqlite-session-event-store';
 
-const sessionRowSchema = z.object({ status: z.string(), metadata_json: z.string() });
+const sessionRowSchema = z.object({ status: z.string(), stopped_at: z.string().nullable(), metadata_json: z.string() });
 const inputRowSchema = z.object({ input_id: z.string(), status: z.string() });
 const approvalRowSchema = z.object({ approval_id: z.string(), status: z.string() });
 const waitRowSchema = z.object({ wait_id: z.string(), reason: z.string(), status: z.string() });
@@ -61,7 +61,11 @@ export async function sessionStatus(client: Client): Promise<string> {
 
 export async function readSessionRow(client: Client): Promise<z.infer<typeof sessionRowSchema>> {
     return sessionRowSchema.parse(
-        (await client.execute('SELECT status, metadata_json FROM sessions WHERE session_id = ?', [SESSION_ID])).rows[0],
+        (
+            await client.execute('SELECT status, stopped_at, metadata_json FROM sessions WHERE session_id = ?', [
+                SESSION_ID,
+            ])
+        ).rows[0],
     );
 }
 

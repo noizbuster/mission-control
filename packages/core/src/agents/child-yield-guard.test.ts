@@ -484,7 +484,7 @@ describe('requireYieldBeforeExit — child graph integration', () => {
         }
     });
 
-    it('spawn path stamps requireYieldBeforeExit and returns yielded output', async () => {
+    it('returns an explicit yield without a trailing prose turn', async () => {
         // Given
         let spawnCalls = 0;
         const model = new MockLanguageModelV3({
@@ -508,6 +508,30 @@ describe('requireYieldBeforeExit — child graph integration', () => {
         // Then: yield settles and completes without a trailing prose turn
         expect(result.status).toBe('completed');
         expect(result.output).toBe('spawned-ok');
+        expect(spawnCalls).toBe(1);
+    });
+
+    it('preserves completed prose when a child does not call yield', async () => {
+        let spawnCalls = 0;
+        const model = new MockLanguageModelV3({
+            provider: 'test',
+            modelId: 'mock',
+            doStream: async () => {
+                spawnCalls += 1;
+                return { stream: convertArrayToReadableStream(textOnlyChunks('completed without an explicit yield')) };
+            },
+        });
+        const childRegistry = new ToolRegistry();
+        childRegistry.register(createYieldToolRegistration({}));
+        const spawn = createChildGraphSpawnFn({ resolveSdkModel: () => model });
+
+        const result = await spawn(makeSpawnContext(childRegistry));
+
+        expect(result).toEqual({
+            sessionId: 'sess-spawn-yield-guard',
+            status: 'completed',
+            output: 'completed without an explicit yield',
+        });
         expect(spawnCalls).toBe(1);
     });
 });

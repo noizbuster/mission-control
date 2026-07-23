@@ -25,6 +25,7 @@ export function deriveReplaySession(sessionId: string, events: readonly AgentEve
             awaiting = undefined;
         }
         if (event.type === 'run.started' || event.type === 'task.started') {
+            stoppedAt = undefined;
             sawRunLifecycle = true;
             hasActiveRun = true;
         }

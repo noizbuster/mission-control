@@ -305,6 +305,11 @@ export {
     type ProviderFactoryTransports,
 } from './providers/provider-factory';
 export { ProviderTurnRunner } from './providers/provider-turn-runner';
+export {
+    DEFAULT_PROVIDER_CHUNK_TIMEOUT_MS,
+    MAX_PROVIDER_CHUNK_TIMEOUT_MS,
+    nextProviderChunkTimeoutMs,
+} from './providers/provider-turn-timeout';
 export type {
     ProviderAdapter,
     ProviderAdapterContext,

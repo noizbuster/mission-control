@@ -55,6 +55,9 @@ export class SessionEventLog {
             if (event.type === 'session.stopped') {
                 stoppedAt = event.timestamp;
             }
+            if (event.type === 'run.started' || event.type === 'task.started') {
+                stoppedAt = undefined;
+            }
             if (event.taskId === undefined) {
                 continue;
             }

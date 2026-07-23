@@ -23,6 +23,7 @@ import {
     createCodingAgentNodeRegistry,
     createSdkModelResolver,
     type LspClient,
+    MAX_PROVIDER_CHUNK_TIMEOUT_MS,
     McpConnectionManager,
     ProjectTrustStore,
     type ProviderAdapter,
@@ -204,6 +205,8 @@ function bridgeResolverFromProvider(provider: ProviderAdapter, selection: ModelP
             providerID: selection.providerID,
             modelID: selection.modelID,
             ...(selection.variantID !== undefined ? { variantID: selection.variantID } : {}),
+            retryLimit: 0,
+            timeoutMs: MAX_PROVIDER_CHUNK_TIMEOUT_MS,
         });
 }
 

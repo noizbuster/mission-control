@@ -16,7 +16,7 @@ import { join } from 'node:path';
 
 const inputSchema = z.record(z.string(), z.unknown());
 const outputSchema = z.object({ ok: z.literal(true) }).strict();
-const NETWORK_ALLOWED_CATEGORY_IDS = ['librarian', 'deep', 'reasoner', 'oracle', 'designer', 'planner'] as const;
+const NETWORK_ALLOWED_CATEGORY_IDS = ['architect', 'librarian', 'deep', 'reasoner', 'oracle', 'designer', 'planner'] as const;
 const NETWORK_BLOCKED_CATEGORY_IDS = ['explore', 'reviewer', 'quick'] as const;
 const NETWORK_TOOL_NAMES = ['webfetch', 'web_search', 'mcp__fixture__echo'] as const;
 

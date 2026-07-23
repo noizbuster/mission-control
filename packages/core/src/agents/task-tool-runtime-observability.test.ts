@@ -103,6 +103,7 @@ function buildRuntime(
         },
         ...(services !== undefined ? { services } : {}),
         parentSessionId: 'parent-session',
+        isCliRootParent: true,
     });
 }
 

@@ -110,6 +110,7 @@ function buildRuntime(input: {
         parentToolRegistry: new ToolRegistry(),
         parentAgent: parent,
         parentSessionId: input.parentSessionId,
+        isCliRootParent: true,
         spawnFn: input.spawnFn,
         services: {
             jobManager: new AsyncJobManager(),

@@ -306,20 +306,18 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
         }
     }
 
-    // Child-only: keep the coding-agent self-edge alive until yield settles (or soft-land /
-    // maxNodeRuns ends the loop). Parent graphs omit requireYieldBeforeExit.
+    // An explicit child yield always ends this graph turn. Requiring yield is
+    // optional: prose-only completed children retain their final assistant
+    // output as an implicit completion at the child spawn boundary.
     const requireYieldBeforeExit = readBooleanConfig(node, 'requireYieldBeforeExit') === true;
-    if (requireYieldBeforeExit) {
-        if (blackboard.get(CHILD_YIELDED_KEY) === true) {
-            // Yield is a workspace tool, so the base loop would stay active; force exit.
-            loopActive = false;
-            blackboard.set('llm.loop_active', false);
-            blackboard.set(CHILD_YIELD_REMINDER_PENDING_KEY, false);
-        } else if (!loopActive) {
-            loopActive = true;
-            blackboard.set('llm.loop_active', true);
-            blackboard.set(CHILD_YIELD_REMINDER_PENDING_KEY, true);
-        }
+    if (blackboard.get(CHILD_YIELDED_KEY) === true) {
+        loopActive = false;
+        blackboard.set('llm.loop_active', false);
+        blackboard.set(CHILD_YIELD_REMINDER_PENDING_KEY, false);
+    } else if (requireYieldBeforeExit && !loopActive) {
+        loopActive = true;
+        blackboard.set('llm.loop_active', true);
+        blackboard.set(CHILD_YIELD_REMINDER_PENDING_KEY, true);
     }
 }
 

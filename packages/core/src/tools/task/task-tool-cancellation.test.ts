@@ -47,10 +47,15 @@ describe('full-parity task cancellation propagation', () => {
         expect(captured?.controlEpoch).toEqual(CONTROL_EPOCH);
     });
 
-    it('settles an operator-aborted child result as tool.failed', async () => {
+    it('settles an explicitly aborted child result as tool.failed', async () => {
         const runtime: TaskToolRuntime = {
             runChildSession: (request) =>
-                Promise.resolve({ sessionId: request.sessionId, status: 'failed', output: 'cancelled' }),
+                Promise.resolve({
+                    sessionId: request.sessionId,
+                    status: 'failed',
+                    output: 'cancelled',
+                    failureKind: 'aborted',
+                }),
             startBackgroundSession: () => ({ sessionId: 'unused', backgroundId: 'unused' }),
             resumeChildSession: (sessionId) => Promise.resolve({ sessionId, status: 'failed', output: 'cancelled' }),
             sessionExists: () => false,
@@ -59,7 +64,6 @@ describe('full-parity task cancellation propagation', () => {
         const registry = new ToolRegistry();
         const advertisement = registry.register(createFullParityTaskToolRegistration({ runtime }));
         const controller = new AbortController();
-        controller.abort();
 
         const settlement = await registry.invoke({
             toolCallId: 'task-cancelled',
@@ -74,5 +78,38 @@ describe('full-parity task cancellation propagation', () => {
             error: { code: 'operator_aborted', retryable: false },
         });
         expect(settlement.events.map((event) => event.type)).not.toContain('tool.completed');
+    });
+
+    it('keeps a yield-missing result retryable after the parent signal aborts', async () => {
+        const runtime: TaskToolRuntime = {
+            runChildSession: (request) =>
+                Promise.resolve({
+                    sessionId: request.sessionId,
+                    status: 'failed',
+                    output: '[degraded salvage] completed investigation',
+                    failureKind: 'yield_missing',
+                }),
+            startBackgroundSession: () => ({ sessionId: 'unused', backgroundId: 'unused' }),
+            resumeChildSession: (sessionId) => Promise.resolve({ sessionId, status: 'failed', output: 'cancelled' }),
+            sessionExists: () => false,
+            generateSessionId: () => 'session-task-yield-missing',
+        };
+        const registry = new ToolRegistry();
+        const advertisement = registry.register(createFullParityTaskToolRegistration({ runtime }));
+        const controller = new AbortController();
+        controller.abort();
+
+        const settlement = await registry.invoke({
+            toolCallId: 'task-yield-missing',
+            toolName: 'task',
+            advertisedVersion: advertisement.version,
+            argumentsJson: JSON.stringify({ prompt: 'work', subagent_type: 'deep', load_skills: [] }),
+            signal: controller.signal,
+        });
+
+        expect(settlement.result).toMatchObject({
+            status: 'failed',
+            error: { code: 'task_yield_missing', retryable: true },
+        });
     });
 });

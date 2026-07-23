@@ -77,6 +77,7 @@ export function buildLifecycleRuntime(services: TaskToolRuntimeServices, spawnFn
         parentToolRegistry: new ToolRegistry(),
         parentAgent: parent,
         parentSessionId: 'parent-session',
+        isCliRootParent: true,
         spawnFn,
         services,
     });

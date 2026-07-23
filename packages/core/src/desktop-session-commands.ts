@@ -31,6 +31,7 @@ import {
 } from './providers/provider-auth-resolver';
 import { createProviderAuthStore } from './providers/provider-auth-store';
 import { createProviderRouter } from './providers/provider-factory';
+import { MAX_PROVIDER_CHUNK_TIMEOUT_MS } from './providers/provider-turn-timeout';
 import type { ProviderAdapter } from './providers/provider-turn-types';
 import { createGraphTurnRunner } from './runtime/graph-coordinator-turn';
 import type { RunCoordinatorPromptInput, RunCoordinatorReadMessages } from './runtime/run-coordinator';
@@ -371,6 +372,8 @@ class DefaultDesktopSessionCommandService implements DesktopSessionCommandServic
                 providerID: options.providerID ?? selection.providerID,
                 modelID: options.modelID,
                 ...(selection.variantID !== undefined ? { variantID: selection.variantID } : {}),
+                retryLimit: 0,
+                timeoutMs: MAX_PROVIDER_CHUNK_TIMEOUT_MS,
             });
         return createGraphTurnRunner({
             graph: createCodingAgentGraph({ model: selectionToModelOptions(selection) }),

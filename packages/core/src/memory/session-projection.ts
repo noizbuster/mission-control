@@ -10,6 +10,7 @@ import type {
     SessionProjectionRunRecord,
     SessionProjectionSessionRecord,
 } from './session-projection-types';
+import { terminalTaskRunRecords } from './terminal-task-run-projection';
 
 export type SessionProjectionResult = {
     readonly records: readonly SessionProjectionRecord[];
@@ -78,6 +79,7 @@ function recordsForProjection(
         ...projection.codingSteps.flatMap((step) =>
             recordsForStep(projection.sessionId, step, sequenceByEventId, eventByEventId),
         ),
+        ...terminalTaskRunRecords({ sessionId: projection.sessionId, envelopes: projection.envelopes }),
         ...projection.approvals.map((approval) => ({
             kind: 'approval' as const,
             sessionId: projection.sessionId,

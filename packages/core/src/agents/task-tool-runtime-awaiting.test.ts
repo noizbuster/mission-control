@@ -90,6 +90,7 @@ function buildRuntime(
         },
         services,
         parentSessionId: 'parent-session',
+        isCliRootParent: true,
     });
 }
 

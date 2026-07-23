@@ -22,11 +22,26 @@
  *   - 2+ → error (re-throw as structured `error`)
  */
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
-import { spawn } from 'node:child_process';
-import { readdir, realpath, readFile } from 'node:fs/promises';
-import { isAbsolute, join, relative, resolve } from 'node:path';
+import { repoToolFailure } from './read-tools-errors';
+import {
+    createWorkspaceGuard,
+    directDependencySourcePaths,
+    isBinarySample,
+    matchesWorkspaceDenylist,
+    type WorkspaceGuard,
+} from './read-tools-paths';
+import {
+    type ResolvedSearchCli,
+    reresolveSearchCliSkipping,
+    resetSearchCliCacheForTests,
+    resolveSearchCli,
+    type SearchBackend,
+} from './ripgrep-cli';
 import {
     formatRipgrepModelOutput,
+    RIPGREP_DEFAULT_HEAD_LIMIT,
+    RIPGREP_DEFAULT_MAX_OUTPUT_BYTES,
+    RIPGREP_DEFAULT_TIMEOUT_MS,
     type RipgrepMatch,
     type RipgrepOutputMode,
     type RipgrepToolInput,
@@ -35,21 +50,13 @@ import {
     ripgrepOutputLimit,
     ripgrepOutputSchema,
     ripgrepParametersJsonSchema,
-    RIPGREP_DEFAULT_HEAD_LIMIT,
-    RIPGREP_DEFAULT_MAX_OUTPUT_BYTES,
-    RIPGREP_DEFAULT_TIMEOUT_MS,
 } from './ripgrep-tool';
-import {
-    resetSearchCliCacheForTests,
-    reresolveSearchCliSkipping,
-    resolveSearchCli,
-    type ResolvedSearchCli,
-    type SearchBackend,
-} from './ripgrep-cli';
-import { repoToolFailure } from './read-tools-errors';
-import { isBinarySample, createWorkspaceGuard, type WorkspaceGuard } from './read-tools-paths';
 import { permissionRequest, requestToolPermission } from './tool-permissions';
 import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './tool-registry';
+import { spawn } from 'node:child_process';
+import type { Dirent } from 'node:fs';
+import { readdir, readFile, realpath } from 'node:fs/promises';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 
 export type RipgrepToolFactoryOptions = {
     readonly workspaceRoot: string;
@@ -66,7 +73,9 @@ export async function registerRipgrepTool(
 export async function createRipgrepToolRegistration(
     options: RipgrepToolFactoryOptions,
 ): Promise<ToolRegistration<RipgrepToolInput, RipgrepToolOutput>> {
-    const guard = await createWorkspaceGuard(options.workspaceRoot);
+    const guard = await createWorkspaceGuard(options.workspaceRoot, {
+        allowDirectDenylistedPaths: directDependencySourcePaths,
+    });
     return {
         name: 'ripgrep',
         description:
@@ -77,7 +86,7 @@ export async function createRipgrepToolRegistration(
         outputSchema: ripgrepOutputSchema,
         outputLimit: ripgrepOutputLimit,
         guideline:
-            'Use ripgrep to locate content (function definitions, error strings, config keys) before reading files. Bases are workspace-relative; paths under generated/reference directories are filtered out. Prefer `output_mode: "files_with_matches"` for the first pass, then narrow with `include` or `output_mode: "content"`.',
+            'Use ripgrep to locate content (function definitions, error strings, config keys) before reading files. Bases are workspace-relative; generated/reference paths are filtered unless the base explicitly targets dependency source. Prefer `output_mode: "files_with_matches"` for the first pass, then narrow with `include` or `output_mode: "content"`.',
         execute: (input, context) => runWorkspaceRipgrep(guard, options, input, context.toolCallId, context.toolName),
         toModelOutput: formatRipgrepModelOutput,
     };
@@ -92,9 +101,10 @@ async function runWorkspaceRipgrep(
 ): Promise<RipgrepToolOutput> {
     await requireReadPermission(options, toolCallId, toolName, input.path ?? '.');
     const target = await resolveRipgrepBase(guard, input.path);
+    const allowsDependencySource = matchesWorkspaceDenylist(target.relativePath);
     const outputMode: RipgrepOutputMode = input.output_mode ?? 'files_with_matches';
     const headLimit = input.head_limit ?? RIPGREP_DEFAULT_HEAD_LIMIT;
-    const matches = await runSearchChain(guard, input, outputMode, target.absolutePath);
+    const matches = await runSearchChain(guard, input, outputMode, target.absolutePath, allowsDependencySource);
     const sliced = matches.slice(0, headLimit);
     const filesSearched = new Set(sliced.map((match) => match.path)).size;
     return {
@@ -115,13 +125,14 @@ async function runSearchChain(
     input: RipgrepToolInput,
     outputMode: RipgrepOutputMode,
     targetPath: string,
+    allowsDependencySource: boolean,
 ): Promise<readonly RipgrepMatch[]> {
     let cli = resolveSearchCli();
     for (let attempt = 0; attempt < 3; attempt += 1) {
         if (cli.backend === 'node') {
-            return searchWithNode(guard, targetPath, input, outputMode);
+            return searchWithNode(guard, targetPath, input, outputMode, allowsDependencySource);
         }
-        const result = await runCliSpawn(cli, guard, input, outputMode, targetPath);
+        const result = await runCliSpawn(cli, guard, input, outputMode, targetPath, allowsDependencySource);
         if (result.kind === 'ok') {
             return result.matches;
         }
@@ -131,7 +142,7 @@ async function runSearchChain(
         }
         throw repoToolFailure('search_failed', result.error);
     }
-    return searchWithNode(guard, targetPath, input, outputMode);
+    return searchWithNode(guard, targetPath, input, outputMode, allowsDependencySource);
 }
 
 type CliSpawnResult =
@@ -145,11 +156,15 @@ async function runCliSpawn(
     input: RipgrepToolInput,
     outputMode: RipgrepOutputMode,
     targetPath: string,
+    allowsDependencySource: boolean,
 ): Promise<CliSpawnResult> {
     if (cli.backend === 'node' || cli.path === null) {
         return { kind: 'spawn_failed' };
     }
-    const args = cli.backend === 'rg' ? buildRgArgs(guard, input, outputMode) : buildGrepArgs(guard, input, outputMode);
+    const args =
+        cli.backend === 'rg'
+            ? buildRgArgs(guard, input, outputMode, allowsDependencySource)
+            : buildGrepArgs(guard, input, outputMode, allowsDependencySource);
     const patternArg = cli.backend === 'rg' ? ['--', input.pattern] : ['-e', input.pattern];
     const fullArgs = [...args, ...patternArg, targetPath];
     const spawnResult = await runProcess(cli.path, fullArgs);
@@ -159,7 +174,7 @@ async function runCliSpawn(
         }
         return { kind: 'runtime_error', error: spawnResult.error };
     }
-    const parsed = parseRipgrepOutput(spawnResult.stdout, outputMode, guard);
+    const parsed = parseRipgrepOutput(spawnResult.stdout, outputMode, guard, allowsDependencySource);
     return { kind: 'ok', matches: parsed };
 }
 
@@ -167,6 +182,7 @@ function buildRgArgs(
     guard: WorkspaceGuard,
     input: RipgrepToolInput,
     outputMode: RipgrepOutputMode,
+    allowsDependencySource: boolean,
 ): readonly string[] {
     const args: string[] = [
         '--color=never',
@@ -176,8 +192,10 @@ function buildRgArgs(
         '--no-messages',
         '--hidden',
     ];
-    for (const glob of guard.denylistRipgrepGlobs) {
-        args.push('--glob', glob);
+    if (!allowsDependencySource) {
+        for (const glob of guard.denylistRipgrepGlobs) {
+            args.push('--glob', glob);
+        }
     }
     if (input.include !== undefined) {
         args.push('--glob', input.include);
@@ -206,10 +224,13 @@ function buildGrepArgs(
     guard: WorkspaceGuard,
     input: RipgrepToolInput,
     outputMode: RipgrepOutputMode,
+    allowsDependencySource: boolean,
 ): readonly string[] {
     const args: string[] = ['-r', '-E', '-n', '-H', '--color=never'];
-    for (const dir of denylistDirectories(guard)) {
-        args.push(`--exclude-dir=${dir}`);
+    if (!allowsDependencySource) {
+        for (const dir of denylistDirectories(guard)) {
+            args.push(`--exclude-dir=${dir}`);
+        }
     }
     if (input.include !== undefined) {
         args.push(`--include=${input.include}`);
@@ -299,6 +320,7 @@ function parseRipgrepOutput(
     stdout: string,
     outputMode: RipgrepOutputMode,
     guard: WorkspaceGuard,
+    allowsDependencySource: boolean,
 ): readonly RipgrepMatch[] {
     if (stdout.trim().length === 0) {
         return [];
@@ -312,33 +334,33 @@ function parseRipgrepOutput(
         }
         if (outputMode === 'files_with_matches') {
             const trimmed = normalized.trim();
-            if (guard.isDeniedAbsolutePath(trimmed)) {
+            if (!allowsDependencySource && guard.isDeniedAbsolutePath(trimmed)) {
                 continue;
             }
             matches.push({ path: guard.relativeFromAbsolute(trimmed), line: 0, text: '' });
             continue;
         }
         if (outputMode === 'count') {
-            const match = normalized.match(/^([A-Za-z]:[\\\/].*?|.+?):(\d+)(?=:|$)/);
+            const match = normalized.match(/^([A-Za-z]:[\\/].*?|.+?):(\d+)(?=:|$)/);
             if (match === null || match[1] === undefined || match[2] === undefined) {
                 continue;
             }
             const absolute = match[1];
             const count = parseInt(match[2], 10);
-            if (Number.isNaN(count) || guard.isDeniedAbsolutePath(absolute)) {
+            if (Number.isNaN(count) || (!allowsDependencySource && guard.isDeniedAbsolutePath(absolute))) {
                 continue;
             }
             matches.push({ path: guard.relativeFromAbsolute(absolute), line: count, text: '' });
             continue;
         }
-        const match = normalized.match(/^([A-Za-z]:[\\\/].*?|.+?):(\d+):(.*)$/);
+        const match = normalized.match(/^([A-Za-z]:[\\/].*?|.+?):(\d+):(.*)$/);
         if (match === null || match[1] === undefined || match[2] === undefined || match[3] === undefined) {
             continue;
         }
         const absolute = match[1];
         const lineNumber = parseInt(match[2], 10);
         const text = match[3];
-        if (Number.isNaN(lineNumber) || guard.isDeniedAbsolutePath(absolute)) {
+        if (Number.isNaN(lineNumber) || (!allowsDependencySource && guard.isDeniedAbsolutePath(absolute))) {
             continue;
         }
         matches.push({ path: guard.relativeFromAbsolute(absolute), line: lineNumber, text });
@@ -357,8 +379,9 @@ async function searchWithNode(
     targetPath: string,
     input: RipgrepToolInput,
     outputMode: RipgrepOutputMode,
+    allowsDependencySource: boolean,
 ): Promise<readonly RipgrepMatch[]> {
-    const files = await collectFiles(guard, targetPath);
+    const files = await collectFiles(guard, targetPath, allowsDependencySource);
     const filtered = input.include !== undefined ? filterByInclude(files, input.include) : files;
     let regex: RegExp;
     try {
@@ -412,20 +435,29 @@ async function searchWithNode(
     return matches;
 }
 
-async function collectFiles(guard: WorkspaceGuard, rootPath: string): Promise<readonly string[]> {
-    let stats;
+async function collectFiles(
+    guard: WorkspaceGuard,
+    rootPath: string,
+    allowsDependencySource: boolean,
+): Promise<readonly string[]> {
+    let stats: string;
     try {
         stats = await realpath(rootPath);
     } catch {
         return [];
     }
     const entries: string[] = [];
-    await walk(stats, guard, entries);
+    await walk(stats, guard, entries, allowsDependencySource);
     return entries.sort((left, right) => left.localeCompare(right));
 }
 
-async function walk(currentPath: string, guard: WorkspaceGuard, out: string[]): Promise<void> {
-    let directoryEntries;
+async function walk(
+    currentPath: string,
+    guard: WorkspaceGuard,
+    out: string[],
+    allowsDependencySource: boolean,
+): Promise<void> {
+    let directoryEntries: Dirent[];
     try {
         directoryEntries = await readdir(currentPath, { withFileTypes: true });
     } catch {
@@ -433,11 +465,11 @@ async function walk(currentPath: string, guard: WorkspaceGuard, out: string[]): 
     }
     for (const entry of directoryEntries) {
         const absolute = join(currentPath, entry.name);
-        if (!guard.shouldTraverseAbsolutePath(absolute)) {
+        if (!allowsDependencySource && !guard.shouldTraverseAbsolutePath(absolute)) {
             continue;
         }
         if (entry.isDirectory()) {
-            await walk(absolute, guard, out);
+            await walk(absolute, guard, out, allowsDependencySource);
             continue;
         }
         if (entry.isFile()) {
@@ -471,7 +503,10 @@ function isRegExpSpecial(char: string): boolean {
     return '.+()|{}[]^$\\'.includes(char);
 }
 
-async function resolveRipgrepBase(guard: WorkspaceGuard, requestedPath: string | undefined): Promise<{
+async function resolveRipgrepBase(
+    guard: WorkspaceGuard,
+    requestedPath: string | undefined,
+): Promise<{
     readonly absolutePath: string;
     readonly relativePath: string;
 }> {

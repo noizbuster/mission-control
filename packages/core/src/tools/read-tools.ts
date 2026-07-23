@@ -1,7 +1,12 @@
 import type { NativeSummaryResult } from '../native/natives-client';
 import { computeLineHash } from './hashline/hash-computation';
 import { repoToolFailure } from './read-tools-errors';
-import { createWorkspaceGuard, isBinarySample, type WorkspaceGuard } from './read-tools-paths';
+import {
+    createWorkspaceGuard,
+    directDependencySourcePaths,
+    isBinarySample,
+    type WorkspaceGuard,
+} from './read-tools-paths';
 import {
     DEFAULT_READ_LINE_LIMIT,
     type ListInput,
@@ -31,8 +36,6 @@ import { permissionRequest, requestToolPermission } from './tool-permissions';
 import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './tool-registry';
 import { open, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-
-const dependencySourcePaths = ['node_modules'] as const;
 
 export type { ReadOnlyRepoToolOptions } from './read-tools-schemas';
 
@@ -70,7 +73,7 @@ export async function createReadOnlyRepoToolRegistrations(
     const resolved = resolveOptions(options);
     const guard = await createWorkspaceGuard(options.workspaceRoot, {
         allowDenylistedPaths: resolved.allowDenylistedPaths,
-        allowDirectDenylistedPaths: dependencySourcePaths,
+        allowDirectDenylistedPaths: directDependencySourcePaths,
     });
     const registrations: ReadOnlyRepoToolRegistrations = [
         createReadTool(guard, resolved),

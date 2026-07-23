@@ -12,6 +12,7 @@ import type { LanguageModelV3StreamPart } from '@ai-sdk/provider';
 import {
     AgentRuntime,
     JsonlSessionEventStore,
+    type ProviderAdapter,
     projectSessionReplay,
     type SdkModelResolver,
     SdkModelResolverError,
@@ -60,6 +61,40 @@ function toolCallChunks(): LanguageModelV3StreamPart[] {
         { type: 'tool-call', toolCallId: 'call_1', toolName: 'echo', input: JSON.stringify({ text: 'hi' }) },
         { type: 'finish', finishReason: { unified: 'tool-calls', raw: undefined }, usage: buildUsage() },
     ];
+}
+
+function createTimeoutThenRecoverProvider(): ProviderAdapter & { readonly attemptCount: () => number } {
+    let attempts = 0;
+    return {
+        async *streamTurn(request, _context) {
+            attempts += 1;
+            if (attempts === 1) {
+                yield {
+                    kind: 'response_failed',
+                    requestId: request.requestId,
+                    sequence: 1,
+                    error: {
+                        code: 'provider_timeout',
+                        message: 'provider timed out before output',
+                        retryable: true,
+                    },
+                };
+                return;
+            }
+            yield {
+                kind: 'response_completed',
+                requestId: request.requestId,
+                sequence: 1,
+                message: {
+                    messageId: `message_${request.turnId}`,
+                    role: 'assistant',
+                    content: 'Recovered.',
+                },
+                finishReason: 'stop',
+            };
+        },
+        attemptCount: () => attempts,
+    };
 }
 
 /** A tool-call stream proposing the REAL `repo.read` tool against a workspace-relative path. */
@@ -120,6 +155,30 @@ describe('runCodingPromptOnGraph (--engine graph wiring)', () => {
                 .map((event) => event.message ?? '')
                 .join('\n');
             expect(messages).toContain('llm.turn.completed');
+        } finally {
+            await runtime.stop();
+        }
+    });
+
+    it('defers an injected provider timeout retry to the LLM actor', async () => {
+        const provider = createTimeoutThenRecoverProvider();
+        const runtime = new AgentRuntime({ modelProviderSelection: SELECTION });
+        await runtime.start();
+        try {
+            const result = await runCodingPromptOnGraph({
+                runtime,
+                selection: SELECTION,
+                prompt: 'retry then respond',
+                workspaceRoot: process.cwd(),
+                provider,
+                toolRegistry: new ToolRegistry(),
+            });
+
+            expect(result.status).toBe('completed');
+            expect(provider.attemptCount()).toBe(2);
+            expect(runtime.getEvents().some((event) => event.message === 'node emitted event: llm.provider_wait')).toBe(
+                true,
+            );
         } finally {
             await runtime.stop();
         }

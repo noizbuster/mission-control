@@ -23,6 +23,27 @@ describe('session replay lifecycle', () => {
         expect(session.status).toBe('running');
     });
 
+    it('revives a stopped session when a new task begins', () => {
+        const session = deriveReplaySession(SESSION_ID, [
+            runStarted(),
+            {
+                type: 'session.stopped',
+                timestamp: '2026-07-11T10:00:02.000Z',
+                sessionId: SESSION_ID,
+                message: 'mission-control session stopped',
+            },
+            {
+                type: 'task.started',
+                timestamp: '2026-07-11T10:00:03.000Z',
+                sessionId: SESSION_ID,
+                taskId: 'task_after_stop',
+            },
+        ]);
+
+        expect(session.status).toBe('running');
+        expect(session).not.toHaveProperty('stoppedAt');
+    });
+
     it('clears an approval wait cancelled before marker-only cleanup', () => {
         const session = deriveReplaySession(SESSION_ID, [
             approvalRequested(),

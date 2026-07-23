@@ -1,4 +1,9 @@
-import { createWorkspaceGuard, matchesWorkspaceDenylist, type WorkspaceGuard } from './read-tools-paths';
+import {
+    createWorkspaceGuard,
+    directDependencySourcePaths,
+    matchesWorkspaceDenylist,
+    type WorkspaceGuard,
+} from './read-tools-paths';
 import type { Dirent } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { relative, resolve } from 'node:path';
@@ -9,7 +14,7 @@ export function createEvalToolHost(workspaceRoot: string): (name: string, args: 
     let workspaceGuard: Promise<WorkspaceGuard> | undefined;
     return async (name, args) => {
         workspaceGuard ??= createWorkspaceGuard(workspaceRoot, {
-            allowDirectDenylistedPaths: ['node_modules'],
+            allowDirectDenylistedPaths: directDependencySourcePaths,
         });
         const guard = await workspaceGuard;
         const argRecord = isRecord(args) ? args : {};

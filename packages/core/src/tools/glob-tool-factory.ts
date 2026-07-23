@@ -22,7 +22,12 @@ import {
     safeReaddirRecursive,
 } from './glob-tool';
 import { repoToolFailure } from './read-tools-errors';
-import { createWorkspaceGuard, defaultReadOnlyRepoToolDenylist, type WorkspaceGuard } from './read-tools-paths';
+import {
+    createWorkspaceGuard,
+    defaultReadOnlyRepoToolDenylist,
+    directDependencySourcePaths,
+    type WorkspaceGuard,
+} from './read-tools-paths';
 import { permissionRequest, requestToolPermission } from './tool-permissions';
 import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './tool-registry';
 import { realpath } from 'node:fs/promises';
@@ -44,7 +49,9 @@ export async function registerGlobTool(
 export async function createGlobToolRegistration(
     options: GlobToolFactoryOptions,
 ): Promise<ToolRegistration<GlobToolInput, GlobToolOutput>> {
-    const guard = await createWorkspaceGuard(options.workspaceRoot);
+    const guard = await createWorkspaceGuard(options.workspaceRoot, {
+        allowDirectDenylistedPaths: directDependencySourcePaths,
+    });
     return {
         name: 'glob',
         description: 'Find files matching a glob pattern (e.g. "**/*.ts", "src/*.json") under the workspace.',

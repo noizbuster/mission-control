@@ -416,9 +416,12 @@ describe('ConcreteTaskToolRuntime', () => {
             expect(toolNames).not.toContain('mcp__docs__lookup');
         });
 
-        it('retains network tools for ON agent names when parent advertises them', async () => {
+        it.each([
+            'librarian',
+            'architect',
+        ] as const)('retains network tools for ON agent name %s when parent advertises them', async (agentName) => {
             const child = makeAgent({
-                name: 'librarian',
+                name: agentName,
                 tools: ['read', 'webfetch', 'web_search', 'mcp__docs__lookup', 'workflow', 'team_create'],
             });
             const parent = makeParentAgent();
@@ -446,11 +449,11 @@ describe('ConcreteTaskToolRuntime', () => {
             });
 
             await runtime.runChildSession({
-                sessionId: 'sess-librarian-net',
+                sessionId: `sess-${agentName}-net`,
                 prompt: 'lookup docs',
                 loadSkills: [],
                 childPermissions: [],
-                subagentType: 'librarian',
+                subagentType: agentName,
             });
 
             const toolNames = captured.context?.childToolRegistry.advertise().map((a) => a.name) ?? [];
@@ -550,17 +553,16 @@ describe('ConcreteTaskToolRuntime', () => {
             });
         }
 
-        it('returns failed salvage when resolveSdkModel is provided without a yield', async () => {
+        it('preserves completed prose when resolveSdkModel is provided without a yield', async () => {
             const callCount = { value: 0 };
             const runtime = buildDefaultSpawnRuntime(callCount, () => textOnlyChunks('child completed'));
 
             const result = await runtime.runChildSession(makeRequest());
 
-            expect(result.status).toBe('failed');
+            expect(result.status).toBe('completed');
             expect(result.sessionId).toBe('sess-test-1');
-            expect(result.failureKind).toBe('yield_missing');
-            expect(result.output).toMatch(/^\[degraded salvage\] /);
-            expect(result.output).toContain('child completed');
+            expect(result.output).toBe('child completed');
+            expect(result.failureKind).toBeUndefined();
         });
 
         it('returns the yielded result when the child calls yield', async () => {
@@ -593,7 +595,7 @@ describe('ConcreteTaskToolRuntime', () => {
             await expect(runtime.runChildSession(makeRequest())).rejects.toThrow(/spawnFn not wired/);
         });
 
-        it('marks a child without yield as failed while salvaging the final assistant text', async () => {
+        it('bounds an implicit child completion to the configured summary limit', async () => {
             const callCount = { value: 0 };
             const runtime = buildDefaultSpawnRuntime(callCount, () => textOnlyChunks('x'.repeat(200)), 64);
 
@@ -602,14 +604,13 @@ describe('ConcreteTaskToolRuntime', () => {
                 prompt: 'explore the codebase',
             });
 
-            expect(callCount.value).toBeGreaterThanOrEqual(1);
-            expect(result.status).toBe('failed');
-            expect(result.failureKind).toBe('yield_missing');
-            expect(result.output).toMatch(/^\[degraded salvage\] /);
+            expect(callCount.value).toBe(1);
+            expect(result.status).toBe('completed');
             expect(result.output.length).toBeLessThanOrEqual(64);
+            expect(result.failureKind).toBeUndefined();
         });
 
-        it('redacts credentials from degraded child salvage output', async () => {
+        it('redacts credentials from implicit child completion output', async () => {
             // Given
             const knownCredential = ['known', 'degraded', 'child', 'credential'].join('_');
             const callCount = { value: 0 };
@@ -624,8 +625,8 @@ describe('ConcreteTaskToolRuntime', () => {
             const result = await runtime.runChildSession(makeRequest());
 
             // Then
-            expect(result.status).toBe('failed');
-            expect(result.failureKind).toBe('yield_missing');
+            expect(result.status).toBe('completed');
+            expect(result.failureKind).toBeUndefined();
             expect(result.output).toContain('keep-this-salvage');
             expect(result.output).toContain('[REDACTED_CREDENTIAL]');
             expect(result.output).not.toContain(knownCredential);

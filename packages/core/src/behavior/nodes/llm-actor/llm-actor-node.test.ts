@@ -19,11 +19,13 @@
 import type { LanguageModelV3StreamPart } from '@ai-sdk/provider';
 import type { AbgSignal } from '@mission-control/protocol';
 import { stepCountIs, streamText } from 'ai';
-import { MockLanguageModelV3 } from 'ai/test';
-import { describe, expect, it } from 'vitest';
+import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
+import { describe, expect, it, vi } from 'vitest';
 import { assembleSystemPrompt } from '../../../context/system-prompt';
 import { wrapFlatProviderAsSdkModel } from '../../../providers/ai-sdk/flat-provider-bridge';
 import { createDeterministicProvider } from '../../../providers/deterministic-provider';
+import { DEFAULT_PROVIDER_CHUNK_TIMEOUT_MS } from '../../../providers/provider-turn-timeout';
+import { ProviderTurnError } from '../../../providers/provider-turn-types';
 import { ToolRegistry } from '../../../tools/tool-registry';
 import { createAbgToolSettlementLedger, createProposalOnlyToolBridge, type PolicyGateFn } from './abg-tool-bridge';
 import type { LlmActorModel } from './llm-actor-node';
@@ -32,7 +34,6 @@ import {
     anthropicShapeChunks,
     buildEchoTools,
     buildMockModel,
-    collectSignals,
     echoRegistration,
     eventTypes,
     messages,
@@ -40,6 +41,13 @@ import {
     openaiShapeChunks,
     tick,
 } from './llm-actor-node-test-support';
+
+function streamUsage() {
+    return {
+        inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+        outputTokens: { total: 1, text: 1, reasoning: 0 },
+    };
+}
 
 describe('LLMActor node — Phase 0 gating spike', () => {
     it.each([
@@ -49,7 +57,19 @@ describe('LLMActor node — Phase 0 gating spike', () => {
         const model = buildMockModel(provider, modelId, chunks);
         const tools = buildEchoTools(async () => ({ allowed: true }));
 
-        const signals = await collectSignals(model, tools);
+        const signals: AbgSignal[] = [];
+        for await (const signal of runLlmActor({
+            graphId: 'g1',
+            nodeId: 'llm-1',
+            model,
+            system: assembleSystemPrompt(),
+            messages,
+            tools,
+            retrySleep: async () => {},
+            now: () => NOW,
+        })) {
+            signals.push(signal);
+        }
 
         expect(signals[0]).toMatchObject({ type: 'started', nodeId: 'llm-1' });
         expect(signals.at(-1)).toMatchObject({ type: 'success', nodeId: 'llm-1' });
@@ -140,6 +160,300 @@ describe('LLMActor node — Phase 0 gating spike', () => {
         expect(eventTypes(signals)).toContain('llm.error');
     });
 
+    it('retries a provider timeout thrown before stream registration', async () => {
+        // Given
+        let attempts = 0;
+        const model = new MockLanguageModelV3({
+            provider: 'openai',
+            modelId: 'gpt-5',
+            doStream: async () => {
+                attempts += 1;
+                if (attempts === 1) {
+                    throw new ProviderTurnError({
+                        code: 'provider_timeout',
+                        message: 'connection timed out before stream registration',
+                        retryable: true,
+                    });
+                }
+                return {
+                    stream: convertArrayToReadableStream([
+                        { type: 'stream-start', warnings: [] },
+                        { type: 'text-start', id: 't1' },
+                        { type: 'text-delta', id: 't1', delta: 'Recovered.' },
+                        { type: 'text-end', id: 't1' },
+                        { type: 'finish', finishReason: { unified: 'stop', raw: undefined }, usage: streamUsage() },
+                    ]),
+                };
+            },
+        });
+        const signals: AbgSignal[] = [];
+
+        // When
+        for await (const signal of runLlmActor({
+            graphId: 'setup-timeout-retry',
+            nodeId: 'llm-1',
+            model,
+            system: assembleSystemPrompt(),
+            messages,
+            retryBaseDelayMs: 0,
+            maxRetryDelayMs: 0,
+            now: () => NOW,
+        })) {
+            signals.push(signal);
+        }
+
+        // Then
+        expect(attempts).toBe(2);
+        expect(eventTypes(signals)).toContain('llm.provider_wait');
+        expect(eventTypes(signals)).not.toContain('llm.error');
+        expect(signals.at(-1)).toMatchObject({ type: 'success' });
+    });
+
+    it('retries a rate-limited error thrown before stream registration', async () => {
+        // Given
+        let attempts = 0;
+        const model = new MockLanguageModelV3({
+            provider: 'openai',
+            modelId: 'gpt-5',
+            doStream: async () => {
+                attempts += 1;
+                if (attempts === 1) {
+                    throw new ProviderTurnError({
+                        code: 'provider_rate_limited',
+                        message: 'rate limit before stream registration',
+                        retryable: true,
+                    });
+                }
+                return {
+                    stream: convertArrayToReadableStream([
+                        { type: 'stream-start', warnings: [] },
+                        { type: 'text-start', id: 't1' },
+                        { type: 'text-delta', id: 't1', delta: 'Recovered.' },
+                        { type: 'text-end', id: 't1' },
+                        { type: 'finish', finishReason: { unified: 'stop', raw: undefined }, usage: streamUsage() },
+                    ]),
+                };
+            },
+        });
+        const signals: AbgSignal[] = [];
+
+        // When
+        for await (const signal of runLlmActor({
+            graphId: 'setup-rate-limit-retry',
+            nodeId: 'llm-1',
+            model,
+            system: assembleSystemPrompt(),
+            messages,
+            retryBaseDelayMs: 0,
+            maxRetryDelayMs: 0,
+            now: () => NOW,
+        })) {
+            signals.push(signal);
+        }
+
+        // Then
+        expect(attempts).toBe(2);
+        expect(eventTypes(signals)).toContain('llm.provider_wait');
+        expect(eventTypes(signals)).not.toContain('llm.error');
+        expect(signals.at(-1)).toMatchObject({ type: 'success' });
+    });
+
+    it('retries after the default timeout when a model delays stream registration', async () => {
+        // Given
+        vi.useFakeTimers();
+        try {
+            let attempts = 0;
+            const model = new MockLanguageModelV3({
+                provider: 'openai',
+                modelId: 'gpt-5',
+                doStream: async () => {
+                    attempts += 1;
+                    if (attempts === 1) {
+                        await tick(DEFAULT_PROVIDER_CHUNK_TIMEOUT_MS + 1);
+                    }
+                    return {
+                        stream: convertArrayToReadableStream([
+                            { type: 'stream-start', warnings: [] },
+                            { type: 'text-start', id: 't1' },
+                            { type: 'text-delta', id: 't1', delta: 'Recovered.' },
+                            { type: 'text-end', id: 't1' },
+                            { type: 'finish', finishReason: { unified: 'stop', raw: undefined }, usage: streamUsage() },
+                        ]),
+                    };
+                },
+            });
+            const collected: AbgSignal[] = [];
+
+            // When
+            const consumeSignals = (async (): Promise<void> => {
+                for await (const signal of runLlmActor({
+                    graphId: 'pre-stream-timeout-retry',
+                    nodeId: 'llm-1',
+                    model,
+                    system: assembleSystemPrompt(),
+                    messages,
+                    retryBaseDelayMs: 0,
+                    maxRetryDelayMs: 0,
+                    now: () => NOW,
+                })) {
+                    collected.push(signal);
+                }
+            })();
+            await vi.advanceTimersByTimeAsync(DEFAULT_PROVIDER_CHUNK_TIMEOUT_MS + 1);
+            await consumeSignals;
+
+            // Then
+            expect(attempts).toBe(2);
+            expect(eventTypes(collected)).toContain('llm.provider_wait');
+            expect(collected.at(-1)).toMatchObject({ type: 'success' });
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('does not retry after raw provider output starts while redaction buffers its display', async () => {
+        // Given
+        vi.useFakeTimers();
+        try {
+            let attempts = 0;
+            const model = new MockLanguageModelV3({
+                provider: 'openai',
+                modelId: 'gpt-5',
+                doStream: async ({ abortSignal }) => {
+                    attempts += 1;
+                    if (attempts > 1) {
+                        return {
+                            stream: convertArrayToReadableStream([
+                                { type: 'stream-start', warnings: [] },
+                                { type: 'text-start', id: 't2' },
+                                { type: 'text-delta', id: 't2', delta: 'Retried.' },
+                                { type: 'text-end', id: 't2' },
+                                {
+                                    type: 'finish',
+                                    finishReason: { unified: 'stop', raw: undefined },
+                                    usage: streamUsage(),
+                                },
+                            ]),
+                        };
+                    }
+                    const stream = new ReadableStream({
+                        start(controller) {
+                            controller.enqueue({ type: 'stream-start', warnings: [] });
+                            controller.enqueue({ type: 'text-start', id: 't1' });
+                            controller.enqueue({ type: 'text-delta', id: 't1', delta: 'sk-' });
+                            abortSignal?.addEventListener(
+                                'abort',
+                                () => {
+                                    controller.error(new DOMException('aborted', 'AbortError'));
+                                },
+                                { once: true },
+                            );
+                        },
+                    });
+                    return { stream };
+                },
+            });
+            const signals: AbgSignal[] = [];
+
+            // When
+            const consumeSignals = (async (): Promise<void> => {
+                for await (const signal of runLlmActor({
+                    graphId: 'redaction-buffered-output',
+                    nodeId: 'llm-1',
+                    model,
+                    system: assembleSystemPrompt(),
+                    messages,
+                    retryBaseDelayMs: 0,
+                    maxRetryDelayMs: 0,
+                    now: () => NOW,
+                })) {
+                    signals.push(signal);
+                }
+            })();
+            await vi.advanceTimersByTimeAsync(DEFAULT_PROVIDER_CHUNK_TIMEOUT_MS + 1);
+            await consumeSignals;
+
+            // Then
+            expect(attempts).toBe(1);
+            expect(eventTypes(signals)).not.toContain('llm.provider_wait');
+            expect(signals.at(-1)).toMatchObject({ type: 'failure' });
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('aborts the first attempt before retrying a no-output timeout', async () => {
+        // Given
+        vi.useFakeTimers();
+        try {
+            let attempts = 0;
+            let firstAttemptAborted = false;
+            const model = new MockLanguageModelV3({
+                provider: 'openai',
+                modelId: 'gpt-5',
+                doStream: async ({ abortSignal }) => {
+                    attempts += 1;
+                    if (attempts > 1) {
+                        return {
+                            stream: convertArrayToReadableStream([
+                                { type: 'stream-start', warnings: [] },
+                                { type: 'text-start', id: 't2' },
+                                { type: 'text-delta', id: 't2', delta: 'Retried.' },
+                                { type: 'text-end', id: 't2' },
+                                {
+                                    type: 'finish',
+                                    finishReason: { unified: 'stop', raw: undefined },
+                                    usage: streamUsage(),
+                                },
+                            ]),
+                        };
+                    }
+                    return {
+                        stream: new ReadableStream({
+                            start(controller) {
+                                controller.enqueue({ type: 'stream-start', warnings: [] });
+                                abortSignal?.addEventListener(
+                                    'abort',
+                                    () => {
+                                        firstAttemptAborted = true;
+                                        controller.error(new DOMException('aborted', 'AbortError'));
+                                    },
+                                    { once: true },
+                                );
+                            },
+                        }),
+                    };
+                },
+            });
+            const signals: AbgSignal[] = [];
+
+            // When
+            const consumeSignals = (async (): Promise<void> => {
+                for await (const signal of runLlmActor({
+                    graphId: 'cancel-before-retry',
+                    nodeId: 'llm-1',
+                    model,
+                    system: assembleSystemPrompt(),
+                    messages,
+                    retryBaseDelayMs: 0,
+                    maxRetryDelayMs: 0,
+                    now: () => NOW,
+                })) {
+                    signals.push(signal);
+                }
+            })();
+            await vi.advanceTimersByTimeAsync(DEFAULT_PROVIDER_CHUNK_TIMEOUT_MS + 1);
+            await consumeSignals;
+
+            // Then
+            expect(firstAttemptAborted).toBe(true);
+            expect(attempts).toBe(2);
+            expect(signals.at(-1)).toMatchObject({ type: 'success' });
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     it('emits provider_aborted without a second provider call when aborted during retry sleep', async () => {
         // Given
         let retrySleepCalls = 0;
@@ -217,7 +531,19 @@ describe('LLMActor node — Phase 0 gating spike', () => {
         const tools = buildEchoTools(async () => ({ allowed: true }));
 
         // When
-        const signals = await collectSignals(model, tools);
+        const signals: AbgSignal[] = [];
+        for await (const signal of runLlmActor({
+            graphId: 'g1',
+            nodeId: 'llm-1',
+            model,
+            system: assembleSystemPrompt(),
+            messages,
+            tools,
+            retrySleep: async () => {},
+            now: () => NOW,
+        })) {
+            signals.push(signal);
+        }
 
         // Then
         expect(signals.at(-1)).toMatchObject({

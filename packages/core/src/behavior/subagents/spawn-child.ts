@@ -17,15 +17,8 @@ import { createObservabilityRedactor } from '../../providers/observability-redac
 import type { SessionControlEpoch } from '../../runtime/session-control-cancellation';
 import type { AskUserQuestionRequest } from '../../tools/ask-user-schemas';
 import { ASK_USER_BLOCKED_ANSWER, createAskUserToolRegistration } from '../../tools/ask-user-tool';
-import type {
-    ChildAskUserParentAnswerer,
-    ChildAskUserSourceFields,
-} from '../../tools/child-ask-user-router';
-import {
-    formatChildAskUserHeader,
-    routeChildAskUser,
-    withChildAskUserSource,
-} from '../../tools/child-ask-user-router';
+import type { ChildAskUserParentAnswerer, ChildAskUserSourceFields } from '../../tools/child-ask-user-router';
+import { formatChildAskUserHeader, routeChildAskUser, withChildAskUserSource } from '../../tools/child-ask-user-router';
 import type { TaskOutput } from '../../tools/task-tool';
 import type { ToolRegistry } from '../../tools/tool-registry';
 import { createCodingAgentGraph } from '../coding-agent-graph';
@@ -106,7 +99,6 @@ export async function spawnChildCodingAgent(input: SpawnChildInput): Promise<Tas
 
     const graph = createCodingAgentGraph({
         model: input.model,
-        requireYieldBeforeExit: true,
     });
     if (input.systemPrompt !== undefined) {
         const node = graph.nodes[0];

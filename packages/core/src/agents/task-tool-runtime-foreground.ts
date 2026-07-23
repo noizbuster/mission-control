@@ -90,5 +90,6 @@ function failedChildResult(sessionId: string, error: unknown): ChildSpawnResult 
         sessionId,
         status: 'failed',
         output: error instanceof Error ? error.message : String(error),
+        ...(error instanceof ChildSessionCancelledError ? { failureKind: 'aborted' as const } : {}),
     };
 }

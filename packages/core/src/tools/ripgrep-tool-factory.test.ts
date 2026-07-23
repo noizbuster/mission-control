@@ -170,6 +170,27 @@ describeWithRg('workspace-scoped ripgrep factory', () => {
         });
     });
 
+    it('allows a ripgrep base inside nested node_modules', async () => {
+        const workspaceRoot = await createWorkspace();
+        await mkdir(join(workspaceRoot, 'apps', 'tui', 'node_modules', '@opentui', 'solid'), { recursive: true });
+        await writeFile(
+            join(workspaceRoot, 'apps', 'tui', 'node_modules', '@opentui', 'solid', 'index.ts'),
+            'NESTED_DEPENDENCY_NEEDLE',
+            'utf8',
+        );
+        const registry = await buildRegistry(workspaceRoot);
+
+        const settlement = await invokeRipgrep(registry, {
+            pattern: 'NESTED_DEPENDENCY_NEEDLE',
+            path: 'apps/tui/node_modules/@opentui/solid',
+        });
+
+        expect(settlement.result.status).toBe('completed');
+        expect(settlement.structuredOutput).toMatchObject({
+            matches: [expect.objectContaining({ path: 'apps/tui/node_modules/@opentui/solid/index.ts' })],
+        });
+    });
+
     it('rejects a malformed invocation (missing pattern) before invoking rg', async () => {
         const workspaceRoot = await createWorkspace();
         await mkdir(join(workspaceRoot, 'src'), { recursive: true });

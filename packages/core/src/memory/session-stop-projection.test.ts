@@ -77,6 +77,58 @@ describe('session stop SQLite projection', () => {
         expect(JSON.parse(resumedRows.session.metadata_json)).not.toHaveProperty('lifecycleReason');
     });
 
+    it('revives a stopped durable session when a new task and run start', async () => {
+        const url = await createSqliteSessionEventStoreTestDbUrl('stopped-session-resume');
+        const store = await openStore(url);
+        await store.append(sessionStarted());
+        await store.append({
+            type: 'session.stopped',
+            timestamp: '2026-07-11T10:00:01.000Z',
+            sessionId: SESSION_ID,
+            message: 'mission-control session stopped',
+        });
+        await store.append({
+            type: 'task.started',
+            timestamp: '2026-07-11T10:00:02.000Z',
+            sessionId: SESSION_ID,
+            taskId: 'task_after_stop',
+        });
+        await store.append(nextRunStarted());
+        const snapshot = await store.getSnapshot(SESSION_ID);
+        await store.close();
+
+        const rows = await readProjectionRows(url);
+
+        expect(snapshot.status).toBe('running');
+        expect(snapshot).not.toHaveProperty('stoppedAt');
+        expect(rows.session).toMatchObject({ status: 'running', stopped_at: null });
+    });
+
+    it('settles a durable run when task.failed carries interrupted run metadata', async () => {
+        // Given: a durable run began and its interactive task reports an interruption.
+        const url = await createSqliteSessionEventStoreTestDbUrl('task-failed-run-settlement');
+        const store = await openStore(url);
+        await store.append(sessionStarted());
+        await store.append(nextRunStarted());
+
+        // When: the terminal task event carries the run identity and interrupted state.
+        await store.append({
+            type: 'task.failed',
+            timestamp: '2026-07-11T10:00:13.000Z',
+            sessionId: SESSION_ID,
+            taskId: 'task_interrupted',
+            message: 'provider turn interrupted',
+            run: { command: 'run', state: 'interrupted', runId: 'run_next' },
+        });
+        const snapshot = await store.getSnapshot(SESSION_ID);
+        await store.close();
+        const rows = await readProjectionRows(url);
+
+        // Then: both durable projection surfaces release the active run and return idle.
+        expect(snapshot.status).toBe('idle');
+        expect(rows.session).toMatchObject({ status: 'idle', stopped_at: null });
+    });
+
     it.each(['mission', 'job'] as const)('waits for a nonterminal %s authority before idle(aborted)', async (kind) => {
         const url = await createSqliteSessionEventStoreTestDbUrl(`survivor-${kind}`);
         const store = await openStore(url);

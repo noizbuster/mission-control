@@ -6,6 +6,13 @@ export type ProviderChunkIterator = AsyncIterator<ProviderStreamChunk>;
 
 const iteratorClosePromises = new WeakMap<ProviderChunkIterator, Promise<void>>();
 
+export const DEFAULT_PROVIDER_CHUNK_TIMEOUT_MS = 120_000;
+export const MAX_PROVIDER_CHUNK_TIMEOUT_MS = 600_000;
+
+export function nextProviderChunkTimeoutMs(currentTimeoutMs: number): number {
+    return Math.min(currentTimeoutMs * 2, MAX_PROVIDER_CHUNK_TIMEOUT_MS);
+}
+
 export type NextProviderChunkInput = {
     readonly iterator: ProviderChunkIterator;
     readonly signal: AbortSignal;

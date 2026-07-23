@@ -78,6 +78,7 @@ export function buildRuntimeWithServices(
         },
         services,
         parentSessionId: 'parent-session',
+        isCliRootParent: true,
     });
 }
 

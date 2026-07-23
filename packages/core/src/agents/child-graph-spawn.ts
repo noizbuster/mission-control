@@ -41,6 +41,7 @@ export const CHILD_HARD_DROPPED_CAPABILITY_KINDS: ReadonlySet<string> = new Set(
  * (explore, reviewer, quick) stay hard-dropped for network.
  */
 export const CHILD_NETWORK_ALLOWED_CATEGORIES: ReadonlySet<string> = new Set([
+    'architect',
     'librarian',
     'deep',
     'reasoner',
@@ -67,10 +68,7 @@ export function isChildNetworkCategoryAllowed(categoryOrAgentName: string): bool
     return CHILD_NETWORK_ALLOWED_CATEGORIES.has(categoryOrAgentName);
 }
 
-export function hasHardDroppedCapability(
-    capabilities: readonly string[],
-    options?: HardDropOptions,
-): boolean {
+export function hasHardDroppedCapability(capabilities: readonly string[], options?: HardDropOptions): boolean {
     return (
         hasAlwaysDroppedCapability(capabilities) ||
         hasSubagentDroppedCapability(capabilities, options?.allowSubagentNesting === true) ||
@@ -100,13 +98,9 @@ export function defaultSpawnFn(): Promise<ChildSpawnResult> {
 }
 
 /**
- * Build the default spawn fn: runs a bounded child coding-agent graph from the
- * resolved context. The child gets its OWN identity (agent body via `systemPrompt`),
- * the pre-built child tool surface (yield present, task absent). Cloned effectful tools
- * retain their original permission callbacks, while the child invocation policy enforces
- * derived path rules. The yielded
- * result (captured via the `onYield` callback) becomes the child's `output`; if the
- * child never calls `yield`, a bounded degraded salvage summary is returned with failed status.
+ * Build the default spawn fn. An explicit `yield` result becomes the child's
+ * output; completed final prose without `yield` is preserved as an implicit
+ * completion instead of discarding completed work.
  */
 export function createChildGraphSpawnFn(
     deps: ChildGraphSpawnDeps,
@@ -153,6 +147,18 @@ export function createChildGraphSpawnFn(
             };
         }
 
+        const summary = boundedSummary(
+            observabilityRedactor.redactText(taskOutput.summary),
+            deps.summaryLimit ?? DEFAULT_CHILD_SUMMARY_LIMIT,
+        );
+        if (taskOutput.status === 'completed' && summary.length > 0) {
+            return {
+                sessionId: context.sessionId,
+                status: 'completed',
+                output: summary,
+            };
+        }
+
         const salvage = boundedDegradedSalvage(
             observabilityRedactor.redactText(taskOutput.summary),
             deps.summaryLimit ?? DEFAULT_CHILD_SUMMARY_LIMIT,
@@ -169,6 +175,10 @@ export function createChildGraphSpawnFn(
 
 function boundedDegradedSalvage(summary: string, limit: number): string {
     return `${DEGRADED_SALVAGE_LABEL}${summary}`.slice(0, Math.max(0, limit));
+}
+
+function boundedSummary(summary: string, limit: number): string {
+    return summary.slice(0, Math.max(0, limit));
 }
 
 function stringifyYieldResult(value: unknown): string {

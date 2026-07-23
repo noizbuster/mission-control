@@ -82,6 +82,12 @@ describe('read-only repo tool denylist', () => {
             findAdvertisement(registry, 'repo.read').version,
             'node_modules/source-pkg/dist/generated.js',
         );
+        const nestedDependencyListing = await invokeNamedTool(registry, 'ls', listTool.version, {
+            path: 'apps/tui/node_modules/@opentui',
+        });
+        const nestedDependencySource = await invokeNamedTool(registry, 'read', readTool.version, {
+            path: 'apps/tui/node_modules/@opentui/solid/index.ts',
+        });
         const rootSearch = await invokeSearch(registry, searchTool.version, 'DEPENDENCY_SOURCE_SENTINEL', '.');
 
         expect(rootListing.structuredOutput).toMatchObject({
@@ -98,6 +104,14 @@ describe('read-only repo tool denylist', () => {
         expect(distributedSource.structuredOutput).toMatchObject({
             path: 'node_modules/source-pkg/dist/generated.js',
             content: 'generated',
+        });
+        expect(nestedDependencyListing.structuredOutput).toMatchObject({
+            path: 'apps/tui/node_modules/@opentui',
+            entries: [{ name: 'solid', kind: 'directory' }],
+        });
+        expect(nestedDependencySource.structuredOutput).toMatchObject({
+            path: 'apps/tui/node_modules/@opentui/solid/index.ts',
+            content: 'NESTED_DEPENDENCY_SOURCE_SENTINEL',
         });
         expect(rootSearch.structuredOutput).toMatchObject({ totalMatches: 0, matches: [] });
     });
@@ -216,6 +230,7 @@ async function createDenylistFixture(workspaceRoot: string): Promise<void> {
     await mkdir(join(workspaceRoot, '.nx'), { recursive: true });
     await mkdir(join(workspaceRoot, 'dist'), { recursive: true });
     await mkdir(join(workspaceRoot, 'node_modules', 'source-pkg', 'dist'), { recursive: true });
+    await mkdir(join(workspaceRoot, 'apps', 'tui', 'node_modules', '@opentui', 'solid'), { recursive: true });
     await writeFile(join(workspaceRoot, 'temp', 'ref-repos', 'opencode', 'README.md'), 'hidden needle', 'utf8');
     await writeFile(
         join(workspaceRoot, 'temp', 'ref-repos', 'opencode', 'AGENTS.md'),
@@ -230,6 +245,11 @@ async function createDenylistFixture(workspaceRoot: string): Promise<void> {
         'utf8',
     );
     await writeFile(join(workspaceRoot, 'node_modules', 'source-pkg', 'dist', 'generated.js'), 'generated', 'utf8');
+    await writeFile(
+        join(workspaceRoot, 'apps', 'tui', 'node_modules', '@opentui', 'solid', 'index.ts'),
+        'NESTED_DEPENDENCY_SOURCE_SENTINEL',
+        'utf8',
+    );
     await writeFile(join(workspaceRoot, 'visible.txt'), 'visible needle', 'utf8');
 }
 

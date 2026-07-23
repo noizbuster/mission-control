@@ -53,6 +53,7 @@ function buildAuthorityRuntime(input: AuthorityRuntimeInput): ConcreteTaskToolRu
         },
         services: input.services,
         parentSessionId: 'parent-session',
+        isCliRootParent: true,
     });
 }
 

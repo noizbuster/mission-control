@@ -16,7 +16,7 @@ import { buildChildToolSurface } from './task-tool-runtime-authority';
 const inputSchema = z.record(z.string(), z.unknown());
 const outputSchema = z.object({ ok: z.literal(true) }).strict();
 
-const ON_CATEGORIES = ['librarian', 'deep', 'reasoner', 'oracle', 'designer', 'planner'] as const;
+const ON_CATEGORIES = ['architect', 'librarian', 'deep', 'reasoner', 'oracle', 'designer', 'planner'] as const;
 const OFF_CATEGORIES = ['explore', 'reviewer', 'quick'] as const;
 const NETWORK_TOOL_NAMES = ['webfetch', 'web_search', 'mcp__docs__lookup'] as const;
 
@@ -28,7 +28,7 @@ describe('CHILD_NETWORK_ALLOWED_CATEGORIES (todo 1b)', () => {
         expect(CHILD_HARD_DROPPED_CAPABILITY_KINDS.has('subagent')).toBe(true);
     });
 
-    it('allowlists only the six ON categories', () => {
+    it('allowlists only the seven ON categories and agents', () => {
         expect([...CHILD_NETWORK_ALLOWED_CATEGORIES].sort()).toEqual([...ON_CATEGORIES].sort());
         for (const off of OFF_CATEGORIES) {
             expect(isChildNetworkCategoryAllowed(off)).toBe(false);

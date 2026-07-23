@@ -31,6 +31,11 @@ import {
     isAbortRequested,
     isIndefiniteProviderWaitError,
 } from '../../../providers/provider-retry-policy';
+import {
+    DEFAULT_PROVIDER_CHUNK_TIMEOUT_MS,
+    nextProviderChunkTimeoutMs,
+} from '../../../providers/provider-turn-timeout';
+import { ProviderTurnError } from '../../../providers/provider-turn-types';
 import { errorToString } from '../../../util/error-to-string';
 import { createAbgEmitSignal } from '../../abg-emit';
 import type { CapturedToolProposal, ExecutedToolProposal } from './abg-tool-proposal-execution';
@@ -49,24 +54,11 @@ import {
 
 export type { LlmActorModel, LlmActorRunInput, LlmActorTurnResult } from './llm-actor-node-types';
 
-/**
- * Default per-chunk timeout for real-provider streams driven through the graph path.
- * Mirrors the flat-path `nextProviderChunk` timeout (120s) so both execution paths
- * abort a stalled SSE connection at the same bound.
- */
-const DEFAULT_PROVIDER_TURN_TIMEOUT_MS = 120_000;
+const MAX_NO_OUTPUT_TIMEOUT_RETRIES = 3;
 
 export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSignal> {
     const { nodeId, now } = input;
     const observabilityRedactor = input.observabilityRedactor ?? createObservabilityRedactor();
-    const adapterContext = {
-        graphId: input.graphId,
-        nodeId,
-        now,
-        ...(input.settlementLedger !== undefined ? { settlementLedger: input.settlementLedger } : {}),
-        observabilityRedactor,
-        observabilityStreams: createStreamPartObservabilityState(),
-    };
     const graphIdPart = input.graphId !== undefined ? { graphId: input.graphId } : {};
 
     yield { type: 'started', nodeId, ...graphIdPart };
@@ -90,13 +82,34 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
     const retrySleep = input.retrySleep ?? abortableRetrySleep;
     const retryBaseDelayMs = input.retryBaseDelayMs ?? DEFAULT_PROVIDER_RETRY_BASE_DELAY_MS;
     const maxRetryDelayMs = input.maxRetryDelayMs ?? DEFAULT_PROVIDER_MAX_RETRY_DELAY_MS;
+    let providerChunkTimeoutMs = input.timeoutMs ?? DEFAULT_PROVIDER_CHUNK_TIMEOUT_MS;
     let providerWaitAttempt = 0;
+    let noOutputTimeoutRetries = 0;
 
     // Rate-limit / usage-exhaustion: wait indefinitely with exponential backoff (cap ~30m).
     // Only retry when no stream parts escaped — mid-stream failure must not re-execute tools.
     while (true) {
-        let sawStreamPart = false;
+        let sawProviderOutput = false;
+        let streamError: unknown;
+        const attemptAbortController = new AbortController();
+        const forwardAbort = () => {
+            attemptAbortController.abort(input.signal?.reason);
+        };
+        if (input.signal?.aborted === true) {
+            forwardAbort();
+        } else {
+            input.signal?.addEventListener('abort', forwardAbort, { once: true });
+        }
+        const adapterContext = {
+            graphId: input.graphId,
+            nodeId,
+            now,
+            ...(input.settlementLedger !== undefined ? { settlementLedger: input.settlementLedger } : {}),
+            observabilityRedactor,
+            observabilityStreams: createStreamPartObservabilityState(),
+        };
         try {
+            const noOutputDeadlineMs = Date.now() + providerChunkTimeoutMs;
             const result = streamText({
                 model: input.model,
                 system: input.system,
@@ -104,19 +117,40 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
                 // Runtime-authored system messages (yield reminders, mid-conversation context
                 // updates) are placed in `messages` for chronological fidelity; safe to opt in.
                 allowSystemInMessages: true,
-                // Prevents indefinite hang on a stalled provider stream (mirrors flat-path 120s).
-                timeout: { chunkMs: input.timeoutMs ?? DEFAULT_PROVIDER_TURN_TIMEOUT_MS },
+                timeout: { chunkMs: providerChunkTimeoutMs },
                 stopWhen: stepCountIs(1),
                 // Own rate-limit waits below; disable AI SDK's short finite retry budget.
                 maxRetries: 0,
                 onError: () => undefined,
                 ...(input.tools !== undefined ? { tools: input.tools } : {}),
                 ...(input.toolChoice !== undefined ? { toolChoice: input.toolChoice } : {}),
-                ...(input.signal !== undefined ? { abortSignal: input.signal } : {}),
+                abortSignal: attemptAbortController.signal,
             });
 
-            for await (const part of result.fullStream) {
-                sawStreamPart = true;
+            const streamIterator = result.fullStream[Symbol.asyncIterator]();
+            while (true) {
+                const next = sawProviderOutput
+                    ? await streamIterator.next()
+                    : await nextBeforeProviderOutput({
+                          iterator: streamIterator,
+                          signal: attemptAbortController.signal,
+                          deadlineMs: noOutputDeadlineMs,
+                          onTimeout: () => {
+                              attemptAbortController.abort(providerTimeoutError());
+                          },
+                          timeoutError: providerTimeoutError,
+                          abortError: () =>
+                              input.signal?.aborted === true ? providerAbortedError() : providerTimeoutError(),
+                      });
+                if (next.done) {
+                    break;
+                }
+                const part = next.value;
+                if (part.type === 'error') {
+                    streamError = part.error;
+                    continue;
+                }
+                sawProviderOutput ||= isVisibleProviderOutput(part);
                 if (input.settleToolProposals !== undefined && part.type === 'tool-call') {
                     capturedToolProposals.push({
                         toolCallId: part.toolCallId,
@@ -125,6 +159,14 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
                     });
                 }
                 for (const signal of abgSignalsFromStreamPart(part, adapterContext)) {
+                    if (
+                        signal.type === 'emit' &&
+                        (signal.event.type === 'llm.text.delta' ||
+                            signal.event.type === 'llm.reasoning.delta' ||
+                            signal.event.type === 'llm.tool_call.proposed')
+                    ) {
+                        sawProviderOutput = true;
+                    }
                     if (signal.type === 'emit' && signal.event.type === 'llm.tool_call.proposed') {
                         const proposedId = extractToolCallId(signal.event.payload);
                         if (proposedId !== undefined) {
@@ -140,10 +182,42 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
             providerResponseMessages = response.messages;
             break;
         } catch (error) {
-            const surfacedMessage = error instanceof Error ? error.message : errorToString(error);
-            if (!sawStreamPart && !isAbortRequested(input.signal) && isIndefiniteProviderWaitError(error)) {
+            const streamProviderError = streamError ?? error;
+            const classified = classifyProviderStreamError(streamProviderError);
+            const hasActionableStreamClassification = classified?.code !== undefined && classified.code !== 'unknown';
+            const providerError =
+                streamError !== undefined && !hasActionableStreamClassification ? error : streamProviderError;
+            const streamMessage =
+                streamProviderError instanceof Error ? streamProviderError.message : errorToString(streamProviderError);
+            const surfacedMessage =
+                providerError instanceof Error ? providerError.message : errorToString(providerError);
+            const errorCode = hasActionableStreamClassification
+                ? classified.code
+                : extractProviderErrorCode(providerError);
+            const retryable = hasActionableStreamClassification
+                ? classified.retryable
+                : extractProviderErrorRetryable(providerError);
+            const retryExhausted = extractProviderRetryExhausted(providerError);
+            const eventErrorCode = hasActionableStreamClassification
+                ? classified.code
+                : streamError === undefined
+                  ? errorCode
+                  : undefined;
+            const canRetryNoOutputTimeout =
+                input.timeoutMs === undefined &&
+                errorCode === 'provider_timeout' &&
+                noOutputTimeoutRetries < MAX_NO_OUTPUT_TIMEOUT_RETRIES;
+            if (
+                !sawProviderOutput &&
+                !isAbortRequested(input.signal) &&
+                (isIndefiniteProviderWaitError(providerError) || canRetryNoOutputTimeout)
+            ) {
                 providerWaitAttempt += 1;
                 const delayMs = computeProviderRetryDelayMs(providerWaitAttempt, retryBaseDelayMs, maxRetryDelayMs);
+                if (canRetryNoOutputTimeout) {
+                    noOutputTimeoutRetries += 1;
+                    providerChunkTimeoutMs = nextProviderChunkTimeoutMs(providerChunkTimeoutMs);
+                }
                 yield createAbgEmitSignal({
                     graphId: input.graphId,
                     nodeId,
@@ -152,8 +226,9 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
                     payload: observabilityRedactor.redactValue({
                         attempt: providerWaitAttempt,
                         delayMs,
-                        reason: classifyProviderStreamError(error)?.code ?? 'provider_rate_limited',
+                        reason: errorCode ?? 'provider_rate_limited',
                         message: observabilityRedactor.redactText(surfacedMessage),
+                        chunkTimeoutMs: providerChunkTimeoutMs,
                     }),
                     timestamp: now(),
                 });
@@ -190,18 +265,14 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
             // redacts provider error messages at the provider-event layer) so a provider failure
             // carrying a secret does not leak into the `llm.error` emit (rendered + persisted).
             const message = observabilityRedactor.redactText(surfacedMessage);
-            const classified = classifyProviderStreamError(error);
-            const errorCode = classified?.code ?? extractProviderErrorCode(error);
-            const retryable = classified?.retryable ?? extractProviderErrorRetryable(error);
-            const retryExhausted = extractProviderRetryExhausted(error);
             yield createAbgEmitSignal({
                 graphId: input.graphId,
                 nodeId,
                 source: 'llm-actor',
                 eventType: 'llm.error',
                 payload: observabilityRedactor.redactValue({
-                    error: message,
-                    ...(errorCode !== undefined ? { errorCode } : {}),
+                    error: observabilityRedactor.redactText(streamMessage),
+                    ...(eventErrorCode !== undefined ? { errorCode: eventErrorCode } : {}),
                 }),
                 timestamp: now(),
             });
@@ -224,6 +295,8 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
                 ),
             };
             return;
+        } finally {
+            input.signal?.removeEventListener('abort', forwardAbort);
         }
     }
 
@@ -329,6 +402,79 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
         ...graphIdPart,
         result: observabilityRedactor.redactValue(rawTurnResult),
     };
+}
+
+type NextBeforeProviderOutputInput<Part> = {
+    readonly iterator: AsyncIterator<Part>;
+    readonly signal: AbortSignal;
+    readonly deadlineMs: number;
+    readonly onTimeout: () => void;
+    readonly timeoutError: () => ProviderTurnError;
+    readonly abortError: () => ProviderTurnError;
+};
+
+function nextBeforeProviderOutput<Part>(input: NextBeforeProviderOutputInput<Part>): Promise<IteratorResult<Part>> {
+    if (input.signal.aborted) {
+        return Promise.reject(input.abortError());
+    }
+    return new Promise((resolve, reject) => {
+        let settled = false;
+        const clear = () => {
+            clearTimeout(timeout);
+            input.signal.removeEventListener('abort', abort);
+        };
+        const fail = (error: ProviderTurnError) => {
+            if (settled) return;
+            settled = true;
+            clear();
+            reject(error);
+        };
+        const timeout = setTimeout(
+            () => {
+                input.onTimeout();
+                fail(input.timeoutError());
+            },
+            Math.max(0, input.deadlineMs - Date.now()),
+        );
+        const abort = () => {
+            fail(input.abortError());
+        };
+        input.signal.addEventListener('abort', abort, { once: true });
+        input.iterator.next().then(
+            (result) => {
+                if (settled) return;
+                settled = true;
+                clear();
+                resolve(result);
+            },
+            (error: unknown) => {
+                if (settled) return;
+                settled = true;
+                clear();
+                reject(error);
+            },
+        );
+    });
+}
+
+function isVisibleProviderOutput(part: { readonly type: string }): boolean {
+    return part.type === 'text-delta' || part.type === 'reasoning-delta' || part.type === 'tool-call';
+}
+
+function providerTimeoutError(): ProviderTurnError {
+    return new ProviderTurnError({
+        code: 'provider_timeout',
+        message: 'provider turn timed out',
+        retryable: true,
+    });
+}
+
+function providerAbortedError(): ProviderTurnError {
+    return new ProviderTurnError({
+        code: 'provider_aborted',
+        message: 'provider turn aborted',
+        retryable: false,
+    });
 }
 
 function serializedToolInput(input: unknown): string {

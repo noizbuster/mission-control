@@ -1,30 +1,46 @@
 import { describe, expect, it } from 'vitest';
 import { parseAgentFile } from '../agent-parser';
 import deep from './deep.md';
+import architect from './architect.md';
 import designer from './designer.md';
 import explore from './explore.md';
 import librarian from './librarian.md';
+import executor from './executor.md';
 import oracle from './oracle.md';
 import planner from './planner.md';
 import quick from './quick.md';
 import reasoner from './reasoner.md';
 import reviewer from './reviewer.md';
+import writer from './writer.md';
+import { BUNDLED_AGENT_TEMPLATES } from './index';
 
 const BUNDLED_TEMPLATES = [
+    { name: 'architect', template: architect },
     { name: 'quick', template: quick },
     { name: 'deep', template: deep },
     { name: 'reasoner', template: reasoner },
     { name: 'designer', template: designer },
+    { name: 'executor', template: executor },
     { name: 'explore', template: explore },
     { name: 'oracle', template: oracle },
     { name: 'librarian', template: librarian },
     { name: 'planner', template: planner },
     { name: 'reviewer', template: reviewer },
+    { name: 'writer', template: writer },
 ] as const;
 
 describe('bundled agents — parse via parseAgentFile', () => {
-    it('covers all 9 bundled categories', () => {
-        expect(BUNDLED_TEMPLATES).toHaveLength(9);
+    it('covers all 12 bundled agents', () => {
+        expect(BUNDLED_TEMPLATES).toHaveLength(12);
+    });
+
+    it('registers every bundled declaration', () => {
+        const registeredNames = BUNDLED_AGENT_TEMPLATES.map((template) =>
+            parseAgentFile('/bundled/registered.md', template, 'bundled').name,
+        ).sort();
+        const declaredNames = BUNDLED_TEMPLATES.map(({ name }) => name).sort();
+
+        expect(registeredNames).toEqual(declaredNames);
     });
 
     for (const { name, template } of BUNDLED_TEMPLATES) {

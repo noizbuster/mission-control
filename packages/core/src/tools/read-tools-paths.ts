@@ -22,6 +22,8 @@ export const defaultReadOnlyRepoToolDenylist = [
     '.git',
 ] as const;
 
+export const directDependencySourcePaths = ['node_modules'] as const;
+
 export const defaultAutomatedDiscoveryDenylist = [...defaultReadOnlyRepoToolDenylist, referenceRepositoryPath] as const;
 
 export type WorkspaceGuardOptions = {
@@ -216,7 +218,12 @@ function isAllowedForDenylistEntry(allowedPaths: readonly string[], entry: strin
 
 function isAllowedDirectDenylistedPath(allowedPaths: readonly string[], relativePath: string): boolean {
     const canonicalPath = canonicalPolicyPath(relativePath);
-    return allowedPaths.some((allowedPath) => isSameOrDescendant(canonicalPolicyPath(allowedPath), canonicalPath));
+    return allowedPaths.some((allowedPath) => {
+        const canonicalAllowedPath = canonicalPolicyPath(allowedPath);
+        return canonicalAllowedPath.includes('/')
+            ? isSameOrDescendant(canonicalAllowedPath, canonicalPath)
+            : pathSegments(canonicalPath).includes(canonicalAllowedPath);
+    });
 }
 
 function hasAllowedDenylistedDescendant(denylistPolicy: WorkspaceDenylistPolicy, relativePath: string): boolean {

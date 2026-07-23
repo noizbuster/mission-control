@@ -154,7 +154,7 @@ export function createFullParityTaskToolRegistration(
                         ...(context.controlEpoch !== undefined ? { controlEpoch: context.controlEpoch } : {}),
                     }),
                 );
-                return toToolResult(result, context.signal);
+                return toToolResult(result);
             }
 
             const sessionId = options.runtime.generateSessionId();
@@ -172,7 +172,7 @@ export function createFullParityTaskToolRegistration(
                 return { sessionId: handle.sessionId, backgroundId: handle.backgroundId, status: 'running' };
             }
 
-            return toToolResult(await options.runtime.runChildSession(request), context.signal);
+            return toToolResult(await options.runtime.runChildSession(request));
         },
         toModelOutput: (output) => {
             if (output.batch !== undefined) {
@@ -252,15 +252,8 @@ async function executeBatch(
     };
 }
 
-function toToolResult(result: ChildSpawnResult, signal?: AbortSignal): TaskToolResult {
+function toToolResult(result: ChildSpawnResult): TaskToolResult {
     if (result.status === 'failed') {
-        if (signal?.aborted === true) {
-            throw new ToolExecutionError({
-                code: 'operator_aborted',
-                message: result.output,
-                retryable: false,
-            });
-        }
         const failure = classifyChildSpawnFailure(result);
         throw new ToolExecutionError({
             code: failure.code,
