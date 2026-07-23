@@ -25,18 +25,13 @@ export async function* streamOpenAICompatibleChatCompletions(
                 kind: 'network',
                 message: 'OpenAI-compatible SSE frame contained invalid JSON',
             }),
-        onFetchError: (error) => {
-            if (input.signal.aborted || (error instanceof Error && error.name === 'AbortError')) {
-                return new OpenAICompatibleTransportError({
-                    kind: 'abort',
-                    message: error instanceof Error ? error.message : String(error),
-                });
-            }
-            return new OpenAICompatibleTransportError({
-                kind: 'network',
+        onTransportError: (error) =>
+            new OpenAICompatibleTransportError({
+                // A local cancellation is terminal; an AbortError without our signal being
+                // aborted is a peer-side stream failure and must enter the retry path.
+                kind: input.signal.aborted ? 'abort' : 'network',
                 message: error instanceof Error ? error.message : String(error),
-            });
-        },
+            }),
     });
 }
 

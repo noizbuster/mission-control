@@ -5,14 +5,17 @@ export type SseTransportRequest = {
     readonly signal: AbortSignal;
 };
 
-export async function* readSseStream(
-    request: SseTransportRequest,
-    options: {
-        readonly onError: (response: Response) => Promise<Error> | Error;
-        readonly onInvalidJson: () => Error;
-        readonly onFetchError?: (error: unknown) => Error;
-    },
-): AsyncIterable<unknown> {
+export type SseStreamOptions = {
+    readonly onError: (response: Response) => Promise<Error> | Error;
+    readonly onInvalidJson: () => Error;
+    /**
+     * Maps failures while opening or reading the HTTP stream. The request signal is available to
+     * callers so they can distinguish an intentional cancellation from a peer-side disconnect.
+     */
+    readonly onTransportError?: (error: unknown) => Error;
+};
+
+export async function* readSseStream(request: SseTransportRequest, options: SseStreamOptions): AsyncIterable<unknown> {
     let response: Response;
     try {
         response = await fetch(request.endpoint, {
@@ -22,8 +25,8 @@ export async function* readSseStream(
             signal: request.signal,
         });
     } catch (error) {
-        if (options.onFetchError !== undefined) {
-            throw options.onFetchError(error);
+        if (options.onTransportError !== undefined) {
+            throw options.onTransportError(error);
         }
         throw error;
     }
@@ -40,15 +43,22 @@ export async function* readSseStream(
     const decoder = new TextDecoder();
     let buffer = '';
 
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const consumed = parseSseFrames(buffer, options.onInvalidJson);
-        buffer = consumed.remainder;
-        for (const event of consumed.events) {
-            yield event;
+    try {
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const consumed = parseSseFrames(buffer, options.onInvalidJson);
+            buffer = consumed.remainder;
+            for (const event of consumed.events) {
+                yield event;
+            }
         }
+    } catch (error) {
+        if (options.onTransportError !== undefined) {
+            throw options.onTransportError(error);
+        }
+        throw error;
     }
 
     buffer += decoder.decode();
