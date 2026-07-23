@@ -251,9 +251,77 @@ describe('flushGraphTurnEvents', () => {
         expect(isInterruptFlushEvent(events[1] as AgentEvent)).toBe(false);
     });
 
+    it('persists filtered checkpoint and graph failure boundaries through an abort-aware batch', async () => {
+        // Given: an already-aborted turn with log noise before its checkpoint and graph failure.
+        const controller = new AbortController();
+        controller.abort();
+        const checkpoint = linearResumeCheckpoint({
+            graphId: 'post-abort-boundaries',
+            runId: 'run_post_abort_boundaries',
+            queuedNodeIds: ['resume-node'],
+            completedNodeIds: ['checkpoint-node'],
+        });
+        const persisted: AgentEvent[] = [];
+        const receivedSignals: Array<AbortSignal | undefined> = [];
+        const events: AgentEvent[] = [
+            {
+                type: 'log',
+                timestamp: NOW,
+                sessionId: 'session_graph_turn',
+                message: 'streaming noise',
+            },
+            {
+                type: 'graph.checkpoint',
+                timestamp: NOW,
+                sessionId: 'session_graph_turn',
+                abg: { graphId: checkpoint.graphId, checkpoint },
+            },
+            {
+                type: 'graph.failed',
+                timestamp: NOW,
+                sessionId: 'session_graph_turn',
+                message: 'ABG graph loop limit exceeded',
+                abg: {
+                    graphId: checkpoint.graphId,
+                    error: {
+                        code: 'graph_loop_limit',
+                        message: 'ABG graph loop limit exceeded',
+                        retryable: false,
+                    },
+                },
+            },
+        ];
+        const context: RunCoordinatorTurnContext = {
+            signal: controller.signal,
+            command: 'run',
+            readMessages: async () => [],
+            nextId: async (prefix) => prefix,
+            appendDurableEvent: async () => {
+                throw new Error('should use batch path');
+            },
+            appendDurableEvents: async (batch, signal) => {
+                receivedSignals.push(signal);
+                if (signal?.aborted === true) {
+                    return;
+                }
+                persisted.push(...batch);
+            },
+            appendDurableEnvelope: async () => {},
+        };
+
+        // When: the graph's post-abort boundary batch is flushed.
+        await flushGraphTurnEvents(context, events);
+
+        // Then: retained boundaries commit in source order without the cancelled batch signal.
+        expect(persisted.map((event) => event.type)).toEqual(['graph.checkpoint', 'graph.failed']);
+        expect(receivedSignals).toEqual([undefined]);
+    });
+
     it('uses appendDurableEvents batch path when provided', async () => {
         // Given
         const batches: AgentEvent[][] = [];
+        const signals: Array<AbortSignal | undefined> = [];
+        const signal = new AbortController().signal;
         const events: AgentEvent[] = [
             {
                 type: 'node.started',
@@ -269,15 +337,16 @@ describe('flushGraphTurnEvents', () => {
             },
         ];
         const context: RunCoordinatorTurnContext = {
-            signal: new AbortController().signal,
+            signal,
             command: 'run',
             readMessages: async () => [],
             nextId: async (prefix) => prefix,
             appendDurableEvent: async () => {
                 throw new Error('should use batch path');
             },
-            appendDurableEvents: async (batch) => {
+            appendDurableEvents: async (batch, batchSignal) => {
                 batches.push([...batch]);
+                signals.push(batchSignal);
             },
             appendDurableEnvelope: async () => {},
         };
@@ -288,6 +357,7 @@ describe('flushGraphTurnEvents', () => {
         // Then
         expect(batches).toHaveLength(1);
         expect(batches[0]?.map((event) => event.type)).toEqual(['node.started', 'log']);
+        expect(signals).toEqual([signal]);
     });
 
     it('keeps graph checkpoint events during aborted flushes', () => {

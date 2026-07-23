@@ -167,7 +167,8 @@ export async function flushGraphTurnEvents(
     }
     if (context.appendDurableEvents !== undefined) {
         // Single-lane batch path: one queue entry, abort-checked inside the store when possible.
-        await context.appendDurableEvents(toFlush, context.signal);
+        const batchSignal = context.signal.aborted ? undefined : context.signal;
+        await context.appendDurableEvents(toFlush, batchSignal);
         return;
     }
     for (const event of toFlush) {
