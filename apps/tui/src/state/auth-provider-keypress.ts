@@ -95,7 +95,7 @@ function reduceProviderPromptKeypressCharacter(
         return { state: { ...state, pendingNumberSelection: character } };
     }
     if (isSearchCharacter(character)) {
-        return { state: appendSearchQuery(state, character) };
+        return { state: appendProviderPromptSearch(state, character) };
     }
     return { state };
 }
@@ -116,7 +116,7 @@ function reducePendingNumberSelection(
         return { ...state, pendingNumberSelection: '' };
     }
     if (isSearchCharacter(character)) {
-        return appendSearchQuery(
+        return appendProviderPromptSearch(
             { ...state, pendingNumberSelection: '' },
             `${state.pendingNumberSelection}${character}`,
         );
@@ -180,7 +180,10 @@ function submitSelection(
     return { ...state, submitted: true, pendingEscape: '', pendingNumberSelection: '' };
 }
 
-function appendSearchQuery(state: ProviderPromptKeypressState, value: string): ProviderPromptKeypressState {
+export function appendProviderPromptSearch(
+    state: ProviderPromptKeypressState,
+    value: string,
+): ProviderPromptKeypressState {
     return {
         ...state,
         searchQuery: `${state.searchQuery}${value}`,

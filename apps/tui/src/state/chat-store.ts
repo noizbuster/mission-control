@@ -7,6 +7,7 @@ import { PasteMarkerStore } from '../platform/keymap/bracketed-paste';
 import type { DiffEntry } from '../platform/keymap/diff-viewer';
 import { APPROVAL_LEVELS, type ApprovalLevel, isApprovalLevel } from './approval-level';
 import {
+    appendProviderPromptSearch,
     createProviderPromptKeypressState,
     filterProviderPromptChoices,
     type ProviderPromptKeypressState,
@@ -1309,6 +1310,11 @@ export class ChatStore {
             rawInput,
             promptChoices,
         );
+        this.publish();
+    }
+
+    appendModelPickerSearch(character: string): void {
+        this.state.modelPickerKeypress = appendProviderPromptSearch(this.state.modelPickerKeypress, character);
         this.publish();
     }
 

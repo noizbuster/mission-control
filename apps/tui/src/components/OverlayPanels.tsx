@@ -469,12 +469,12 @@ export function ModelPickerOverlay({ store }: ModelPickerOverlayProps): JSX.Elem
             store.hideModelPicker(undefined);
             return;
         }
-        if (key.name === 'up' || (key.ctrl && key.name === 'p') || key.name === 'k') {
+        if (key.name === 'up' || (key.ctrl && key.name === 'p')) {
             key.preventDefault();
             store.updateModelPickerKeypress('k');
             return;
         }
-        if (key.name === 'down' || (key.ctrl && key.name === 'n') || key.name === 'j') {
+        if (key.name === 'down' || (key.ctrl && key.name === 'n')) {
             key.preventDefault();
             store.updateModelPickerKeypress('j');
             return;
@@ -484,27 +484,13 @@ export function ModelPickerOverlay({ store }: ModelPickerOverlayProps): JSX.Elem
             store.updateModelPickerKeypress('\b');
             return;
         }
-        if (
-            key.name === 'left' ||
-            key.name === 'right' ||
-            key.name === '-' ||
-            key.name === '=' ||
-            key.name === '+' ||
-            key.name === '[' ||
-            key.name === ']'
-        ) {
+        if (key.name === 'left' || key.name === 'right') {
             const selection = focusedSelection();
             if (selection !== undefined) {
                 key.preventDefault();
                 const catalogDefault = getModelContextLimit(selection.providerID, selection.modelID);
-                const isContext =
-                    key.name === 'left' ||
-                    key.name === 'right' ||
-                    key.name === '-' ||
-                    key.name === '=' ||
-                    key.name === '+';
-                if (isContext && key.name !== '[' && key.name !== ']') {
-                    const direction = key.name === 'left' || key.name === '-' ? -1 : 1;
+                const direction = key.name === 'left' ? -1 : 1;
+                if (!key.ctrl) {
                     void localPreferences.stepModelContextLimit(selection, direction, catalogDefault).then(() => {
                         const lines = buildModelContextPrefLines(
                             selection,
@@ -514,17 +500,14 @@ export function ModelPickerOverlay({ store }: ModelPickerOverlayProps): JSX.Elem
                     });
                     return;
                 }
-                void localPreferences.stepModelAutoCompactThreshold(
-                    selection,
-                    key.name === '[' || key.name === 'left' ? -1 : 1,
-                );
+                void localPreferences.stepModelAutoCompactThreshold(selection, direction);
                 return;
             }
         }
-        if (key.ctrl || key.meta || key.super) return;
-        if (key.sequence.length === 1 && key.sequence >= ' ' && key.sequence <= '~') {
+        const character = printableCharFromKey(key);
+        if (character !== undefined) {
             key.preventDefault();
-            store.updateModelPickerKeypress(key.sequence);
+            store.appendModelPickerSearch(character);
         }
     });
 
@@ -532,7 +515,7 @@ export function ModelPickerOverlay({ store }: ModelPickerOverlayProps): JSX.Elem
         <OverlayFrame
             variant="modal"
             title="Select model"
-            footer="↑↓ navigate · ←→ context · [ ] compact · type search · Enter select · Esc cancel"
+            footer="↑↓ navigate · ←→ context · Ctrl+←→ compact · type search · Enter select · Esc cancel"
         >
             <text attributes={TextAttributes.DIM}>{`Search: ${view().searchQuery}`}</text>
             {view().totalCount === 0 ? (
