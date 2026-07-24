@@ -73,11 +73,11 @@ describe('runAgent JSON headless final state', () => {
         });
     });
 
-    it('emits an interrupted final state for no-session JSON provider aborts', async () => {
-        const dataDir = await tempRoot('mctrl-json-headless-interrupted-');
+    it('emits a failed final state for a remote provider abort after bounded retries', async () => {
+        const dataDir = await tempRoot('mctrl-json-headless-remote-abort-');
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
 
-        const output = await runAgent(parseArgs(['run', 'interrupt provider', '--json']), {
+        const output = await runAgent(parseArgs(['run', 'remote provider abort', '--json']), {
             provider: createDeterministicProvider([
                 {
                     kind: 'response_failed',
@@ -91,10 +91,10 @@ describe('runAgent JSON headless final state', () => {
         });
         const records = parseJsonRecords(output);
 
-        expect(records.map((record) => record.type)).toContain('run.interrupted');
+        expect(records.map((record) => record.type)).toContain('run.failed');
         expect(lastRecord(records)).toMatchObject({
             type: 'session.stopped',
-            status: 'interrupted',
+            status: 'failed',
             runId: expect.stringMatching(/^run_.+/),
         });
     });

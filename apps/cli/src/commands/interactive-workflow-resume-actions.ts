@@ -6,11 +6,11 @@ import {
     resolveMcRoot,
     updateRunStatus,
 } from '@mission-control/core';
-import type { ModelProviderSelection } from '@mission-control/protocol';
+import type { AgentEvent, GraphCheckpoint, ModelProviderSelection } from '@mission-control/protocol';
 import type { CodingActionContext } from './interactive-chat-action-context';
 import { actionResult, type ChatActionResult } from './interactive-chat-action-result';
 import type { ChatOutput } from './interactive-chat-io';
-import { type ActiveCodingAgentTurn, resumeCodingAgentTurn } from './interactive-coding-agent';
+import { type ActiveCodingAgentTurn, resumeCodingAgentTurn, startCodingAgentTurn } from './interactive-coding-agent';
 import { runWorkflowAction } from './interactive-workflow-actions';
 import { createWorkflowRunOutcomeObserver, redactWorkflowError } from './interactive-workflow-run-outcome';
 import {
@@ -19,7 +19,12 @@ import {
     type WorkflowSessionContinue,
 } from './interactive-workflow-state';
 import { clearStickyAttachBanner } from './session-attach-projection';
-import { decideWorkResume, formatWorkResumeStartMessage, isWorkResumeActionable } from './work-resume-decision';
+import {
+    decideWorkResume,
+    formatWorkResumeStartMessage,
+    isWorkResumeActionable,
+    SAFE_RECOVERY_PROMPT,
+} from './work-resume-decision';
 
 export async function runInterruptAction(
     chatOutput: ChatOutput,
@@ -58,15 +63,26 @@ export async function runWorkResumeAction(
     const decision = decideWorkResume(sessionEvents);
     clearStickyAttachBanner(chatOutput);
     chatOutput.write(formatWorkResumeStartMessage(decision, sessionId));
-    if (!isWorkResumeActionable(decision)) {
-        return actionResult(selection);
+
+    let sourceRunId: string;
+    let checkpoint: GraphCheckpoint | undefined;
+    let recoveryPrompt: string | undefined;
+    if (decision.kind === 'recovery') {
+        sourceRunId = decision.sourceRunId;
+        recoveryPrompt = SAFE_RECOVERY_PROMPT;
+    } else {
+        if (!isWorkResumeActionable(decision)) {
+            return actionResult(selection);
+        }
+        sourceRunId = decision.snapshot.runId;
+        checkpoint = decision.snapshot.checkpoint;
     }
-    const resumableSessionRun = decision.snapshot;
+
     const workflowContinue = await findWorkflowGraphForSessionContinue({
         workspaceRoot: coding.workspaceRoot,
         sessionId,
-        sessionRunId: resumableSessionRun.runId,
-        ...(resumableSessionRun.checkpoint !== undefined ? { checkpoint: resumableSessionRun.checkpoint } : {}),
+        sessionRunId: sourceRunId,
+        ...(checkpoint !== undefined ? { checkpoint } : {}),
         ...(coding.workflowRegistry !== undefined ? { workflowRegistry: coding.workflowRegistry } : {}),
         ...(coding.observabilityRedactor !== undefined ? { observabilityRedactor: coding.observabilityRedactor } : {}),
         ...(coding.taskRuntimeServices?.sessionControlHost !== undefined
@@ -75,45 +91,56 @@ export async function runWorkResumeAction(
     });
     const turnId = coding.nextTurnId();
     const observer = createContinueOutcomeObserver(sessionId, turnId, workflowContinue);
-    if (workflowContinue?.bookkeeping === 'reuse_blocked' && workflowContinue.handle !== undefined) {
+    if (
+        recoveryPrompt === undefined &&
+        workflowContinue?.bookkeeping === 'reuse_blocked' &&
+        workflowContinue.handle !== undefined
+    ) {
         await updateRunStatus(workflowContinue.handle.location, workflowContinue.handle.runId, 'running');
     }
+    const turnOptions = {
+        sessionId,
+        turnId,
+        store: coding.sessionStore,
+        provider: coding.provider,
+        modelProviderSelection: selection,
+        workspaceRoot: coding.workspaceRoot,
+        output: chatOutput,
+        emitEvent: (event: AgentEvent) => {
+            observer?.observe(event);
+            coding.emitEvent?.(event);
+        },
+        observeStoredEvent: (event: AgentEvent) => {
+            observer?.observe(event);
+            coding.observeStoredEvent?.(event);
+        },
+        ...(coding.commandExecutor !== undefined ? { commandExecutor: coding.commandExecutor } : {}),
+        ...(coding.engine !== undefined ? { engine: coding.engine } : {}),
+        ...(coding.resolveSdkModel !== undefined ? { resolveSdkModel: coding.resolveSdkModel } : {}),
+        ...(coding.requestUserQuestion !== undefined ? { requestUserQuestion: coding.requestUserQuestion } : {}),
+        ...(coding.requestUserQuestions !== undefined ? { requestUserQuestions: coding.requestUserQuestions } : {}),
+        ...(coding.abgOverlayController !== undefined ? { abgOverlayController: coding.abgOverlayController } : {}),
+        ...(coding.pricingTable !== undefined ? { pricingTable: coding.pricingTable } : {}),
+        ...(coding.permissionSession !== undefined ? { permissionSession: coding.permissionSession } : {}),
+        ...(coding.onUsage !== undefined ? { onUsage: coding.onUsage } : {}),
+        ...(coding.authStore !== undefined ? { authStore: coding.authStore } : {}),
+        ...(coding.workflowRegistry !== undefined ? { workflowRegistry: coding.workflowRegistry } : {}),
+        ...(coding.profileName !== undefined ? { profileName: coding.profileName } : {}),
+        ...(coding.config !== undefined ? { config: coding.config } : {}),
+        ...(coding.taskRuntimeServices !== undefined ? { taskRuntimeServices: coding.taskRuntimeServices } : {}),
+        ...(workflowContinue !== undefined ? { graph: workflowContinue.graph } : {}),
+    };
     let activeTurn: ActiveCodingAgentTurn;
     try {
-        activeTurn = await resumeCodingAgentTurn({
-            sessionId,
-            turnId,
-            store: coding.sessionStore,
-            provider: coding.provider,
-            modelProviderSelection: selection,
-            workspaceRoot: coding.workspaceRoot,
-            output: chatOutput,
-            emitEvent: (event) => {
-                observer?.observe(event);
-                coding.emitEvent?.(event);
-            },
-            observeStoredEvent: (event) => {
-                observer?.observe(event);
-                coding.observeStoredEvent?.(event);
-            },
-            ...(coding.commandExecutor !== undefined ? { commandExecutor: coding.commandExecutor } : {}),
-            ...(coding.engine !== undefined ? { engine: coding.engine } : {}),
-            ...(coding.resolveSdkModel !== undefined ? { resolveSdkModel: coding.resolveSdkModel } : {}),
-            ...(coding.requestUserQuestion !== undefined ? { requestUserQuestion: coding.requestUserQuestion } : {}),
-            ...(coding.requestUserQuestions !== undefined ? { requestUserQuestions: coding.requestUserQuestions } : {}),
-            ...(coding.abgOverlayController !== undefined ? { abgOverlayController: coding.abgOverlayController } : {}),
-            ...(coding.pricingTable !== undefined ? { pricingTable: coding.pricingTable } : {}),
-            ...(coding.permissionSession !== undefined ? { permissionSession: coding.permissionSession } : {}),
-            ...(coding.onUsage !== undefined ? { onUsage: coding.onUsage } : {}),
-            ...(coding.authStore !== undefined ? { authStore: coding.authStore } : {}),
-            ...(coding.workflowRegistry !== undefined ? { workflowRegistry: coding.workflowRegistry } : {}),
-            ...(coding.profileName !== undefined ? { profileName: coding.profileName } : {}),
-            ...(coding.config !== undefined ? { config: coding.config } : {}),
-            ...(coding.taskRuntimeServices !== undefined ? { taskRuntimeServices: coding.taskRuntimeServices } : {}),
-            ...(workflowContinue !== undefined ? { graph: workflowContinue.graph } : {}),
-        });
+        activeTurn =
+            recoveryPrompt === undefined
+                ? await resumeCodingAgentTurn(turnOptions)
+                : await startCodingAgentTurn({ ...turnOptions, prompt: recoveryPrompt });
     } catch (error: unknown) {
-        await observer?.settle({ status: 'failed', reason: 'workflow resume setup failed' });
+        await observer?.settle({
+            status: 'failed',
+            reason: recoveryPrompt === undefined ? 'workflow resume setup failed' : 'workflow recovery setup failed',
+        });
         throw redactWorkflowError(error instanceof Error ? error : new Error(String(error)));
     }
     if (observer === undefined) return actionResult(selection, activeTurn);

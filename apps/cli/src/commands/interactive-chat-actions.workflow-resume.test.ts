@@ -15,17 +15,21 @@ import type { GraphCheckpoint, ModelProviderSelection, WorkflowSpec } from '@mis
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CodingActionContext } from './interactive-chat-actions';
 import { runChatAction } from './interactive-chat-actions';
+import type {
+    resumeCodingAgentTurn as ResumeCodingAgentTurn,
+    startCodingAgentTurn as StartCodingAgentTurn,
+} from './interactive-coding-agent';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const resumeCodingAgentTurnMock = vi.hoisted(() =>
-    vi.fn<typeof import('./interactive-coding-agent').resumeCodingAgentTurn>(),
-);
+const resumeCodingAgentTurnMock = vi.hoisted(() => vi.fn<typeof ResumeCodingAgentTurn>());
+const startCodingAgentTurnMock = vi.hoisted(() => vi.fn<typeof StartCodingAgentTurn>());
 
 vi.mock('./interactive-coding-agent.js', async (importOriginal) => ({
     ...(await importOriginal<typeof import('./interactive-coding-agent')>()),
     resumeCodingAgentTurn: resumeCodingAgentTurnMock,
+    startCodingAgentTurn: startCodingAgentTurnMock,
 }));
 
 const selection: ModelProviderSelection = { providerID: 'local', modelID: 'local-echo' };
@@ -34,6 +38,7 @@ const tempRoots: string[] = [];
 afterEach(async () => {
     vi.unstubAllEnvs();
     resumeCodingAgentTurnMock.mockReset();
+    startCodingAgentTurnMock.mockReset();
     await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
@@ -339,8 +344,8 @@ describe('interactive blocked workflow Run resume', () => {
         expect((await readRun(location, running.id)).status).toBe('completed');
     });
 
-    it('writes interrupt node hint on cold continue and refuses interrupt without checkpoint', async () => {
-        // Given: interrupt+checkpoint cold session, then a bare interrupt session.
+    it('resumes queued interruption checkpoints and starts safe recovery without a checkpoint', async () => {
+        // Given: interrupt+checkpoint cold session, then a bare interruption session.
         const workspace = await mkdtemp(join(tmpdir(), 'wf-resume-interrupt-hint-'));
         tempRoots.push(workspace);
         await mkdir(join(workspace, '.mc'), { recursive: true });
@@ -398,7 +403,7 @@ describe('interactive blocked workflow Run resume', () => {
         expect(writes.join('')).toContain('queued node(s): entry');
         expect(resumeCodingAgentTurnMock).toHaveBeenCalledTimes(1);
 
-        // And: interrupt without checkpoint refuses resume.
+        // And: interruption without a checkpoint starts a guarded fresh run.
         const bareSessionId = 'session_workflow_interrupt_bare';
         const bareStore = await openLocalSessionEventStore({ dataDir, sessionId: bareSessionId });
         await bareStore.append({
@@ -414,6 +419,7 @@ describe('interactive blocked workflow Run resume', () => {
             run: { runId: 'owner_bare', state: 'interrupted', reason: 'user_interrupt' },
         });
         resumeCodingAgentTurnMock.mockClear();
+        startCodingAgentTurnMock.mockImplementation(async () => fakeActiveTurn());
         const bareWrites: string[] = [];
         const bare = await runChatAction(
             new AgentRuntime(),
@@ -436,9 +442,98 @@ describe('interactive blocked workflow Run resume', () => {
                 workflowRegistry: new WorkflowRegistry([spec]),
             },
         );
-        expect(bare.activeTurn).toBeUndefined();
+        await bare.activeTurn?.done;
+        expect(startCodingAgentTurnMock).toHaveBeenCalledTimes(1);
         expect(resumeCodingAgentTurnMock).not.toHaveBeenCalled();
-        expect(bareWrites.join('')).toContain('interrupted without a graph checkpoint');
+        expect(bareWrites.join('')).toContain('Starting safe recovery for session_workflow_interrupt_bare');
+    });
+
+    it('starts a guarded fresh run after an interrupted task receipt instead of replaying its checkpoint', async () => {
+        const workspace = await mkdtemp(join(tmpdir(), 'wf-safe-recovery-'));
+        tempRoots.push(workspace);
+        await mkdir(join(workspace, '.mc'), { recursive: true });
+        const dataDir = join(workspace, 'data');
+        vi.stubEnv('MCTRL_DATA_DIR', dataDir);
+        const sessionId = 'session_safe_recovery';
+        const runId = 'run_safe_recovery';
+        const sessionStore = await openLocalSessionEventStore({ dataDir, sessionId });
+        const timestamp = new Date().toISOString();
+        await sessionStore.append({
+            type: 'run.started',
+            timestamp,
+            sessionId,
+            run: { runId, state: 'running' },
+        });
+        await sessionStore.append({
+            type: 'graph.checkpoint',
+            timestamp,
+            sessionId,
+            run: { runId, state: 'running' },
+            abg: {
+                graphId: 'resumable-workflow-graph',
+                checkpoint: interruptCheckpoint('resumable-workflow-graph', runId),
+            },
+        });
+        await sessionStore.append({
+            type: 'graph.checkpoint',
+            timestamp,
+            sessionId,
+            run: { runId, state: 'running' },
+            abg: {
+                graphId: 'resumable-workflow-graph',
+                checkpoint: {
+                    ...interruptCheckpoint('resumable-workflow-graph', runId),
+                    queuedNodeIds: [],
+                },
+            },
+        });
+        await sessionStore.append({
+            type: 'task.failed',
+            timestamp,
+            sessionId,
+            taskId: 'task_interrupted',
+            message: 'provider turn interrupted',
+            run: { runId, state: 'interrupted' },
+        });
+        await sessionStore.append({
+            type: 'session.stopped',
+            timestamp,
+            sessionId,
+            message: 'mission-control session stopped',
+        });
+        const writes: string[] = [];
+        startCodingAgentTurnMock.mockImplementation(async () => fakeActiveTurn());
+
+        const result = await runChatAction(
+            new AgentRuntime(),
+            { write: (chunk) => writes.push(chunk) },
+            { kind: 'continue' },
+            selection,
+            async () => undefined,
+            [],
+            {
+                activeTurn: undefined,
+                useTui: false,
+                commandExecutor: undefined,
+                emitEvent: undefined,
+                nextTurnId: () => 'turn_safe_recovery',
+                observeStoredEvent: undefined,
+                provider: createDeterministicProvider([]),
+                sessionId,
+                sessionStore,
+                workspaceRoot: workspace,
+            },
+        );
+        await result.activeTurn?.done;
+
+        expect(writes.join('')).toContain('Starting safe recovery for session_safe_recovery');
+        expect(startCodingAgentTurnMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                prompt: expect.stringContaining('Treat its terminal failure tail as non-authoritative'),
+            }),
+        );
+        expect(resumeCodingAgentTurnMock).not.toHaveBeenCalled();
+        await sessionStore.close();
     });
 
     it('does not settle an older workflow Run when a newer plain owner Run is blocked', async () => {

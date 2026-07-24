@@ -223,7 +223,7 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                     // surfaces on `session.stopped` without threading it here.
                     if (result.terminal === true) {
                         const terminalError = terminalErrorFromSignal(result.lastSignal);
-                        if (terminalError?.code === 'provider_aborted' || isAbortRequested(input.abortSignal)) {
+                        if (isAbortRequested(input.abortSignal)) {
                             clearAllCorrections(state);
                             requeueInterruptedNodesForCheckpoint(state);
                             emitGraphCheckpoint({ graphId: graph.id, input, state, reason: 'interrupt' });

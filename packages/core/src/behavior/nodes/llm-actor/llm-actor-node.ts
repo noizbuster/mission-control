@@ -194,18 +194,26 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
             const errorCode = hasActionableStreamClassification
                 ? classified.code
                 : extractProviderErrorCode(providerError);
-            const retryable = hasActionableStreamClassification
-                ? classified.retryable
-                : extractProviderErrorRetryable(providerError);
+            // `provider_aborted` is emitted by SDK adapters both for the run owner's AbortSignal
+            // and for a remote transport that closed its request. Only the former is an interrupt.
+            // A remote abort has no committed provider output yet, so retry it as a timeout instead
+            // of terminally stopping the graph and orphaning the session.
+            const externalProviderAbort = errorCode === 'provider_aborted' && !isAbortRequested(input.signal);
+            const effectiveErrorCode = externalProviderAbort ? 'provider_timeout' : errorCode;
+            const retryable = externalProviderAbort
+                ? true
+                : hasActionableStreamClassification
+                  ? classified.retryable
+                  : extractProviderErrorRetryable(providerError);
             const retryExhausted = extractProviderRetryExhausted(providerError);
-            const eventErrorCode = hasActionableStreamClassification
-                ? classified.code
-                : streamError === undefined
-                  ? errorCode
-                  : undefined;
+            const eventErrorCode =
+                hasActionableStreamClassification || externalProviderAbort || streamError === undefined
+                    ? effectiveErrorCode
+                    : undefined;
             const canRetryNoOutputTimeout =
+                !externalProviderAbort &&
                 input.timeoutMs === undefined &&
-                errorCode === 'provider_timeout' &&
+                effectiveErrorCode === 'provider_timeout' &&
                 noOutputTimeoutRetries < MAX_NO_OUTPUT_TIMEOUT_RETRIES;
             if (
                 !sawProviderOutput &&
@@ -226,7 +234,7 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
                     payload: observabilityRedactor.redactValue({
                         attempt: providerWaitAttempt,
                         delayMs,
-                        reason: errorCode ?? 'provider_rate_limited',
+                        reason: effectiveErrorCode ?? 'provider_rate_limited',
                         message: observabilityRedactor.redactText(surfacedMessage),
                         chunkTimeoutMs: providerChunkTimeoutMs,
                     }),
@@ -283,10 +291,10 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
                 nodeId,
                 ...graphIdPart,
                 error: observabilityRedactor.redactValue(
-                    errorCode !== undefined
+                    effectiveErrorCode !== undefined
                         ? {
                               message,
-                              code: errorCode,
+                              code: effectiveErrorCode,
                               providerError: true,
                               retryable: retryable ?? false,
                               ...(retryExhausted ? { retryExhausted: true } : {}),

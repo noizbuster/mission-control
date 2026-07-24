@@ -376,6 +376,68 @@ describe('flushGraphTurnEvents', () => {
         expect(receivedSignals).toEqual([undefined]);
     });
 
+    it('continues persisting replay boundaries after an interrupt cancels an earlier raw-log batch', async () => {
+        // Given: the raw-log append is interrupted after the graph returned its event sequence.
+        const controller = new AbortController();
+        const persisted: AgentEvent[] = [];
+        const receivedSignals: Array<AbortSignal | undefined> = [];
+        const events: AgentEvent[] = [
+            {
+                type: 'log',
+                timestamp: NOW,
+                sessionId: 'session_graph_turn',
+                message: 'raw diagnostic before completion',
+            },
+            {
+                type: 'log',
+                timestamp: NOW,
+                sessionId: 'session_graph_turn',
+                message: 'node emitted event: llm.turn.completed',
+                abg: {
+                    graphId: 'graph_resume',
+                    emit: { type: 'llm.turn.completed', payload: { text: 'durable assistant response' } },
+                },
+            },
+            {
+                type: 'log',
+                timestamp: NOW,
+                sessionId: 'session_graph_turn',
+                message: 'raw diagnostic after completion',
+            },
+            {
+                type: 'node.completed',
+                timestamp: NOW,
+                sessionId: 'session_graph_turn',
+                message: 'node completed',
+            },
+        ];
+        const context: RunCoordinatorTurnContext = {
+            signal: controller.signal,
+            command: 'run',
+            readMessages: async () => [],
+            nextId: async (prefix) => prefix,
+            appendDurableEvent: async () => {
+                throw new Error('should use batch path');
+            },
+            appendDurableEvents: async (batch, signal) => {
+                receivedSignals.push(signal);
+                if (signal !== undefined) {
+                    controller.abort();
+                    return;
+                }
+                persisted.push(...batch);
+            },
+            appendDurableEnvelope: async () => {},
+        };
+
+        // When: the raw-log batch is cancelled mid-flush.
+        await flushGraphTurnEvents(context, events);
+
+        // Then: raw logs are droppable, but later replay boundaries still commit in source order.
+        expect(persisted).toEqual([events[1], events[3]]);
+        expect(receivedSignals.map((signal) => signal === undefined)).toEqual([false, true, true]);
+    });
+
     it('uses appendDurableEvents batch path when provided', async () => {
         // Given
         const batches: AgentEvent[][] = [];
@@ -413,10 +475,9 @@ describe('flushGraphTurnEvents', () => {
         // When
         await flushGraphTurnEvents(context, events);
 
-        // Then
-        expect(batches).toHaveLength(1);
-        expect(batches[0]?.map((event) => event.type)).toEqual(['node.started', 'log']);
-        expect(signals).toEqual([signal]);
+        // Then: replay boundaries use an uncancellable batch; raw logs remain cancellable.
+        expect(batches.map((batch) => batch.map((event) => event.type))).toEqual([['node.started'], ['log']]);
+        expect(signals).toEqual([undefined, signal]);
     });
 
     it('keeps graph checkpoint events during aborted flushes', () => {
@@ -472,24 +533,17 @@ describe('mapGraphTurnResult', () => {
         expect(active).toMatchObject({ reason: 'graph settled non-terminally as active', errorCode: 'unknown' });
     });
 
-    it('maps a provider_aborted terminal error to interrupted (parity with the flat run coordinator)', () => {
-        const aborted = mapGraphTurnResult({
-            graphId: 'g',
-            status: 'failed',
-            events: [],
-            terminalError: { code: 'provider_aborted', message: 'provider aborted', retryable: true },
-        });
-        expect(aborted).toEqual({ status: 'interrupted' });
-    });
-
-    it('keeps a non-abort provider error as failed (only provider_aborted is an interrupt)', () => {
+    it('keeps provider_aborted as failed unless the run owner signal aborted', () => {
+        // Given: a graph reports an abort-shaped provider error but no coordinator signal is available here.
         const failed = mapGraphTurnResult({
             graphId: 'g',
             status: 'failed',
             events: [],
-            terminalError: { code: 'unknown', message: 'provider exploded', retryable: false },
+            terminalError: { code: 'provider_aborted', message: 'provider aborted', retryable: false },
         });
-        expect(failed.status).toBe('failed');
+
+        // Then: only createGraphTurnRunner's actual AbortSignal check may classify interruption.
+        expect(failed).toMatchObject({ status: 'failed', errorCode: 'provider_aborted' });
     });
 
     it('propagates a tool_failed terminalError code as the protocol errorCode instead of unknown', () => {

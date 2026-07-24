@@ -1,5 +1,10 @@
 import { findResumableRun, type GraphResumeEvent, type ResumableRunSnapshot } from '@mission-control/core';
-import { GraphCheckpointSchema } from '@mission-control/protocol';
+
+export const SAFE_RECOVERY_PROMPT =
+    'A prior run in this session was interrupted. Treat its terminal failure tail as non-authoritative. ' +
+    'Before taking any write, command, or network action, inspect the current workspace and conversation to determine ' +
+    'what is already complete. Do not repeat potentially side-effecting work unless its current state is verified. ' +
+    'Continue only the verified outstanding work; if verification is insufficient, ask the user.';
 
 export type WorkResumeDecision =
     | {
@@ -11,7 +16,8 @@ export type WorkResumeDecision =
           readonly snapshot: Extract<ResumableRunSnapshot, { readonly kind: 'interrupted' }>;
       }
     | {
-          readonly kind: 'interrupt_without_checkpoint';
+          readonly kind: 'recovery';
+          readonly sourceRunId: string;
       }
     | {
           readonly kind: 'nothing_to_resume';
@@ -24,15 +30,17 @@ export function decideWorkResume(events: readonly GraphResumeEvent[]): WorkResum
             case 'approval':
                 return { kind: 'approval', snapshot: resumable };
             case 'interrupted':
-                return { kind: 'interrupted', snapshot: resumable };
+                return isProviderAbortSnapshot(resumable)
+                    ? { kind: 'recovery', sourceRunId: resumable.runId }
+                    : { kind: 'interrupted', snapshot: resumable };
             default:
                 return assertNever(resumable);
         }
     }
-    if (newestInterruptLacksCheckpoint(events)) {
-        return { kind: 'interrupt_without_checkpoint' };
-    }
-    return { kind: 'nothing_to_resume' };
+    const recoveryRunId = latestInterruptedRunId(events);
+    return recoveryRunId === undefined
+        ? { kind: 'nothing_to_resume' }
+        : { kind: 'recovery', sourceRunId: recoveryRunId };
 }
 
 export function formatWorkResumeStartMessage(decision: WorkResumeDecision, sessionId: string): string {
@@ -45,10 +53,10 @@ export function formatWorkResumeStartMessage(decision: WorkResumeDecision, sessi
             const nodes = decision.snapshot.checkpoint.queuedNodeIds.join(', ');
             return `Resuming interrupted run for ${sessionId} from queued node(s): ${nodes}\n`;
         }
-        case 'interrupt_without_checkpoint':
+        case 'recovery':
             return (
-                `Nothing to resume for ${sessionId}: last run was interrupted without a graph checkpoint. ` +
-                'Send a new prompt or re-invoke the workflow.\n'
+                `Starting safe recovery for ${sessionId}. The interrupted tail will not be replayed; ` +
+                'the new run will inspect the current workspace before continuing.\n'
             );
         case 'nothing_to_resume':
             return (
@@ -76,48 +84,24 @@ function approvalDetail(snapshot: Extract<ResumableRunSnapshot, { readonly kind:
     return 'waiting for approval';
 }
 
-function newestInterruptLacksCheckpoint(events: readonly GraphResumeEvent[]): boolean {
+function isProviderAbortSnapshot(snapshot: Extract<ResumableRunSnapshot, { readonly kind: 'interrupted' }>): boolean {
+    return snapshot.reason === 'provider_aborted' || snapshot.errorCode === 'provider_aborted';
+}
+
+function latestInterruptedRunId(events: readonly GraphResumeEvent[]): string | undefined {
     for (let index = events.length - 1; index >= 0; index -= 1) {
         const event = events[index];
         if (event === undefined) continue;
-        if (isFullTerminalRunEvent(event)) return false;
-        if (event.type !== 'run.interrupted') continue;
+        if (isFullTerminalRunEvent(event)) return undefined;
+        if (event.type === 'run.started') return undefined;
         const runId = event.run?.runId;
-        if (runId === undefined) continue;
-        return !hasParseableCheckpointInRunWindow(events, index, runId);
+        if (runId !== undefined && isInterruptedRunBoundary(event)) return runId;
     }
-    return false;
+    return undefined;
 }
 
-function hasParseableCheckpointInRunWindow(
-    events: readonly GraphResumeEvent[],
-    beforeIndex: number,
-    runId: string,
-): boolean {
-    for (let index = beforeIndex - 1; index >= 0; index -= 1) {
-        const event = events[index];
-        if (event === undefined) continue;
-        if (isFullTerminalRunEvent(event)) return false;
-        if (event.type === 'run.started' && event.run?.runId === runId) return false;
-        if (event.type !== 'graph.checkpoint') continue;
-        const parsed = GraphCheckpointSchema.safeParse(event.abg?.checkpoint);
-        if (!parsed.success) continue;
-        if (checkpointBindsRun(parsed.data.sessionRunId, event.run?.runId, runId)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-function checkpointBindsRun(
-    checkpointSessionRunId: string | undefined,
-    eventRunId: string | undefined,
-    runId: string,
-): boolean {
-    if (checkpointSessionRunId !== undefined || eventRunId !== undefined) {
-        return checkpointSessionRunId === runId || eventRunId === runId;
-    }
-    return true;
+function isInterruptedRunBoundary(event: GraphResumeEvent): boolean {
+    return event.type === 'run.interrupted' || (event.type === 'task.failed' && event.run?.state === 'interrupted');
 }
 
 function isFullTerminalRunEvent(event: GraphResumeEvent): boolean {

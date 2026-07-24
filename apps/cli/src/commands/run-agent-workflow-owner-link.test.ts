@@ -130,11 +130,11 @@ describe('noninteractive workflow session owner linkage', () => {
         expect(disposal.spy).toHaveBeenCalledTimes(1);
     });
 
-    it('retains the interrupted owner runId on the cancelled Mission Run', async () => {
-        const sessionId = 'session_cancelled_owner_link';
+    it('retains the failed owner runId when a remote provider abort exhausts retries', async () => {
+        const sessionId = 'session_remote_abort_owner_link';
         const disposal = observeServiceDisposal(sessionId);
 
-        await runAgent(parseArgs(['run', '#persist-demo cancel', '--jsonl', '--session', sessionId]), {
+        await runAgent(parseArgs(['run', '#persist-demo remote abort', '--jsonl', '--session', sessionId]), {
             workspaceRoot: fixture.workspaceDir,
             provider: createDeterministicProvider([
                 {
@@ -144,9 +144,9 @@ describe('noninteractive workflow session owner linkage', () => {
             ]),
         });
 
-        const ownerRunId = await durableOwnerRunId(fixture.dataDir, sessionId, 'run.interrupted');
+        const ownerRunId = await durableOwnerRunId(fixture.dataDir, sessionId, 'run.failed');
         const run = await persistedWorkflowRun(fixture);
-        expect(run.status).toBe('cancelled');
+        expect(run.status).toBe('failed');
         expect(run.sessionRunId).toBe(ownerRunId);
         expect(run.endedAt).toBeDefined();
         expect(disposal.attachments).toEqual([[]]);

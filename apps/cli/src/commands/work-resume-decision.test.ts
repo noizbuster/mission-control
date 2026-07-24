@@ -56,7 +56,43 @@ describe('decideWorkResume', () => {
         expect(isWorkResumeActionable(decision)).toBe(true);
     });
 
-    it('classifies interrupt without checkpoint as non-actionable guidance', () => {
+    it('starts safe recovery instead of replaying a provider-aborted interrupted checkpoint', () => {
+        // Given: legacy persistence marked a provider abort as run.interrupted with queued work.
+        const checkpoint = makeCheckpoint({ sessionRunId: 'run-provider-abort', queuedNodeIds: ['delegate-wave'] });
+        const events = [
+            runEvent('run.started', 'run-provider-abort', 'running'),
+            checkpointEvent(checkpoint, 'run-provider-abort'),
+            runEvent('run.interrupted', 'run-provider-abort', 'interrupted', { reason: 'provider_aborted' }),
+        ];
+
+        // When: /continue classifies the legacy provider abort.
+        const decision = decideWorkResume(events);
+
+        // Then: it starts a guarded fresh run rather than executing the stale cursor.
+        expect(decision).toEqual({ kind: 'recovery', sourceRunId: 'run-provider-abort' });
+        expect(isWorkResumeActionable(decision)).toBe(false);
+    });
+
+    it('starts safe recovery for an interrupted task receipt instead of replaying an older checkpoint', () => {
+        // Given: a provider abort left a completed failure tail after an earlier queued checkpoint.
+        const safeCheckpoint = makeCheckpoint({ sessionRunId: 'run-recovery', queuedNodeIds: ['delegate-wave'] });
+        const terminalCheckpoint = makeCheckpoint({ sessionRunId: 'run-recovery', queuedNodeIds: [] });
+        const events = [
+            runEvent('run.started', 'run-recovery', 'running'),
+            checkpointEvent(safeCheckpoint, 'run-recovery'),
+            checkpointEvent(terminalCheckpoint, 'run-recovery'),
+            runEvent('task.failed', 'run-recovery', 'interrupted'),
+        ];
+
+        // When: /continue evaluates the interrupted session.
+        const decision = decideWorkResume(events);
+
+        // Then: it starts a fresh guarded run rather than replaying delegate-wave.
+        expect(decision).toEqual({ kind: 'recovery', sourceRunId: 'run-recovery' });
+        expect(isWorkResumeActionable(decision)).toBe(false);
+    });
+
+    it('starts safe recovery for an interrupt without a checkpoint', () => {
         // Given: an interrupted run with no graph.checkpoint in its window.
         const events = [
             runEvent('run.started', 'run-bare', 'running'),
@@ -66,11 +102,24 @@ describe('decideWorkResume', () => {
         // When: /continue classifies cold session events.
         const decision = decideWorkResume(events);
 
-        // Then: resume is refused with the interrupt-without-checkpoint kind.
-        expect(decision).toEqual({ kind: 'interrupt_without_checkpoint' });
+        // Then: an explicit command starts a guarded fresh run.
+        expect(decision).toEqual({ kind: 'recovery', sourceRunId: 'run-bare' });
         expect(isWorkResumeActionable(decision)).toBe(false);
     });
 
+    it('does not recover an older interruption after a newer run has started', () => {
+        // Given: a prior interrupted tail followed by an active successor run.
+        const events = [
+            runEvent('task.failed', 'run-old', 'interrupted'),
+            runEvent('run.started', 'run-current', 'running'),
+        ];
+
+        // When: /continue scans the cold session history.
+        const decision = decideWorkResume(events);
+
+        // Then: it never revives the older run over the newer owner.
+        expect(decision).toEqual({ kind: 'nothing_to_resume' });
+    });
     it('classifies a completed tip as nothing_to_resume (no loop)', () => {
         // Given: a completed run after an earlier interrupt checkpoint.
         const events = [
@@ -87,8 +136,8 @@ describe('decideWorkResume', () => {
         expect(isWorkResumeActionable(decision)).toBe(false);
     });
 
-    it('classifies empty queued interrupt checkpoint as nothing_to_resume', () => {
-        // Given: interrupt checkpoint exists but queuedNodeIds is empty.
+    it('starts safe recovery when the latest interruption checkpoint has an empty queue', () => {
+        // Given: the empty queue cannot safely be rewound to an older graph state.
         const events = [
             checkpointEvent(makeCheckpoint({ sessionRunId: 'run-empty', queuedNodeIds: [] }), 'run-empty'),
             runEvent('run.interrupted', 'run-empty', 'interrupted'),
@@ -97,8 +146,8 @@ describe('decideWorkResume', () => {
         // When: /continue classifies cold session events.
         const decision = decideWorkResume(events);
 
-        // Then: empty queue is not resumable and is not the no-checkpoint path.
-        expect(decision).toEqual({ kind: 'nothing_to_resume' });
+        // Then: a new guarded run is available without replaying the old checkpoint.
+        expect(decision).toEqual({ kind: 'recovery', sourceRunId: 'run-empty' });
     });
 });
 
@@ -143,16 +192,17 @@ describe('formatWorkResumeStartMessage', () => {
         expect(message).toContain('queued node(s): entry, verify');
     });
 
-    it('emits explicit non-resume guidance for interrupt without checkpoint', () => {
-        // Given: interrupt_without_checkpoint.
-        const decision: WorkResumeDecision = { kind: 'interrupt_without_checkpoint' };
+    it('announces safe recovery without claiming it will replay the interrupted graph', () => {
+        // Given: a non-replay recovery decision.
+        const decision: WorkResumeDecision = { kind: 'recovery', sourceRunId: 'run_recovery' };
 
         // When: the start message is formatted.
         const message = formatWorkResumeStartMessage(decision, 'session_x');
 
-        // Then: nothing-to-resume plus checkpoint guidance.
-        expect(message).toContain('Nothing to resume for session_x');
-        expect(message).toContain('interrupted without a graph checkpoint');
+        // Then: it states the tail is ignored and workspace inspection comes first.
+        expect(message).toContain('Starting safe recovery for session_x');
+        expect(message).toContain('interrupted tail will not be replayed');
+        expect(message).toContain('inspect the current workspace');
     });
 
     it('emits a plain nothing-to-resume message', () => {
@@ -169,7 +219,14 @@ describe('formatWorkResumeStartMessage', () => {
 });
 
 function runEvent(
-    type: 'run.started' | 'run.blocked' | 'run.interrupted' | 'run.completed' | 'run.failed' | 'run.idle',
+    type:
+        | 'run.started'
+        | 'run.blocked'
+        | 'run.interrupted'
+        | 'run.completed'
+        | 'run.failed'
+        | 'run.idle'
+        | 'task.failed',
     runId: string,
     state: 'running' | 'blocked_on_approval' | 'interrupted' | 'completed' | 'failed' | 'idle',
     extra: { readonly reason?: string; readonly toolCallId?: string } = {},

@@ -74,6 +74,48 @@ describe('bounded ABG graph coordinator', () => {
         expect(retrySleepSignal).toBe(controller.signal);
         expect(result.events.some((event) => event.type === 'graph.completed')).toBe(false);
     });
+
+    it('does not create an interrupt checkpoint for a provider abort without an owner abort signal', async () => {
+        // Given: a provider reports an abort-shaped terminal error while the run owner remains live.
+        const registry = createAbgNodeRegistry();
+        registry.register(
+            'remote-abort',
+            async function* run(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
+                yield { type: 'started', graphId: context.graphId, nodeId: node.id };
+                yield {
+                    type: 'failure',
+                    graphId: context.graphId,
+                    nodeId: node.id,
+                    error: {
+                        code: 'provider_aborted',
+                        message: 'remote provider closed the request',
+                        providerError: true,
+                        retryable: false,
+                    },
+                };
+            },
+        );
+
+        // When: the graph receives the failure without a run-owner AbortSignal.
+        const result = await runAbgGraph({
+            ...baseInput,
+            registry,
+            graph: {
+                id: 'remote-provider-abort',
+                entryNodeId: 'remote',
+                defaults: { retryLimit: 2 },
+                nodes: [{ id: 'remote', kind: 'llm', implementation: 'remote-abort' }],
+                edges: [],
+                rules: [],
+                policies: [],
+            },
+        });
+
+        // Then: it fails normally; no resumable interrupt checkpoint is fabricated.
+        expect(result.status).toBe('failed');
+        expect(result.terminalError).toMatchObject({ code: 'provider_aborted' });
+        expect(result.events.some((event) => event.type === 'graph.checkpoint')).toBe(false);
+    });
 });
 
 function attemptsFor(events: readonly AgentEvent[], nodeId: string): number[] {

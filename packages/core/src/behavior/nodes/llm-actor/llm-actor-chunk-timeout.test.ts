@@ -51,6 +51,43 @@ function createRetryingTimeoutProvider(): RetryingTimeoutProvider {
     };
 }
 
+function createRetryingAbortProvider(): RetryingTimeoutProvider {
+    let attempts = 0;
+    return {
+        async *streamTurn(
+            request: ProviderTurnRequest,
+            _context: ProviderAdapterContext,
+        ): AsyncIterable<ProviderStreamChunk> {
+            attempts += 1;
+            if (attempts === 1) {
+                yield {
+                    kind: 'response_failed',
+                    requestId: request.requestId,
+                    sequence: 1,
+                    error: {
+                        code: 'provider_aborted',
+                        message: 'provider closed the request',
+                        retryable: false,
+                    },
+                };
+                return;
+            }
+            yield {
+                kind: 'response_completed',
+                requestId: request.requestId,
+                sequence: 1,
+                message: {
+                    messageId: `message_${request.turnId}`,
+                    role: 'assistant',
+                    content: 'recovered after provider close',
+                },
+                finishReason: 'stop',
+            };
+        },
+        attemptCount: () => attempts,
+    };
+}
+
 function createPermanentlyTimedOutProvider(): RetryingTimeoutProvider {
     let attempts = 0;
     return {
@@ -108,39 +145,39 @@ describe('LLM actor chunk timeout', () => {
         });
     });
 
-    it('preserves an explicit provider abort when no chunk deadline elapsed', async () => {
+    it('maps a remote provider abort to a retryable timeout without delaying inside the actor', async () => {
+        // Given: the provider closes its request but the owner signal remains live.
+        const provider = createRetryingAbortProvider();
         const model = wrapFlatProviderAsSdkModel({
-            provider: createDeterministicProvider([
-                {
-                    kind: 'response_failed',
-                    error: {
-                        code: 'provider_aborted',
-                        message: 'provider aborted',
-                        retryable: false,
-                    },
-                },
-            ]),
+            provider,
             providerID: 'local',
             modelID: 'local-echo',
             retryLimit: 0,
         });
         const signals: AbgSignal[] = [];
 
+        // When: the actor receives the remote abort without an owner abort signal.
         for await (const signal of runLlmActor({
             graphId: 'provider-abort-graph',
             nodeId: 'provider-abort-node',
             model,
-            system: 'Observe an explicit abort.',
+            system: 'Recover the provider request.',
             messages,
-            timeoutMs: 100,
+            retryBaseDelayMs: 0,
+            maxRetryDelayMs: 0,
             now: () => NOW,
         })) {
             signals.push(signal);
         }
 
+        // Then: the graph may consume its normal node retry budget without a long actor wait.
+        expect(provider.attemptCount()).toBe(1);
+        expect(signals.some((signal) => signal.type === 'emit' && signal.event.type === 'llm.provider_wait')).toBe(
+            false,
+        );
         expect(signals.at(-1)).toMatchObject({
             type: 'failure',
-            error: { code: 'provider_aborted', retryable: false },
+            error: { code: 'provider_timeout', providerError: true, retryable: true },
         });
     });
 

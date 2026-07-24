@@ -272,9 +272,9 @@ describe('runAgent JSON reporter', () => {
         });
     });
 
-    it('returns machine-readable interrupted state instead of rejecting on provider abort', async () => {
+    it('returns machine-readable failed state for a remote provider abort', async () => {
         const output = await runAgent(
-            parseArgs(['run', 'interrupt provider', '--json', '--session', 'session_json_interrupted']),
+            parseArgs(['run', 'remote provider abort', '--json', '--session', 'session_json_remote_abort']),
             {
                 provider: createDeterministicProvider([
                     {
@@ -291,17 +291,17 @@ describe('runAgent JSON reporter', () => {
         const records = parseJsonRecords(output);
         const finalRecord = lastRecord(records);
 
-        expect(records.map((record) => record.type)).toContain('run.interrupted');
-        expect(records.map((record) => record.type)).not.toContain('run.failed');
+        expect(records.map((record) => record.type)).toContain('run.failed');
+        expect(records.map((record) => record.type)).not.toContain('run.interrupted');
         expect(finalRecord).toMatchObject({
             type: 'session.stopped',
-            sessionId: 'session_json_interrupted',
-            status: 'interrupted',
+            sessionId: 'session_json_remote_abort',
+            status: 'failed',
             runId: expect.stringMatching(/^run_.+/),
             machine: {
                 run: {
                     runId: expect.stringMatching(/^run_.+/),
-                    status: 'interrupted',
+                    status: 'failed',
                 },
             },
         });

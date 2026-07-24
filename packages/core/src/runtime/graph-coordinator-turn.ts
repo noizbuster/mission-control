@@ -153,27 +153,35 @@ async function loadResumeCheckpoint(
 }
 
 /**
- * Flush graph-produced durable events. When the turn was aborted, only boundary/lifecycle events
- * that are needed for a coherent interrupted receipt are kept (skip pure log spam). Always check
- * abort between chunks so a backed-up write lane cannot trap the process after soft interrupt.
+ * Flush graph-produced durable events in source order. Replay-critical boundaries always commit,
+ * even if an interrupt arrives while an earlier raw-log batch is waiting in the write lane. Raw
+ * `log` rows remain cancellable so a backed-up observational stream cannot delay interruption.
  */
 export async function flushGraphTurnEvents(
     context: Pick<RunCoordinatorTurnContext, 'signal' | 'appendDurableEvent' | 'appendDurableEvents'>,
     events: readonly AgentEvent[],
 ): Promise<void> {
-    const toFlush = context.signal.aborted ? events.filter(isInterruptFlushEvent) : events;
-    if (toFlush.length === 0) {
-        return;
-    }
     if (context.appendDurableEvents !== undefined) {
-        // Single-lane batch path: one queue entry, abort-checked inside the store when possible.
-        const batchSignal = context.signal.aborted ? undefined : context.signal;
-        await context.appendDurableEvents(toFlush, batchSignal);
+        let start = 0;
+        while (start < events.length) {
+            const replayCritical = isInterruptFlushEvent(events[start] as AgentEvent);
+            let end = start + 1;
+            while (end < events.length && isInterruptFlushEvent(events[end] as AgentEvent) === replayCritical) {
+                end += 1;
+            }
+            if (replayCritical || !context.signal.aborted) {
+                await context.appendDurableEvents(
+                    events.slice(start, end),
+                    replayCritical ? undefined : context.signal,
+                );
+            }
+            start = end;
+        }
         return;
     }
-    for (const event of toFlush) {
-        if (context.signal.aborted && !isInterruptFlushEvent(event)) {
-            break;
+    for (const event of events) {
+        if (!isInterruptFlushEvent(event) && context.signal.aborted) {
+            continue;
         }
         await context.appendDurableEvent(event);
     }
@@ -207,13 +215,6 @@ export function mapGraphTurnResult(result: AbgGraphRunResult): RunCoordinatorPro
         case 'cancelled':
             return { status: 'interrupted' };
         case 'failed':
-            // A provider abort (`provider_aborted`) is an interrupt, not a hard failure — mirror the
-            // prior flat run coordinator's abort-awareness so the drain
-            // maps it to `run.interrupted`. The code travels on the result's `terminalError` (a node
-            // surfaced a structured provider error); failures with no recognizable code stay `failed`.
-            if (result.terminalError !== undefined && result.terminalError.code === 'provider_aborted') {
-                return { status: 'interrupted' };
-            }
             return {
                 status: 'failed',
                 reason: resolveFailedReason(result),
