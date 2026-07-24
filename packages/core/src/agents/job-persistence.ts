@@ -1,13 +1,14 @@
 /**
- * Persists {@link BackgroundJobHandle} instances to disk so AsyncJobManager
+ * Persists {@link DurableBackgroundJobHandle} instances to disk so AsyncJobManager
  * background jobs survive process restarts. Each job is stored as a single JSON
  * file at `<jobsDir>/<jobId>.json`. Writes are atomic (temp-file-then-rename)
  * following the `.mc/` persistence convention from `boulder-store.ts`, so
  * concurrent writes never produce a partially-written file.
  */
 
+import { ProtocolErrorSchema } from '@mission-control/protocol';
 import { z } from 'zod';
-import type { BackgroundJobHandle } from './async-job-manager';
+import type { BackgroundJobHandle, DurableBackgroundJobHandle } from './async-job-manager';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -17,6 +18,7 @@ const JSON_FILE_SUFFIX = '.json';
 const BackgroundJobResultSchema = z.object({
     status: z.enum(['completed', 'failed']),
     output: z.string(),
+    failure: ProtocolErrorSchema.optional(),
 });
 
 const BackgroundJobHandleSchema = z.object({
@@ -27,7 +29,6 @@ const BackgroundJobHandleSchema = z.object({
     blocking: z.boolean().optional(),
     status: z.enum(['queued', 'running', 'completed', 'failed', 'cancelled']),
     result: BackgroundJobResultSchema.optional(),
-    error: z.string().optional(),
     startedAt: z.string().min(1),
     completedAt: z.string().optional(),
     cancellationReason: z.string().optional(),
@@ -39,7 +40,7 @@ const BackgroundJobHandleSchema = z.object({
  * written to a unique temp file and renamed into place. Concurrent calls (even
  * for the same jobId) never corrupt each other.
  */
-export async function persistJob(jobsDir: string, handle: BackgroundJobHandle): Promise<void> {
+export async function persistJob(jobsDir: string, handle: DurableBackgroundJobHandle): Promise<void> {
     const validated = BackgroundJobHandleSchema.parse(handle);
     const filePath = join(jobsDir, `${handle.jobId}${JSON_FILE_SUFFIX}`);
     await atomicWriteJson(filePath, validated);
@@ -91,6 +92,15 @@ async function tryReadJobFile(filePath: string): Promise<BackgroundJobHandle | u
         return undefined;
     }
     const v = result.data;
+    const parsedResult = v.result;
+    const jobResult =
+        parsedResult === undefined
+            ? undefined
+            : {
+                  status: parsedResult.status,
+                  output: parsedResult.output,
+                  ...(parsedResult.failure !== undefined ? { failure: parsedResult.failure } : {}),
+              };
     // Conditional spreads satisfy `exactOptionalPropertyTypes`: absent vs undefined.
     const handle: BackgroundJobHandle = {
         jobId: v.jobId,
@@ -100,8 +110,7 @@ async function tryReadJobFile(filePath: string): Promise<BackgroundJobHandle | u
         ...(v.blocking !== undefined ? { blocking: v.blocking } : {}),
         status: v.status,
         startedAt: v.startedAt,
-        ...(v.result !== undefined ? { result: v.result } : {}),
-        ...(v.error !== undefined ? { error: v.error } : {}),
+        ...(jobResult !== undefined ? { result: jobResult } : {}),
         ...(v.completedAt !== undefined ? { completedAt: v.completedAt } : {}),
         ...(v.cancellationReason !== undefined ? { cancellationReason: v.cancellationReason } : {}),
     };

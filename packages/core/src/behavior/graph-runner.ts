@@ -6,6 +6,7 @@ import type {
     AgentEvent,
     GraphCheckpoint,
     ModelProviderSelection,
+    RedactionMetadata,
 } from '@mission-control/protocol';
 import type { ModelMessage } from 'ai';
 import type { ProjectInstructionResource } from '../context/project-context-messages';
@@ -173,6 +174,7 @@ export type AbgGraphTerminalError = {
     readonly code: string;
     readonly message: string;
     readonly retryable: boolean;
+    readonly redactions?: RedactionMetadata[];
 };
 
 export async function runAbgGraph(input: AbgGraphRunnerInput): Promise<AbgGraphRunResult> {

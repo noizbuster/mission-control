@@ -12,9 +12,9 @@ import {
     upsertSubagentRelation,
 } from './agent-job-sql-mirror-persist';
 import type { ResolveSubagentWaitInput, StartSubagentWaitInput } from './agent-job-sql-mirror-types';
-import type { BackgroundJobHandle } from './async-job-manager';
+import type { DurableBackgroundJobHandle } from './async-job-manager';
 
-export async function recordJobWithLifecycle(client: Client, handle: BackgroundJobHandle): Promise<void> {
+export async function recordJobWithLifecycle(client: Client, handle: DurableBackgroundJobHandle): Promise<void> {
     await upsertJobRow({ client, handle });
     if (handle.parentSessionId !== undefined) {
         await refreshSessionAwaitingFromPendingWaits({

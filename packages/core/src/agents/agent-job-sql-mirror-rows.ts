@@ -1,4 +1,5 @@
 import type { InValue } from '@libsql/client';
+import { ProtocolErrorSchema } from '@mission-control/protocol';
 import { z } from 'zod';
 import type { SessionPendingWait } from '../memory/session-status-derivation';
 import type { BackgroundJobHandle } from './async-job-manager';
@@ -33,6 +34,7 @@ const jobResultSchema = z
     .object({
         status: z.enum(['completed', 'failed']),
         output: z.string(),
+        failure: ProtocolErrorSchema.optional(),
     })
     .strict();
 
@@ -109,9 +111,16 @@ export function parseAgentRef(row: unknown): AgentRef | undefined {
 export function parseJob(row: unknown): BackgroundJobHandle | undefined {
     const parsed = asyncJobRowSchema.safeParse(row);
     if (!parsed.success) return undefined;
-    const result = parseJson(parsed.data.result_json, jobResultSchema);
+    const parsedResult = parseJson(parsed.data.result_json, jobResultSchema);
+    const result =
+        parsedResult === undefined
+            ? undefined
+            : {
+                  status: parsedResult.status,
+                  output: parsedResult.output,
+                  ...(parsedResult.failure !== undefined ? { failure: parsedResult.failure } : {}),
+              };
     const metadata = parseJson(parsed.data.metadata_json, jobMetadataSchema) ?? {};
-    const error = parseErrorMessage(parsed.data.error_json);
     const completedAt = parsed.data.completed_at ?? parsed.data.failed_at ?? parsed.data.cancelled_at ?? undefined;
     return {
         jobId: parsed.data.job_id,
@@ -126,7 +135,6 @@ export function parseJob(row: unknown): BackgroundJobHandle | undefined {
         status: parsed.data.status,
         startedAt: parsed.data.queued_at,
         ...(result !== undefined ? { result } : {}),
-        ...(error !== undefined ? { error } : {}),
         ...(completedAt !== undefined ? { completedAt } : {}),
         ...(parsed.data.cancellation_reason !== null && parsed.data.cancellation_reason !== undefined
             ? { cancellationReason: parsed.data.cancellation_reason }
@@ -176,18 +184,6 @@ function parseJson<T>(raw: string | null | undefined, schema: z.ZodType<T>): T |
     }
     const result = schema.safeParse(parsed);
     return result.success ? result.data : undefined;
-}
-
-function parseErrorMessage(raw: string | null | undefined): string | undefined {
-    const parsed = parseJson(
-        raw,
-        z
-            .object({
-                message: z.string(),
-            })
-            .strict(),
-    );
-    return parsed?.message;
 }
 
 function runtimeStatusFromDb(

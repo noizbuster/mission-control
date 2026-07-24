@@ -1,9 +1,11 @@
 // allow: SIZE_OK -- HEAD 437 -> current 484 pure LOC; one child-session authority and spawn state-machine regression matrix.
-import type { LanguageModelV3StreamPart } from '@ai-sdk/provider';
+import type { LanguageModelV3, LanguageModelV3StreamPart } from '@ai-sdk/provider';
 import type { AgentDefinition } from '@mission-control/protocol';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import { wrapFlatProviderAsSdkModel } from '../providers/ai-sdk/flat-provider-bridge';
+import { createDeterministicProvider } from '../providers/deterministic-provider';
 import { createObservabilityRedactor } from '../providers/observability-redactor';
 import type { ChildSpawnRequest } from '../tools/task/task-tool';
 import { ToolRegistry } from '../tools/tool-registry';
@@ -416,53 +418,53 @@ describe('ConcreteTaskToolRuntime', () => {
             expect(toolNames).not.toContain('mcp__docs__lookup');
         });
 
-        it.each([
-            'librarian',
-            'architect',
-        ] as const)('retains network tools for ON agent name %s when parent advertises them', async (agentName) => {
-            const child = makeAgent({
-                name: agentName,
-                tools: ['read', 'webfetch', 'web_search', 'mcp__docs__lookup', 'workflow', 'team_create'],
-            });
-            const parent = makeParentAgent();
-            const agentIndex = new AgentIndex();
-            agentIndex.register(child);
-            const parentRegistry = new ToolRegistry();
-            parentRegistry.register(makeTool('read', ['read']));
-            parentRegistry.register(makeTool('webfetch', ['network']));
-            parentRegistry.register(makeTool('web_search', ['network']));
-            parentRegistry.register(makeTool('mcp__docs__lookup', ['network']));
-            parentRegistry.register(makeTool('workflow', ['workflow']));
-            parentRegistry.register(makeTool('team_create', ['team']));
-            const captured: { context: ChildSpawnContext | undefined } = { context: undefined };
-            const spawnFn: SpawnFn = async (context) => {
-                captured.context = context;
-                return { sessionId: context.sessionId, status: 'completed', output: '' };
-            };
-            const runtime = new ConcreteTaskToolRuntime({
-                agentIndex,
-                resolveModel: (agent) => ({ providerID: 'test', modelID: agent.name }),
-                workspaceRoot: '/tmp/workspace',
-                parentToolRegistry: parentRegistry,
-                parentAgent: parent,
-                spawnFn,
-            });
+        it.each(['librarian', 'architect'] as const)(
+            'retains network tools for ON agent name %s when parent advertises them',
+            async (agentName) => {
+                const child = makeAgent({
+                    name: agentName,
+                    tools: ['read', 'webfetch', 'web_search', 'mcp__docs__lookup', 'workflow', 'team_create'],
+                });
+                const parent = makeParentAgent();
+                const agentIndex = new AgentIndex();
+                agentIndex.register(child);
+                const parentRegistry = new ToolRegistry();
+                parentRegistry.register(makeTool('read', ['read']));
+                parentRegistry.register(makeTool('webfetch', ['network']));
+                parentRegistry.register(makeTool('web_search', ['network']));
+                parentRegistry.register(makeTool('mcp__docs__lookup', ['network']));
+                parentRegistry.register(makeTool('workflow', ['workflow']));
+                parentRegistry.register(makeTool('team_create', ['team']));
+                const captured: { context: ChildSpawnContext | undefined } = { context: undefined };
+                const spawnFn: SpawnFn = async (context) => {
+                    captured.context = context;
+                    return { sessionId: context.sessionId, status: 'completed', output: '' };
+                };
+                const runtime = new ConcreteTaskToolRuntime({
+                    agentIndex,
+                    resolveModel: (agent) => ({ providerID: 'test', modelID: agent.name }),
+                    workspaceRoot: '/tmp/workspace',
+                    parentToolRegistry: parentRegistry,
+                    parentAgent: parent,
+                    spawnFn,
+                });
 
-            await runtime.runChildSession({
-                sessionId: `sess-${agentName}-net`,
-                prompt: 'lookup docs',
-                loadSkills: [],
-                childPermissions: [],
-                subagentType: agentName,
-            });
+                await runtime.runChildSession({
+                    sessionId: `sess-${agentName}-net`,
+                    prompt: 'lookup docs',
+                    loadSkills: [],
+                    childPermissions: [],
+                    subagentType: agentName,
+                });
 
-            const toolNames = captured.context?.childToolRegistry.advertise().map((a) => a.name) ?? [];
-            expect(toolNames).toContain('webfetch');
-            expect(toolNames).toContain('web_search');
-            expect(toolNames).toContain('mcp__docs__lookup');
-            expect(toolNames).not.toContain('workflow');
-            expect(toolNames).not.toContain('team_create');
-        });
+                const toolNames = captured.context?.childToolRegistry.advertise().map((a) => a.name) ?? [];
+                expect(toolNames).toContain('webfetch');
+                expect(toolNames).toContain('web_search');
+                expect(toolNames).toContain('mcp__docs__lookup');
+                expect(toolNames).not.toContain('workflow');
+                expect(toolNames).not.toContain('team_create');
+            },
+        );
 
         it('keeps subagent-capability helpers when nesting is depth-allowed', async () => {
             const { runtime, captured } = buildRuntimeWithCapabilityTools();
@@ -517,6 +519,7 @@ describe('ConcreteTaskToolRuntime', () => {
             chunksFor: (call: number) => LanguageModelV3StreamPart[],
             summaryLimit?: number,
             knownCredential?: string,
+            sdkModel?: LanguageModelV3,
         ): ConcreteTaskToolRuntime {
             const child = makeAgent({ systemPrompt: 'You are a deep coding agent. Explore, decide, act.' });
             const parent = makeParentAgent();
@@ -541,7 +544,7 @@ describe('ConcreteTaskToolRuntime', () => {
                 workspaceRoot: '/tmp/workspace',
                 parentToolRegistry: parentRegistry,
                 parentAgent: parent,
-                resolveSdkModel: () => mockModel,
+                resolveSdkModel: () => sdkModel ?? mockModel,
                 ...(summaryLimit !== undefined ? { summaryLimit } : {}),
                 ...(knownCredential !== undefined
                     ? {
@@ -608,6 +611,43 @@ describe('ConcreteTaskToolRuntime', () => {
             expect(result.status).toBe('completed');
             expect(result.output.length).toBeLessThanOrEqual(64);
             expect(result.failureKind).toBeUndefined();
+        });
+
+        it('propagates a normalized terminal provider failure through the concrete child runtime', async () => {
+            const model = wrapFlatProviderAsSdkModel({
+                provider: createDeterministicProvider([
+                    {
+                        kind: 'response_failed',
+                        error: {
+                            code: 'provider_aborted',
+                            message: 'remote provider closed the child stream',
+                            retryable: false,
+                        },
+                    },
+                ]),
+                providerID: 'test',
+                modelID: 'child-model',
+                retryLimit: 0,
+            });
+            const runtime = buildDefaultSpawnRuntime(
+                { value: 0 },
+                () => textOnlyChunks('unused'),
+                undefined,
+                undefined,
+                model,
+            );
+
+            const result = await runtime.runChildSession(makeRequest());
+
+            expect(result).toMatchObject({
+                status: 'failed',
+                failureKind: 'graph_failed',
+                failure: {
+                    code: 'provider_timeout',
+                    message: 'remote provider closed the child stream',
+                    retryable: true,
+                },
+            });
         });
 
         it('redacts credentials from implicit child completion output', async () => {

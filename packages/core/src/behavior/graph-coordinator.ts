@@ -1,5 +1,11 @@
 // allow: SIZE_OK -- HEAD 604 -> current 702 pure LOC; one bounded graph execution state machine (checkpoint + progress-contract wire).
-import type { AbgNodeSpec, AbgPolicyDecision, AbgSignal, AgentEvent } from '@mission-control/protocol';
+import {
+    type AbgNodeSpec,
+    type AbgPolicyDecision,
+    type AbgSignal,
+    type AgentEvent,
+    RedactionMetadataSchema,
+} from '@mission-control/protocol';
 import {
     abortableRetrySleep,
     computeProviderRetryDelayMs,
@@ -477,7 +483,16 @@ function terminalErrorFromSignal(signal: AbgSignal | undefined): AbgGraphTermina
         const message = hasField(error, 'message') && typeof error.message === 'string' ? error.message : code;
         const retryable =
             hasField(error, 'retryable') && typeof error.retryable === 'boolean' ? error.retryable : false;
-        return { code, message, retryable };
+        const redactions =
+            hasField(error, 'redactions') && Array.isArray(error.redactions)
+                ? RedactionMetadataSchema.array().safeParse(error.redactions)
+                : undefined;
+        return {
+            code,
+            message,
+            retryable,
+            ...(redactions?.success === true ? { redactions: redactions.data } : {}),
+        };
     }
     return undefined;
 }

@@ -218,9 +218,8 @@ describe('background child control errors', () => {
         expect(fixture.host.classify(fixture.sessionId)).toEqual({ kind: 'absent' });
     });
 
-    it('preserves the spawn failure when background job-control detach also rejects', async () => {
+    it('preserves a provider terminal failure when background job-control cleanup rejects', async () => {
         const fixture = await createLifecycleHost('background-job-detach-aggregate');
-        const spawnError = new Error('spawn rejected');
         const detachError = new Error('job detach rejected');
         const originalAttach = fixture.host.attachEntity.bind(fixture.host);
         vi.spyOn(fixture.host, 'attachEntity').mockImplementation(async (input) => {
@@ -234,16 +233,31 @@ describe('background child control errors', () => {
             };
         });
         const services = makeLifecycleServices({ host: fixture.host, controlJobs: true });
-        const runtime = buildLifecycleRuntime(services, async () => Promise.reject(spawnError));
+        const runtime = buildLifecycleRuntime(services, async (context) => ({
+            sessionId: context.sessionId,
+            status: 'failed',
+            output: '[degraded salvage] partial child output',
+            failureKind: 'graph_failed',
+            failure: {
+                code: 'provider_aborted',
+                message: 'remote provider closed the child stream',
+                retryable: false,
+            },
+        }));
 
         const handle = runtime.startBackgroundSession(lifecycleRequest(fixture.sessionId));
-        const failure = await services.jobManager.awaitJob(handle.backgroundId).catch((error: unknown) => error);
+        const settled = await services.jobManager.awaitJob(handle.backgroundId);
 
-        expect(failure).toBeInstanceOf(AsyncJobCleanupError);
-        if (failure instanceof AsyncJobCleanupError) {
-            expect(failure.primaryError).toBe(spawnError);
-            expect(failure.suppressedErrors).toEqual([detachError]);
-        }
+        expect(settled).toMatchObject({
+            status: 'failed',
+            result: {
+                failure: {
+                    code: 'provider_aborted',
+                    message: 'remote provider closed the child stream',
+                    retryable: false,
+                },
+            },
+        });
         expect(fixture.host.classify(fixture.sessionId)).toEqual({ kind: 'absent' });
         expect(fixture.host.classify('parent-session')).toEqual({ kind: 'absent' });
     });

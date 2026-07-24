@@ -12,6 +12,7 @@
  */
 
 import type { Client } from '@libsql/client';
+import type { ProtocolError } from '@mission-control/protocol';
 import type { SessionControlEpoch } from '../runtime/session-control-cancellation';
 import type { SessionControlAttachment, SessionControlHost } from '../runtime/session-control-host';
 import { LifecycleCleanupError } from './lifecycle-cleanup-error';
@@ -24,13 +25,18 @@ export interface BackgroundJobHandle {
     readonly agentId?: string;
     readonly blocking?: boolean;
     status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
-    result?: { status: 'completed' | 'failed'; output: string };
+    result?: { status: 'completed' | 'failed'; output: string; failure?: ProtocolError };
     error?: string;
     readonly startedAt: string;
     completedAt?: string;
     cancellationReason?: string;
     readonly controlEpoch?: SessionControlEpoch;
 }
+
+/** Durable job snapshots never carry raw runtime exception text. */
+export type DurableBackgroundJobHandle = Readonly<Omit<BackgroundJobHandle, 'error'>> & {
+    readonly error?: never;
+};
 
 /**
  * Work function invoked when a job gets a concurrency slot. The signal is
@@ -39,7 +45,7 @@ export interface BackgroundJobHandle {
 export type JobExecuteFn = (
     signal: AbortSignal,
     controlEpoch?: SessionControlEpoch,
-) => Promise<{ status: 'completed' | 'failed'; output: string }>;
+) => Promise<{ status: 'completed' | 'failed'; output: string; failure?: ProtocolError }>;
 
 export interface StartJobInput {
     readonly sessionId: string;
@@ -54,7 +60,7 @@ export interface StartJobInput {
 }
 
 export interface AsyncJobPersistenceMirror {
-    readonly recordJob: (handle: BackgroundJobHandle, client?: Client) => void | Promise<void>;
+    readonly recordJob: (handle: DurableBackgroundJobHandle, client?: Client) => void | Promise<void>;
 }
 
 export interface AsyncJobManagerOptions {
@@ -172,6 +178,7 @@ export class AsyncJobManager {
             throw new Error(`unknown job: ${jobId}`);
         }
         if (!entry.cleanupPending && !entry.preparationPending) {
+            if (hasReportableTerminalOutcome(entry.handle)) return entry.handle;
             if (entry.terminalError !== undefined) throw entry.terminalError;
             if (entry.quarantineError !== undefined) throw entry.quarantineError;
             if (TERMINAL.has(entry.handle.status)) return entry.handle;
@@ -383,9 +390,10 @@ export class AsyncJobManager {
 
     private async settleJob(entry: JobEntry, outcome: JobExecutionOutcome): Promise<boolean> {
         const terminal = terminalJobHandle(entry, outcome);
+        const durableTerminal = durableSnapshotJobHandle(terminal);
         const fence = entry.handle.controlEpoch?.callbackFence;
         if (fence === undefined) {
-            await this.mirror?.recordJob(terminal);
+            await this.mirror?.recordJob(durableTerminal);
             applyTerminalJobHandle(entry.handle, terminal);
             return true;
         }
@@ -402,7 +410,7 @@ export class AsyncJobManager {
                 ...(terminal.error !== undefined ? { errorCode: 'tool_failed' } : {}),
                 signalAborted: entry.controller.signal.aborted,
             },
-            write: (client) => Promise.resolve(mirror.recordJob(terminal, client)),
+            write: (client) => Promise.resolve(mirror.recordJob(durableTerminal, client)),
         });
         if (!settlement.accepted) throw new QuarantinedJobSettlementError(entry.handle.jobId);
         applyTerminalJobHandle(entry.handle, terminal);
@@ -471,7 +479,7 @@ export class AsyncJobManager {
                 handleId: `job:${entry.handle.jobId}`,
                 attemptedEventType: 'job.cancelled',
                 metadata: { status: 'cancelled', signalAborted: entry.controller.signal.aborted },
-                write: (client) => Promise.resolve(mirror.recordJob(terminal, client)),
+                write: (client) => Promise.resolve(mirror.recordJob(durableSnapshotJobHandle(terminal), client)),
             })
             .then(
                 (settlement) => {
@@ -517,7 +525,8 @@ export class AsyncJobManager {
         if (entry.awaiters.length === 0) return;
         const pending = entry.awaiters.splice(0);
         for (const awaiter of pending) {
-            if (entry.terminalError !== undefined) awaiter.reject(entry.terminalError);
+            if (hasReportableTerminalOutcome(entry.handle)) awaiter.resolve(entry.handle);
+            else if (entry.terminalError !== undefined) awaiter.reject(entry.terminalError);
             else if (entry.quarantineError !== undefined) awaiter.reject(entry.quarantineError);
             else awaiter.resolve(entry.handle);
         }
@@ -526,7 +535,11 @@ export class AsyncJobManager {
     /** Track a fully-settled terminal entry for bounded queryability, evicting the oldest terminal entry when over {@link maxTerminalEntries}. Live coordination is complete; the durable mirror (SQL async_jobs) retains full history. */
     private reapTerminalJob(entry: JobEntry): void {
         if (entry.cleanupPending || entry.preparationPending) return;
-        if (!TERMINAL.has(entry.handle.status) && entry.terminalError === undefined && entry.quarantineError === undefined) {
+        if (
+            !TERMINAL.has(entry.handle.status) &&
+            entry.terminalError === undefined &&
+            entry.quarantineError === undefined
+        ) {
             return;
         }
         const jobId = entry.handle.jobId;
@@ -590,7 +603,7 @@ export class AsyncJobManager {
     }
 
     private recordJob(entry: JobEntry): void {
-        void this.mirror?.recordJob(snapshotJobHandle(entry.handle));
+        void this.mirror?.recordJob(durableSnapshotJobHandle(entry.handle));
     }
 
     private trackRun(run: Promise<void>): void {
@@ -604,10 +617,18 @@ export class AsyncJobManager {
     }
 }
 
+function hasReportableTerminalOutcome(handle: BackgroundJobHandle): boolean {
+    return TERMINAL.has(handle.status) && (handle.status === 'cancelled' || handle.result !== undefined);
+}
+
 type JobExecutionOutcome =
     | {
           readonly kind: 'result';
-          readonly result: { readonly status: 'completed' | 'failed'; readonly output: string };
+          readonly result: {
+              readonly status: 'completed' | 'failed';
+              readonly output: string;
+              readonly failure?: ProtocolError;
+          };
       }
     | { readonly kind: 'error'; readonly error: unknown };
 
@@ -647,9 +668,18 @@ function applySettlementFailure(target: BackgroundJobHandle, error: unknown): vo
     delete target.result;
 }
 
-function snapshotJobHandle(handle: BackgroundJobHandle): BackgroundJobHandle {
+export function durableSnapshotJobHandle(handle: BackgroundJobHandle): DurableBackgroundJobHandle {
     return {
-        ...handle,
+        jobId: handle.jobId,
+        sessionId: handle.sessionId,
+        ...(handle.parentSessionId !== undefined ? { parentSessionId: handle.parentSessionId } : {}),
+        ...(handle.agentId !== undefined ? { agentId: handle.agentId } : {}),
+        ...(handle.blocking !== undefined ? { blocking: handle.blocking } : {}),
+        status: handle.status,
         ...(handle.result !== undefined ? { result: { ...handle.result } } : {}),
+        startedAt: handle.startedAt,
+        ...(handle.completedAt !== undefined ? { completedAt: handle.completedAt } : {}),
+        ...(handle.cancellationReason !== undefined ? { cancellationReason: handle.cancellationReason } : {}),
+        ...(handle.controlEpoch !== undefined ? { controlEpoch: handle.controlEpoch } : {}),
     };
 }

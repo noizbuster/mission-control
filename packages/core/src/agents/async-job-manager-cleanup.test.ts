@@ -8,7 +8,7 @@ afterEach(async () => {
 });
 
 describe('AsyncJobManager control cleanup', () => {
-    it('surfaces queued cancellation detach rejection and still drains the parent host', async () => {
+    it('returns queued cancellation despite detach rejection and still drains the parent host', async () => {
         const fixture = await createLifecycleHost('job-queued-detach-reject');
         const detachError = new Error('queued detach rejected');
         const originalAttach = fixture.host.attachEntity.bind(fixture.host);
@@ -44,7 +44,7 @@ describe('AsyncJobManager control cleanup', () => {
 
         manager.cancelJob(queued.jobId);
 
-        await expect(manager.awaitJob(queued.jobId)).rejects.toBe(detachError);
+        await expect(manager.awaitJob(queued.jobId)).resolves.toMatchObject({ status: 'cancelled' });
         expect(queuedExecute).not.toHaveBeenCalled();
         finishRunning?.();
         await manager.awaitJob(running.jobId);
@@ -140,7 +140,7 @@ describe('AsyncJobManager control cleanup', () => {
         expect(fixture.host.classify('parent-session')).toEqual({ kind: 'absent' });
     });
 
-    it('notifies pre-start termination once when pending attachment cleanup rejects', async () => {
+    it('notifies pre-start termination once and returns cancellation when attachment cleanup rejects', async () => {
         const fixture = await createLifecycleHost('job-pre-start-notify-once');
         const detachError = new Error('detach rejected');
         let finishAttach: ((attachment: { readonly detach: () => Promise<void> }) => void) | undefined;
@@ -160,13 +160,11 @@ describe('AsyncJobManager control cleanup', () => {
 
         manager.cancelJob(handle.jobId);
         finishAttach?.({ detach: async () => Promise.reject(detachError) });
-        const failure = await manager.awaitJob(handle.jobId).catch((error: unknown) => error);
-
-        expect(failure).toBe(detachError);
+        await expect(manager.awaitJob(handle.jobId)).resolves.toMatchObject({ status: 'cancelled' });
         expect(onTerminatedBeforeStart).toHaveBeenCalledTimes(1);
     });
 
-    it('keeps a durably completed handle terminal when control detach rejects', async () => {
+    it('returns a durably completed handle when control detach rejects', async () => {
         const fixture = await createLifecycleHost('job-complete-detach-reject');
         const detachError = new Error('detach rejected');
         const originalAttach = fixture.host.attachEntity.bind(fixture.host);
@@ -196,7 +194,10 @@ describe('AsyncJobManager control cleanup', () => {
             execute: async () => ({ status: 'completed', output: 'done' }),
         });
 
-        await expect(manager.awaitJob(handle.jobId)).rejects.toBe(detachError);
+        await expect(manager.awaitJob(handle.jobId)).resolves.toMatchObject({
+            status: 'completed',
+            result: { output: 'done' },
+        });
 
         expect(handle.status).toBe('completed');
         expect(terminalWrites).toEqual(['completed']);

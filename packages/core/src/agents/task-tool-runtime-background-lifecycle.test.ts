@@ -92,7 +92,7 @@ describe('background child control lifecycle', () => {
         expect(fixture.host.classify(fixture.sessionId)).toEqual({ kind: 'absent' });
     });
 
-    it('quiesces after background spawn rejection and preserves the spawn error', async () => {
+    it('quiesces after a background spawn rejection without retaining the thrown error', async () => {
         const fixture = await createLifecycleHost('background-spawn-reject');
         const spawnError = new Error('spawn rejected');
         const controller = new AbortController();
@@ -104,7 +104,8 @@ describe('background child control lifecycle', () => {
         const settled = await services.jobManager.awaitJob(handle.backgroundId);
 
         expect(settled.status).toBe('failed');
-        expect(settled.error).toBe(spawnError.message);
+        expect(settled.error).toBeUndefined();
+        expect(settled.result?.failure).toMatchObject({ code: 'task_child_failed', retryable: false });
         expect(services.runtimeRegistry.lookup(fixture.sessionId)?.status).toBe('aborted');
         expect(counts()).toEqual({ added: 1, removed: 1 });
         expect(fixture.host.classify(fixture.sessionId)).toEqual({ kind: 'absent' });

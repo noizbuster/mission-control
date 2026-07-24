@@ -1,4 +1,4 @@
-import type { PolicyEffectRule } from '@mission-control/protocol';
+import { type PolicyEffectRule, type ProtocolError, ProtocolErrorSchema } from '@mission-control/protocol';
 import { z } from 'zod';
 import type { SessionControlEpoch } from '../../runtime/session-control-cancellation';
 import type { CategoryDefinition } from './category-catalog';
@@ -86,6 +86,7 @@ const batchResultItemSchema = z
         sessionId: z.string().min(1),
         status: z.enum(['completed', 'failed']),
         output: z.string(),
+        failure: ProtocolErrorSchema.optional(),
     })
     .strict();
 
@@ -124,12 +125,7 @@ export interface ChildSpawnRequest {
     readonly controlEpoch?: SessionControlEpoch;
 }
 
-export const CHILD_SPAWN_FAILURE_KINDS = [
-    'yield_missing',
-    'graph_failed',
-    'tool_denied',
-    'aborted',
-] as const;
+export const CHILD_SPAWN_FAILURE_KINDS = ['yield_missing', 'graph_failed', 'tool_denied', 'aborted'] as const;
 export type ChildSpawnFailureKind = (typeof CHILD_SPAWN_FAILURE_KINDS)[number];
 
 export interface ChildSpawnResult {
@@ -137,6 +133,8 @@ export interface ChildSpawnResult {
     readonly status: 'completed' | 'failed';
     readonly output: string;
     readonly failureKind?: ChildSpawnFailureKind;
+    /** Structured terminal graph failure, redacted before crossing the child boundary. */
+    readonly failure?: ProtocolError;
 }
 
 export interface TaskToolBackgroundHandle {

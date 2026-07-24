@@ -11,7 +11,12 @@ import {
     cleanupOperationTestRuntimes,
     createOperationTestRuntime,
 } from '../runtime/session-control-operation-test-support';
-import { AsyncJobManager, type AsyncJobPersistenceMirror, type BackgroundJobHandle } from './async-job-manager';
+import {
+    AsyncJobManager,
+    type AsyncJobPersistenceMirror,
+    type BackgroundJobHandle,
+    type DurableBackgroundJobHandle,
+} from './async-job-manager';
 
 afterEach(cleanupOperationTestRuntimes);
 
@@ -211,6 +216,48 @@ describe('AsyncJobManager callback fencing', () => {
         expect(
             await readSessionControlOperation(runtime, lease.dbIdentity, lease.sessionId, 'operation-queued-live'),
         ).toMatchObject({ settledHandleIds: [`job:${queued.jobId}`] });
+        runtime.close();
+    });
+
+    it('keeps raw execute errors out of fenced mirror snapshots', async () => {
+        const runtime = await createOperationTestRuntime();
+        const lease = await acquireOperationTestLease(runtime, 'owner-fenced-mirror-redaction', 1_000);
+        const secret = 'fenced_mirror_secret';
+        const persisted: DurableBackgroundJobHandle[] = [];
+        let rejectExecution: ((reason?: unknown) => void) | undefined;
+        const manager = new AsyncJobManager(1, {
+            mirror: {
+                recordJob: (handle) => {
+                    persisted.push(handle);
+                },
+            },
+        });
+        const handle = manager.startJob({
+            sessionId: lease.sessionId,
+            controlEpoch: controlEpoch(runtime, lease, 'operation-fenced-mirror-redaction'),
+            execute: () =>
+                new Promise((_resolve, reject) => {
+                    rejectExecution = reject;
+                }),
+        });
+        await createSessionControlOperation({
+            runtime,
+            lease,
+            operationId: 'operation-fenced-mirror-redaction',
+            barrierKind: 'all_mutations',
+            deadlineWallMs: 20_000,
+            capturedHandleIds: [`job:${handle.jobId}`],
+            nowWallMs: 1_100,
+        });
+
+        const awaited = manager.awaitJob(handle.jobId);
+        rejectExecution?.(new Error(secret));
+        const settled = await awaited;
+
+        expect(settled.error).toBe(secret);
+        expect(persisted.some((snapshot) => snapshot.status === 'failed')).toBe(true);
+        expect(persisted).not.toContainEqual(expect.objectContaining({ error: expect.any(String) }));
+        expect(JSON.stringify(persisted)).not.toContain(secret);
         runtime.close();
     });
 });

@@ -132,6 +132,71 @@ describe('job tool — wait', () => {
         expect(result.output).toBe('something broke');
     });
 
+    it('does not expose a rejected job exception to the model', async () => {
+        const credential = 'job_rejection_secret';
+        const manager = new AsyncJobManager(2);
+        const tool = buildTool(manager);
+        const handle = manager.startJob({
+            sessionId: 'sess-rejected',
+            execute: async () => {
+                throw new Error(`job rejected with ${credential}`);
+            },
+        });
+
+        const result = await tool.execute({ action: 'wait', job_id: handle.jobId }, toolContext());
+
+        expect(result).toMatchObject({
+            status: 'failed',
+            failure: { code: 'task_child_failed', retryable: false },
+        });
+        expect(JSON.stringify(result)).not.toContain(credential);
+    });
+
+    it('returns an already-settled rejected job without leaking its raw exception', async () => {
+        const credential = 'settled_job_rejection_secret';
+        const manager = new AsyncJobManager(2);
+        const tool = buildTool(manager);
+        const handle = manager.startJob({
+            sessionId: 'sess-settled-rejected',
+            execute: async () => {
+                throw new Error(`job rejected with ${credential}`);
+            },
+        });
+        await flush();
+
+        const result = await tool.execute({ action: 'wait', job_id: handle.jobId }, toolContext());
+
+        expect(result).toMatchObject({
+            status: 'failed',
+            failure: { code: 'task_child_failed', retryable: false },
+        });
+        expect(JSON.stringify(result)).not.toContain(credential);
+    });
+
+    it('returns and renders a structured child failure after background work settles', async () => {
+        const manager = new AsyncJobManager(2);
+        const tool = buildTool(manager);
+        const handle = manager.startJob({
+            sessionId: 'sess-provider-abort',
+            execute: async () => ({
+                status: 'failed',
+                output: '[degraded salvage] partial child output',
+                failure: {
+                    code: 'provider_aborted',
+                    message: 'remote provider closed the child stream',
+                    retryable: false,
+                },
+            }),
+        });
+
+        const result = await tool.execute({ action: 'wait', job_id: handle.jobId }, toolContext());
+
+        expect(result.failure).toMatchObject({ code: 'provider_aborted', retryable: false });
+        const output = tool.toModelOutput?.(result);
+        expect(output).toContain('[provider_aborted]');
+        expect(output).toContain('remote provider closed the child stream');
+    });
+
     it('returns cancelled status when the job was cancelled before wait resolves', async () => {
         const manager = new AsyncJobManager(2);
         const ctrl = makeControllableExecute();
@@ -252,16 +317,21 @@ describe('job tool — model output formatting', () => {
         expect(out).toContain('done');
     });
 
-    it('formats a failed wait result with the error', () => {
+    it('formats a failed wait result with its structured failure', () => {
         const tool = buildTool(new AsyncJobManager());
         const out = tool.toModelOutput?.({
             action: 'wait',
             job_id: 'job_x',
             status: 'failed',
-            error: 'boom',
+            failure: {
+                code: 'provider_aborted',
+                message: 'remote provider closed the child stream',
+                retryable: false,
+            },
         });
         expect(out).toContain('failed');
-        expect(out).toContain('boom');
+        expect(out).toContain('provider_aborted');
+        expect(out).toContain('remote provider closed the child stream');
     });
 
     it('formats an empty list', () => {

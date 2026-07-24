@@ -22,7 +22,7 @@ import type {
     ResolveSubagentWaitInput,
     StartSubagentWaitInput,
 } from './agent-job-sql-mirror-types';
-import type { BackgroundJobHandle } from './async-job-manager';
+import type { BackgroundJobHandle, DurableBackgroundJobHandle } from './async-job-manager';
 import type { AgentRef, RuntimeAgentPersistenceMirror } from './runtime-registry';
 import type { TaskToolSubagentMirror } from './task-tool-runtime-types';
 
@@ -59,7 +59,7 @@ export class SqlAgentJobMirror implements RuntimeAgentPersistenceMirror, TaskToo
         );
     }
 
-    recordJob(handle: BackgroundJobHandle, client?: Client): void | Promise<void> {
+    recordJob(handle: DurableBackgroundJobHandle, client?: Client): void | Promise<void> {
         if (client !== undefined) return recordJobWithLifecycle(client, handle);
         this.enqueue(() => this.writeTransaction((client) => recordJobWithLifecycle(client, handle)));
     }

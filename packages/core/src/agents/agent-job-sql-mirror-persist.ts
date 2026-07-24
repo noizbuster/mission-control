@@ -2,7 +2,7 @@ import type { Client } from '@libsql/client';
 import { ensurePublicSessionRow } from '../memory/session-awaiting-sql';
 import { ensureSessionWithIdentity } from '../memory/session-identity-sql';
 import { runtimeStatusToDb } from './agent-job-sql-mirror-rows';
-import type { BackgroundJobHandle } from './async-job-manager';
+import type { DurableBackgroundJobHandle } from './async-job-manager';
 import type { AgentRef } from './runtime-registry';
 
 export type ChildSessionTerminalStatus = 'completed' | 'failed' | 'cancelled';
@@ -63,7 +63,7 @@ export async function upsertRuntimeAgentRow(input: { readonly client: Client; re
 
 export async function upsertJobRow(input: {
     readonly client: Client;
-    readonly handle: BackgroundJobHandle;
+    readonly handle: DurableBackgroundJobHandle;
 }): Promise<void> {
     const terminalAt = input.handle.completedAt ?? null;
     const now = input.handle.completedAt ?? input.handle.startedAt;
@@ -118,7 +118,7 @@ export async function upsertJobRow(input: {
             input.handle.status === 'cancelled' ? terminalAt : null,
             input.handle.cancellationReason ?? null,
             input.handle.result === undefined ? null : JSON.stringify(input.handle.result),
-            input.handle.error === undefined ? null : JSON.stringify({ message: input.handle.error }),
+            null,
             JSON.stringify({ blocking: input.handle.blocking }),
         ],
     });

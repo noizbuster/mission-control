@@ -8,7 +8,7 @@
  * graph via `spawnChildCodingAgent`. The hard-drop constant lives here too because it
  * is the registry-layer guard that backs the spawn safety contract.
  */
-import type { AbgNodeModelOptions } from '@mission-control/protocol';
+import type { AbgNodeModelOptions, ProtocolError } from '@mission-control/protocol';
 import { spawnChildCodingAgent } from '../behavior/subagents/spawn-child';
 import type { SdkModelResolver } from '../providers/ai-sdk/model-resolver';
 import { createObservabilityRedactor } from '../providers/observability-redactor';
@@ -93,8 +93,21 @@ export interface ChildGraphSpawnDeps {
     readonly summaryLimit?: number;
 }
 
+export class MissingChildSpawnConfigurationError extends Error {
+    constructor() {
+        super('spawnFn not wired: provide resolveSdkModel or an explicit spawnFn');
+        this.name = 'MissingChildSpawnConfigurationError';
+    }
+}
+
+export const MISSING_CHILD_SPAWN_CONFIGURATION_FAILURE: ProtocolError = {
+    code: 'tool_failed',
+    message: 'Child spawning is not configured',
+    retryable: false,
+};
+
 export function defaultSpawnFn(): Promise<ChildSpawnResult> {
-    return Promise.reject(new Error('spawnFn not wired: provide resolveSdkModel or an explicit spawnFn'));
+    return Promise.reject(new MissingChildSpawnConfigurationError());
 }
 
 /**
@@ -139,11 +152,14 @@ export function createChildGraphSpawnFn(
         });
 
         const observabilityRedactor = context.hostCallbacks?.observabilityRedactor ?? createObservabilityRedactor();
+        const failure = taskOutput.failure;
         if (yieldedResult !== undefined) {
             return {
                 sessionId: context.sessionId,
                 status: taskOutput.status,
                 output: observabilityRedactor.redactText(stringifyYieldResult(yieldedResult.value)),
+                ...(taskOutput.status === 'failed' ? { failureKind: 'graph_failed' as const } : {}),
+                ...(failure !== undefined ? { failure } : {}),
             };
         }
 
@@ -169,6 +185,7 @@ export function createChildGraphSpawnFn(
             status: 'failed',
             output: observabilityRedactor.redactText(salvage),
             failureKind,
+            ...(failure !== undefined ? { failure } : {}),
         };
     };
 }

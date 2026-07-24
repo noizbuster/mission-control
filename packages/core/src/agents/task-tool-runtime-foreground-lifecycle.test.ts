@@ -128,7 +128,7 @@ describe('foreground child control lifecycle', () => {
         expect(fixture.host.classify(fixture.sessionId)).toEqual({ kind: 'absent' });
     });
 
-    it('quiesces after spawn rejection and preserves the spawn error', async () => {
+    it('quiesces after spawn rejection and returns a structured terminal failure', async () => {
         const fixture = await createLifecycleHost('foreground-spawn-reject');
         const controller = new AbortController();
         const counts = abortListenerCounts(controller);
@@ -136,12 +136,53 @@ describe('foreground child control lifecycle', () => {
         const services = makeLifecycleServices({ host: fixture.host, mirror: resolvingMirror() });
         const runtime = buildLifecycleRuntime(services, async () => Promise.reject(spawnError));
 
-        await expect(runtime.runChildSession(lifecycleRequest(fixture.sessionId, controller.signal))).rejects.toBe(
-            spawnError,
-        );
+        const result = await runtime.runChildSession(lifecycleRequest(fixture.sessionId, controller.signal));
 
+        expect(result).toMatchObject({
+            sessionId: fixture.sessionId,
+            status: 'failed',
+            failure: { code: 'task_child_failed', retryable: false },
+        });
         expect(services.runtimeRegistry.lookup(fixture.sessionId)?.status).toBe('aborted');
         expect(counts()).toEqual({ added: 1, removed: 1 });
+        expect(fixture.host.classify(fixture.sessionId)).toEqual({ kind: 'absent' });
+    });
+
+    it('preserves a provider terminal failure when child-control cleanup rejects', async () => {
+        const fixture = await createLifecycleHost('foreground-provider-cleanup-reject');
+        const detachError = new Error('child detach rejected');
+        const originalAttach = fixture.host.attachEntity.bind(fixture.host);
+        vi.spyOn(fixture.host, 'attachEntity').mockImplementation(async (input) => {
+            const attachment = await originalAttach(input);
+            return {
+                detach: async () => {
+                    await attachment.detach();
+                    throw detachError;
+                },
+            };
+        });
+        const runtime = buildLifecycleRuntime(makeLifecycleServices({ host: fixture.host }), async (context) => ({
+            sessionId: context.sessionId,
+            status: 'failed',
+            output: '[degraded salvage] partial child output',
+            failureKind: 'graph_failed',
+            failure: {
+                code: 'provider_aborted',
+                message: 'remote provider closed the child stream',
+                retryable: false,
+            },
+        }));
+
+        const result = await runtime.runChildSession(lifecycleRequest(fixture.sessionId));
+
+        expect(result).toMatchObject({
+            status: 'failed',
+            failure: {
+                code: 'provider_aborted',
+                message: 'remote provider closed the child stream',
+                retryable: false,
+            },
+        });
         expect(fixture.host.classify(fixture.sessionId)).toEqual({ kind: 'absent' });
     });
 

@@ -1,9 +1,130 @@
 import { describe, expect, it } from 'vitest';
+import { wrapFlatProviderAsSdkModel } from '../../providers/ai-sdk/flat-provider-bridge';
+import { createDeterministicProvider } from '../../providers/deterministic-provider';
+import { createObservabilityRedactor } from '../../providers/observability-redactor';
 import type { AskUserQuestionRequest } from '../../tools/ask-user-schemas';
 import { ASK_USER_BLOCKED_ANSWER } from '../../tools/ask-user-tool';
 import { ToolRegistry } from '../../tools/tool-registry';
 import type { ToolInvocationSettlement } from '../../tools/tool-registry-types';
-import { type ChildHostCallbacks, registerChildAskUserTool } from './spawn-child';
+import {
+    type ChildHostCallbacks,
+    normalizeChildFailureCode,
+    registerChildAskUserTool,
+    spawnChildCodingAgent,
+} from './spawn-child';
+
+describe('spawnChildCodingAgent terminal failure', () => {
+    it('preserves the normalized retryable provider failure as the child failure payload', async () => {
+        const model = wrapFlatProviderAsSdkModel({
+            provider: createDeterministicProvider([
+                {
+                    kind: 'response_failed',
+                    error: {
+                        code: 'provider_aborted',
+                        message: 'remote provider closed the child stream',
+                        retryable: false,
+                    },
+                },
+            ]),
+            providerID: 'test',
+            modelID: 'child-model',
+            retryLimit: 0,
+        });
+
+        const result = await spawnChildCodingAgent({
+            description: 'child',
+            prompt: 'inspect the failure',
+            resolveSdkModel: () => model,
+            model: { providerID: 'test', modelID: 'child-model' },
+            now: () => '2026-07-24T00:00:00.000Z',
+            sessionId: 'child-provider-abort',
+            childToolRegistry: new ToolRegistry(),
+        });
+
+        expect(result.status).toBe('failed');
+        expect(result.failure).toEqual({
+            code: 'provider_timeout',
+            message: 'remote provider closed the child stream',
+            retryable: true,
+        });
+    });
+    it('redacts terminal messages and rejects untrusted terminal codes', async () => {
+        const credential = 'child_failure_secret';
+        expect(normalizeChildFailureCode(`provider_${credential}`)).toBe('task_child_failed');
+
+        const model = wrapFlatProviderAsSdkModel({
+            provider: createDeterministicProvider([
+                {
+                    kind: 'response_failed',
+                    error: {
+                        code: 'provider_auth_failed',
+                        message: `provider rejected ${credential}`,
+                        retryable: false,
+                        redactions: [
+                            {
+                                classification: 'credential',
+                                reason: 'provider error redaction',
+                                replacement: '[REDACTED_CREDENTIAL]',
+                            },
+                        ],
+                    },
+                },
+            ]),
+            providerID: 'test',
+            modelID: 'child-model',
+            retryLimit: 0,
+        });
+        const result = await spawnChildCodingAgent({
+            description: 'child',
+            prompt: 'inspect the failure',
+            resolveSdkModel: () => model,
+            model: { providerID: 'test', modelID: 'child-model' },
+            now: () => '2026-07-24T00:00:00.000Z',
+            sessionId: 'child-redacted-failure',
+            childToolRegistry: new ToolRegistry(),
+            hostCallbacks: {
+                observabilityRedactor: createObservabilityRedactor({ secrets: [credential] }),
+            },
+        });
+
+        expect(result.failure).toEqual({
+            code: 'provider_auth_failed',
+            message: 'provider rejected [REDACTED_CREDENTIAL]',
+            retryable: false,
+            redactions: [
+                {
+                    classification: 'credential',
+                    reason: 'provider error redaction',
+                    replacement: '[REDACTED_CREDENTIAL]',
+                },
+            ],
+        });
+    });
+
+    it('fails closed and redacts an unexpected child graph rejection', async () => {
+        const credential = 'unexpected_child_failure_secret';
+        const result = await spawnChildCodingAgent({
+            description: 'child',
+            prompt: 'inspect the failure',
+            resolveSdkModel: () => {
+                throw new Error(`model resolver failed with ${credential}`);
+            },
+            model: { providerID: 'test', modelID: 'child-model' },
+            now: () => '2026-07-24T00:00:00.000Z',
+            sessionId: 'child-unexpected-failure',
+            childToolRegistry: new ToolRegistry(),
+            hostCallbacks: {
+                observabilityRedactor: createObservabilityRedactor({ secrets: [credential] }),
+            },
+        });
+
+        expect(result).toMatchObject({
+            status: 'failed',
+            failure: { code: 'task_child_failed', retryable: false },
+        });
+        expect(JSON.stringify(result)).not.toContain(credential);
+    });
+});
 
 describe('registerChildAskUserTool', () => {
     it('returns the blocked sentinel when no host surface is attached', async () => {

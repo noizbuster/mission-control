@@ -1,24 +1,26 @@
 import type { SessionBackgroundJob } from '../memory/session-status-derivation';
 import type { ResolveSubagentWaitInput } from './agent-job-sql-mirror-types';
-import type { BackgroundJobHandle } from './async-job-manager';
-import { formatSalvageSnippet } from './runaway-guard';
+import {
+    type BackgroundJobHandle,
+    type DurableBackgroundJobHandle,
+    durableSnapshotJobHandle,
+} from './async-job-manager';
 
 export const activeJobStatuses: ReadonlySet<BackgroundJobHandle['status']> = new Set(['queued', 'running']);
 
 export const selectJobColumns =
     'job_id, parent_session_id, child_session_id, agent_id, status, queued_at, started_at, completed_at, failed_at, cancelled_at, cancellation_reason, result_json, error_json, metadata_json';
 
-export function cancelRecoveredJob(job: BackgroundJobHandle): BackgroundJobHandle {
-    return {
+export function cancelRecoveredJob(job: BackgroundJobHandle): DurableBackgroundJobHandle {
+    return durableSnapshotJobHandle({
         ...job,
         status: 'cancelled',
-        error: formatSalvageSnippet(0, undefined, undefined),
         completedAt: new Date().toISOString(),
         cancellationReason: 'recovered_after_restart',
-    };
+    });
 }
 
-export function resolvedSubagentJob(input: ResolveSubagentWaitInput, now: string): BackgroundJobHandle {
+export function resolvedSubagentJob(input: ResolveSubagentWaitInput, now: string): DurableBackgroundJobHandle {
     return {
         jobId: input.childSessionId,
         sessionId: input.childSessionId,
@@ -28,8 +30,14 @@ export function resolvedSubagentJob(input: ResolveSubagentWaitInput, now: string
         startedAt: now,
         completedAt: now,
         ...(input.status === 'cancelled'
-            ? { cancellationReason: 'cancelled', error: input.output }
-            : { result: { status: input.status, output: input.output } }),
+            ? { cancellationReason: 'cancelled' }
+            : {
+                  result: {
+                      status: input.status,
+                      output: input.output,
+                      ...(input.failure !== undefined ? { failure: input.failure } : {}),
+                  },
+              }),
     };
 }
 

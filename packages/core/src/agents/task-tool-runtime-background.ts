@@ -1,15 +1,18 @@
 import type { SessionControlEpoch } from '../runtime/session-control-cancellation';
 import type { ChildSpawnRequest, ChildSpawnResult, TaskToolBackgroundHandle } from '../tools/task/task-tool';
 import type { JobExecuteFn } from './async-job-manager';
+import { MISSING_CHILD_SPAWN_CONFIGURATION_FAILURE, MissingChildSpawnConfigurationError } from './child-graph-spawn';
 import { childDisplayName } from './task-tool-runtime-authority';
 import type { TaskToolRuntimeServices } from './task-tool-runtime-contract';
 import {
     attachChildControl,
     type ChildControlPrimaryFailure,
     ChildSessionCancelledError,
+    ChildSessionCleanupError,
     disposeChildControl,
     rethrowAfterChildCleanup,
     settleChildCompletion,
+    unreportedChildFailure,
 } from './task-tool-runtime-control';
 
 export function startBackgroundChildSession(input: {
@@ -54,6 +57,7 @@ export function startBackgroundChildSession(input: {
             ),
         );
         let primaryFailure: ChildControlPrimaryFailure | undefined;
+        let terminalResultReported = false;
         try {
             if (controlled.signal.aborted) {
                 const cancellationError = new ChildSessionCancelledError(sessionId);
@@ -69,36 +73,59 @@ export function startBackgroundChildSession(input: {
                     }),
                 );
             }
-            const result = await input
-                .executeSpawn(sessionId, controlled.signal, controlEpoch)
-                .catch((error: unknown) =>
-                    rethrowAfterChildCleanup(error, () =>
-                        settleChildCompletion({
-                            services: input.services,
-                            runtimeRegistry,
-                            parentSessionId: input.parentSessionId,
-                            sessionId,
-                            result: failedChildResult(sessionId, error),
-                            ...(controlEpoch !== undefined ? { controlEpoch } : {}),
-                            resolveWait: false,
-                        }),
-                    ),
-                );
-            await settleChildCompletion({
-                services: input.services,
-                runtimeRegistry,
-                parentSessionId: input.parentSessionId,
-                sessionId,
-                result,
-                ...(controlEpoch !== undefined ? { controlEpoch } : {}),
-                resolveWait: false,
-            });
-            return { status: result.status, output: result.output };
+            let result: ChildSpawnResult;
+            let spawnFailure: unknown;
+            try {
+                result = await input.executeSpawn(sessionId, controlled.signal, controlEpoch);
+            } catch (error: unknown) {
+                if (error instanceof MissingChildSpawnConfigurationError) {
+                    result = {
+                        sessionId,
+                        status: 'failed',
+                        output: '',
+                        failureKind: 'graph_failed',
+                        failure: MISSING_CHILD_SPAWN_CONFIGURATION_FAILURE,
+                    };
+                } else {
+                    spawnFailure = error;
+                    result = unreportedChildFailure(sessionId);
+                }
+            }
+            try {
+                await settleChildCompletion({
+                    services: input.services,
+                    runtimeRegistry,
+                    parentSessionId: input.parentSessionId,
+                    sessionId,
+                    result,
+                    ...(controlEpoch !== undefined ? { controlEpoch } : {}),
+                    resolveWait: false,
+                });
+            } catch (settlementError: unknown) {
+                if (spawnFailure !== undefined) {
+                    throw new ChildSessionCleanupError(spawnFailure, settlementError);
+                }
+                throw settlementError;
+            }
+            terminalResultReported = true;
+            return {
+                status: result.status,
+                output: result.output,
+                ...(result.failure !== undefined ? { failure: result.failure } : {}),
+            };
         } catch (error: unknown) {
             primaryFailure = { error };
             throw error;
         } finally {
-            await disposeChildControl(controlled, primaryFailure);
+            if (terminalResultReported) {
+                try {
+                    await controlled.dispose();
+                } catch {
+                    // Lifecycle cleanup cannot replace a settled child terminal result.
+                }
+            } else {
+                await disposeChildControl(controlled, primaryFailure);
+            }
         }
     };
 
@@ -116,9 +143,13 @@ export function startBackgroundChildSession(input: {
 }
 
 function failedChildResult(sessionId: string, error: unknown): ChildSpawnResult {
-    return {
-        sessionId,
-        status: 'failed',
-        output: error instanceof Error ? error.message : String(error),
-    };
+    if (error instanceof ChildSessionCancelledError) {
+        return {
+            sessionId,
+            status: 'failed',
+            output: '',
+            failureKind: 'aborted',
+        };
+    }
+    return unreportedChildFailure(sessionId);
 }

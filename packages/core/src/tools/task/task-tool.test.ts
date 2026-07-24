@@ -1,14 +1,19 @@
 // allow: SIZE_OK -- HEAD 397 -> current 388 pure LOC; one task routing, batch, resume, and background lifecycle state-machine matrix.
+
+import type { ProtocolError } from '@mission-control/protocol';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { discoverAgents } from '../../agents/agent-loader';
 import { AgentIndex } from '../../agents/agent-registry';
+import { MissingChildSpawnConfigurationError } from '../../agents/child-graph-spawn';
+import { ChildSessionCleanupError } from '../../agents/task-tool-runtime-control';
 import type { ToolExecutionContext } from '../tool-registry-types';
-import { getCategory } from './category-catalog';
 import { ToolExecutionError } from '../tool-registry-types';
+import { getCategory } from './category-catalog';
 import {
-    classifyChildSpawnFailure,
     type ChildSpawnRequest,
+    type ChildSpawnResult,
     type CreateFullParityTaskToolOptions,
+    classifyChildSpawnFailure,
     createFullParityTaskToolRegistration,
     type TaskToolRuntime,
     taskToolInputSchema,
@@ -24,13 +29,7 @@ interface MockCall {
 
 type RunResultOverride = (
     request: ChildSpawnRequest,
-) =>
-    | { status: 'completed' | 'failed'; output: string; failureKind?: 'yield_missing' | 'graph_failed' | 'tool_denied' | 'aborted' }
-    | Promise<{
-          status: 'completed' | 'failed';
-          output: string;
-          failureKind?: 'yield_missing' | 'graph_failed' | 'tool_denied' | 'aborted';
-      }>;
+) => Omit<ChildSpawnResult, 'sessionId'> | Promise<Omit<ChildSpawnResult, 'sessionId'>>;
 
 function createMockRuntime(
     existingSessionIds: ReadonlySet<string> = new Set(['ses_existing']),
@@ -175,10 +174,7 @@ describe('task tool — category routing', () => {
 
     it('threads optional title onto the child spawn request', async () => {
         const { tool, mock } = buildTool();
-        await tool.execute(
-            taskToolInputSchema.parse(params({ category: 'deep', title: 'Investigate auth' })),
-            CTX,
-        );
+        await tool.execute(taskToolInputSchema.parse(params({ category: 'deep', title: 'Investigate auth' })), CTX);
         expect(mock.calls[0]?.request?.title).toBe('Investigate auth');
         expect(mock.calls[0]?.request?.category?.id).toBe('deep');
     });
@@ -490,10 +486,19 @@ describe('task tool — batch mode', () => {
         expect(roles).toEqual(['finder-a', 'finder-b', 'finder-c']);
     });
 
-    it('returns partial results when one child fails (no throw)', async () => {
+    it('retains structured details when one batch child fails (no throw)', async () => {
         const { tool, mock } = buildTool(undefined, (request) => {
             if (request.prompt.includes('fail-me')) {
-                return { status: 'failed', output: 'boom' };
+                return {
+                    status: 'failed',
+                    output: 'boom',
+                    failureKind: 'graph_failed',
+                    failure: {
+                        code: 'provider_timeout',
+                        message: 'provider stream timed out',
+                        retryable: true,
+                    },
+                };
             }
             return { status: 'completed', output: 'ok' };
         });
@@ -512,7 +517,8 @@ describe('task tool — batch mode', () => {
         const statuses = (result.batch ?? []).map((b) => b.status).sort();
         expect(statuses).toEqual(['completed', 'completed', 'failed']);
         const failedItem = (result.batch ?? []).find((b) => b.status === 'failed');
-        expect(failedItem?.output).toBe('boom');
+        expect(failedItem?.failure).toMatchObject({ code: 'provider_timeout', retryable: true });
+        expect(failedItem?.output).toContain('[provider_timeout]');
         expect(mock.calls.filter((c) => c.kind === 'run')).toHaveLength(3);
     });
 
@@ -584,7 +590,7 @@ describe('classifyChildSpawnFailure', () => {
                 output: '[degraded salvage] mid work',
                 failureKind: 'yield_missing',
             }),
-        ).toEqual({ code: 'task_yield_missing', retryable: true });
+        ).toMatchObject({ code: 'task_yield_missing', retryable: true });
     });
 
     it('marks graph_failed as non-retryable task_child_failed', () => {
@@ -595,7 +601,27 @@ describe('classifyChildSpawnFailure', () => {
                 output: 'boom',
                 failureKind: 'graph_failed',
             }),
-        ).toEqual({ code: 'task_child_failed', retryable: false });
+        ).toMatchObject({ code: 'task_child_failed', retryable: false });
+    });
+
+    it('preserves a validated child graph failure for the parent graph coordinator', () => {
+        expect(
+            classifyChildSpawnFailure({
+                sessionId: 's1',
+                status: 'failed',
+                output: 'provider stream timed out',
+                failureKind: 'graph_failed',
+                failure: {
+                    code: 'provider_timeout',
+                    message: 'provider stream timed out',
+                    retryable: true,
+                },
+            }),
+        ).toEqual({
+            code: 'provider_timeout',
+            message: 'provider stream timed out',
+            retryable: true,
+        });
     });
 
     it('infers yield_missing from degraded salvage prefix without failureKind', () => {
@@ -605,7 +631,7 @@ describe('classifyChildSpawnFailure', () => {
                 status: 'failed',
                 output: '[degraded salvage] leftover prose',
             }),
-        ).toEqual({ code: 'task_yield_missing', retryable: true });
+        ).toMatchObject({ code: 'task_yield_missing', retryable: true });
     });
 });
 
@@ -625,5 +651,230 @@ describe('task tool — yield_missing settlement', () => {
             expect(error.error.code).toBe('task_yield_missing');
             expect(error.error.retryable).toBe(true);
         }
+    });
+});
+
+describe('task tool — child graph failure settlement', () => {
+    it('surfaces the child terminal error code and message to the parent', async () => {
+        const { tool } = buildTool(undefined, () => ({
+            status: 'failed',
+            output: '[degraded salvage] partial child output',
+            failureKind: 'graph_failed',
+            failure: {
+                code: 'provider_aborted',
+                message: 'remote provider closed the child stream',
+                retryable: false,
+            },
+        }));
+
+        try {
+            await tool.execute(taskToolInputSchema.parse(params({ category: 'deep' })), CTX);
+            expect.unreachable('expected ToolExecutionError');
+        } catch (error) {
+            expect(error).toBeInstanceOf(ToolExecutionError);
+            if (!(error instanceof ToolExecutionError)) return;
+            expect(error.error).toMatchObject({ code: 'provider_aborted', retryable: false });
+            expect(error.error.message).toContain('[provider_aborted]');
+            expect(error.error.message).toContain('remote provider closed the child stream');
+        }
+    });
+    it('does not expose a rejected runtime exception to the parent model', async () => {
+        const credential = 'foreground_child_runtime_secret';
+        const { tool } = buildTool(undefined, async () => {
+            throw new Error(`child runtime rejected with ${credential}`);
+        });
+
+        const error = await Promise.resolve(
+            tool.execute(taskToolInputSchema.parse(params({ category: 'deep' })), CTX),
+        ).catch((caught: unknown) => caught);
+
+        expect(error).toBeInstanceOf(ToolExecutionError);
+        if (!(error instanceof ToolExecutionError)) return;
+        expect(error.error).toEqual({
+            code: 'task_child_failed',
+            message: 'Child session failed before reporting a terminal result',
+            retryable: false,
+        });
+        expect(JSON.stringify(error)).not.toContain(credential);
+    });
+
+    it('reports missing child spawn configuration distinctly from a provider failure', async () => {
+        const { tool } = buildTool(undefined, async () => Promise.reject(new MissingChildSpawnConfigurationError()));
+
+        const error = await Promise.resolve(
+            tool.execute(taskToolInputSchema.parse(params({ category: 'deep' })), CTX),
+        ).catch((caught: unknown) => caught);
+
+        expect(error).toBeInstanceOf(ToolExecutionError);
+        if (!(error instanceof ToolExecutionError)) return;
+        expect(error.error).toEqual({
+            code: 'tool_failed',
+            message: 'Child spawning is not configured',
+            retryable: false,
+        });
+    });
+
+    it('retains missing child spawn configuration per batch item', async () => {
+        const { tool } = buildTool(undefined, async () => Promise.reject(new MissingChildSpawnConfigurationError()));
+
+        const result = await Promise.resolve(
+            tool.execute(
+                taskToolInputSchema.parse({
+                    load_skills: [],
+                    tasks: [{ agent: 'deep', assignment: 'configure child' }],
+                }),
+                CTX,
+            ),
+        );
+
+        expect(result.batch?.[0]?.failure).toEqual({
+            code: 'tool_failed',
+            message: 'Child spawning is not configured',
+            retryable: false,
+        });
+    });
+
+    it('preserves missing spawn configuration through a cleanup wrapper', async () => {
+        const cleanupFailure = new ChildSessionCleanupError(
+            new MissingChildSpawnConfigurationError(),
+            new Error('child detach rejected'),
+        );
+        const { tool } = buildTool(undefined, async () => Promise.reject(cleanupFailure));
+
+        const direct = await Promise.resolve(
+            tool.execute(taskToolInputSchema.parse(params({ category: 'deep' })), CTX),
+        ).catch((caught: unknown) => caught);
+        expect(direct).toBeInstanceOf(ToolExecutionError);
+        if (direct instanceof ToolExecutionError) {
+            expect(direct.error).toEqual({
+                code: 'tool_failed',
+                message: 'Child spawning is not configured',
+                retryable: false,
+            });
+        }
+
+        const { mock } = buildTool();
+        const resumeTool = createFullParityTaskToolRegistration({
+            runtime: {
+                ...mock.runtime,
+                resumeChildSession: async () => Promise.reject(cleanupFailure),
+            },
+        });
+        const resumed = await Promise.resolve(
+            resumeTool.execute(taskToolInputSchema.parse(params({ task_id: 'ses_existing' })), CTX),
+        ).catch((caught: unknown) => caught);
+        expect(resumed).toBeInstanceOf(ToolExecutionError);
+        if (resumed instanceof ToolExecutionError) {
+            expect(resumed.error).toEqual({
+                code: 'tool_failed',
+                message: 'Child spawning is not configured',
+                retryable: false,
+            });
+        }
+
+        const batch = await Promise.resolve(
+            tool.execute(
+                taskToolInputSchema.parse({
+                    load_skills: [],
+                    tasks: [{ agent: 'deep', assignment: 'configure child' }],
+                }),
+                CTX,
+            ),
+        );
+        expect(batch.batch?.[0]?.failure).toEqual({
+            code: 'tool_failed',
+            message: 'Child spawning is not configured',
+            retryable: false,
+        });
+    });
+
+    it('preserves redacted provider failure metadata across direct, resume, and batch boundaries', async () => {
+        const credential = 'provider_failure_secret';
+        const failure: ProtocolError = {
+            code: 'provider_timeout',
+            message: 'provider rejected [REDACTED_CREDENTIAL]',
+            retryable: true,
+            redactions: [
+                {
+                    classification: 'credential',
+                    reason: 'provider error redaction',
+                    replacement: '[REDACTED_CREDENTIAL]',
+                },
+            ],
+        };
+        const childFailure = {
+            status: 'failed' as const,
+            output: '',
+            failureKind: 'graph_failed' as const,
+            failure,
+        };
+        const { tool } = buildTool(undefined, async () => childFailure);
+
+        const direct = await Promise.resolve(
+            tool.execute(taskToolInputSchema.parse(params({ category: 'deep' })), CTX),
+        ).catch((caught: unknown) => caught);
+        expect(direct).toBeInstanceOf(ToolExecutionError);
+        if (direct instanceof ToolExecutionError) {
+            expect(direct.error).toEqual({
+                ...failure,
+                message: `Child session ses_mock_1 failed [provider_timeout]: ${failure.message}`,
+            });
+            expect(JSON.stringify(direct)).not.toContain(credential);
+        }
+
+        const { mock } = buildTool();
+        const resumeTool = createFullParityTaskToolRegistration({
+            runtime: {
+                ...mock.runtime,
+                resumeChildSession: async (sessionId) => ({ sessionId, ...childFailure }),
+            },
+        });
+        const resumed = await Promise.resolve(
+            resumeTool.execute(taskToolInputSchema.parse(params({ task_id: 'ses_existing' })), CTX),
+        ).catch((caught: unknown) => caught);
+        expect(resumed).toBeInstanceOf(ToolExecutionError);
+        if (resumed instanceof ToolExecutionError) {
+            expect(resumed.error).toEqual({
+                ...failure,
+                message: `Child session ses_existing failed [provider_timeout]: ${failure.message}`,
+            });
+            expect(JSON.stringify(resumed)).not.toContain(credential);
+        }
+
+        const batch = await tool.execute(
+            taskToolInputSchema.parse({
+                load_skills: [],
+                tasks: [{ agent: 'deep', assignment: 'inspect provider failure' }],
+            }),
+            CTX,
+        );
+        expect(batch.batch?.[0]?.failure).toEqual(failure);
+        expect(JSON.stringify(batch)).not.toContain(credential);
+    });
+
+    it('preserves structured tool failures across batch boundaries', async () => {
+        const structuredFailure = new ToolExecutionError({
+            code: 'provider_timeout',
+            message: 'provider rejected [REDACTED_CREDENTIAL]',
+            retryable: true,
+            redactions: [
+                {
+                    classification: 'credential',
+                    reason: 'provider error redaction',
+                    replacement: '[REDACTED_CREDENTIAL]',
+                },
+            ],
+        });
+        const { tool } = buildTool(undefined, async () => Promise.reject(structuredFailure));
+
+        const batch = await tool.execute(
+            taskToolInputSchema.parse({
+                load_skills: [],
+                tasks: [{ agent: 'deep', assignment: 'preserve structured failure' }],
+            }),
+            CTX,
+        );
+
+        expect(batch.batch?.[0]?.failure).toEqual(structuredFailure.error);
     });
 });

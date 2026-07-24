@@ -247,7 +247,7 @@ describe('SqlAgentJobMirror', () => {
             expect(report).toEqual({ recovered: 1, cancelled: 1, preserved: 0 });
             expect(job?.status).toBe('cancelled');
             expect(job?.completedAt).toBeDefined();
-            expect(job?.error).toContain('cancelled after');
+            expect(job?.cancellationReason).toBe('recovered_after_restart');
         });
     });
 });

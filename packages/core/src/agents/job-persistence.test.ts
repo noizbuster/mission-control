@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import type { BackgroundJobHandle } from './async-job-manager';
+import type { BackgroundJobHandle, DurableBackgroundJobHandle } from './async-job-manager';
 import { loadPersistedJobs, persistJob } from './job-persistence';
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -19,7 +19,7 @@ function makeTempDir(): string {
     return dir;
 }
 
-function sampleHandle(overrides: Partial<BackgroundJobHandle> = {}): BackgroundJobHandle {
+function sampleHandle(overrides: Partial<DurableBackgroundJobHandle> = {}): DurableBackgroundJobHandle {
     return {
         jobId: 'job_test_1',
         sessionId: 'ses_1',
@@ -75,13 +75,21 @@ describe('persistJob', () => {
         expect(loaded[0]).toEqual(handle);
     });
 
-    it('round-trips a failed handle with an error message', async () => {
+    it('round-trips a failed handle with its structured child failure', async () => {
         // Given
         const jobsDir = makeTempDir();
         const handle = sampleHandle({
             jobId: 'job_failed',
             status: 'failed',
-            error: 'boom',
+            result: {
+                status: 'failed',
+                output: '[degraded salvage] partial child output',
+                failure: {
+                    code: 'provider_aborted',
+                    message: 'remote provider closed the child stream',
+                    retryable: false,
+                },
+            },
             completedAt: '2026-06-22T00:02:00.000Z',
         });
 
@@ -92,6 +100,20 @@ describe('persistJob', () => {
         // Then
         expect(loaded).toHaveLength(1);
         expect(loaded[0]).toEqual(handle);
+    });
+    it('rejects raw-error handles at the API and omits injected error text from disk', async () => {
+        const expectFalse = <_Value extends false>(): void => undefined;
+        expectFalse<BackgroundJobHandle extends DurableBackgroundJobHandle ? true : false>();
+
+        const jobsDir = makeTempDir();
+        const handle = sampleHandle({ jobId: 'job_raw_error' });
+        const secret = 'file_persistence_secret';
+        expect(Reflect.set(handle, 'error', secret)).toBe(true);
+
+        await persistJob(jobsDir, handle);
+
+        expect(readFileSync(join(jobsDir, 'job_raw_error.json'), 'utf8')).not.toContain(secret);
+        expect((await loadPersistedJobs(jobsDir))[0]?.error).toBeUndefined();
     });
 });
 
@@ -177,7 +199,7 @@ describe('concurrent writes', () => {
     it('safely persists many jobs written in parallel without leftover temp files', async () => {
         // Given
         const jobsDir = makeTempDir();
-        const handles: BackgroundJobHandle[] = Array.from({ length: 10 }, (_, i) =>
+        const handles: DurableBackgroundJobHandle[] = Array.from({ length: 10 }, (_, i) =>
             sampleHandle({ jobId: `job_${i}`, sessionId: `s_${i}` }),
         );
 
@@ -199,7 +221,7 @@ describe('concurrent writes', () => {
         const jobsDir = makeTempDir();
         const jobId = 'job_contended';
         // All writes target the same jobId; each produces a valid handle.
-        const handles: BackgroundJobHandle[] = Array.from({ length: 5 }, (_, i) =>
+        const handles: DurableBackgroundJobHandle[] = Array.from({ length: 5 }, (_, i) =>
             sampleHandle({ jobId, status: 'completed', sessionId: `s_${i}` }),
         );
 

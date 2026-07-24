@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { JobExecuteFn } from './async-job-manager';
+import type { BackgroundJobHandle, DurableBackgroundJobHandle, JobExecuteFn } from './async-job-manager';
 import { AsyncJobManager } from './async-job-manager';
 
 type JobResult = { status: 'completed' | 'failed'; output: string };
@@ -262,6 +262,34 @@ describe('AsyncJobManager', () => {
 
             expect(settled.status).toBe('failed');
             expect(settled.error).toBe('crash');
+        });
+
+        it('makes durable snapshots incompatible with raw-error handles', () => {
+            const expectFalse = <_Value extends false>(): void => undefined;
+            expectFalse<BackgroundJobHandle extends DurableBackgroundJobHandle ? true : false>();
+        });
+
+        it('keeps raw execute errors in memory but out of mirror snapshots', async () => {
+            const secret = 'ordinary_mirror_secret';
+            const persisted: DurableBackgroundJobHandle[] = [];
+            const manager = new AsyncJobManager(2, {
+                mirror: {
+                    recordJob: (handle) => {
+                        persisted.push(handle);
+                    },
+                },
+            });
+            const handle = manager.startJob({
+                sessionId: 's1',
+                execute: makeThrowingExecute(secret),
+            });
+
+            const settled = await manager.awaitJob(handle.jobId);
+
+            expect(settled.error).toBe(secret);
+            expect(persisted.some((snapshot) => snapshot.status === 'failed')).toBe(true);
+            expect(persisted).not.toContainEqual(expect.objectContaining({ error: expect.any(String) }));
+            expect(JSON.stringify(persisted)).not.toContain(secret);
         });
 
         it('returns immediately for an already-completed job', async () => {

@@ -1,3 +1,5 @@
+import type { ProtocolError } from '@mission-control/protocol';
+
 export interface AgentJobRecoveryReport {
     readonly recovered: number;
     readonly cancelled: number;
@@ -16,4 +18,5 @@ export interface ResolveSubagentWaitInput {
     readonly childSessionId: string;
     readonly status: 'completed' | 'failed' | 'cancelled';
     readonly output: string;
+    readonly failure?: ProtocolError;
 }

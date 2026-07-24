@@ -21,6 +21,7 @@
  * completion via an effect-runtime service; here the model explicitly waits/cancels via
  * this tool, keeping the surface dependency-free.
  */
+import { type ProtocolError, ProtocolErrorSchema } from '@mission-control/protocol';
 import { z } from 'zod';
 import type { AsyncJobManager, BackgroundJobHandle } from '../agents/async-job-manager';
 import { ToolExecutionError, type ToolRegistration } from './tool-registry-types';
@@ -56,7 +57,7 @@ const jobOutputSchema = z
         job_id: z.string().min(1).optional(),
         status: z.enum(['completed', 'failed', 'cancelled', 'running', 'queued', 'not_found']),
         output: z.string().optional(),
-        error: z.string().optional(),
+        failure: ProtocolErrorSchema.optional(),
         jobs: z.array(jobSummaryEntrySchema).optional(),
     })
     .strict();
@@ -67,6 +68,12 @@ export interface JobToolDependencies {
     /** Shared job manager instance (same one backing the task tool's background mode). */
     readonly jobManager: AsyncJobManager;
 }
+
+const UNREPORTED_BACKGROUND_FAILURE: ProtocolError = {
+    code: 'task_child_failed',
+    message: 'Background task failed before reporting a terminal result',
+    retryable: false,
+};
 
 /**
  * Build the `job` tool registration. `deps.jobManager` is the live manager shared with
@@ -130,14 +137,19 @@ export function createJobToolRegistration(deps: JobToolDependencies): ToolRegist
 }
 
 async function waitResult(jobManager: AsyncJobManager, jobId: string): Promise<JobToolResult> {
-    let handle: BackgroundJobHandle;
-    try {
-        handle = await jobManager.awaitJob(jobId);
-    } catch {
-        // awaitJob throws for an unknown id; surface a clean not_found to the model.
+    if (!jobManager.listJobs().some((handle) => handle.jobId === jobId)) {
         return { action: 'wait', job_id: jobId, status: 'not_found' };
     }
-    return handleToWaitResult(handle);
+    try {
+        return handleToWaitResult(await jobManager.awaitJob(jobId));
+    } catch {
+        return {
+            action: 'wait',
+            job_id: jobId,
+            status: 'failed',
+            failure: UNREPORTED_BACKGROUND_FAILURE,
+        };
+    }
 }
 
 function handleToWaitResult(handle: BackgroundJobHandle): JobToolResult {
@@ -150,7 +162,7 @@ function handleToWaitResult(handle: BackgroundJobHandle): JobToolResult {
             ...base,
             status: 'failed',
             ...(handle.result?.output !== undefined ? { output: handle.result.output } : {}),
-            ...(handle.error !== undefined ? { error: handle.error } : {}),
+            failure: handle.result?.failure ?? UNREPORTED_BACKGROUND_FAILURE,
         };
     }
     if (handle.status === 'completed') {
@@ -206,7 +218,9 @@ function formatJobModelOutput(output: JobToolResult): string {
     // wait
     if (output.status === 'not_found') return `Job ${label} not found.`;
     if (output.status === 'failed') {
-        return `Job ${label} failed${output.error !== undefined ? `: ${output.error}` : ''}.`;
+        const failure = output.failure ?? UNREPORTED_BACKGROUND_FAILURE;
+        const tail = output.output !== undefined ? `\n${truncate(output.output, 2000)}` : '';
+        return `Job ${label} failed [${failure.code}]: ${failure.message}.${tail}`;
     }
     if (output.status === 'cancelled') return `Job ${label} was cancelled.`;
     if (output.status === 'completed') {

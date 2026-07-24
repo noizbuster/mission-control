@@ -17,6 +17,12 @@
  * Schema enforces XOR between batch and single-spawn; children run in parallel
  * via Promise.all; `context` propagates as `parentContext` to every child.
  */
+import type { ProtocolError } from '@mission-control/protocol';
+import {
+    MISSING_CHILD_SPAWN_CONFIGURATION_FAILURE,
+    MissingChildSpawnConfigurationError,
+} from '../../agents/child-graph-spawn';
+import { LifecycleCleanupError } from '../../agents/lifecycle-cleanup-error';
 import { TASK_TOOL_NAME } from '../task-tool';
 import type { ToolRegistration } from '../tool-registry-types';
 import { ToolExecutionError } from '../tool-registry-types';
@@ -135,24 +141,27 @@ export function createFullParityTaskToolRegistration(
             const routing = resolveRouting(input);
             const childPermissions = buildChildPermissions(routing.category);
 
-            if (input.task_id !== undefined) {
-                if (!options.runtime.sessionExists(input.task_id)) {
+            const taskId = input.task_id;
+            if (taskId !== undefined) {
+                if (!options.runtime.sessionExists(taskId)) {
                     throw new ToolExecutionError({
                         code: 'tool_failed',
-                        message: `session not found: ${input.task_id}`,
+                        message: `session not found: ${taskId}`,
                         retryable: false,
                     });
                 }
-                const result = await options.runtime.resumeChildSession(
-                    input.task_id,
-                    buildRequest({
-                        params: input,
-                        routing,
-                        sessionId: input.task_id,
-                        childPermissions,
-                        signal: context.signal,
-                        ...(context.controlEpoch !== undefined ? { controlEpoch: context.controlEpoch } : {}),
-                    }),
+                const result = await invokeChildRuntime(() =>
+                    options.runtime.resumeChildSession(
+                        taskId,
+                        buildRequest({
+                            params: input,
+                            routing,
+                            sessionId: taskId,
+                            childPermissions,
+                            signal: context.signal,
+                            ...(context.controlEpoch !== undefined ? { controlEpoch: context.controlEpoch } : {}),
+                        }),
+                    ),
                 );
                 return toToolResult(result);
             }
@@ -168,11 +177,11 @@ export function createFullParityTaskToolRegistration(
             });
 
             if (input.run_in_background === true) {
-                const handle = options.runtime.startBackgroundSession(request);
+                const handle = await invokeChildRuntime(() => options.runtime.startBackgroundSession(request));
                 return { sessionId: handle.sessionId, backgroundId: handle.backgroundId, status: 'running' };
             }
 
-            return toToolResult(await options.runtime.runChildSession(request));
+            return toToolResult(await invokeChildRuntime(() => options.runtime.runChildSession(request)));
         },
         toModelOutput: (output) => {
             if (output.batch !== undefined) {
@@ -229,15 +238,24 @@ async function executeBatch(
                     return {
                         sessionId: result.sessionId,
                         status: result.status,
-                        output: result.output,
+                        output: result.status === 'failed' ? formatChildSpawnFailure(result) : result.output,
+                        ...(result.failure !== undefined ? { failure: result.failure } : {}),
                         ...(item.role !== undefined ? { role: item.role } : {}),
                     };
                 } catch (error: unknown) {
-                    const message = error instanceof Error ? error.message : String(error);
+                    const failure = error instanceof ToolExecutionError ? error.error : childRuntimeFailure(error);
+                    const failedChild: ChildSpawnResult = {
+                        sessionId,
+                        status: 'failed',
+                        output: '',
+                        failureKind: 'graph_failed',
+                        failure,
+                    };
                     return {
                         sessionId,
                         status: 'failed',
-                        output: message,
+                        output: formatChildSpawnFailure(failedChild),
+                        failure,
                         ...(item.role !== undefined ? { role: item.role } : {}),
                     };
                 }
@@ -257,32 +275,73 @@ function toToolResult(result: ChildSpawnResult): TaskToolResult {
         const failure = classifyChildSpawnFailure(result);
         throw new ToolExecutionError({
             code: failure.code,
-            message: result.output,
+            message: formatChildSpawnFailure(result),
             retryable: failure.retryable,
+            ...(failure.redactions !== undefined ? { redactions: failure.redactions } : {}),
         });
     }
     return { sessionId: result.sessionId, status: result.status, output: result.output };
 }
 
-export function classifyChildSpawnFailure(result: ChildSpawnResult): {
-    readonly code: 'task_yield_missing' | 'task_child_failed' | 'operator_aborted' | 'tool_failed';
-    readonly retryable: boolean;
-} {
+export function classifyChildSpawnFailure(result: ChildSpawnResult): ProtocolError {
+    if (result.failure !== undefined) return result.failure;
     const kind = result.failureKind;
     if (kind === 'yield_missing') {
-        return { code: 'task_yield_missing', retryable: true };
+        return {
+            code: 'task_yield_missing',
+            message: 'Child session ended without calling yield',
+            retryable: true,
+        };
     }
     if (kind === 'aborted') {
-        return { code: 'operator_aborted', retryable: false };
+        return { code: 'operator_aborted', message: 'Child session was aborted', retryable: false };
     }
     if (kind === 'tool_denied') {
-        return { code: 'tool_failed', retryable: false };
+        return { code: 'tool_failed', message: 'Child tool access was denied', retryable: false };
     }
     if (kind === 'graph_failed') {
-        return { code: 'task_child_failed', retryable: false };
+        return { code: 'task_child_failed', message: 'Child graph failed without a terminal error', retryable: false };
     }
     if (result.output.startsWith('[degraded salvage]')) {
-        return { code: 'task_yield_missing', retryable: true };
+        return {
+            code: 'task_yield_missing',
+            message: 'Child session ended without calling yield',
+            retryable: true,
+        };
     }
-    return { code: 'tool_failed', retryable: false };
+    return {
+        code: 'tool_failed',
+        message: 'Child session failed without a classified terminal error',
+        retryable: false,
+    };
+}
+
+function formatChildSpawnFailure(result: ChildSpawnResult): string {
+    const failure = result.failure;
+    if (failure === undefined) return result.output;
+    const headline = `Child session ${result.sessionId} failed [${failure.code}]: ${failure.message}`;
+    return result.output.length > 0 ? `${headline}\n${result.output}` : headline;
+}
+
+async function invokeChildRuntime<T>(operation: () => T | Promise<T>): Promise<T> {
+    try {
+        return await operation();
+    } catch (error: unknown) {
+        if (error instanceof ToolExecutionError) throw error;
+        throw new ToolExecutionError(childRuntimeFailure(error));
+    }
+}
+
+function childRuntimeFailure(error: unknown): ProtocolError {
+    if (
+        error instanceof MissingChildSpawnConfigurationError ||
+        (error instanceof LifecycleCleanupError && error.primaryError instanceof MissingChildSpawnConfigurationError)
+    ) {
+        return MISSING_CHILD_SPAWN_CONFIGURATION_FAILURE;
+    }
+    return {
+        code: 'task_child_failed',
+        message: 'Child session failed before reporting a terminal result',
+        retryable: false,
+    };
 }

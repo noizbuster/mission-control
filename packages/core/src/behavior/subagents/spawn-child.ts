@@ -10,7 +10,14 @@
  * This is the runtime half of the `task` tool pair: `tools/task-tool.ts` is the model-facing
  * contract + recursion guard; this module is the runtime that knows how to build a graph.
  */
-import type { AbgNodeModelOptions, AbgSignal, AgentEvent } from '@mission-control/protocol';
+import {
+    type AbgNodeModelOptions,
+    type AbgSignal,
+    type AgentEvent,
+    type ProtocolError,
+    type ProtocolErrorCode,
+    ProtocolErrorCodeSchema,
+} from '@mission-control/protocol';
 import type { ModelMessage } from 'ai';
 import type { ObservabilityRedactor } from '../../providers/observability-redactor';
 import { createObservabilityRedactor } from '../../providers/observability-redactor';
@@ -23,6 +30,7 @@ import type { TaskOutput } from '../../tools/task-tool';
 import type { ToolRegistry } from '../../tools/tool-registry';
 import { createCodingAgentGraph } from '../coding-agent-graph';
 import { createCodingAgentNodeRegistry } from '../coding-agent-registry';
+import type { AbgGraphRunResult } from '../graph-runner';
 import { runAbgGraph } from '../graph-runner';
 import type { LlmActorModel } from '../nodes/llm-actor/llm-actor-node';
 
@@ -90,8 +98,12 @@ export type SpawnChildInput = {
     readonly hostCallbacks?: ChildHostCallbacks;
 };
 
-/** Build + run the child graph and return its outcome as a `TaskOutput`. */
-export async function spawnChildCodingAgent(input: SpawnChildInput): Promise<TaskOutput> {
+/** Build + run the child graph and preserve its terminal result for task settlement. */
+export type ChildCodingAgentOutput = TaskOutput & {
+    readonly failure?: ProtocolError;
+};
+
+export async function spawnChildCodingAgent(input: SpawnChildInput): Promise<ChildCodingAgentOutput> {
     const childToolRegistry = input.childToolRegistry;
     if (childToolRegistry.advertise().some((tool) => tool.name === 'ask_user')) {
         registerChildAskUserTool(childToolRegistry, input.sessionId, input.hostCallbacks);
@@ -107,32 +119,84 @@ export async function spawnChildCodingAgent(input: SpawnChildInput): Promise<Tas
         }
     }
 
-    const result = await runAbgGraph({
-        graph,
-        sessionId: input.sessionId,
-        now: input.now,
-        modelProviderSelection: input.model,
-        registry: createCodingAgentNodeRegistry(),
-        resolveSdkModel: input.resolveSdkModel,
-        toolRegistry: childToolRegistry,
-        initialMessages: [{ role: 'user', content: input.prompt }],
-        ...(input.signal !== undefined ? { abortSignal: input.signal } : {}),
-        ...(input.controlEpoch !== undefined ? { controlEpoch: input.controlEpoch } : {}),
-        ...(input.hostCallbacks?.onSignal !== undefined ? { onSignal: input.hostCallbacks.onSignal } : {}),
-        ...(input.hostCallbacks?.observabilityRedactor !== undefined
-            ? { observabilityRedactor: input.hostCallbacks.observabilityRedactor }
-            : {}),
-    });
-
     const observabilityRedactor = input.hostCallbacks?.observabilityRedactor ?? createObservabilityRedactor();
+    let result: AbgGraphRunResult;
+    try {
+        result = await runAbgGraph({
+            graph,
+            sessionId: input.sessionId,
+            now: input.now,
+            modelProviderSelection: input.model,
+            registry: createCodingAgentNodeRegistry(),
+            resolveSdkModel: input.resolveSdkModel,
+            toolRegistry: childToolRegistry,
+            initialMessages: [{ role: 'user', content: input.prompt }],
+            ...(input.signal !== undefined ? { abortSignal: input.signal } : {}),
+            ...(input.controlEpoch !== undefined ? { controlEpoch: input.controlEpoch } : {}),
+            ...(input.hostCallbacks?.onSignal !== undefined ? { onSignal: input.hostCallbacks.onSignal } : {}),
+            ...(input.hostCallbacks?.observabilityRedactor !== undefined
+                ? { observabilityRedactor: input.hostCallbacks.observabilityRedactor }
+                : {}),
+        });
+    } catch {
+        return {
+            description: input.description,
+            status: 'failed',
+            summary: '',
+            failure: unreportedChildGraphFailure(),
+        };
+    }
+
     const summary = observabilityRedactor.redactText(
         latestAssistantText(result.finalMessages ?? [], input.summaryLimit ?? 4000),
     );
+    const failure =
+        result.status === 'completed' ? undefined : childFailureFromGraphResult(result, observabilityRedactor);
     return {
         description: input.description,
         status: result.status === 'completed' ? 'completed' : 'failed',
         summary,
+        ...(failure !== undefined ? { failure } : {}),
     };
+}
+
+export function unreportedChildGraphFailure(): ProtocolError {
+    return {
+        code: 'task_child_failed',
+        message: 'Child graph failed before reporting a terminal result',
+        retryable: false,
+    };
+}
+
+function childFailureFromGraphResult(
+    result: AbgGraphRunResult,
+    observabilityRedactor: ObservabilityRedactor,
+): ProtocolError {
+    const terminalError = result.terminalError;
+    if (terminalError !== undefined) {
+        return {
+            code: normalizeChildFailureCode(terminalError.code),
+            message: observabilityRedactor.redactText(terminalError.message),
+            retryable: terminalError.retryable,
+            ...(terminalError.redactions !== undefined ? { redactions: terminalError.redactions } : {}),
+        };
+    }
+    return {
+        code: 'task_child_failed',
+        message: observabilityRedactor.redactText(
+            result.reason ?? `Child graph ${result.status} without a terminal error`,
+        ),
+        retryable: false,
+    };
+}
+
+/**
+ * Graph terminal errors use loose codes because provider adapters are not trusted
+ * producers. Only protocol codes may cross the child/model persistence boundary.
+ */
+export function normalizeChildFailureCode(code: string): ProtocolErrorCode {
+    const parsed = ProtocolErrorCodeSchema.safeParse(code);
+    return parsed.success ? parsed.data : 'task_child_failed';
 }
 
 /**

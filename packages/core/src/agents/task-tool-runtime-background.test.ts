@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MissingChildSpawnConfigurationError } from './child-graph-spawn';
 import {
     buildRuntimeWithoutServices,
     buildRuntimeWithServices,
@@ -35,6 +36,34 @@ describe('ConcreteTaskToolRuntime.startBackgroundSession', () => {
             expect(settled.result?.output).toBe('child finished');
         });
 
+        it('retains a structured child graph failure in the settled job result', async () => {
+            const services = makeTaskRuntimeServices();
+            const runtime = buildRuntimeWithServices(services, async () => ({
+                status: 'failed',
+                output: '[degraded salvage] partial child output',
+                failureKind: 'graph_failed',
+                failure: {
+                    code: 'provider_timeout',
+                    message: 'remote provider closed the child stream',
+                    retryable: true,
+                },
+            }));
+
+            const handle = runtime.startBackgroundSession(makeBackgroundRequest('sess-bg-failure'));
+            const settled = await services.jobManager.awaitJob(handle.backgroundId);
+
+            expect(settled).toMatchObject({
+                status: 'failed',
+                result: {
+                    failure: {
+                        code: 'provider_timeout',
+                        message: 'remote provider closed the child stream',
+                        retryable: true,
+                    },
+                },
+            });
+        });
+
         it('registers the child as a running ref in the runtime registry', () => {
             const services = makeTaskRuntimeServices();
             const runtime = buildRuntimeWithServices(services, async () => ({
@@ -52,7 +81,7 @@ describe('ConcreteTaskToolRuntime.startBackgroundSession', () => {
             expect(runtime.sessionExists('sess-bg-3')).toBe(false);
         });
 
-        it('surfaces child-agent failures through job state instead of swallowing them', async () => {
+        it('converts a rejected child spawn into a structured terminal failure', async () => {
             const services = makeTaskRuntimeServices();
             const runtime = buildRuntimeWithServices(services, async () => {
                 throw new Error('child exploded');
@@ -62,7 +91,35 @@ describe('ConcreteTaskToolRuntime.startBackgroundSession', () => {
             const settled = await services.jobManager.awaitJob(handle.backgroundId);
 
             expect(settled.status).toBe('failed');
-            expect(settled.error).toBe('child exploded');
+            expect(settled.error).toBeUndefined();
+            expect(settled.result).toMatchObject({
+                status: 'failed',
+                failure: {
+                    code: 'task_child_failed',
+                    retryable: false,
+                },
+            });
+        });
+
+        it('retains a missing spawn configuration as a distinct structured job failure', async () => {
+            const services = makeTaskRuntimeServices();
+            const runtime = buildRuntimeWithServices(services, async () =>
+                Promise.reject(new MissingChildSpawnConfigurationError()),
+            );
+
+            const handle = runtime.startBackgroundSession(makeBackgroundRequest('sess-bg-missing-config'));
+            const settled = await services.jobManager.awaitJob(handle.backgroundId);
+
+            expect(settled).toMatchObject({
+                status: 'failed',
+                result: {
+                    failure: {
+                        code: 'tool_failed',
+                        message: 'Child spawning is not configured',
+                        retryable: false,
+                    },
+                },
+            });
         });
 
         it('transitions the ref to aborted when the spawn throws', async () => {

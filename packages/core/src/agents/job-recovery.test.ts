@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import type { BackgroundJobHandle } from './async-job-manager';
+import type { DurableBackgroundJobHandle } from './async-job-manager';
 import { loadPersistedJobs, persistJob } from './job-persistence';
 import { recoverJobs } from './job-recovery';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -20,7 +20,7 @@ function makeTempDir(): string {
     return dir;
 }
 
-function sampleHandle(overrides: Partial<BackgroundJobHandle> = {}): BackgroundJobHandle {
+function sampleHandle(overrides: Partial<DurableBackgroundJobHandle> = {}): DurableBackgroundJobHandle {
     return {
         jobId: 'job_test',
         sessionId: 'ses_1',
@@ -73,7 +73,7 @@ describe('recoverJobs', () => {
         expect(byId.get('job_c2')?.status).toBe('completed');
     });
 
-    it('stamps cancelled jobs with a salvage snippet and completion timestamp', async () => {
+    it('stamps cancelled jobs with a completion timestamp without serializing salvage text', async () => {
         // Given
         const jobsDir = makeTempDir();
         await persistJob(jobsDir, sampleHandle({ jobId: 'job_running', status: 'running' }));
@@ -81,10 +81,10 @@ describe('recoverJobs', () => {
         // When
         await recoverJobs(jobsDir);
 
-        // Then: the cancelled job carries a salvage snippet in its error field
+        // Then: cancellation is structural, not a model-visible error string.
         const [loaded] = await loadPersistedJobs(jobsDir);
         expect(loaded?.status).toBe('cancelled');
-        expect(loaded?.error).toBe('[cancelled after 0 req, (no output)]');
+        expect(loaded?.error).toBeUndefined();
         expect(loaded?.completedAt).toBeDefined();
     });
 
@@ -126,7 +126,7 @@ describe('recoverJobs', () => {
         expect(loaded?.error).toBeUndefined();
     });
 
-    it('preserves failed jobs', async () => {
+    it('preserves failed jobs with structured terminal failure details', async () => {
         // Given
         const jobsDir = makeTempDir();
         await persistJob(
@@ -134,7 +134,15 @@ describe('recoverJobs', () => {
             sampleHandle({
                 jobId: 'job_failed',
                 status: 'failed',
-                error: 'boom',
+                result: {
+                    status: 'failed',
+                    output: '[degraded salvage] partial child output',
+                    failure: {
+                        code: 'provider_aborted',
+                        message: 'remote provider closed the child stream',
+                        retryable: false,
+                    },
+                },
                 completedAt: '2026-06-22T00:00:00.000Z',
             }),
         );
@@ -145,8 +153,10 @@ describe('recoverJobs', () => {
         // Then
         expect(report).toEqual({ recovered: 1, cancelled: 0, preserved: 1 });
         const [loaded] = await loadPersistedJobs(jobsDir);
-        expect(loaded?.status).toBe('failed');
-        expect(loaded?.error).toBe('boom');
+        expect(loaded).toMatchObject({
+            status: 'failed',
+            result: { failure: { code: 'provider_aborted', retryable: false } },
+        });
     });
 
     it('returns zero counts for a missing directory', async () => {

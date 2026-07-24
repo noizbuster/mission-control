@@ -22,6 +22,7 @@
 import type { AbgSignal } from '@mission-control/protocol';
 import type { ModelMessage } from 'ai';
 import { stepCountIs, streamText } from 'ai';
+import { FlatProviderBridgeError } from '../../../providers/ai-sdk/flat-provider-bridge';
 import { createObservabilityRedactor } from '../../../providers/observability-redactor';
 import {
     abortableRetrySleep,
@@ -206,6 +207,10 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
                   ? classified.retryable
                   : extractProviderErrorRetryable(providerError);
             const retryExhausted = extractProviderRetryExhausted(providerError);
+            const providerRedactions =
+                providerError instanceof ProviderTurnError || providerError instanceof FlatProviderBridgeError
+                    ? providerError.error.redactions
+                    : undefined;
             const eventErrorCode =
                 hasActionableStreamClassification || externalProviderAbort || streamError === undefined
                     ? effectiveErrorCode
@@ -297,6 +302,7 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
                               code: effectiveErrorCode,
                               providerError: true,
                               retryable: retryable ?? false,
+                              ...(providerRedactions !== undefined ? { redactions: providerRedactions } : {}),
                               ...(retryExhausted ? { retryExhausted: true } : {}),
                           }
                         : message,

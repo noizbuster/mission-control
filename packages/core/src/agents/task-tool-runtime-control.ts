@@ -44,6 +44,20 @@ export class ChildSessionCancelledError extends Error {
     }
 }
 
+export function unreportedChildFailure(sessionId: string): ChildSpawnResult {
+    return {
+        sessionId,
+        status: 'failed',
+        output: '',
+        failureKind: 'graph_failed',
+        failure: {
+            code: 'task_child_failed',
+            message: 'Child session failed before reporting a terminal result',
+            retryable: false,
+        },
+    };
+}
+
 export async function attachChildControl(
     services: TaskToolRuntimeServices | undefined,
     sessionId: string,
@@ -129,6 +143,7 @@ export async function settleChildCompletion(input: {
         childSessionId: input.sessionId,
         status: input.result.status,
         output: input.result.output,
+        ...(input.result.failure !== undefined ? { failure: input.result.failure } : {}),
     } as const;
     const fence = input.controlEpoch?.callbackFence;
     if (fence === undefined) {

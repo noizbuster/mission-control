@@ -1,6 +1,6 @@
 import type { AgentDefinition } from '@mission-control/protocol';
 import { z } from 'zod';
-import type { ChildSpawnRequest } from '../tools/task/task-tool';
+import type { ChildSpawnRequest, ChildSpawnResult } from '../tools/task/task-tool';
 import { ToolRegistry } from '../tools/tool-registry';
 import type { ToolRegistration } from '../tools/tool-registry-types';
 import { AgentIndex } from './agent-registry';
@@ -58,7 +58,7 @@ export function makeTaskRuntimeServices(): TaskToolRuntimeServices {
 
 export function buildRuntimeWithServices(
     services: TaskToolRuntimeServices,
-    spawnImpl: (sessionId: string) => Promise<{ status: 'completed' | 'failed'; output: string }>,
+    spawnImpl: (sessionId: string) => Promise<Omit<ChildSpawnResult, 'sessionId'>>,
 ): ConcreteTaskToolRuntime {
     const agentIndex = new AgentIndex();
     agentIndex.register(makeAgent('child-agent'));
@@ -74,7 +74,7 @@ export function buildRuntimeWithServices(
         parentAgent: makeAgent('parent', '*'),
         spawnFn: async (context) => {
             const result = await spawnImpl(context.sessionId);
-            return { sessionId: context.sessionId, status: result.status, output: result.output };
+            return { sessionId: context.sessionId, ...result };
         },
         services,
         parentSessionId: 'parent-session',

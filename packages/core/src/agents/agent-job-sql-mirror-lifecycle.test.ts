@@ -100,11 +100,50 @@ describe('SqlAgentJobMirror lifecycle', () => {
             });
             await mirror.flush();
 
-            const rows = await mirror.client.execute(
-                'SELECT session_id, status FROM sessions WHERE session_id = ?',
-                ['child-fg'],
-            );
+            const rows = await mirror.client.execute('SELECT session_id, status FROM sessions WHERE session_id = ?', [
+                'child-fg',
+            ]);
             expect(rows.rows).toEqual([{ session_id: 'child-fg', status: 'idle' }]);
+        });
+    });
+});
+
+describe('SqlAgentJobMirror child failure persistence', () => {
+    it('persists a foreground child graph failure on the synchronous job record', async () => {
+        await withAgentJobMirror(async (mirror) => {
+            await mirror.startSubagentWait({
+                parentSessionId: 'parent-session',
+                childSessionId: 'child-failed',
+                agentId: 'agent-fg',
+                mode: 'sync',
+            });
+            await mirror.resolveSubagentWait({
+                parentSessionId: 'parent-session',
+                childSessionId: 'child-failed',
+                status: 'failed',
+                output: '[degraded salvage] partial child output',
+                failure: {
+                    code: 'provider_aborted',
+                    message: 'remote provider closed the child stream',
+                    retryable: false,
+                },
+            });
+            await mirror.flush();
+
+            const jobs = await mirror.loadBackgroundJobsForParent('parent-session');
+
+            expect(jobs).toContainEqual({
+                jobId: 'child-failed',
+                blocking: true,
+                status: 'failed',
+                childSessionId: 'child-failed',
+            });
+            const loaded = await mirror.loadJobs();
+            expect(loaded.find((job) => job.jobId === 'child-failed')?.result?.failure).toEqual({
+                code: 'provider_aborted',
+                message: 'remote provider closed the child stream',
+                retryable: false,
+            });
         });
     });
 });
