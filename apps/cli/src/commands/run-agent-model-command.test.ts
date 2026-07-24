@@ -195,7 +195,6 @@ describe('runAgent /model chat command', () => {
             }),
             chatInput: createScriptedChatInput([
                 { type: 'line', value: '/model list' },
-                { type: 'line', value: '/model anthropic/claude-3-5-haiku-20241022' },
                 { type: 'interrupt' },
                 { type: 'interrupt' },
             ]),
@@ -203,7 +202,7 @@ describe('runAgent /model chat command', () => {
             modelDiscovery: async () => [],
         });
 
-        expect(output).toContain('anthropic/claude-3-5-haiku-20241022');
+        expect(output).toMatch(/\nanthropic\/\S+ \[executable\]\n/);
     });
 });
 
