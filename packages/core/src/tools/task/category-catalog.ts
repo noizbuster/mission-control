@@ -51,6 +51,14 @@ const NETWORK_TOOLS: readonly string[] = ['webfetch', 'web_search', 'mcp__*'];
 
 const BUILTIN_CATEGORY_LIST: readonly CategoryDefinition[] = [
     {
+        id: 'architect',
+        model: 'mctrl/plan',
+        permissions: READ_ONLY_DENIES,
+        tools: ['read', 'ls', 'grep', 'find', 'glob', ...NETWORK_TOOLS],
+        systemPromptAddendum:
+            'You are an architecture specialist. Analyze the existing system, identify constraints and tradeoffs, and recommend an implementable design. Do not modify files.',
+    },
+    {
         id: 'quick',
         model: 'sonnet',
         permissions: ALLOW_ALL,

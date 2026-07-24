@@ -100,6 +100,7 @@ beforeAll(async () => {
 });
 
 const ALL_CATEGORY_IDS = [
+    'architect',
     'quick',
     'deep',
     'reasoner',
@@ -347,7 +348,7 @@ describe('task tool — nested task depth gate', () => {
 });
 
 describe('bundled agent discovery via AgentIndex', () => {
-    it('all 9 built-in agent names are discoverable', () => {
+    it('all 10 built-in category agent names are discoverable', () => {
         for (const id of ALL_CATEGORY_IDS) {
             expect(agentIndex.lookup(id)).toBeDefined();
         }
@@ -374,7 +375,7 @@ describe('bundled agent discovery via AgentIndex', () => {
     });
 
     it('ON network categories list webfetch and web_search; OFF categories do not', () => {
-        const onWithTools = ['librarian', 'oracle', 'designer', 'planner'] as const;
+        const onWithTools = ['architect', 'librarian', 'oracle', 'designer', 'planner'] as const;
         const off = ['explore', 'reviewer', 'quick'] as const;
         for (const id of onWithTools) {
             const bundled = agentIndex.lookup(id);
@@ -433,7 +434,7 @@ describe('bundled agent parity with category catalog', () => {
     });
 
     it('read-only categories enforce read-only via tier and tool surface (parity with catalog READ_ONLY_DENIES)', () => {
-        const readOnlyIds = ['explore', 'oracle', 'librarian', 'reviewer'] as const;
+        const readOnlyIds = ['architect', 'explore', 'oracle', 'librarian', 'reviewer'] as const;
         const mutatingTools = ['file.edit', 'file.write', 'file.patch', 'command.run', 'bash.run'];
         for (const id of readOnlyIds) {
             const bundled = agentIndex.lookup(id);
