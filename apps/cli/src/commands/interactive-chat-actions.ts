@@ -20,6 +20,7 @@ import { startPromptTurn } from './interactive-chat-prompt-turn';
 import { runRenameAction } from './interactive-chat-rename-action';
 import { runTrustAction } from './interactive-chat-trust';
 import { runRedoAction, runUndoAction } from './interactive-chat-undo-redo-action';
+import { runKickAction } from './interactive-kick-action';
 import { runMissionAction, runModelsAction } from './interactive-mission-actions';
 import {
     runActivePromptAdmissionAction,
@@ -29,7 +30,6 @@ import {
     runSkillAction,
 } from './interactive-prompt-actions';
 import { runWorkflowAction } from './interactive-workflow-actions';
-import { runKickAction } from './interactive-kick-action';
 import { runInterruptAction, runRetryAction, runWorkResumeAction } from './interactive-workflow-resume-actions';
 
 export { loadDashboardAgentEntries } from './interactive-agent-actions';
@@ -205,7 +205,7 @@ export async function runChatAction(
         case 'model-list':
             return runModelListAction(chatOutput, currentModelProviderSelection, action, coding.activeTurn);
         case 'model':
-            return runModelSelectionAction(runtime, chatOutput, action.selection, coding.activeTurn);
+            return runModelSelectionAction(runtime, action.selection, coding.activeTurn);
         case 'trust':
             if (coding.workspaceRoot === undefined) {
                 chatOutput.write('Trust command unavailable: workspace root is unavailable\n');

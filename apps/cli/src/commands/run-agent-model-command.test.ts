@@ -49,6 +49,8 @@ describe('runAgent /model chat command', () => {
         expect(output).toContain('provider: local');
         expect(output).toContain('model: local-echo');
         expect(output).toContain('selection: local/local-echo');
+        // Changing the model must not print status output (only the startup banner above prints the initial model).
+        expect(output).not.toContain('selection: anthropic/claude-3-5-haiku-20241022');
         expect(output).toContain('Assistant: received prompt: explain model routing');
         expect(promptModelCall?.modelProviderSelection).toEqual({
             providerID: 'anthropic',
@@ -76,8 +78,8 @@ describe('runAgent /model chat command', () => {
             },
         });
 
-        expect(output).toContain('variant: fast');
-        expect(output).toContain('selection: local/local-echo#fast');
+        expect(output).not.toContain('variant: fast');
+        expect(output).not.toContain('selection: local/local-echo#fast');
         expect(output).toContain('Assistant: received prompt: explain variant routing');
         expect(promptModelCall?.modelProviderSelection).toEqual({
             providerID: 'local',
@@ -88,6 +90,7 @@ describe('runAgent /model chat command', () => {
 
     it('opens a model picker for /model pick', async () => {
         const chatOutput = createBufferedChatOutput();
+        let promptModelCall: AgentEvent | undefined;
         let pickerChoices: readonly string[] = [];
 
         const output = await runAgent(parseArgs([]), {
@@ -99,6 +102,11 @@ describe('runAgent /model chat command', () => {
                 { type: 'interrupt' },
             ]),
             chatOutput: chatOutput.output,
+            onRuntimeEvent: (event) => {
+                if (isModelCallCompletedMessage(event, 'received prompt: after picker')) {
+                    promptModelCall = event;
+                }
+            },
             selectModel: async (choices) => {
                 pickerChoices = choices.map((choice) => choice.label);
                 return choices[0]?.selection;
@@ -109,9 +117,10 @@ describe('runAgent /model chat command', () => {
         expect(pickerChoices.length).toBeGreaterThan(0);
         expect(pickerChoices.every((choice) => choice.startsWith('anthropic/'))).toBe(true);
         expect(pickerChoices).not.toContain('local/local-echo');
-        expect(output).toContain('provider: anthropic');
-        expect(output).toContain('selection: anthropic/');
+        expect(output).not.toContain('provider: anthropic');
+        expect(output).not.toContain('selection: anthropic/');
         expect(output).toContain('Assistant: received prompt: after picker');
+        expect(promptModelCall?.modelProviderSelection?.providerID).toBe('anthropic');
     });
 
     it('rejects /model direct selection for providers that are not logged in', async () => {
@@ -183,7 +192,7 @@ describe('runAgent /model chat command', () => {
 
         const modelListOutput = output;
         expect(modelListOutput).toContain('anthropic/claude-3-5-haiku-20241022');
-        expect(output).toContain('selection: anthropic/claude-3-5-haiku-20241022');
+        expect(output).not.toContain('selection: anthropic/claude-3-5-haiku-20241022');
     });
 
     it('still shows catalog models when discovery returns empty', async () => {

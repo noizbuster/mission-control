@@ -6,7 +6,6 @@ import type { ModelSelector } from './interactive-chat';
 import { actionResult, type ChatActionResult } from './interactive-chat-action-result';
 import type { CodingActionContext } from './interactive-chat-actions';
 import type { ChatOutput } from './interactive-chat-io';
-import { formatModelProviderStatus } from './interactive-chat-status';
 
 export async function runModelPickAction(
     runtime: AgentRuntime,
@@ -22,13 +21,11 @@ export async function runModelPickAction(
     }
     const selection = await selectModel(modelChoices, currentSelection, { title: 'Select model' });
     if (selection === undefined) {
-        chatOutput.write(formatModelProviderStatus(currentSelection, { nodeMode: 'none' }));
         return actionResult(currentSelection, coding.activeTurn);
     }
     const unavailableReason = getModelChoiceUnavailableReason(modelChoices, selection);
     if (unavailableReason !== undefined) {
         chatOutput.write(`${unavailableReason}\n`);
-        chatOutput.write(formatModelProviderStatus(currentSelection, { nodeMode: 'none' }));
         return actionResult(currentSelection, coding.activeTurn);
     }
     const variantChoices = createVariantChoices(selection);
@@ -37,11 +34,9 @@ export async function runModelPickAction(
             ? selection
             : await selectModel(variantChoices, selection, { title: 'Select variant' });
     if (selectedVariant === undefined) {
-        chatOutput.write(formatModelProviderStatus(currentSelection, { nodeMode: 'none' }));
         return actionResult(currentSelection, coding.activeTurn);
     }
     runtime.setModelProviderSelection(selectedVariant);
-    chatOutput.write(formatModelProviderStatus(selectedVariant, { nodeMode: 'none' }));
     return actionResult(selectedVariant, coding.activeTurn, { persistModelProviderSelection: true });
 }
 
@@ -64,11 +59,9 @@ export function runModelListAction(
 
 export function runModelSelectionAction(
     runtime: AgentRuntime,
-    chatOutput: ChatOutput,
     selection: ModelProviderSelection,
     activeTurn: CodingActionContext['activeTurn'],
 ): ChatActionResult {
     runtime.setModelProviderSelection(selection);
-    chatOutput.write(formatModelProviderStatus(selection, { nodeMode: 'none' }));
     return actionResult(selection, activeTurn, { persistModelProviderSelection: true });
 }

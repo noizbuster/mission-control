@@ -72,6 +72,7 @@ export function createChatTuiHandle(store: ChatStore, unmountFn: () => void): Ch
         unmount: () => {
             if (unmounted) return;
             unmounted = true;
+            store.closeEventQueue();
             unmountFn();
         },
     };

@@ -49,8 +49,25 @@ export function assertReplayIsReadable(
     }
 }
 
+export function assertReplayIsAttachable(
+    replay: JsonlSessionReplayPrefixProjection,
+    sessionId: string,
+    action: string,
+): void {
+    if (replayHasAttachBlockingDiagnostics(replay)) {
+        throw new SessionNavigationError(`Cannot ${action} corrupt session: ${sessionId}`);
+    }
+}
+
 function replayHasDiagnostics(replay: JsonlSessionReplayPrefixProjection): boolean {
     return replay.diagnostics.length > 0 || replay.projection.sessionTree.diagnostics.length > 0;
+}
+
+function replayHasAttachBlockingDiagnostics(replay: JsonlSessionReplayPrefixProjection): boolean {
+    return (
+        replay.projection.sessionTree.diagnostics.length > 0 ||
+        replay.diagnostics.some((diagnostic) => diagnostic.code !== 'missing_provider_continuation')
+    );
 }
 
 export async function prepareTargetSession(input: {

@@ -270,8 +270,8 @@ describe('requireYieldBeforeExit — coding-agent graph stamp', () => {
         });
         const withoutFlag = createCodingAgentGraph({ model: MODEL_SELECTION });
 
-        expect(withFlag.nodes[0]?.config?.['requireYieldBeforeExit']).toBe(true);
-        expect(withoutFlag.nodes[0]?.config?.['requireYieldBeforeExit']).toBeUndefined();
+        expect(withFlag.nodes[0]?.config?.requireYieldBeforeExit).toBe(true);
+        expect(withoutFlag.nodes[0]?.config?.requireYieldBeforeExit).toBeUndefined();
     });
 });
 
@@ -511,7 +511,7 @@ describe('requireYieldBeforeExit — child graph integration', () => {
         expect(spawnCalls).toBe(1);
     });
 
-    it('preserves completed prose when a child does not call yield', async () => {
+    it('fails with bounded salvage when a child does not call yield', async () => {
         let spawnCalls = 0;
         const model = new MockLanguageModelV3({
             provider: 'test',
@@ -529,9 +529,10 @@ describe('requireYieldBeforeExit — child graph integration', () => {
 
         expect(result).toEqual({
             sessionId: 'sess-spawn-yield-guard',
-            status: 'completed',
-            output: 'completed without an explicit yield',
+            status: 'failed',
+            output: `${DEGRADED_SALVAGE_LABEL}completed without an explicit yield`,
+            failureKind: 'yield_missing',
         });
-        expect(spawnCalls).toBe(1);
+        expect(spawnCalls).toBeGreaterThan(1);
     });
 });

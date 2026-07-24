@@ -1344,6 +1344,20 @@ describe('chat-store — event queue', () => {
         const event = await promise;
         expect(event.type).toBe('interrupt');
     });
+
+    it('settles pending and future waits when the input queue closes', async () => {
+        // Given: the imperative loop is blocked waiting for its next input event.
+        const store = createChatStore();
+        const pending = store.waitForEvent();
+
+        // When: TUI teardown closes the input queue.
+        store.closeEventQueue();
+        store.enqueueEvent(makeLineEvent('stale input'));
+
+        // Then: no await survives teardown and stale input cannot be delivered later.
+        await expect(pending).resolves.toEqual({ type: 'interrupt' });
+        await expect(store.waitForEvent()).resolves.toEqual({ type: 'interrupt' });
+    });
 });
 
 describe('chat-store — menus', () => {

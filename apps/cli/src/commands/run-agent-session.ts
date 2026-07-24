@@ -22,6 +22,7 @@ export type RunEventRecorder = {
     readonly currentStore: () => LocalSessionEventStore | undefined;
     readonly switchSession: (sessionId: string) => Promise<LocalSessionEventStore>;
     readonly ensureSession: () => Promise<EnsuredSession>;
+    readonly shouldFinalizeCurrentSession: () => boolean;
 };
 
 export async function createRunEventRecorder(
@@ -49,6 +50,11 @@ export async function createRunEventRecorder(
                 ? false
                 : await hasWorkspaceMetadata(currentStore, currentSessionId);
     }
+    let currentSessionWasAttached = false;
+    let recordedSessionWorkSinceAttach = false;
+    if (currentSessionId !== undefined && currentStore !== undefined) {
+        currentSessionWasAttached = (await currentStore.getEvents(currentSessionId)).length > 0;
+    }
     let appendPromises: Promise<void>[] = [];
     const workspaceMetadata =
         options.workspaceRoot === undefined ? undefined : await resolveSessionWorkspaceMetadata(options.workspaceRoot);
@@ -65,10 +71,13 @@ export async function createRunEventRecorder(
         }
         await flushAppends();
         await currentStore?.close();
+        const nextStore = await openLocalSessionEventStore({ sessionId, observabilityRedactor });
+        currentSessionWasAttached = (await nextStore.getEvents(sessionId)).length > 0;
+        recordedSessionWorkSinceAttach = false;
         currentSessionId = sessionId;
-        currentStore = await openLocalSessionEventStore({ sessionId, observabilityRedactor });
-        metadataRecorded = await hasWorkspaceMetadata(currentStore, sessionId);
-        return currentStore;
+        currentStore = nextStore;
+        metadataRecorded = await hasWorkspaceMetadata(nextStore, sessionId);
+        return nextStore;
     };
 
     // session.started is appended directly (not via record()) because record() short-circuits until materialized.
@@ -80,6 +89,8 @@ export async function createRunEventRecorder(
         const store = await openLocalSessionEventStore({ sessionId, observabilityRedactor });
         currentSessionId = sessionId;
         currentStore = store;
+        currentSessionWasAttached = false;
+        recordedSessionWorkSinceAttach = false;
         metadataRecorded = false;
         const startedAt = new Date().toISOString();
         appendPromises.push(
@@ -109,6 +120,14 @@ export async function createRunEventRecorder(
                 { ...event, sessionId: currentSessionId },
                 observabilityRedactor,
             );
+            const preserveAttachedTerminalLifecycle =
+                currentSessionWasAttached && !recordedSessionWorkSinceAttach && isAttachLifecycleEvent(mapped.type);
+            if (preserveAttachedTerminalLifecycle) {
+                return mapped;
+            }
+            if (!isAttachLifecycleEvent(mapped.type)) {
+                recordedSessionWorkSinceAttach = true;
+            }
             appendPromises.push(currentStore.append(mapped));
             if (!metadataRecorded && mapped.type === 'session.started' && workspaceMetadata !== undefined) {
                 metadataRecorded = true;
@@ -129,7 +148,11 @@ export async function createRunEventRecorder(
         currentStore: () => currentStore,
         switchSession: openSessionStore,
         ensureSession,
+        shouldFinalizeCurrentSession: () => !currentSessionWasAttached || recordedSessionWorkSinceAttach,
     };
+}
+function isAttachLifecycleEvent(type: AgentEvent['type']): boolean {
+    return type === 'session.started' || type === 'session.stopped' || type === 'session.finalize';
 }
 
 async function hasWorkspaceMetadata(store: LocalSessionEventStore, sessionId: string): Promise<boolean> {

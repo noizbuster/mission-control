@@ -111,6 +111,7 @@ export async function spawnChildCodingAgent(input: SpawnChildInput): Promise<Chi
 
     const graph = createCodingAgentGraph({
         model: input.model,
+        requireYieldBeforeExit: true,
     });
     if (input.systemPrompt !== undefined) {
         const node = graph.nodes[0];

@@ -306,9 +306,8 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
         }
     }
 
-    // An explicit child yield always ends this graph turn. Requiring yield is
-    // optional: prose-only completed children retain their final assistant
-    // output as an implicit completion at the child spawn boundary.
+    // An explicit child yield always ends this graph turn. Child graphs require
+    // it; prose alone re-enters the graph until yield or the bounded node budget.
     const requireYieldBeforeExit = readBooleanConfig(node, 'requireYieldBeforeExit') === true;
     if (blackboard.get(CHILD_YIELDED_KEY) === true) {
         loopActive = false;

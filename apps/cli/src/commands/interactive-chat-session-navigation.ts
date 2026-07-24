@@ -1,12 +1,9 @@
 import { type ObservabilityRedactor, type LocalSessionEventStore as SessionStore } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
-import {
-    formatSessionSummary,
-    formatSessionTree,
-    latestSelection,
-} from './interactive-chat-session-navigation-format';
+import { formatSessionSummary, formatSessionTree, latestSelection } from './interactive-chat-session-navigation-format';
 import {
     appendSessionNavigationEvent,
+    assertReplayIsAttachable,
     assertReplayIsReadable,
     copyDurableReplayEnvelopes,
     createSessionNavigationEvent,
@@ -85,7 +82,7 @@ export function createSessionNavigationController(input: {
         },
         switchSession: async ({ sessionId }) => {
             const replay = await readReplay(validatedSessionId(sessionId));
-            assertReplayIsReadable(replay, sessionId, 'switch');
+            assertReplayIsAttachable(replay, sessionId, 'switch');
             const store = await input.switchSessionStore(sessionId);
             const selection = latestSelection(replay);
             return {

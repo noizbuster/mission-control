@@ -111,9 +111,8 @@ export function defaultSpawnFn(): Promise<ChildSpawnResult> {
 }
 
 /**
- * Build the default spawn fn. An explicit `yield` result becomes the child's
- * output; completed final prose without `yield` is preserved as an implicit
- * completion instead of discarding completed work.
+ * Build the default spawn fn. Only an explicit `yield` result is a completed
+ * child task; a graph that ends without one is a failed, bounded salvage result.
  */
 export function createChildGraphSpawnFn(
     deps: ChildGraphSpawnDeps,
@@ -163,18 +162,6 @@ export function createChildGraphSpawnFn(
             };
         }
 
-        const summary = boundedSummary(
-            observabilityRedactor.redactText(taskOutput.summary),
-            deps.summaryLimit ?? DEFAULT_CHILD_SUMMARY_LIMIT,
-        );
-        if (taskOutput.status === 'completed' && summary.length > 0) {
-            return {
-                sessionId: context.sessionId,
-                status: 'completed',
-                output: summary,
-            };
-        }
-
         const salvage = boundedDegradedSalvage(
             observabilityRedactor.redactText(taskOutput.summary),
             deps.summaryLimit ?? DEFAULT_CHILD_SUMMARY_LIMIT,
@@ -192,10 +179,6 @@ export function createChildGraphSpawnFn(
 
 function boundedDegradedSalvage(summary: string, limit: number): string {
     return `${DEGRADED_SALVAGE_LABEL}${summary}`.slice(0, Math.max(0, limit));
-}
-
-function boundedSummary(summary: string, limit: number): string {
-    return summary.slice(0, Math.max(0, limit));
 }
 
 function stringifyYieldResult(value: unknown): string {

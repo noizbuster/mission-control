@@ -8,11 +8,7 @@ import type { AgentEvent } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args';
 import { runAgent } from './run-agent';
-import {
-    createBufferedChatOutput,
-    createEmptyAuthStore,
-    createScriptedChatInput,
-} from './run-agent-chat-test-support';
+import { createBufferedChatOutput, createEmptyAuthStore, createScriptedChatInput } from './run-agent-chat-test-support';
 import { readStoredSessionProjection, writeLocalSessionEvents } from './session-test-support';
 import { appendFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -78,6 +74,103 @@ describe('runAgent interactive session navigation repairs', () => {
         expect(output).toContain(sessionId);
         expect(output).not.toContain(`Cannot switch corrupt session: ${sessionId}`);
         expect(output).toContain('Exiting mission-control chat');
+    });
+
+    it('attaches a terminal session with incomplete provider continuation diagnostics', async () => {
+        const dataDir = await tempRoot('mctrl-chat-navigation-incomplete-continuation-');
+        const sessionId = 'session_navigation_incomplete_continuation';
+        vi.stubEnv('MCTRL_DATA_DIR', dataDir);
+        await writeLocalSessionEvents({
+            dataDir,
+            sessionId,
+            events: [
+                sessionEvent(sessionId, 'session.started', 'failed source'),
+                sessionEvent(sessionId, 'prompt.promoted', 'restore failed work'),
+                uncontinuedToolFailureEvent(sessionId),
+                failedGraphEvent(sessionId),
+                sessionEvent(sessionId, 'session.stopped', 'failed source stopped'),
+            ],
+        });
+        const before = await readStoredSessionProjection({ dataDir, sessionId });
+        const chatOutput = createBufferedChatOutput();
+
+        const output = await runAgent(parseArgs([]), {
+            authStore: createEmptyAuthStore(),
+            chatInput: createScriptedChatInput([
+                { type: 'line', value: `/session ${sessionId}` },
+                { type: 'line', value: '/exit' },
+            ]),
+            chatOutput: chatOutput.output,
+            provider: createDeterministicProvider([]),
+        });
+
+        const after = await readStoredSessionProjection({ dataDir, sessionId });
+        expect(output).toContain(`Switched to session: ${sessionId}`);
+        expect(output).not.toContain(`Cannot switch corrupt session: ${sessionId}`);
+        expect(after.events).toEqual(before.events);
+    });
+
+    it('attaches a terminal failed session without rewriting its lifecycle when no new work runs', async () => {
+        const dataDir = await tempRoot('mctrl-chat-navigation-terminal-attach-');
+        const sessionId = 'session_navigation_terminal_attach';
+        vi.stubEnv('MCTRL_DATA_DIR', dataDir);
+        await writeLocalSessionEvents({
+            dataDir,
+            sessionId,
+            events: [
+                sessionEvent(sessionId, 'session.started', 'failed source'),
+                sessionEvent(sessionId, 'prompt.promoted', 'restore failed work'),
+                failedGraphEvent(sessionId),
+            ],
+        });
+        const before = await readStoredSessionProjection({ dataDir, sessionId });
+        const chatOutput = createBufferedChatOutput();
+
+        const output = await runAgent(parseArgs(['--session', sessionId]), {
+            authStore: createEmptyAuthStore(),
+            chatInput: createScriptedChatInput([{ type: 'line', value: '/exit' }]),
+            chatOutput: chatOutput.output,
+            provider: createDeterministicProvider([]),
+        });
+
+        const after = await readStoredSessionProjection({ dataDir, sessionId });
+        expect(output).toContain('You: restore failed work');
+        expect(after.events).toEqual(before.events);
+    });
+
+    it('accepts a new prompt after attaching a terminal failed session', async () => {
+        const dataDir = await tempRoot('mctrl-chat-navigation-terminal-prompt-');
+        const sessionId = 'session_navigation_terminal_prompt';
+        vi.stubEnv('MCTRL_DATA_DIR', dataDir);
+        await writeLocalSessionEvents({
+            dataDir,
+            sessionId,
+            events: [
+                sessionEvent(sessionId, 'session.started', 'failed source'),
+                sessionEvent(sessionId, 'prompt.promoted', 'restore failed work'),
+                failedGraphEvent(sessionId),
+            ],
+        });
+        const requests: ProviderTurnRequest[] = [];
+
+        await runAgent(parseArgs(['--session', sessionId]), {
+            authStore: createEmptyAuthStore(),
+            chatInput: createScriptedChatInput([
+                { type: 'line', value: 'continue from the attached failure' },
+                { type: 'line', value: '/exit' },
+            ]),
+            chatOutput: createBufferedChatOutput().output,
+            provider: captureProvider(requests),
+            plainPromptGraph: 'coding-agent',
+        });
+
+        const projection = await readStoredSessionProjection({ dataDir, sessionId });
+        expect(requests).toHaveLength(1);
+        expect(
+            projection.events.some(
+                (event) => event.type === 'prompt.admitted' && event.message === 'continue from the attached failure',
+            ),
+        ).toBe(true);
     });
 
     it('filters copied approval and tool state out of cloned sessions in the interactive surface', async () => {
@@ -191,6 +284,47 @@ function sessionEvent(
             modelID: 'local-echo',
         },
         ...(sessionTree !== undefined ? { sessionTree } : {}),
+    };
+}
+
+function failedGraphEvent(sessionId: string): AgentEvent {
+    return {
+        type: 'graph.failed',
+        timestamp: '2026-06-13T01:00:02.000Z',
+        sessionId,
+        message: 'provider failure ended the graph',
+        nativeSidecarStatus: 'mock',
+        modelProviderSelection: {
+            providerID: 'local',
+            modelID: 'local-echo',
+        },
+        abg: {
+            graphId: 'default',
+            error: {
+                code: 'provider_timeout',
+                message: 'provider failure ended the graph',
+                retryable: false,
+            },
+        },
+    };
+}
+
+function uncontinuedToolFailureEvent(sessionId: string): AgentEvent {
+    return {
+        type: 'tool.failed',
+        timestamp: '2026-06-13T01:00:01.000Z',
+        sessionId,
+        taskId: 'call_incomplete',
+        message: 'tool failed before the provider continuation',
+        nativeSidecarStatus: 'mock',
+        modelProviderSelection: {
+            providerID: 'local',
+            modelID: 'local-echo',
+        },
+        toolResult: {
+            toolCallId: 'call_incomplete',
+            status: 'failed',
+        },
     };
 }
 

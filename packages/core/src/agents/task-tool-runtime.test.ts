@@ -556,16 +556,19 @@ describe('ConcreteTaskToolRuntime', () => {
             });
         }
 
-        it('preserves completed prose when resolveSdkModel is provided without a yield', async () => {
+        it('fails with salvage when a child completes without yielding', async () => {
             const callCount = { value: 0 };
             const runtime = buildDefaultSpawnRuntime(callCount, () => textOnlyChunks('child completed'));
 
             const result = await runtime.runChildSession(makeRequest());
 
-            expect(result.status).toBe('completed');
-            expect(result.sessionId).toBe('sess-test-1');
-            expect(result.output).toBe('child completed');
-            expect(result.failureKind).toBeUndefined();
+            expect(result).toMatchObject({
+                sessionId: 'sess-test-1',
+                status: 'failed',
+                output: '[degraded salvage] child completed',
+                failureKind: 'yield_missing',
+            });
+            expect(callCount.value).toBeGreaterThan(1);
         });
 
         it('returns the yielded result when the child calls yield', async () => {
@@ -598,7 +601,7 @@ describe('ConcreteTaskToolRuntime', () => {
             await expect(runtime.runChildSession(makeRequest())).rejects.toThrow(/spawnFn not wired/);
         });
 
-        it('bounds an implicit child completion to the configured summary limit', async () => {
+        it('bounds degraded salvage to the configured summary limit', async () => {
             const callCount = { value: 0 };
             const runtime = buildDefaultSpawnRuntime(callCount, () => textOnlyChunks('x'.repeat(200)), 64);
 
@@ -607,10 +610,11 @@ describe('ConcreteTaskToolRuntime', () => {
                 prompt: 'explore the codebase',
             });
 
-            expect(callCount.value).toBe(1);
-            expect(result.status).toBe('completed');
+            expect(callCount.value).toBeGreaterThan(1);
+            expect(result.status).toBe('failed');
+            expect(result.output).toMatch(/^\[degraded salvage\] /);
             expect(result.output.length).toBeLessThanOrEqual(64);
-            expect(result.failureKind).toBeUndefined();
+            expect(result.failureKind).toBe('yield_missing');
         });
 
         it('propagates a normalized terminal provider failure through the concrete child runtime', async () => {
@@ -650,7 +654,7 @@ describe('ConcreteTaskToolRuntime', () => {
             });
         });
 
-        it('redacts credentials from implicit child completion output', async () => {
+        it('redacts credentials from degraded salvage after a child misses yield', async () => {
             // Given
             const knownCredential = ['known', 'degraded', 'child', 'credential'].join('_');
             const callCount = { value: 0 };
@@ -665,8 +669,9 @@ describe('ConcreteTaskToolRuntime', () => {
             const result = await runtime.runChildSession(makeRequest());
 
             // Then
-            expect(result.status).toBe('completed');
-            expect(result.failureKind).toBeUndefined();
+            expect(result.status).toBe('failed');
+            expect(result.failureKind).toBe('yield_missing');
+            expect(result.output).toMatch(/^\[degraded salvage\] /);
             expect(result.output).toContain('keep-this-salvage');
             expect(result.output).toContain('[REDACTED_CREDENTIAL]');
             expect(result.output).not.toContain(knownCredential);

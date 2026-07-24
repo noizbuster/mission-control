@@ -133,7 +133,7 @@ export async function runInteractiveAgent(input: RunInteractiveAgentInput): Prom
         if (didStart) {
             await input.runtime.stop();
         }
-        if (sessionFinalizeSink.info !== undefined) {
+        if (sessionFinalizeSink.info !== undefined && recorder.shouldFinalizeCurrentSession()) {
             try {
                 const finalizeTimestamp = new Date().toISOString();
                 const finalizeSessionId = recorder.currentSessionId();

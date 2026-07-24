@@ -356,6 +356,7 @@ export class ChatStore {
     private readonly listeners = new Set<() => void>();
     private readonly eventQueue: ChatInputEvent[] = [];
     private readonly eventWaiters: Array<(event: ChatInputEvent) => void> = [];
+    private eventQueueClosed = false;
     private readonly state: ChatStoreMutableState;
     private snapshot: ChatStoreState;
     private fileFrecencyKeys: readonly string[] = [];
@@ -816,7 +817,23 @@ export class ChatStore {
         this.publish();
     }
 
+    /**
+     * Releases all pending imperative-loop input waits during TUI teardown.
+     * A closed queue never accepts a stale UI event and makes future waits
+     * resolve immediately, so Node cannot exit with an unsettled top-level await.
+     */
+    closeEventQueue(): void {
+        if (this.eventQueueClosed) return;
+        this.eventQueueClosed = true;
+        this.eventQueue.length = 0;
+        const waiters = this.eventWaiters.splice(0);
+        for (const resolve of waiters) {
+            resolve({ type: 'interrupt' });
+        }
+    }
+
     enqueueEvent(event: ChatInputEvent): void {
+        if (this.eventQueueClosed) return;
         const waiter = this.eventWaiters.shift();
         if (waiter !== undefined) {
             waiter(event);
@@ -826,6 +843,9 @@ export class ChatStore {
     }
 
     waitForEvent(): Promise<ChatInputEvent> {
+        if (this.eventQueueClosed) {
+            return Promise.resolve({ type: 'interrupt' });
+        }
         const queued = this.eventQueue.shift();
         if (queued !== undefined) {
             return Promise.resolve(queued);

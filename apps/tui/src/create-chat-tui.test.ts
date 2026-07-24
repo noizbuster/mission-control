@@ -237,6 +237,20 @@ describe('create-chat-tui', () => {
         expect(calls).toBe(1);
     });
 
+    it('unmount settles TUI input waits so the imperative loop can terminate', async () => {
+        // Given: the imperative loop is awaiting UI input when the renderer tears down.
+        const store = createChatStore();
+        const handle = createChatTuiHandle(store, () => {});
+        const pending = handle.waitForEvent();
+
+        // When
+        handle.unmount();
+
+        // Then: both the current and any subsequent wait settle instead of stranding top-level await.
+        await expect(pending).resolves.toEqual({ type: 'interrupt' });
+        await expect(handle.waitForEvent()).resolves.toEqual({ type: 'interrupt' });
+    });
+
     it('ChatTuiOptions accepts abgOverlayController and the controller.store satisfies AbgOverlayStore', () => {
         const controller = createAbgOverlayController(createAbgOverlayStore());
         const options: ChatTuiOptions = {
