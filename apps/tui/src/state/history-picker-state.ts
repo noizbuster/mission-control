@@ -11,9 +11,9 @@ import { formatHistoryContentPreview, formatHistoryTimeColumn } from './history-
 export type HistoryPickerEntry = TuiPromptHistoryEntry;
 
 /**
- * Picker open/selection state.
- * `draftSnapshot` is the input buffer when the picker opened (Esc does not
- * overwrite the textarea; snapshot is kept for callers that need it).
+ * Picker selection state. `selectedIndex` is newest-first; inline recall
+ * temporarily uses `-1` for the captured draft before the first Up press and
+ * after Down returns from the newest entry.
  */
 export type HistoryPickerState = {
     readonly open: boolean;
@@ -73,6 +73,19 @@ export function openHistoryPicker(
     };
 }
 
+/** Begin inline arrow-key recall at the captured draft position. */
+export function beginHistoryRecall(
+    _state: HistoryPickerState,
+    _entriesNewestFirst: readonly HistoryPickerEntry[],
+    currentInput: string,
+): HistoryPickerState {
+    return {
+        open: true,
+        selectedIndex: -1,
+        draftSnapshot: currentInput,
+    };
+}
+
 /**
  * Move selection by one step. `up` decreases index (toward newer / top);
  * `down` increases index (toward older / bottom). No-op when closed or empty.
@@ -93,12 +106,43 @@ export function navigateHistoryPicker(
     return { ...state, selectedIndex: next };
 }
 
+/** Navigate inline recall, including the synthetic draft position at index -1. */
+export function navigateHistoryRecall(
+    state: HistoryPickerState,
+    direction: HistoryPickerDirection,
+    entryCount: number,
+): HistoryPickerState {
+    if (!state.open || entryCount <= 0) {
+        return state;
+    }
+    const delta = direction === 'up' ? -1 : 1;
+    const next = Math.min(Math.max(state.selectedIndex + delta, -1), entryCount - 1);
+    if (next === state.selectedIndex) {
+        return state;
+    }
+    return { ...state, selectedIndex: next };
+}
+
 /** Close the picker; keeps selectedIndex and draftSnapshot. */
 export function closeHistoryPicker(state: HistoryPickerState): HistoryPickerState {
     if (!state.open) {
         return state;
     }
     return { ...state, open: false };
+}
+
+/** Resolve the current inline-recall selection without mutating picker state. */
+export function selectedHistoryPickerText(
+    state: HistoryPickerState,
+    entriesNewestFirst: readonly HistoryPickerEntry[],
+): string | undefined {
+    if (!state.open || entriesNewestFirst.length === 0) {
+        return undefined;
+    }
+    if (state.selectedIndex === -1) {
+        return state.draftSnapshot;
+    }
+    return entriesNewestFirst[state.selectedIndex]?.text;
 }
 
 /**
@@ -109,7 +153,8 @@ export function clampHistoryPickerSelection(
     state: HistoryPickerState,
     entryCount: number,
 ): HistoryPickerState {
-    const selectedIndex = entryCount <= 0 ? 0 : clampIndex(state.selectedIndex, entryCount);
+    const selectedIndex =
+        entryCount <= 0 ? 0 : Math.min(Math.max(state.selectedIndex, -1), entryCount - 1);
     if (selectedIndex === state.selectedIndex) {
         return state;
     }

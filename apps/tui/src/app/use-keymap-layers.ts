@@ -5,8 +5,10 @@ import type { OpenTuiKeymap } from '../platform/keymap/keymap-instance';
 import type { TuiClipboardService } from '../platform/providers/clipboard-toast-context';
 import type { TuiLocalPreferencesService } from '../platform/providers/local-preferences-context';
 import type { TuiPromptStashService } from '../platform/providers/prompt-services-context';
-import type { ChatStore } from '../state/chat-store';
+import { recallPromptHistory } from '../components/ChatInputArea';
 import type { ChatTextareaHandle } from '../components/ChatInputTextarea';
+import { registerPromptHistoryRecallLayers } from '../platform/keymap/prompt-history-recall';
+import type { ChatStore } from '../state/chat-store';
 import {
     parseModelPreferenceKeys,
     recentModelPreferenceSelections,
@@ -123,6 +125,21 @@ export function useKeymapLayers(deps: KeymapLayersDeps): void {
                 { key: 'up', cmd: 'menu.up' },
                 { key: 'down', cmd: 'menu.down' },
             ],
+        });
+        onCleanup(offLayer);
+    });
+
+    // Prompt history must run through the keymap because the managed textarea
+    // consumes its own default Up/Down bindings before component callbacks.
+    onMount(() => {
+        const offLayer = registerPromptHistoryRecallLayers(keymap, {
+            isTextareaFocused: () => textareaHandle.get()?.focused === true,
+            isCursorAtBufferStart: () => (textareaHandle.get()?.cursorOffset ?? -1) === 0,
+            isHistoryOpen: () => store.getSnapshot().historyPicker.open,
+            hasHistoryEntries: () => store.getSnapshot().historyEntries.length > 0,
+            recall: (direction) => {
+                recallPromptHistory(store, textareaHandle.get(), direction);
+            },
         });
         onCleanup(offLayer);
     });

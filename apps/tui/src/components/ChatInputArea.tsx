@@ -22,7 +22,7 @@ import {
     resolveWorkflowCommandMenuSubmission,
 } from '../state/interactive-chat-command-menu';
 import { buildFileAutocompleteCompletion } from '../state/interactive-chat-file-autocomplete';
-import { ChatInputTextarea, type ChatTextareaHandle } from './ChatInputTextarea';
+import { ChatInputTextarea, type ChatTextareaHandle, type ChatTextareaSurface } from './ChatInputTextarea';
 import type { ChatScrollboxHandle } from './ChatTranscript';
 
 const DOUBLE_ESC_WINDOW_MS = 500;
@@ -33,6 +33,34 @@ const noopCursorChange = (): void => {};
 
 export function fileCompletionFrecencyKey(completed: string): string {
     return completed.endsWith('/') ? completed.slice(0, -1) : completed;
+}
+
+/** Synchronize an inline history recall with the native textarea and store mirror. */
+export function applyHistoryRecallText(
+    store: ChatStore,
+    textarea: Pick<ChatTextareaSurface, 'setText' | 'gotoBufferEnd'> | undefined,
+    text: string,
+): void {
+    textarea?.setText(text);
+    textarea?.gotoBufferEnd();
+    store.setInputMirror(text);
+}
+
+/**
+ * Recall one prompt-history position from either the textarea callback or the
+ * keymap layer, keeping native text and the store mirror synchronized.
+ */
+export function recallPromptHistory(
+    store: ChatStore,
+    textarea: Pick<ChatTextareaSurface, 'plainText' | 'setText' | 'gotoBufferEnd'> | undefined,
+    direction: 'up' | 'down',
+): boolean {
+    const text = store.recallHistory(direction, textarea?.plainText ?? store.getSnapshot().inputMirror);
+    if (text === undefined) {
+        return false;
+    }
+    applyHistoryRecallText(store, textarea, text);
+    return true;
 }
 
 function resolveDoubleEscAction(): 'tree' | 'fork' | 'interrupt' | 'none' {
@@ -196,9 +224,7 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
             if (snap.historyPicker.open) {
                 const selected = props.store.confirmHistoryPicker();
                 if (selected !== undefined) {
-                    props.textareaRef.get()?.setText(selected);
-                    props.textareaRef.get()?.gotoBufferEnd();
-                    props.store.setInputMirror(selected);
+                    applyHistoryRecallText(props.store, props.textareaRef.get(), selected);
                 }
                 return;
             }
@@ -215,8 +241,10 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
         if (key.name === 'escape') {
             key.preventDefault();
             if (snap.historyPicker.open) {
-                lastEsc = undefined;
-                props.store.cancelHistoryPicker();
+                const draft = props.store.cancelHistoryPicker();
+                if (draft !== undefined) {
+                    applyHistoryRecallText(props.store, props.textareaRef.get(), draft);
+                }
                 return;
             }
             if (snap.generating) {
@@ -377,7 +405,7 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
 
             if (snap.historyPicker.open) {
                 key.preventDefault();
-                props.store.navigateHistoryPicker(direction);
+                recallPromptHistory(props.store, props.textareaRef.get(), direction);
                 return;
             }
 
@@ -411,7 +439,7 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
                 !fileAutoOpen
             ) {
                 key.preventDefault();
-                props.store.openHistoryPicker(buffer);
+                recallPromptHistory(props.store, props.textareaRef.get(), direction);
                 return;
             }
         }

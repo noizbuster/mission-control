@@ -15,13 +15,16 @@ import {
 } from './auth-provider-keypress';
 import type { ChatInputEvent } from './chat-input-event';
 import {
+    beginHistoryRecall,
     clampHistoryPickerSelection,
     closeHistoryPicker,
     createHistoryPickerState,
     type HistoryPickerEntry,
     type HistoryPickerState,
     navigateHistoryPicker as reduceHistoryPickerNavigation,
+    navigateHistoryRecall,
     openHistoryPicker as reduceOpenHistoryPicker,
+    selectedHistoryPickerText,
 } from './history-picker-state';
 import {
     createSlashCommandMenuState,
@@ -1124,29 +1127,52 @@ export class ChatStore {
         this.publish();
     }
 
+    /**
+     * Cycle prompt history for inline arrow-key recall. Up selects older entries;
+     * Down returns toward the captured draft after the newest entry.
+     */
+    recallHistory(direction: 'up' | 'down', currentBuffer: string): string | undefined {
+        const newestFirst = this.historyEntriesNewestFirst();
+        if (newestFirst.length === 0) {
+            return undefined;
+        }
+        const wasOpen = this.state.historyPicker.open;
+        if (!wasOpen && direction === 'down') {
+            return undefined;
+        }
+        const current = wasOpen
+            ? this.state.historyPicker
+            : beginHistoryRecall(this.state.historyPicker, newestFirst, currentBuffer);
+        const visualDirection = direction === 'up' ? 'down' : 'up';
+        const next = navigateHistoryRecall(current, visualDirection, newestFirst.length);
+        if (wasOpen && next === current) {
+            return undefined;
+        }
+        const text = selectedHistoryPickerText(next, newestFirst);
+        this.state.historyPicker = next.selectedIndex === -1 ? closeHistoryPicker(next) : next;
+        this.publish();
+        return text;
+    }
+
     confirmHistoryPicker(): string | undefined {
         if (!this.state.historyPicker.open) {
             return undefined;
         }
         const newestFirst = this.historyEntriesNewestFirst();
-        if (newestFirst.length === 0) {
-            this.state.historyPicker = closeHistoryPicker(this.state.historyPicker);
-            this.publish();
-            return undefined;
-        }
-        const selectedIndex = Math.min(Math.max(this.state.historyPicker.selectedIndex, 0), newestFirst.length - 1);
-        const selected = newestFirst[selectedIndex];
+        const selected = selectedHistoryPickerText(this.state.historyPicker, newestFirst);
         this.state.historyPicker = closeHistoryPicker(this.state.historyPicker);
         this.publish();
-        return selected?.text;
+        return selected;
     }
 
-    cancelHistoryPicker(): void {
+    cancelHistoryPicker(): string | undefined {
         if (!this.state.historyPicker.open) {
-            return;
+            return undefined;
         }
+        const draftSnapshot = this.state.historyPicker.draftSnapshot;
         this.state.historyPicker = closeHistoryPicker(this.state.historyPicker);
         this.publish();
+        return draftSnapshot;
     }
 
     private appendHistoryEntry(text: string): void {

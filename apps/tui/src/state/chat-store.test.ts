@@ -2463,6 +2463,29 @@ describe('chat-store — history picker + timestamped entries', () => {
         expect(store.getSnapshot().inputMirror).toBe('draft');
     });
 
+    it('recalls newest-first entries inline and restores the captured draft with Down', () => {
+        const store = createChatStore({
+            initialHistoryEntries: [makeHistoryEntry('a', 'older', 1), makeHistoryEntry('b', 'newer', 2)],
+        });
+        store.setInputMirror('draft');
+
+        expect(store.recallHistory('up', 'draft')).toBe('newer');
+        expect(store.getSnapshot().historyPicker).toMatchObject({ open: true, selectedIndex: 0 });
+        expect(store.recallHistory('up', 'newer')).toBe('older');
+        expect(store.recallHistory('up', 'older')).toBeUndefined();
+        expect(store.recallHistory('down', 'older')).toBe('newer');
+        expect(store.recallHistory('down', 'newer')).toBe('draft');
+        expect(store.isHistoryPickerOpen()).toBe(false);
+        expect(store.getSnapshot().inputMirror).toBe('draft');
+    });
+
+    it('does not open recall state when no prompt history exists', () => {
+        const store = createChatStore();
+
+        expect(store.recallHistory('up', 'draft')).toBeUndefined();
+        expect(store.isHistoryPickerOpen()).toBe(false);
+    });
+
     it('cancelHistoryPicker closes without changing inputMirror', () => {
         const store = createChatStore({
             initialHistoryEntries: [makeHistoryEntry('a', 'only', 1)],

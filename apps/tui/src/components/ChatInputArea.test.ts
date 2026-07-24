@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createChatStore } from '../state/chat-store';
-import { fileCompletionFrecencyKey } from './ChatInputArea';
+import { fileCompletionFrecencyKey, recallPromptHistory } from './ChatInputArea';
 import { createRecordingTextarea, makeKeyEvent } from './chat-test-support';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -19,14 +19,11 @@ describe('ChatInputArea prompt-service helpers', () => {
 describe('ChatInputArea history picker keyboard contract', () => {
     it('wires open at buffer start, navigate, fill-only enter, and esc cancel', () => {
         const source = readChatInputAreaSource();
-        expect(source).toContain('openHistoryPicker');
-        expect(source).toContain('navigateHistoryPicker');
+        expect(source).toContain('recallHistory');
+        expect(source).toContain('applyHistoryRecallText');
         expect(source).toContain('confirmHistoryPicker');
         expect(source).toContain('cancelHistoryPicker');
         expect(source).toContain('cursorOffset');
-        expect(source).not.toContain('recallHistory');
-        expect(source).not.toContain('navigateChatInputHistoryUp');
-        expect(source).not.toContain('navigateChatInputHistoryDown');
     });
 
     it('confirm fills textarea without submitting a line event', () => {
@@ -66,16 +63,24 @@ describe('ChatInputArea history picker keyboard contract', () => {
         expect(store.getSnapshot().inputMirror).toBe('keep me');
     });
 
-    it('open at cursor offset 0 does not mutate the buffer', () => {
+    it('recalls the prior prompt from a cursor-start input and restores the draft', () => {
         const store = createChatStore({
-            initialHistoryEntries: [{ id: 'a', text: 'hist', timestamp: 1 }],
+            initialHistoryEntries: [
+                { id: 'a', text: 'older prompt', timestamp: 1 },
+                { id: 'b', text: 'newer prompt', timestamp: 2 },
+            ],
         });
         const textarea = createRecordingTextarea('draft text', 0);
-        expect(textarea.cursorOffset).toBe(0);
-        store.openHistoryPicker(textarea.plainText);
-        expect(store.isHistoryPickerOpen()).toBe(true);
+        expect(recallPromptHistory(store, textarea, 'up')).toBe(true);
+        expect(recallPromptHistory(store, textarea, 'up')).toBe(true);
+        expect(recallPromptHistory(store, textarea, 'down')).toBe(true);
+        expect(recallPromptHistory(store, textarea, 'down')).toBe(true);
+
+        expect(textarea.setTextCalls).toEqual(['newer prompt', 'older prompt', 'newer prompt', 'draft text']);
+        expect(textarea.gotoBufferEndCount).toBe(4);
         expect(textarea.plainText).toBe('draft text');
-        expect(textarea.setTextCalls).toEqual([]);
+        expect(store.getSnapshot().inputMirror).toBe('draft text');
+        expect(store.isHistoryPickerOpen()).toBe(false);
     });
 
     it('makeKeyEvent supports the history picker key names used by the handler', () => {
