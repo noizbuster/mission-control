@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
     renderVisualGraph,
     VISUAL_GRAPH_DEFAULT_WIDTH,
-    VISUAL_GRAPH_MAX_NODES,
     type VisualGraphEdge,
     type VisualGraphNode,
     visualGraphBoundsForViewport,
@@ -28,20 +27,37 @@ describe('visual-graph renderVisualGraph', () => {
             expect(result.lines).toEqual(['(no nodes)']);
         });
 
-        it('returns collapsed summary when node count exceeds maxNodes', () => {
-            const nodes = Array.from({ length: VISUAL_GRAPH_MAX_NODES + 1 }, (_, i) => node(`n${i}`, 'idle'));
-            const result = renderVisualGraph({ nodes, edges: [], maxWidth: WIDE });
+        it('renders and pans a 17-node, 31-edge graph by default', () => {
+            const nodes = Array.from({ length: 17 }, (_, index) => node(`node-${index}`, 'idle'));
+            const edges: VisualGraphEdge[] = [
+                ...Array.from({ length: 16 }, (_, index) => ({ from: `node-${index}`, to: `node-${index + 1}` })),
+                ...Array.from({ length: 15 }, (_, index) => ({ from: `node-${index}`, to: `node-${index + 2}` })),
+            ];
+
+            const result = renderVisualGraph({ nodes, edges, maxWidth: 40, maxHeight: 12 });
+
+            expect(edges).toHaveLength(31);
+            expect(result.collapsed).toBe(false);
+            expect(result.pannable).toBe(true);
+            expect(joinedLines(result)).not.toContain('graph too large');
+        });
+
+        it('returns a summary when the caller-supplied node limit is exceeded', () => {
+            const nodes = Array.from({ length: 3 }, (_, index) => node(`n${index}`, 'idle'));
+            const result = renderVisualGraph({ nodes, edges: [], maxNodes: 2, maxWidth: WIDE });
+
             expect(result.collapsed).toBe(true);
             expect(joinedLines(result)).toContain('too large');
-            expect(joinedLines(result)).toContain(`${VISUAL_GRAPH_MAX_NODES + 1} nodes`);
+            expect(joinedLines(result)).toContain('3 nodes');
+            expect(joinedLines(result)).toContain('above 2');
         });
 
         it('summary reports the status distribution', () => {
             const nodes = [
-                ...Array.from({ length: VISUAL_GRAPH_MAX_NODES + 1 }, () => node('x', 'running')),
-                ...Array.from({ length: 3 }, (_, i) => node(`y${i}`, 'succeeded')),
+                ...Array.from({ length: 3 }, () => node('x', 'running')),
+                ...Array.from({ length: 3 }, (_, index) => node(`y${index}`, 'succeeded')),
             ];
-            const result = renderVisualGraph({ nodes, edges: [], maxWidth: WIDE });
+            const result = renderVisualGraph({ nodes, edges: [], maxNodes: 2, maxWidth: WIDE });
             expect(result.collapsed).toBe(true);
             expect(joinedLines(result)).toContain('running');
             expect(joinedLines(result)).toContain('succeeded');
@@ -171,9 +187,6 @@ describe('visual-graph renderVisualGraph', () => {
             expect(VISUAL_GRAPH_DEFAULT_WIDTH).toBe(40);
         });
 
-        it('VISUAL_GRAPH_MAX_NODES is 16', () => {
-            expect(VISUAL_GRAPH_MAX_NODES).toBe(16);
-        });
     });
 
     describe('determinism', () => {

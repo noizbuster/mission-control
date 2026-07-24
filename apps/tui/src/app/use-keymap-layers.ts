@@ -7,7 +7,11 @@ import type { TuiLocalPreferencesService } from '../platform/providers/local-pre
 import type { TuiPromptStashService } from '../platform/providers/prompt-services-context';
 import type { ChatStore } from '../state/chat-store';
 import type { ChatTextareaHandle } from '../components/ChatInputTextarea';
-import { parseModelPreferenceKeys, recentModelPreferenceSelections } from './app-helpers';
+import {
+    parseModelPreferenceKeys,
+    recentModelPreferenceSelections,
+    selectionCopyEnabledForOverlay,
+} from './app-helpers';
 
 /**
  * Shared deps for all App keymap layer registrations.
@@ -146,7 +150,7 @@ export function useKeymapLayers(deps: KeymapLayersDeps): void {
         void import('../platform/keymap/messages-scroll').then(({ registerSelectionCopyLayer }) => {
             if (disposed) return;
             cleanup = registerSelectionCopyLayer(keymap, createMessagesScrollDeps(deps), {
-                isEnabled: () => store.getSnapshot().overlayMode === 'none',
+                isEnabled: () => selectionCopyEnabledForOverlay(store.getSnapshot().overlayMode),
             });
         });
         onCleanup(() => {

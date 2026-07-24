@@ -19,6 +19,8 @@ export type GlobalKeyboardDeps = {
     readonly abgOverlayController: AbgOverlayController | undefined;
 };
 
+const ABG_GRAPH_PAN_STEP = 12;
+
 /**
  * Global keyboard sink: Ctrl+C interrupt/clear, plus ABG/diff overlay keys when
  * the textarea is not focused. Overlay-only guard prevents double-toggle with
@@ -89,11 +91,11 @@ export function useGlobalKeyboard(deps: GlobalKeyboardDeps): void {
                 return;
             }
             if (key.name === 'left') {
-                setAbgPanX((o) => o + 4);
+                setAbgPanX((o) => o + ABG_GRAPH_PAN_STEP);
                 return;
             }
             if (key.name === 'right') {
-                setAbgPanX((o) => Math.max(0, o - 4));
+                setAbgPanX((o) => Math.max(0, o - ABG_GRAPH_PAN_STEP));
                 return;
             }
             if (key.name === 'r' && abgOverlayController !== undefined) {

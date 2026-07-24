@@ -2,7 +2,7 @@ import type { ModelProviderSelection } from '@mission-control/protocol';
 import type { ChatBlock } from '@mission-control/tui/chat';
 import type { TuiRuntimeProviderValue } from '../platform/providers/runtime-context';
 import { parseModelSelection } from '../state/interactive-chat-model';
-import type { ChatStoreState } from '../state/chat-store';
+import type { ChatStoreOverlayMode, ChatStoreState } from '../state/chat-store';
 import type { StatusBarProps } from '../components/StatusBar';
 
 /**
@@ -63,6 +63,20 @@ export function promptPanelRepaintKey(input: PromptPanelRepaintKeyInput): string
     if (input.inputMirror.startsWith('#')) return `workflow:${input.inputMirror}`;
     if (input.fileAutocompleteOpen) return `file:${input.inputMirror}:${input.fileMatchCount}`;
     return 'none';
+}
+
+/**
+ * Ctrl+D copies terminal selections in the transcript and the ABG overlay.
+ * Other overlays reserve keyboard input for their own controls.
+ */
+export function selectionCopyEnabledForOverlay(overlayMode: ChatStoreOverlayMode): boolean {
+    switch (overlayMode) {
+        case 'none':
+        case 'abg':
+            return true;
+        default:
+            return false;
+    }
 }
 
 export function parseModelPreferenceKeys(keys: readonly string[]): readonly ModelProviderSelection[] {

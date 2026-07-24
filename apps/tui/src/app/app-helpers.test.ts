@@ -1,6 +1,6 @@
 import { type ChatBlock, parseMessageBlocks } from '@mission-control/tui/chat';
 import { describe, expect, it, vi } from 'vitest';
-import { preserveBlockReferences, promptPanelRepaintKey } from './app-helpers';
+import { preserveBlockReferences, promptPanelRepaintKey, selectionCopyEnabledForOverlay } from './app-helpers';
 
 vi.mock('@mission-control/tui', async () => await import('../terminal-text'));
 vi.mock('@mission-control/tui/chat', async () => await import('../chat'));
@@ -115,5 +115,14 @@ describe('promptPanelRepaintKey', () => {
         expect(
             promptPanelRepaintKey({ inputMirror: '/', fileAutocompleteOpen: false, fileMatchCount: 0, menuRows: 0 }),
         ).toBe('none');
+    });
+});
+
+describe('selectionCopyEnabledForOverlay', () => {
+    it('keeps Ctrl+D selection copy available in the ABG graph overlay only', () => {
+        expect(selectionCopyEnabledForOverlay('none')).toBe(true);
+        expect(selectionCopyEnabledForOverlay('abg')).toBe(true);
+        expect(selectionCopyEnabledForOverlay('diff-viewer')).toBe(false);
+        expect(selectionCopyEnabledForOverlay('mission-panel')).toBe(false);
     });
 });

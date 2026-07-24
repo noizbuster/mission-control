@@ -21,13 +21,17 @@ function expectGraphWidth(result: VisualGraphRender, maxWidth: number): void {
 }
 
 describe('visual graph narrow text rendering', () => {
-    it('clips placeholder and summary rows before rows and lines are constructed', () => {
+    it('clips placeholder and caller-limited summary rows before rows and lines are constructed', () => {
         const placeholderAtFour = renderVisualGraph({ nodes: [], edges: [], maxWidth: 4 });
         const placeholderAtOne = renderVisualGraph({ nodes: [], edges: [], maxWidth: 1 });
-        const nodes = Array.from({ length: 17 }, (_, index) => node(`node-${index}`));
-        const summaryAtFour = renderVisualGraph({ nodes, edges: [], maxWidth: 4 });
-        const summaryAtTwelve = renderVisualGraph({ nodes, edges: [], maxWidth: 12 });
-        const summaryAtOne = renderVisualGraph({ nodes, edges: [], maxWidth: 1 });
+        const summaryInput = {
+            nodes: Array.from({ length: 17 }, (_, index) => node(`node-${index}`)),
+            edges: [],
+            maxNodes: 16,
+        };
+        const summaryAtFour = renderVisualGraph({ ...summaryInput, maxWidth: 4 });
+        const summaryAtTwelve = renderVisualGraph({ ...summaryInput, maxWidth: 12 });
+        const summaryAtOne = renderVisualGraph({ ...summaryInput, maxWidth: 1 });
 
         expect(placeholderAtFour.lines).toEqual(['(no~']);
         expect(placeholderAtOne.lines).toEqual(['~']);

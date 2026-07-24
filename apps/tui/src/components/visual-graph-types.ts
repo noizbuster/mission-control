@@ -24,7 +24,6 @@ export type VisualGraphInput = {
     readonly maxHeight?: number;
 };
 
-export const VISUAL_GRAPH_MAX_NODES = 16;
 export const VISUAL_GRAPH_DEFAULT_WIDTH = 40;
 
 const GRAPH_PANE_MIN_WIDTH = 20;

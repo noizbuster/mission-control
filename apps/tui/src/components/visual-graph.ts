@@ -7,7 +7,6 @@ import { layoutGraph } from './visual-graph-layout';
 import { graphCanvasToRows } from './visual-graph-rows';
 import {
     VISUAL_GRAPH_DEFAULT_WIDTH,
-    VISUAL_GRAPH_MAX_NODES,
     type VisualGraphInput,
     type VisualGraphRender,
     type VisualGraphRow,
@@ -24,19 +23,18 @@ export type {
 } from './visual-graph-types';
 export {
     VISUAL_GRAPH_DEFAULT_WIDTH,
-    VISUAL_GRAPH_MAX_NODES,
     visualGraphBoundsForViewport,
 } from './visual-graph-types';
 
 export function renderVisualGraph(input: VisualGraphInput): VisualGraphRender {
-    const maxNodes = input.maxNodes ?? VISUAL_GRAPH_MAX_NODES;
+    const maxNodes = input.maxNodes;
     const maxWidth = normalizePositiveInteger(input.maxWidth ?? VISUAL_GRAPH_DEFAULT_WIDTH);
     const offsetX = Math.max(0, Math.trunc(input.offsetX ?? 0));
     const offsetY = Math.max(0, Math.trunc(input.offsetY ?? 0));
     const maxHeight = input.maxHeight === undefined ? undefined : Math.max(1, Math.trunc(input.maxHeight));
 
     if (input.nodes.length === 0) return placeholderRender('(no nodes)', maxWidth);
-    if (input.nodes.length > maxNodes) return renderSummary(input, maxWidth);
+    if (maxNodes !== undefined && input.nodes.length > maxNodes) return renderSummary(input, maxWidth, maxNodes);
 
     const { positions, selfLoops } = layoutGraph(input);
     if (positions.size === 0) return placeholderRender('(no nodes)', maxWidth);
@@ -86,13 +84,13 @@ function placeholderRender(text: string, maxWidth: number): VisualGraphRender {
     };
 }
 
-function renderSummary(input: VisualGraphInput, maxWidth: number): VisualGraphRender {
+function renderSummary(input: VisualGraphInput, maxWidth: number, maxNodes: number): VisualGraphRender {
     const statusCounts = new Map<AbgNodeStatus, number>();
     for (const node of input.nodes) {
         statusCounts.set(node.status, (statusCounts.get(node.status) ?? 0) + 1);
     }
     const lines = [
-        `(graph too large: ${input.nodes.length} nodes, ${input.edges.length} edges — pan unavailable above ${input.maxNodes ?? VISUAL_GRAPH_MAX_NODES})`,
+        `(graph too large: ${input.nodes.length} nodes, ${input.edges.length} edges — pan unavailable above ${maxNodes})`,
         ...[...statusCounts.entries()].map(([status, count]) => {
             const theme = nodeStatusTheme(status);
             return `${theme.glyph} ${status}: ${count}`;
