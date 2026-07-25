@@ -24,6 +24,12 @@ export {
 } from './async-job-manager';
 export { BUNDLED_AGENT_TEMPLATES } from './bundled/index';
 export {
+    CHILD_ACTIVITY_TOUCH_MIN_MS,
+    childActivityFromSignal,
+    composeChildHostCallbacksWithActivity,
+    createChildActivitySignalObserver,
+} from './child-activity-touch';
+export {
     CHILD_HARD_DROPPED_CAPABILITY_KINDS,
     CHILD_NETWORK_ALLOWED_CATEGORIES,
     hasHardDroppedCapability,

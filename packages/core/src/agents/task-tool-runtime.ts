@@ -1,3 +1,4 @@
+// allow: SIZE_OK - HEAD 272 -> current ~281 pure LOC; compose child activity timestamp observer into the spawn host callbacks
 import type { AgentDefinition } from '@mission-control/protocol';
 import type { ChildHostCallbacks } from '../behavior/subagents/spawn-child';
 import type { SessionControlEpoch } from '../runtime/session-control-cancellation';
@@ -11,8 +12,9 @@ import { createFullParityTaskToolRegistration } from '../tools/task/task-tool';
 import { withNestSubagentPermission } from '../tools/task/task-tool-routing';
 import { ToolRegistry } from '../tools/tool-registry';
 import { ToolExecutionError } from '../tools/tool-registry-types';
-import type { AgentIndex } from './agent-registry';
+import { composeChildHostCallbacksWithActivity } from './child-activity-touch';
 import { canSpawnAtDepth, PRODUCTION_MAX_TASK_DEPTH } from './recursion-policy';
+import type { AgentIndex } from './agent-registry';
 import { getRuntimeRegistry, MAIN_AGENT_ID, type RuntimeAgentRegistry } from './runtime-registry';
 import {
     assertAgentSpawnAllowed,
@@ -167,7 +169,15 @@ export class ConcreteTaskToolRuntime implements TaskToolRuntime {
 
     private async executeSpawn(input: ExecuteSpawnInput): Promise<ChildSpawnResult> {
         const { sessionId, request, prepared, signal, controlEpoch } = input;
-        const hostCallbacks = this.hostCallbacksForChild(sessionId, request, prepared.agent.name);
+        const baseHostCallbacks = this.hostCallbacksForChild(sessionId, request, prepared.agent.name);
+        const hostCallbacks =
+            this.services?.runtimeRegistry !== undefined
+                ? composeChildHostCallbacksWithActivity(
+                      baseHostCallbacks,
+                      sessionId,
+                      this.services.runtimeRegistry,
+                    )
+                : baseHostCallbacks;
         return this.spawnFn({
             sessionId,
             prompt: request.prompt,
