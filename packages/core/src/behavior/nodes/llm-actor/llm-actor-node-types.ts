@@ -16,8 +16,10 @@ export type LlmActorTurnResult = {
 
 export type LlmActorRunInput = {
     readonly graphId?: string;
+    readonly sessionId?: string;
     readonly nodeId: string;
     readonly model: LlmActorModel;
+    readonly providerID?: string;
     readonly system: string;
     readonly messages: NonNullable<StreamTextParameters['messages']>;
     readonly tools?: ToolSet;

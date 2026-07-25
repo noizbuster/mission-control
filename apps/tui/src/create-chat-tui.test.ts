@@ -87,7 +87,7 @@ const CHAT_TUI_HANDLE_METHODS = [
     'setModelSelection',
     'setGenerating',
     'setWorkflowNames',
-    'setSkillNames',
+    'setSkillEntries',
     'setAgentStatus',
     'setAgentRetryStatus',
     'clearAgentStatus',
@@ -168,6 +168,16 @@ describe('create-chat-tui', () => {
         const handle = createChatTuiHandle(store, () => {});
         handle.setGenerating(true);
         expect(store.getSnapshot().generating).toBe(true);
+    });
+
+    it('setSkillEntries preserves skill invocation names and descriptions through the handle', () => {
+        const store = createChatStore();
+        const handle = createChatTuiHandle(store, () => {});
+        const entries = [{ name: 'planner', description: 'Creates implementation plans.' }];
+
+        handle.setSkillEntries(entries);
+
+        expect(store.getSnapshot().skillEntries).toEqual(entries);
     });
 
     it('isShowThinking reads from store snapshot', () => {

@@ -30,6 +30,7 @@ export function runContext(
     const retryCorrection = options.nodeId !== undefined ? state.correctionByNodeId.get(options.nodeId) : undefined;
     return {
         graphId: graph.id,
+        sessionId: input.sessionId,
         now: input.now,
         ...(options.toolCallId !== undefined ? { toolCallId: options.toolCallId } : {}),
         registry,
@@ -67,6 +68,7 @@ export function runContext(
         ...(retryCorrection !== undefined && retryCorrection.length > 0 ? { retryCorrection } : {}),
     } satisfies {
         readonly graphId: string;
+        readonly sessionId: string;
         readonly now: () => string;
         readonly toolCallId?: string;
         readonly registry: AbgNodeRegistry;

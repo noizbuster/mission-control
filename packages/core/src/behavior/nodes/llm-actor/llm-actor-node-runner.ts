@@ -5,7 +5,7 @@
  * (OpenCode forced generate_object on pure gates), blackboard loop_active ownership.
  */
 import type { AbgNodeSpec, AbgSignal } from '@mission-control/protocol';
-import type { ToolSet } from 'ai';
+import type { ModelMessage, ToolSet } from 'ai';
 import { packContext } from '../../../context/context-packer';
 import { assembleSystemPrompt, type SystemPromptSkill } from '../../../context/system-prompt';
 import { YIELD_TOOL_NAME } from '../../../tools/yield-tool/yield-tool';
@@ -129,6 +129,22 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
         pureStructuredGate,
         outputKey: outputKeyConfig,
     });
+
+    // Z.AI's Coding Plan cache matches the literal prefix of Chat Completions requests. Workflow
+    // nodes legitimately use different role prompts, so sending that prompt as the first system
+    // message prevents a shared session prefix from ever reaching the provider's cache threshold.
+    // Keep a trusted, session-stable prefix separate; its project instructions remain framed as
+    // reference data by assembleSystemPrompt, and the node prompt immediately follows it.
+    const zaiCachePrefix =
+        context.model?.providerID === 'zai-coding-plan'
+            ? assembleSystemPrompt({
+                  ...(context.systemPromptEnv !== undefined ? { env: context.systemPromptEnv } : {}),
+                  ...(context.projectInstructionResources !== undefined
+                      ? { resources: context.projectInstructionResources }
+                      : {}),
+              })
+            : undefined;
+
     const settlementLedger = createAbgToolSettlementLedger();
     let generateObjectCapture: GenerateObjectCapture | undefined;
     const proposalOnlyWorkspaceTools =
@@ -170,16 +186,19 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
         });
     }
 
-    const modelMessages = [...packed.messages];
+    const modelMessages: ModelMessage[] =
+        zaiCachePrefix === undefined ? [...packed.messages] : [{ role: 'system', content: system }, ...packed.messages];
 
     let turnResult: LlmActorTurnResult | undefined;
     let proposedWorkspaceToolCalls = 0;
     const proposedYieldToolCallIds: string[] = [];
     for await (const signal of runLlmActor({
         graphId: context.graphId,
+        ...(context.sessionId !== undefined ? { sessionId: context.sessionId } : {}),
         nodeId,
         model: context.sdkModel,
-        system,
+        system: zaiCachePrefix ?? system,
+        ...(context.model?.providerID !== undefined ? { providerID: context.model.providerID } : {}),
         messages: modelMessages,
         ...(tools !== undefined ? { tools } : {}),
         ...(toolChoice !== undefined ? { toolChoice } : {}),

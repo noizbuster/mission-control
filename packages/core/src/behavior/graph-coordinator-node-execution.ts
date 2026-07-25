@@ -17,6 +17,7 @@ import type { AbgGraphRunnerInput } from './graph-runner';
 import { modelCallEvent, toolLifecycleEvent } from './graph-runner-events';
 import type { ToolActionFingerprint } from './loop-safety';
 import { type AbgNodeRegistry, runAbgNode } from './node-registry';
+import { readBooleanConfig, readStringConfig } from './nodes/composite-node-utils';
 import { isEphemeralStreamingAbgSignal, projectAbgSignalToEvent } from './signals';
 import { randomUUID } from 'node:crypto';
 
@@ -119,7 +120,7 @@ async function runNode(
         const signal = rawSignal;
         lastSignal = signal;
         state.nodeStatuses[signal.nodeId] = nodeStatusForSignal(signal);
-        if (signal.type === 'failure') {
+        if (signal.type === 'failure' && !isPermittedFanOutChildFailure(node, signal.nodeId)) {
             if (isToolApprovalBlockedError(signal.error)) blocked = true;
             else {
                 failed = true;
@@ -190,4 +191,13 @@ async function runNode(
         ...(hadOnlyRetryableToolFailures ? { hadOnlyRetryableToolFailures: true } : {}),
         ...(hadProductiveToolUse ? { hadProductiveToolUse: true } : {}),
     };
+}
+
+function isPermittedFanOutChildFailure(node: AbgNodeSpec, failureNodeId: string): boolean {
+    return (
+        node.kind === 'parallel' &&
+        failureNodeId !== node.id &&
+        readStringConfig(node, 'fanOutKey') !== undefined &&
+        readBooleanConfig(node, 'continueOnFailure') === true
+    );
 }

@@ -83,8 +83,8 @@ describe('projectSessionAttachFromEvents', () => {
         expect(projection.overlayRunState).toBe('blocked_on_approval');
     });
 
-    it('projects interrupted sticky banner when checkpoint queue is non-empty', () => {
-        // Given: an interrupted run with a usable checkpoint.
+    it('projects safe-recovery banner for a provider-aborted checkpoint', () => {
+        // Given: an interrupted run with a usable checkpoint and no committed provider result.
         const events: AgentEvent[] = [
             baseEvent('graph.started', { abg: { graphId: 'graph-main' } }),
             baseEvent('graph.checkpoint', {
@@ -99,10 +99,29 @@ describe('projectSessionAttachFromEvents', () => {
         // When: attach projection is derived.
         const projection = projectSessionAttachFromEvents(events);
 
-        // Then: interrupted banner is sticky and graph id is present.
+        // Then: a safe-recovery banner is sticky and graph id is present.
         expect(projection.graphId).toBe('graph-main');
         expect(projection.resumable?.kind).toBe('interrupted');
-        expect(projection.stickyBannerMessage).toBe(RESUMABLE_ATTACH_BANNER.interrupted);
+        expect(projection.stickyBannerMessage).toBe(RESUMABLE_ATTACH_BANNER.recovery);
+        expect(projection.overlayRunState).toBe('interrupted');
+    });
+
+    it('prompts safe recovery after an interrupted task receipt with no resumable checkpoint', () => {
+        const events: AgentEvent[] = [
+            baseEvent('graph.started', { abg: { graphId: 'graph-main' } }),
+            baseEvent('graph.checkpoint', {
+                abg: { graphId: 'graph-main', checkpoint: checkpoint({ queuedNodeIds: ['delegate-wave'] }) },
+            }),
+            baseEvent('graph.checkpoint', {
+                abg: { graphId: 'graph-main', checkpoint: checkpoint({ queuedNodeIds: [] }) },
+            }),
+            baseEvent('task.failed', { run: { runId: 'run-recovery', state: 'interrupted' } }),
+        ];
+
+        const projection = projectSessionAttachFromEvents(events);
+
+        expect(projection.resumable).toBeUndefined();
+        expect(projection.stickyBannerMessage).toBe(RESUMABLE_ATTACH_BANNER.recovery);
         expect(projection.overlayRunState).toBe('interrupted');
     });
 
@@ -155,13 +174,13 @@ describe('applySessionAttachProjection', () => {
             chatOutput,
         });
 
-        // Then: overlay reflects the graph snapshot, sticky banner is set, and no turn starts.
+        // Then: overlay reflects the graph snapshot, the safe-recovery banner is set, and no turn starts.
         const snap = controller.store.getSnapshot();
         expect(snap.activeGraphId).toBe('graph-main');
         expect(snap.nodes.get('start')).toBe('succeeded');
         expect(snap.nodes.get('next-node')).toBe('running');
         expect(snap.runState).toBe('interrupted');
-        expect(chatOutput.sticky.value).toBe(RESUMABLE_ATTACH_BANNER.interrupted);
+        expect(chatOutput.sticky.value).toBe(RESUMABLE_ATTACH_BANNER.recovery);
         expect(resumeTurn).not.toHaveBeenCalled();
     });
 

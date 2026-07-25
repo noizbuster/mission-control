@@ -1,5 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 
+import type { TuiSkillMenuEntry } from '@mission-control/protocol';
 import { useTerminalDimensions } from '@opentui/solid';
 import { type JSX, Show } from 'solid-js';
 import { AgentSpinner } from '../app/AgentSpinner';
@@ -32,7 +33,7 @@ export type ChatBottomDockSlice = {
     readonly inputMirror: string;
     readonly menuState: SlashCommandMenuState;
     readonly workflowNames: readonly string[];
-    readonly skillNames: readonly string[];
+    readonly skillEntries: readonly TuiSkillMenuEntry[];
     readonly fileAutocomplete: FileAutocompleteState;
     readonly historyEntries: readonly HistoryPickerEntry[];
     readonly historyPicker: HistoryPickerState;
@@ -82,7 +83,7 @@ export function selectChatBottomDockSlice(snapshot: ChatStoreState): ChatBottomD
         inputMirror: snapshot.inputMirror,
         menuState: snapshot.menuState,
         workflowNames: snapshot.workflowNames,
-        skillNames: snapshot.skillNames,
+        skillEntries: snapshot.skillEntries,
         fileAutocomplete: snapshot.fileAutocomplete,
         historyEntries: snapshot.historyEntries,
         historyPicker: snapshot.historyPicker,
@@ -112,7 +113,7 @@ export function chatBottomDockSliceEqual(left: ChatBottomDockSlice, right: ChatB
         left.inputMirror === right.inputMirror &&
         left.menuState === right.menuState &&
         left.workflowNames === right.workflowNames &&
-        left.skillNames === right.skillNames &&
+        left.skillEntries === right.skillEntries &&
         left.fileAutocomplete === right.fileAutocomplete &&
         left.historyEntries === right.historyEntries &&
         left.historyPicker === right.historyPicker &&
@@ -174,7 +175,7 @@ function renderPromptAdjacentPanels({
                     entries={[...dockSlice.historyEntries].reverse()}
                     pickerState={dockSlice.historyPicker}
                     maxLines={menuPolicy.rows}
-                    columns={columns}
+                    viewportColumns={columns}
                     showFooter={menuPolicy.showPanelFooter}
                 />
             ) : null}
@@ -183,8 +184,9 @@ function renderPromptAdjacentPanels({
                     inputBuffer={dockSlice.inputMirror}
                     menuState={dockSlice.menuState}
                     workflowNames={dockSlice.workflowNames}
-                    skillNames={dockSlice.skillNames}
+                    skillEntries={dockSlice.skillEntries}
                     maxVisibleRows={menuPolicy.rows}
+                    viewportColumns={columns}
                     showFooter={menuPolicy.showPanelFooter}
                 />
             ) : null}
@@ -193,6 +195,7 @@ function renderPromptAdjacentPanels({
                     fileAutocomplete={dockSlice.fileAutocomplete}
                     maxVisibleRows={menuPolicy.rows}
                     showFooter={menuPolicy.showPanelFooter}
+                    viewportColumns={columns}
                 />
             ) : null}
             {promptAdjacentPanel ?? null}

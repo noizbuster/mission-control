@@ -50,7 +50,7 @@ export function useSubmit(options: UseSubmitOptions): () => void {
                         const insertText = resolveSkillCommandMenuInsertText(
                             captured,
                             snap.menuState,
-                            snap.skillNames,
+                            snap.skillEntries,
                         );
                         if (insertText !== undefined) {
                             textareaHandle.get()?.setText(insertText);

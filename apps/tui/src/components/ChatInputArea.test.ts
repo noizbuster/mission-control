@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createChatStore } from '../state/chat-store';
-import { applyHistoryRecallText, fileCompletionFrecencyKey } from './ChatInputArea';
+import { fileCompletionFrecencyKey } from './ChatInputArea';
+import { applyHistoryRecallText } from './prompt-history-recall';
 import { completionPromptListControls, historyPickerPromptListControls } from './prompt-list-controls';
 import { createRecordingTextarea, makeKeyEvent } from './chat-test-support';
 import { readFileSync } from 'node:fs';
@@ -44,7 +45,7 @@ describe('ChatInputArea history picker keyboard contract', () => {
 
         const textarea = createRecordingTextarea('draft', 0);
         if (selected !== undefined) {
-            applyHistoryRecallText(store, textarea, selected);
+            applyHistoryRecallText(textarea, selected, (text) => store.setInputMirror(text));
         }
         expect(textarea.setTextCalls).toEqual(['older prompt']);
         expect(textarea.gotoBufferEndCount).toBe(1);

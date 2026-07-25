@@ -23,6 +23,7 @@ import type {
     AgentSnapshot,
     MissionControlConfig,
     ModelProviderSelection,
+    TuiSkillMenuEntry,
     WorkflowSpec,
 } from '@mission-control/protocol';
 import type { QuestionBatchEntry, QuestionOption } from '@mission-control/tui/chat';
@@ -124,6 +125,16 @@ export type ModelSelector = (
     currentSelection: ModelProviderSelection,
     options?: { readonly title?: string },
 ) => Promise<ModelProviderSelection | undefined>;
+
+export function toTuiSkillMenuEntries(skills: readonly Skill[]): readonly TuiSkillMenuEntry[] {
+    return skills.map((skill) => {
+        const description = skill.description.trim();
+        return {
+            name: skill.name,
+            description: description.length > 0 ? description : `Load the ${skill.name} skill`,
+        };
+    });
+}
 
 type AskUserRawOption = string | { readonly label: string; readonly description?: string | undefined };
 
@@ -629,7 +640,7 @@ export async function runInteractiveChatSession(
               })
             : { skills: [], diagnostics: [] };
     let sessionSkills: readonly Skill[] = discoveredSkills.skills;
-    tuiHandle?.setSkillNames(sessionSkills.map((skill) => skill.name));
+    tuiHandle?.setSkillEntries(toTuiSkillMenuEntries(sessionSkills));
 
     const discoveredWorkflows =
         options.workspaceRoot !== undefined
@@ -890,7 +901,7 @@ export async function runInteractiveChatSession(
                     skills: sessionSkills,
                     onSkillsReloaded: (skills) => {
                         sessionSkills = skills;
-                        tuiHandle?.setSkillNames(skills.map((skill) => skill.name));
+                        tuiHandle?.setSkillEntries(toTuiSkillMenuEntries(skills));
                     },
                     workflowRegistry: sessionWorkflowRegistry,
                     onWorkflowStarted,

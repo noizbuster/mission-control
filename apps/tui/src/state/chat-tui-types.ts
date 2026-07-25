@@ -1,5 +1,5 @@
 import type { ProviderAuthStore } from '@mission-control/core';
-import type { AgentEvent, AgentSnapshot, ModelProviderSelection } from '@mission-control/protocol';
+import type { AgentEvent, AgentSnapshot, ModelProviderSelection, TuiSkillMenuEntry } from '@mission-control/protocol';
 import type { QuestionBatchEntry, QuestionOption } from '../chat';
 import type { AbgOverlayController } from './abg-overlay-controller';
 import type { ApprovalLevel } from './approval-level';
@@ -53,7 +53,7 @@ export type ChatTuiHandle = {
     onRenameSubmit: ((name: string) => void) | undefined;
     readonly setGenerating: (value: boolean) => void;
     readonly setWorkflowNames: (names: readonly string[]) => void;
-    readonly setSkillNames: (names: readonly string[]) => void;
+    readonly setSkillEntries: (entries: readonly TuiSkillMenuEntry[]) => void;
     readonly setAgentStatus: (text: string) => void;
     readonly setAgentRetryStatus: (text: string, retryAt: number) => void;
     readonly clearAgentStatus: () => void;

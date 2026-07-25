@@ -49,43 +49,95 @@ function streamUsage() {
     };
 }
 
+function stoppingChunks(): LanguageModelV3StreamPart[] {
+    return [
+        { type: 'stream-start', warnings: [] },
+        { type: 'text-start', id: 'text' },
+        { type: 'text-delta', id: 'text', delta: 'done' },
+        { type: 'text-end', id: 'text' },
+        { type: 'finish', finishReason: { unified: 'stop', raw: undefined }, usage: streamUsage() },
+    ];
+}
+
 describe('LLMActor node — Phase 0 gating spike', () => {
     it.each([
         ['anthropic-shape', 'anthropic', 'claude-fable-5', anthropicShapeChunks()],
         ['openai-shape', 'openai', 'gpt-5', openaiShapeChunks()],
-    ])('emits started → deltas → success with exactly one model call (%s)', async (_label, provider, modelId, chunks) => {
-        const model = buildMockModel(provider, modelId, chunks);
-        const tools = buildEchoTools(async () => ({ allowed: true }));
+    ])(
+        'emits started → deltas → success with exactly one model call (%s)',
+        async (_label, provider, modelId, chunks) => {
+            const model = buildMockModel(provider, modelId, chunks);
+            const tools = buildEchoTools(async () => ({ allowed: true }));
 
-        const signals: AbgSignal[] = [];
-        for await (const signal of runLlmActor({
+            const signals: AbgSignal[] = [];
+            for await (const signal of runLlmActor({
+                graphId: 'g1',
+                nodeId: 'llm-1',
+                model,
+                system: assembleSystemPrompt(),
+                messages,
+                tools,
+                retrySleep: async () => {},
+                now: () => NOW,
+            })) {
+                signals.push(signal);
+            }
+
+            expect(signals[0]).toMatchObject({ type: 'started', nodeId: 'llm-1' });
+            expect(signals.at(-1)).toMatchObject({ type: 'success', nodeId: 'llm-1' });
+
+            const types = eventTypes(signals);
+            expect(types).toContain('llm.turn.started');
+            expect(types).toContain('llm.text.delta');
+            expect(types).toContain('llm.tool_call.proposed');
+            expect(types).toContain('tool.completed');
+            expect(types).toContain('llm.turn.completed');
+            if (provider === 'anthropic') {
+                expect(types).toContain('llm.reasoning.delta');
+            }
+
+            // keystone (structural): exactly ONE model call despite finish reason 'tool-calls'
+            expect(model.doStreamCalls.length).toBe(1);
+        },
+    );
+
+    it('adds stable provider cache controls for a session', async () => {
+        const anthropic = buildMockModel('anthropic', 'claude-sonnet-4-6', stoppingChunks());
+        const openai = buildMockModel('openai', 'gpt-5.6', stoppingChunks());
+        const input = {
             graphId: 'g1',
+            sessionId: 'session_cache',
             nodeId: 'llm-1',
-            model,
-            system: assembleSystemPrompt(),
+            system: 'Stable instructions.',
             messages,
-            tools,
-            retrySleep: async () => {},
             now: () => NOW,
+        };
+
+        for await (const _signal of runLlmActor({
+            ...input,
+            model: anthropic,
+            providerID: 'anthropic',
         })) {
-            signals.push(signal);
+            // Consume the completed stream.
+        }
+        for await (const _signal of runLlmActor({
+            ...input,
+            model: openai,
+            providerID: 'openai',
+        })) {
+            // Consume the completed stream.
         }
 
-        expect(signals[0]).toMatchObject({ type: 'started', nodeId: 'llm-1' });
-        expect(signals.at(-1)).toMatchObject({ type: 'success', nodeId: 'llm-1' });
-
-        const types = eventTypes(signals);
-        expect(types).toContain('llm.turn.started');
-        expect(types).toContain('llm.text.delta');
-        expect(types).toContain('llm.tool_call.proposed');
-        expect(types).toContain('tool.completed');
-        expect(types).toContain('llm.turn.completed');
-        if (provider === 'anthropic') {
-            expect(types).toContain('llm.reasoning.delta');
-        }
-
-        // keystone (structural): exactly ONE model call despite finish reason 'tool-calls'
-        expect(model.doStreamCalls.length).toBe(1);
+        expect(anthropic.doStreamCalls[0]?.prompt[0]).toEqual({
+            role: 'system',
+            content: 'Stable instructions.',
+            providerOptions: {
+                anthropic: { cacheControl: { type: 'ephemeral' } },
+            },
+        });
+        expect(openai.doStreamCalls[0]?.providerOptions).toEqual({
+            openai: { promptCacheKey: 'mission-control:session_cache' },
+        });
     });
 
     it('policy gate blocks tool execution until the decision resolves (§5.2 seam)', async () => {

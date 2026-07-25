@@ -110,6 +110,7 @@ import {
     TuiPluginSlotDescriptorSchema,
     TuiPromptHistoryEntrySchema,
     TuiPromptStashEntrySchema,
+    TuiSkillMenuEntrySchema,
     TuiThemePreferenceSchema,
     WorkflowDiscoveryDiagnosticSchema,
     WorkflowSpecSchema,
@@ -406,6 +407,7 @@ describe('protocol public exports', () => {
         expect(TuiLocalPreferencesSchema.shape.recentModels).toBeDefined();
         expect(TuiPromptHistoryEntrySchema.shape.timestamp).toBeDefined();
         expect(TuiPromptStashEntrySchema.shape.cursorOffset).toBeDefined();
+        expect(TuiSkillMenuEntrySchema.shape.description).toBeDefined();
         expect(TuiFrecencyRecordSchema.shape.accessCount).toBeDefined();
         expect(TuiThemePreferenceSchema.shape.customOverrides).toBeDefined();
         expect(TuiPluginManifestSchema.shape.capabilities).toBeDefined();

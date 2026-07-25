@@ -1,7 +1,7 @@
 import type { LanguageModelV3StreamPart } from '@ai-sdk/provider';
 import { describe, expect, it } from 'vitest';
 import { createDeterministicProvider } from '../deterministic-provider';
-import type { ProviderAdapter } from '../provider-turn-types';
+import type { ProviderAdapter, ProviderTurnRequest } from '../provider-turn-types';
 import { FlatProviderBridgeError, wrapFlatProviderAsSdkModel } from './flat-provider-bridge';
 
 /** Drive a model's doStream for a single user prompt and collect the emitted stream parts. */
@@ -77,6 +77,82 @@ describe('wrapFlatProviderAsSdkModel', () => {
         expect(parts.some((part) => part.type === 'tool-input-delta' && part.delta === '{"path":"a.txt"}')).toBe(true);
         expect(parts.some((part) => part.type === 'tool-call' && part.toolName === 'file.read')).toBe(true);
         expect(parts.some((part) => part.type === 'finish' && part.finishReason.unified === 'tool-calls')).toBe(true);
+    });
+
+    it('preserves the configured provider identity on replayed tool calls', async () => {
+        const requests: ProviderTurnRequest[] = [];
+        const provider: ProviderAdapter = {
+            async *streamTurn(request, _context) {
+                requests.push(request);
+                yield {
+                    kind: 'response_completed',
+                    requestId: request.requestId,
+                    sequence: 1,
+                    message: {
+                        messageId: `message_${request.turnId}`,
+                        role: 'assistant',
+                        content: '',
+                    },
+                    finishReason: 'stop',
+                };
+            },
+        };
+        const model = wrapFlatProviderAsSdkModel({
+            provider,
+            providerID: 'anthropic',
+            modelID: 'claude-sonnet-4-6',
+        });
+        const result = await model.doStream({
+            prompt: [
+                {
+                    role: 'assistant',
+                    content: [
+                        {
+                            type: 'tool-call',
+                            toolCallId: 'call_readme',
+                            toolName: 'file.read',
+                            input: { path: 'README.md' },
+                        },
+                    ],
+                },
+                {
+                    role: 'tool',
+                    content: [
+                        {
+                            type: 'tool-result',
+                            toolCallId: 'call_readme',
+                            toolName: 'file.read',
+                            output: { type: 'text', value: '# Mission Control' },
+                        },
+                    ],
+                },
+            ],
+        });
+        const reader = result.stream.getReader();
+        await reader.read();
+        await reader.cancel();
+
+        expect(requests).toHaveLength(1);
+        expect(requests[0]?.messages).toEqual([
+            {
+                role: 'assistant',
+                content: '',
+                providerToolCalls: [
+                    {
+                        providerID: 'anthropic',
+                        toolCallId: 'call_readme',
+                        toolName: 'file.read',
+                        argumentsJson: '{"path":"README.md"}',
+                    },
+                ],
+            },
+            {
+                role: 'tool',
+                toolCallId: 'call_readme',
+                status: 'completed',
+                output: '# Mission Control',
+            },
+        ]);
     });
 
     it('surfaces response_failed through the stream as a FlatProviderBridgeError carrying the original code', async () => {

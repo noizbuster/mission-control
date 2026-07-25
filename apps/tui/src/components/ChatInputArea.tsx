@@ -23,7 +23,8 @@ import {
 } from '../state/interactive-chat-command-menu';
 import { buildFileAutocompleteCompletion } from '../state/interactive-chat-file-autocomplete';
 import { completionPromptListControls, historyPickerPromptListControls } from './prompt-list-controls';
-import { ChatInputTextarea, type ChatTextareaHandle, type ChatTextareaSurface } from './ChatInputTextarea';
+import { ChatInputTextarea, type ChatTextareaHandle } from './ChatInputTextarea';
+import { applyHistoryRecallText } from './prompt-history-recall';
 import type { ChatScrollboxHandle } from './ChatTranscript';
 
 const DOUBLE_ESC_WINDOW_MS = 500;
@@ -36,16 +37,6 @@ export function fileCompletionFrecencyKey(completed: string): string {
     return completed.endsWith('/') ? completed.slice(0, -1) : completed;
 }
 
-/** Synchronize an inline history recall with the native textarea and store mirror. */
-export function applyHistoryRecallText(
-    store: ChatStore,
-    textarea: Pick<ChatTextareaSurface, 'setText' | 'gotoBufferEnd'> | undefined,
-    text: string,
-): void {
-    textarea?.setText(text);
-    textarea?.gotoBufferEnd();
-    store.setInputMirror(text);
-}
 
 
 function resolveDoubleEscAction(): 'tree' | 'fork' | 'interrupt' | 'none' {
@@ -216,7 +207,7 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
             if (snap.historyPicker.open) {
                 const selected = props.store.confirmHistoryPicker();
                 if (selected !== undefined) {
-                    applyHistoryRecallText(props.store, props.textareaRef.get(), selected);
+                    applyHistoryRecallText(props.textareaRef.get(), selected, (text) => props.store.setInputMirror(text));
                 }
                 return;
             }
@@ -228,7 +219,7 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
             key.preventDefault();
             const selected = props.store.confirmHistoryPicker();
             if (selected !== undefined) {
-                applyHistoryRecallText(props.store, props.textareaRef.get(), selected);
+                applyHistoryRecallText(props.textareaRef.get(), selected, (text) => props.store.setInputMirror(text));
             }
             return;
         }
@@ -428,7 +419,7 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
             const skillMenuOpen = promptMenuInteractionsEnabled() && isSkillCommandMenuOpen(buffer);
             const fileAutoOpen = promptMenuInteractionsEnabled() && snap.fileAutocomplete.open;
 
-            if (snap.historyPicker.open) {
+            if (promptMenuInteractionsEnabled() && snap.historyPicker.open) {
                 key.preventDefault();
                 props.store.navigateHistoryPicker(direction);
                 return;
@@ -456,6 +447,7 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
             }
 
             if (
+                promptMenuInteractionsEnabled() &&
                 direction === 'up' &&
                 (props.textareaRef.get()?.cursorOffset ?? 0) === 0 &&
                 !slashMenuOpen &&

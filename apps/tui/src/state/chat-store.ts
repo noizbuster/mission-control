@@ -1125,21 +1125,26 @@ export class ChatStore {
     }
 
 
-    confirmHistoryPicker(): string | undefined {
+    selectedHistoryPickerText(): string | undefined {
         if (!this.state.historyPicker.open) {
             return undefined;
         }
         const newestFirst = this.historyEntriesNewestFirst();
         if (newestFirst.length === 0) {
-            this.state.historyPicker = closeHistoryPicker(this.state.historyPicker);
-            this.publish();
             return undefined;
         }
         const selectedIndex = Math.min(Math.max(this.state.historyPicker.selectedIndex, 0), newestFirst.length - 1);
-        const selected = newestFirst[selectedIndex];
+        return newestFirst[selectedIndex]?.text;
+    }
+
+    confirmHistoryPicker(): string | undefined {
+        if (!this.state.historyPicker.open) {
+            return undefined;
+        }
+        const selectedText = this.selectedHistoryPickerText();
         this.state.historyPicker = closeHistoryPicker(this.state.historyPicker);
         this.publish();
-        return selected?.text;
+        return selectedText;
     }
 
     cancelHistoryPicker(): void {

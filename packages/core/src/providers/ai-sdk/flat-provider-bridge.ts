@@ -147,7 +147,7 @@ export function wrapFlatProviderAsSdkModel(options: FlatProviderBridgeOptions): 
                 providerID,
                 modelID,
                 ...(options.variantID !== undefined ? { variantID: options.variantID } : {}),
-                messages: sdkPromptToAgentMessages(callOptions.prompt),
+                messages: sdkPromptToAgentMessages(callOptions.prompt, providerID),
                 ...(callOptions.tools !== undefined ? { tools: sdkToolsToToolDefinitions(callOptions.tools) } : {}),
             };
             const signal = callOptions.abortSignal ?? new AbortController().signal;
@@ -330,7 +330,7 @@ function forwardAbort(source: AbortSignal, target: AbortController): () => void 
  * transcripts; SDK tool messages (which bundle multiple results per message) are flattened into one
  * `role: 'tool'` message per result — the shape the flat providers and run coordinator expect.
  */
-function sdkPromptToAgentMessages(prompt: readonly LanguageModelV3Message[]): AgentMessage[] {
+function sdkPromptToAgentMessages(prompt: readonly LanguageModelV3Message[], providerID: string): AgentMessage[] {
     const messages: AgentMessage[] = [];
     for (const message of prompt) {
         if (message.role === 'system') {
@@ -338,7 +338,7 @@ function sdkPromptToAgentMessages(prompt: readonly LanguageModelV3Message[]): Ag
         } else if (message.role === 'user') {
             messages.push({ role: 'user', content: textOf(message.content) });
         } else if (message.role === 'assistant') {
-            const transcripts = toolCallTranscriptsOf(message.content);
+            const transcripts = toolCallTranscriptsOf(message.content, providerID);
             messages.push({
                 role: 'assistant',
                 content: textOf(message.content),
@@ -364,11 +364,12 @@ function textOf<P extends { readonly type: string }>(content: ReadonlyArray<P>):
 
 function toolCallTranscriptsOf<P extends { readonly type: string }>(
     content: ReadonlyArray<P>,
+    providerID: string,
 ): NonNullable<Extract<AgentMessage, { readonly role: 'assistant' }>['providerToolCalls']> {
     return content
         .filter((part): part is Extract<P, LanguageModelV3ToolCallPart> => part.type === 'tool-call')
         .map((part) => ({
-            providerID: 'flat-bridge',
+            providerID,
             toolCallId: part.toolCallId,
             toolName: part.toolName,
             argumentsJson: JSON.stringify(part.input),

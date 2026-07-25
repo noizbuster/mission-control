@@ -15,6 +15,7 @@ import type { ChatOutput } from './interactive-chat-io';
 export const RESUMABLE_ATTACH_BANNER = {
     approval: 'Resumable run: blocked on approval. Type /continue to resume work.',
     interrupted: 'Resumable run: interrupted. Type /continue to resume work.',
+    recovery: 'Interrupted run can be safely recovered. Type /continue to inspect and continue outstanding work.',
 } as const;
 
 export type SessionAttachProjection = {
@@ -28,12 +29,14 @@ export type SessionAttachProjection = {
 
 export function projectSessionAttachFromEvents(events: readonly AgentEvent[]): SessionAttachProjection {
     const resumable = findResumableRun(events);
+    const recoveryNeeded = resumable === undefined && hasRecoverableInterruptedTask(events);
     const graphId = latestGraphIdFromEvents(events) ?? resumable?.checkpoint?.graphId;
     return {
         graphId,
         resumable,
-        stickyBannerMessage: stickyBannerForResumable(resumable),
-        overlayRunState: overlayRunStateForResumable(resumable),
+        stickyBannerMessage:
+            stickyBannerForResumable(resumable) ?? (recoveryNeeded ? RESUMABLE_ATTACH_BANNER.recovery : undefined),
+        overlayRunState: overlayRunStateForResumable(resumable) ?? (recoveryNeeded ? 'interrupted' : undefined),
         contextTokensUsed: latestContextTokensUsed(events),
         contextCacheUsage: sessionContextCacheUsage(events),
     };
@@ -93,7 +96,9 @@ function stickyBannerForResumable(resumable: ResumableRunSnapshot | undefined): 
         case 'approval':
             return RESUMABLE_ATTACH_BANNER.approval;
         case 'interrupted':
-            return RESUMABLE_ATTACH_BANNER.interrupted;
+            return isProviderAbortedRun(resumable)
+                ? RESUMABLE_ATTACH_BANNER.recovery
+                : RESUMABLE_ATTACH_BANNER.interrupted;
         default: {
             const _exhaustive: never = resumable;
             return _exhaustive;
@@ -113,6 +118,27 @@ function overlayRunStateForResumable(resumable: ResumableRunSnapshot | undefined
             return _exhaustive;
         }
     }
+}
+
+function isProviderAbortedRun(resumable: Extract<ResumableRunSnapshot, { readonly kind: 'interrupted' }>): boolean {
+    return resumable.reason === 'provider_aborted' || resumable.errorCode === 'provider_aborted';
+}
+
+function hasRecoverableInterruptedTask(events: readonly AgentEvent[]): boolean {
+    for (let index = events.length - 1; index >= 0; index -= 1) {
+        const event = events[index];
+        if (event === undefined) continue;
+        if (event.type === 'run.completed' || event.type === 'run.failed' || event.type === 'run.idle') {
+            return false;
+        }
+        if (event.type === 'run.started') {
+            return false;
+        }
+        if (event.type === 'task.failed' && event.run?.state === 'interrupted') {
+            return true;
+        }
+    }
+    return false;
 }
 
 function projectAbgOverlayOnAttach(

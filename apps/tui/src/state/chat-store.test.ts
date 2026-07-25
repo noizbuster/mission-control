@@ -2471,6 +2471,20 @@ describe('chat-store — history picker + timestamped entries', () => {
         expect(store.getSnapshot().inputMirror).toBe('draft');
     });
 
+    it('exposes the highlighted history text without closing the picker', () => {
+        const store = createChatStore({
+            initialHistoryEntries: [makeHistoryEntry('a', 'older', 1), makeHistoryEntry('b', 'newer', 2)],
+        });
+
+        store.openHistoryPicker('draft');
+        expect(store.selectedHistoryPickerText()).toBe('newer');
+        expect(store.isHistoryPickerOpen()).toBe(true);
+
+        store.navigateHistoryPicker('up');
+        expect(store.selectedHistoryPickerText()).toBe('older');
+        expect(store.isHistoryPickerOpen()).toBe(true);
+    });
+
 
     it('cancelHistoryPicker closes without changing inputMirror', () => {
         const store = createChatStore({

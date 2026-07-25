@@ -104,6 +104,8 @@ export {
     TuiPluginSlotDescriptorSchema,
     type TuiPromptHistoryEntry,
     TuiPromptHistoryEntrySchema,
+    type TuiSkillMenuEntry,
+    TuiSkillMenuEntrySchema,
     type TuiPromptStashEntry,
     TuiPromptStashEntrySchema,
     type TuiThemeOverride,

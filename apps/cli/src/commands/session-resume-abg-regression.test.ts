@@ -38,7 +38,7 @@ afterEach(async () => {
 });
 
 describe('session-resume ABG regression pack (cli)', () => {
-    it('2. attach projects sticky banner without auto-run and leave continue actionable', () => {
+    it('2. attach projects a safe-recovery banner without auto-run after a provider abort', () => {
         // Given: cold interrupted events with a queued checkpoint.
         const checkpoint = makeCheckpoint({
             sessionRunId: 'run-int',
@@ -59,22 +59,18 @@ describe('session-resume ABG regression pack (cli)', () => {
             chatOutput,
         });
 
-        // Then: sticky interrupted banner + ABG snapshot, and no turn starts.
-        expect(projection.stickyBannerMessage).toBe(RESUMABLE_ATTACH_BANNER.interrupted);
-        expect(chatOutput.sticky.value).toBe(RESUMABLE_ATTACH_BANNER.interrupted);
+        // Then: sticky safe-recovery banner + ABG snapshot, and no turn starts.
+        expect(projection.stickyBannerMessage).toBe(RESUMABLE_ATTACH_BANNER.recovery);
+        expect(chatOutput.sticky.value).toBe(RESUMABLE_ATTACH_BANNER.recovery);
         expect(controller.store.getSnapshot().runState).toBe('interrupted');
         expect(resumeTurn).not.toHaveBeenCalled();
 
-        // And: /continue classification remains actionable with the queued cursor.
+        // And: /continue starts a guarded recovery instead of replaying a potentially partial turn.
         const decision = decideWorkResume(events);
-        expect(isWorkResumeActionable(decision)).toBe(true);
-        expect(decision.kind).toBe('interrupted');
-        if (decision.kind !== 'interrupted') {
-            throw new Error('expected interrupted decision');
-        }
-        expect(decision.snapshot.checkpoint.queuedNodeIds).toEqual(['next-node']);
+        expect(isWorkResumeActionable(decision)).toBe(false);
+        expect(decision.kind).toBe('recovery');
         expect(formatWorkResumeStartMessage(decision, CLI_RESUME_REGRESSION_SESSION_ID)).toContain(
-            'queued node(s): next-node',
+            'Starting safe recovery',
         );
     });
 
@@ -144,7 +140,7 @@ describe('session-resume ABG regression pack (cli)', () => {
 
         // When: cold continue recovers graph identity after attach-style event load.
         const decision = decideWorkResume(events);
-        expect(decision.kind).toBe('interrupted');
+        expect(decision.kind).toBe('recovery');
         const recovered = await findWorkflowGraphForSessionContinue({
             workspaceRoot: workspace,
             sessionId,

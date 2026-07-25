@@ -1,4 +1,5 @@
 import { padEndToDisplayWidth, truncateTerminalText } from '@mission-control/tui';
+import type { TuiSkillMenuEntry } from '@mission-control/protocol';
 import { readTerminalCursorDirection } from './interactive-chat-terminal-keys';
 
 export type SlashCommandMenuChoice = {
@@ -256,11 +257,11 @@ export function workflowCommandChoices(workflows: readonly string[]): readonly S
     }));
 }
 
-export function skillCommandChoices(skills: readonly string[]): readonly SlashCommandMenuChoice[] {
-    return skills.map((name) => ({
-        id: `$${name}`,
-        insertText: `$${name} `,
-        description: `Load the ${name} skill`,
+export function skillCommandChoices(skills: readonly TuiSkillMenuEntry[]): readonly SlashCommandMenuChoice[] {
+    return skills.map((skill) => ({
+        id: `$${skill.name}`,
+        insertText: `$${skill.name} `,
+        description: skill.description,
     }));
 }
 
@@ -311,7 +312,7 @@ export function createSkillCommandMenuView(
     line: string,
     state: SlashCommandMenuState,
     maxVisibleChoices: number,
-    skills: readonly string[],
+    skills: readonly TuiSkillMenuEntry[],
 ): SlashCommandMenuView {
     return createCommandMenuView(line, state, maxVisibleChoices, '$', skillCommandChoices(skills));
 }
@@ -354,7 +355,7 @@ export function reduceSkillCommandMenuSelection(
     state: SlashCommandMenuState,
     chunk: string,
     line: string,
-    skills: readonly string[],
+    skills: readonly TuiSkillMenuEntry[],
 ): SlashCommandMenuState {
     return reduceCommandMenuSelection(
         chunk,
@@ -388,7 +389,7 @@ export function resolveWorkflowCommandMenuSubmission(
 export function resolveSkillCommandMenuSubmission(
     line: string,
     state: SlashCommandMenuState,
-    skills: readonly string[],
+    skills: readonly TuiSkillMenuEntry[],
 ): string {
     return resolveCommandMenuSubmission(
         line,
@@ -430,7 +431,7 @@ export function resolveWorkflowCommandMenuInsertText(
 export function resolveSkillCommandMenuInsertText(
     line: string,
     state: SlashCommandMenuState,
-    skills: readonly string[],
+    skills: readonly TuiSkillMenuEntry[],
 ): string | undefined {
     const view = createSkillCommandMenuView(line, state, skillCommandChoices(skills).length, skills);
     if (!view.open) {

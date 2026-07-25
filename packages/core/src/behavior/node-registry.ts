@@ -22,6 +22,7 @@ export type AbgObservedGraphEvent = {
 
 export type AbgNodeRunContext = {
     readonly graphId: string;
+    readonly sessionId?: string;
     readonly now: () => string;
     readonly toolCallId?: string;
     readonly registry?: AbgNodeRegistry;

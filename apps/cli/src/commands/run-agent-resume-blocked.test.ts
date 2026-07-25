@@ -21,7 +21,7 @@ describe('runAgent interactive resume for blocked runs', () => {
         tempRoots.length = 0;
     });
 
-    it('resumes a previously blocked tool continuation for the same durable session', async () => {
+    it('resumes a previously blocked tool continuation after bare continue', async () => {
         const dataDir = await tempRoot('mctrl-chat-resume-data-');
         const sessionId = 'session_cli_resume_blocked';
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
@@ -32,7 +32,7 @@ describe('runAgent interactive resume for blocked runs', () => {
         const output = await runAgent(parseArgs(['--session', sessionId]), {
             authStore: createEmptyAuthStore(),
             chatInput: createScriptedChatInput(
-                [{ type: 'line', value: '/continue' }, { type: 'interrupt' }, { type: 'interrupt' }],
+                [{ type: 'line', value: 'continue' }, { type: 'interrupt' }, { type: 'interrupt' }],
                 50,
             ),
             chatOutput: chatOutput.output,

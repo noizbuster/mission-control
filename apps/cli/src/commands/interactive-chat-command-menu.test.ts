@@ -31,6 +31,8 @@ import {
     terminalModifiedKeyDisableSequence,
     terminalModifiedKeyEnableSequence,
 } from './interactive-chat-keyboard';
+import type { Skill } from '@mission-control/core';
+import { toTuiSkillMenuEntries } from './interactive-chat';
 
 describe('interactive chat command menu', () => {
     it('opens slash commands, filters by typed query, and submits the arrow-selected command', () => {
@@ -389,7 +391,10 @@ describe('interactive chat command menu', () => {
     });
 
     it('opens the skill menu on a bare $ prefix', () => {
-        const skills = ['planner', 'playwright'];
+        const skills = [
+            { name: 'planner', description: 'Creates implementation plans.' },
+            { name: 'playwright', description: 'Automates browser workflows.' },
+        ];
         const state = createSlashCommandMenuState();
         const view = createSkillCommandMenuView('$', state, 10, skills);
 
@@ -401,18 +406,21 @@ describe('interactive chat command menu', () => {
             {
                 id: '$planner',
                 insertText: '$planner ',
-                description: 'Load the planner skill',
+                description: 'Creates implementation plans.',
             },
             {
                 id: '$playwright',
                 insertText: '$playwright ',
-                description: 'Load the playwright skill',
+                description: 'Automates browser workflows.',
             },
         ]);
     });
 
     it('filters $pl so planner ranks above playwright', () => {
-        const skills = ['planner', 'playwright'];
+        const skills = [
+            { name: 'planner', description: 'Creates implementation plans.' },
+            { name: 'playwright', description: 'Automates browser workflows.' },
+        ];
         const view = createSkillCommandMenuView('$pl', createSlashCommandMenuState(), 10, skills);
 
         expect(view.open).toBe(true);
@@ -422,7 +430,10 @@ describe('interactive chat command menu', () => {
     });
 
     it('shows an empty skill menu for unmatched queries without rewriting submission', () => {
-        const skills = ['planner', 'playwright'];
+        const skills = [
+            { name: 'planner', description: 'Creates implementation plans.' },
+            { name: 'playwright', description: 'Automates browser workflows.' },
+        ];
         const state = createSlashCommandMenuState();
         const view = createSkillCommandMenuView('$zzz', state, 10, skills);
 
@@ -432,7 +443,10 @@ describe('interactive chat command menu', () => {
     });
 
     it('returns the untrimmed skill insertText (with trailing space) for the selected choice', () => {
-        const skills = ['planner', 'playwright'];
+        const skills = [
+            { name: 'planner', description: 'Creates implementation plans.' },
+            { name: 'playwright', description: 'Automates browser workflows.' },
+        ];
         const initial = createSlashCommandMenuState();
 
         expect(resolveSkillCommandMenuInsertText('$', initial, skills)).toBe('$planner ');
@@ -445,6 +459,33 @@ describe('interactive chat command menu', () => {
         expect(isSkillCommandMenuOpen('$planner')).toBe(true);
         expect(isSkillCommandMenuOpen('$planner ')).toBe(false);
         expect(isSkillCommandMenuOpen('plain')).toBe(false);
-        expect(resolveSkillCommandMenuInsertText('$planner ', createSlashCommandMenuState(), ['planner'])).toBeUndefined();
+        expect(
+            resolveSkillCommandMenuInsertText('$planner ', createSlashCommandMenuState(), [
+                { name: 'planner', description: 'Creates implementation plans.' },
+            ]),
+        ).toBeUndefined();
+    });
+});
+
+describe('TUI skill menu entries', () => {
+    it('supplies a protocol-valid description when skill metadata omits one', () => {
+        const skills = [
+            {
+                name: 'planner',
+                description: '',
+                disableModelInvocation: false,
+                filePath: '/workspace/.mctrl/skills/planner/SKILL.md',
+                baseDir: '/workspace/.mctrl/skills/planner',
+                sourceInfo: {
+                    scope: 'project',
+                    scopeId: 'project-mctrl',
+                    sourceDir: '/workspace/.mctrl/skills',
+                },
+            },
+        ] satisfies readonly Skill[];
+
+        expect(toTuiSkillMenuEntries(skills)).toEqual([
+            { name: 'planner', description: 'Load the planner skill' },
+        ]);
     });
 });

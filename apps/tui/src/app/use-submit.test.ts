@@ -135,9 +135,9 @@ describe('useSubmit', () => {
     });
 
     it('inserts skill menu completion for $pl without calling submitLine', () => {
-        // Given: open skill menu on partial `$pl` with skillNames including planner
+        // Given: open skill menu on partial `$pl` with a planner menu entry.
         const store = createChatStore();
-        store.setSkillNames(['planner']);
+        store.setSkillEntries([{ name: 'planner', description: 'Creates implementation plans.' }]);
         const textarea = createRecordingTextarea('$pl');
         const textareaHandle = asTextareaRef(textarea);
         const submitLine = vi.spyOn(store, 'submitLine');

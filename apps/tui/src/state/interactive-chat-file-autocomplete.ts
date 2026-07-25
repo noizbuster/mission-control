@@ -46,7 +46,17 @@ export type FileAutocompleteOptions = {
     readonly frecencyKeys?: readonly string[];
 };
 
-const deniedPathEntries = ['node_modules', '.git', '.nx', '.mc', 'dist', 'build', 'target', 'coverage'] as const;
+const deniedPathEntries = [
+    'node_modules',
+    '.git',
+    '.nx',
+    '.mc',
+    'dist',
+    'build',
+    'target',
+    'coverage',
+    'temp/ref-repos',
+] as const;
 
 const whitespacePattern = /\s/u;
 const maxReturnedMatches = 100;

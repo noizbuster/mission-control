@@ -1,56 +1,52 @@
-import { TextAttributes } from '@opentui/core';
-import { For, type JSX } from 'solid-js';
+/** @jsxImportSource @opentui/solid */
+
+import { createMemo, Show, type JSX } from 'solid-js';
 import { createFileAutocompleteView, type FileAutocompleteState } from '../state/interactive-chat-file-autocomplete';
-import { OverlayFrame } from './OverlayFrame';
-import { SELECTED_BG } from './overlay-theme';
+import { completionPromptListControls } from './prompt-list-controls';
+import { PromptListPanel, type PromptListColumn, type PromptListRow } from './PromptListPanel';
 
 export type FileAutocompletePanelProps = {
     readonly fileAutocomplete: FileAutocompleteState;
     readonly maxVisibleRows?: number;
+    readonly viewportColumns: number;
     readonly showFooter?: boolean;
 };
 
 const MAX_VISIBLE = 8;
-const FOOTER = 'Tab/Enter to complete, Up/Down to navigate, Esc to close';
+const fileColumns = [{ id: 'file', width: 'fill' }] as const satisfies readonly PromptListColumn[];
 
-export function FileAutocompletePanel({
-    fileAutocomplete,
-    maxVisibleRows = MAX_VISIBLE,
-    showFooter = true,
-}: FileAutocompletePanelProps): JSX.Element | null {
-    if (maxVisibleRows <= 0) return null;
-
-    const view = createFileAutocompleteView(fileAutocomplete, maxVisibleRows);
-    if (!view.open) return null;
-
-    const header =
-        view.totalCount > 0
-            ? ` Files matching @${view.prefix} (${view.totalCount}) `
-            : ` Files matching @${view.prefix} `;
+export function FileAutocompletePanel(props: FileAutocompletePanelProps): JSX.Element {
+    const maxVisibleRows = createMemo(() => props.maxVisibleRows ?? MAX_VISIBLE);
+    const view = createMemo(() => createFileAutocompleteView(props.fileAutocomplete, maxVisibleRows()));
+    const rows = createMemo<readonly PromptListRow[]>(() => {
+        const current = view();
+        return current.visibleMatches.map((match, index) => {
+            const globalIndex = current.startIndex + index;
+            return {
+                id: `${globalIndex}:${match.name}`,
+                cells: [{ lines: [`${match.isDirectory ? '/' : ' '}${match.name}`] }],
+                selected: globalIndex === current.selectedIndex,
+            };
+        });
+    });
+    const title = (): string => {
+        const current = view();
+        return current.totalCount > 0
+            ? `Files matching @${current.prefix} (${current.totalCount})`
+            : `Files matching @${current.prefix}`;
+    };
 
     return (
-        <OverlayFrame variant="panel" title={header.trim()} {...(showFooter ? { footer: FOOTER } : {})}>
-            {view.empty ? (
-                <text attributes={TextAttributes.DIM}> no files match</text>
-            ) : (
-                <For each={view.visibleMatches}>
-                    {(match, index) => {
-                        const globalIndex = view.startIndex + index();
-                        const isSelected = globalIndex === view.selectedIndex;
-                        const marker = match.isDirectory ? '/' : ' ';
-                        const selectedBg = isSelected ? { bg: SELECTED_BG } : {};
-                        return (
-                            <box flexDirection="row">
-                                <text {...selectedBg}>
-                                    {isSelected ? '> ' : '  '}
-                                    {marker}
-                                    {match.name}
-                                </text>
-                            </box>
-                        );
-                    }}
-                </For>
-            )}
-        </OverlayFrame>
+        <Show when={maxVisibleRows() > 0 && view().open}>
+            <PromptListPanel
+                title={title()}
+                rows={rows()}
+                columns={fileColumns}
+                viewportColumns={props.viewportColumns}
+                emptyMessage="no files match"
+                controls={completionPromptListControls}
+                {...(props.showFooter !== undefined ? { showFooter: props.showFooter } : {})}
+            />
+        </Show>
     );
 }

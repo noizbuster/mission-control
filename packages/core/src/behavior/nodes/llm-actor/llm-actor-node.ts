@@ -86,6 +86,21 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
     let providerChunkTimeoutMs = input.timeoutMs ?? DEFAULT_PROVIDER_CHUNK_TIMEOUT_MS;
     let providerWaitAttempt = 0;
     let noOutputTimeoutRetries = 0;
+    const usesAnthropicPromptCache = input.providerID === 'anthropic';
+    const cachedSystemMessage: ModelMessage = {
+        role: 'system',
+        content: input.system,
+        providerOptions: {
+            anthropic: { cacheControl: { type: 'ephemeral' } },
+        },
+    };
+    const modelMessages = usesAnthropicPromptCache ? [cachedSystemMessage, ...input.messages] : input.messages;
+    const system = usesAnthropicPromptCache ? undefined : input.system;
+    const usesOpenAiPromptCache = input.providerID === 'openai' || input.providerID === 'openai-responses';
+    const providerOptions =
+        usesOpenAiPromptCache && input.sessionId !== undefined
+            ? { openai: { promptCacheKey: `mission-control:${input.sessionId}` } }
+            : undefined;
 
     // Rate-limit / usage-exhaustion: wait indefinitely with exponential backoff (cap ~30m).
     // Only retry when no stream parts escaped — mid-stream failure must not re-execute tools.
@@ -113,8 +128,8 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
             const noOutputDeadlineMs = Date.now() + providerChunkTimeoutMs;
             const result = streamText({
                 model: input.model,
-                system: input.system,
-                messages: input.messages,
+                ...(system !== undefined ? { system } : {}),
+                messages: modelMessages,
                 // Runtime-authored system messages (yield reminders, mid-conversation context
                 // updates) are placed in `messages` for chronological fidelity; safe to opt in.
                 allowSystemInMessages: true,
@@ -123,6 +138,7 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
                 // Own rate-limit waits below; disable AI SDK's short finite retry budget.
                 maxRetries: 0,
                 onError: () => undefined,
+                ...(providerOptions !== undefined ? { providerOptions } : {}),
                 ...(input.tools !== undefined ? { tools: input.tools } : {}),
                 ...(input.toolChoice !== undefined ? { toolChoice: input.toolChoice } : {}),
                 abortSignal: attemptAbortController.signal,

@@ -196,6 +196,11 @@ export function parseChatLine(value: string, options: ChatLineOptions = {}): Cha
     if (line.length === 0) {
         return { kind: 'empty' };
     }
+    // Recovery guidance commonly says "continue". Accept that exact, column-zero
+    // form as the work-resume command; whitespace still escapes it as literal text.
+    if (value === 'continue') {
+        return { kind: 'continue' };
+    }
     // Prefix commands only match at column 0. A leading space (or other
     // whitespace) is an intentional escape so the user can send literal text
     // that starts with `/`, `$`, `#`, or `!` without invoking a command.

@@ -6,6 +6,7 @@ import type { TuiClipboardService } from '../platform/providers/clipboard-toast-
 import type { TuiLocalPreferencesService } from '../platform/providers/local-preferences-context';
 import type { TuiPromptStashService } from '../platform/providers/prompt-services-context';
 import type { ChatTextareaHandle } from '../components/ChatInputTextarea';
+import { applyHistoryRecallText } from '../components/prompt-history-recall';
 import { registerPromptHistoryRecallLayers } from '../platform/keymap/prompt-history-recall';
 import type { ChatStore } from '../state/chat-store';
 import {
@@ -131,6 +132,11 @@ export function useKeymapLayers(deps: KeymapLayersDeps): void {
     // Prompt history must run through the keymap because the managed textarea
     // consumes its own default Up/Down bindings before component callbacks.
     onMount(() => {
+        const applyInlineHistorySelection = (): void => {
+            const selected = store.selectedHistoryPickerText();
+            if (selected === undefined) return;
+            applyHistoryRecallText(textareaHandle.get(), selected, (text) => store.setInputMirror(text));
+        };
         const offLayer = registerPromptHistoryRecallLayers(keymap, {
             isTextareaFocused: () => textareaHandle.get()?.focused === true,
             isCursorAtBufferStart: () => (textareaHandle.get()?.cursorOffset ?? -1) === 0,
@@ -139,9 +145,15 @@ export function useKeymapLayers(deps: KeymapLayersDeps): void {
             openPicker: () => {
                 const currentInput = textareaHandle.get()?.plainText ?? store.getSnapshot().inputMirror;
                 store.openHistoryPicker(currentInput);
+                if (!promptMenuInteractionsEnabled()) {
+                    applyInlineHistorySelection();
+                }
             },
             navigatePicker: (direction) => {
                 store.navigateHistoryPicker(direction);
+                if (!promptMenuInteractionsEnabled()) {
+                    applyInlineHistorySelection();
+                }
             },
         });
         onCleanup(offLayer);

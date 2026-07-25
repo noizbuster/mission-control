@@ -16,6 +16,7 @@ import {
     TuiPluginSlotDescriptorSchema,
     TuiPromptHistoryEntrySchema,
     TuiPromptStashEntrySchema,
+    TuiSkillMenuEntrySchema,
     TuiThemePreferenceSchema,
 } from './tui-provider-data';
 
@@ -71,6 +72,15 @@ describe('TUI provider data schemas', () => {
         expect(() => TuiLocalPreferencesSchema.parse({ ...preferences, unknown: true })).toThrow();
         expect(() =>
             TuiPromptHistoryEntrySchema.parse({ id: 'h1', text: 'prompt', timestamp: 1, parts: [] }),
+        ).toThrow();
+        expect(TuiSkillMenuEntrySchema.parse({ name: 'planner', description: 'Creates plans.' })).toEqual({
+            name: 'planner',
+            description: 'Creates plans.',
+        });
+        expect(() => TuiSkillMenuEntrySchema.parse({ name: 'planner', description: '' })).toThrow();
+        expect(() => TuiSkillMenuEntrySchema.parse({ name: '', description: 'Creates plans.' })).toThrow();
+        expect(() =>
+            TuiSkillMenuEntrySchema.parse({ name: 'planner', description: 'Creates plans.', extra: true }),
         ).toThrow();
     });
 

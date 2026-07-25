@@ -277,6 +277,15 @@ describe('chat command parser', () => {
         });
     });
 
+    it('accepts bare continue as an exact work-resume shortcut', () => {
+        expect(parseChatLine('continue')).toEqual({ kind: 'continue' });
+        expect(parseChatLine(' continue')).toEqual({ kind: 'prompt', prompt: 'continue' });
+        expect(parseChatLine('continue outstanding work')).toEqual({
+            kind: 'prompt',
+            prompt: 'continue outstanding work',
+        });
+    });
+
     it('parses /retry as a no-argument failed-run-rerun command', () => {
         expect(parseChatLine('/retry')).toEqual({ kind: 'retry' });
         expect(parseChatLine('/retry now')).toEqual({

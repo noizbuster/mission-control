@@ -45,6 +45,56 @@ describe('ABG graph coordinator composite nodes', () => {
         expect(result.events.at(-1)?.type).toBe('graph.failed');
     });
 
+    it('completes a fan-out that permits failed children', async () => {
+        const registry = createDefaultAbgNodeRegistry();
+        registry.register('seed-items', async function* (node, context) {
+            context.blackboard?.set('plan.todos', ['one']);
+            yield { type: 'started', graphId: context.graphId, nodeId: node.id };
+            yield { type: 'success', graphId: context.graphId, nodeId: node.id };
+        });
+        registry.register('failed-delegate', async function* (node, context) {
+            yield { type: 'started', graphId: context.graphId, nodeId: node.id };
+            yield {
+                type: 'failure',
+                graphId: context.graphId,
+                nodeId: node.id,
+                error: { code: 'child_failed' },
+            };
+        });
+
+        const result = await runAbgGraph({
+            ...baseInput,
+            registry,
+            graph: {
+                id: 'fan-out-continue-on-failure',
+                entryNodeId: 'seed',
+                defaults: { retryLimit: 0 },
+                nodes: [
+                    { id: 'seed', kind: 'action', implementation: 'seed-items' },
+                    {
+                        id: 'wave',
+                        kind: 'parallel',
+                        children: ['delegate'],
+                        config: { fanOutKey: 'plan.todos', continueOnFailure: true },
+                    },
+                    { id: 'delegate', kind: 'action', implementation: 'failed-delegate' },
+                ],
+                edges: [{ source: 'seed', target: 'wave' }],
+                rules: [],
+                policies: [],
+            },
+        });
+
+        expect(result.status).toBe('completed');
+        expect(result.events.some((event) => event.type === 'node.failed' && event.abg?.nodeId === 'delegate')).toBe(
+            true,
+        );
+        expect(result.events.some((event) => event.type === 'node.completed' && event.abg?.nodeId === 'wave')).toBe(
+            true,
+        );
+        expect(result.events.at(-1)?.type).toBe('graph.completed');
+    });
+
     it('completes a race when a competitor fails before a later valid winner', async () => {
         const registry = createDefaultAbgNodeRegistry();
         registry.register('race-competitor', async function* (node, context) {

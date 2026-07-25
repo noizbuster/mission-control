@@ -113,6 +113,14 @@ export const TuiPromptHistoryEntrySchema = z
     .strict();
 export type TuiPromptHistoryEntry = z.infer<typeof TuiPromptHistoryEntrySchema>;
 
+export const TuiSkillMenuEntrySchema = z
+    .object({
+        name: z.string().min(1),
+        description: z.string().min(1),
+    })
+    .strict();
+export type TuiSkillMenuEntry = z.infer<typeof TuiSkillMenuEntrySchema>;
+
 export const TuiPromptStashEntrySchema = z
     .object({
         id: z.string().min(1),

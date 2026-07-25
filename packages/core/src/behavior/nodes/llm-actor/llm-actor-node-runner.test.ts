@@ -93,6 +93,40 @@ function capturedSystemText(calls: readonly { readonly prompt: readonly unknown[
     return undefined;
 }
 
+function capturedSystemTexts(calls: readonly { readonly prompt: readonly unknown[] }[]): readonly string[] {
+    const prompt = calls[0]?.prompt;
+    if (prompt === undefined) {
+        return [];
+    }
+    return prompt.flatMap((message) => {
+        if (
+            typeof message !== 'object' ||
+            message === null ||
+            !('role' in message) ||
+            message.role !== 'system' ||
+            !('content' in message)
+        ) {
+            return [];
+        }
+        const content = message.content;
+        if (typeof content === 'string') {
+            return [content];
+        }
+        if (!Array.isArray(content)) {
+            return [];
+        }
+        return [
+            content
+                .map((part) =>
+                    typeof part === 'object' && part !== null && 'text' in part && typeof part.text === 'string'
+                        ? part.text
+                        : '',
+                )
+                .join('\n'),
+        ];
+    });
+}
+
 describe('runLlmActorNode — system prompt threading', () => {
     const node = { id: 'llm-actor', kind: 'llm' } as const;
 
@@ -182,6 +216,35 @@ describe('runLlmActorNode — system prompt threading', () => {
         const system = capturedSystemText(model.doStreamCalls);
         expect(system).toBe('OVERRIDE_PERSONA');
         expect(system).not.toContain('/should-not-appear');
+    });
+
+    it('places a stable system prefix before Z.AI node-specific instructions', async () => {
+        const model = buildModel();
+        const blackboard = createBlackboard();
+        blackboard.appendMessages([{ role: 'user', content: 'ping' } as ModelMessage]);
+        const context: AbgNodeRunContext = {
+            graphId: 'g_zai_cache',
+            now: () => NOW,
+            sdkModel: model,
+            blackboard,
+            model: { providerID: 'zai-coding-plan', modelID: 'glm-5.2' },
+            systemPromptEnv: { cwd: '/workspace/mission-control' },
+            projectInstructionResources: [{ path: 'AGENTS.md', content: 'Use pnpm for verification.' }],
+        };
+        const nodeWithOverride = {
+            id: 'llm-actor',
+            kind: 'llm',
+            config: { systemPrompt: 'NODE-SPECIFIC-INSTRUCTION' },
+        } as const;
+
+        await collectSignals(runLlmActorNode(nodeWithOverride, context));
+
+        const systems = capturedSystemTexts(model.doStreamCalls);
+        expect(systems).toHaveLength(2);
+        expect(systems[0]).toContain('Working directory: /workspace/mission-control');
+        expect(systems[0]).toContain('--- AGENTS.md ---');
+        expect(systems[0]).toContain('Use pnpm for verification.');
+        expect(systems[1]).toBe('NODE-SPECIFIC-INSTRUCTION');
     });
 
     it('surfaces a registered tool guideline in the # Guidelines section of the prompt', async () => {

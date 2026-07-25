@@ -2,9 +2,10 @@ import {
     type AgentEvent,
     type AgentMessage,
     AgentMessageSchema,
+    type ProtocolError,
+    ProtocolErrorSchema,
     type ProviderToolCallTranscript,
 } from '@mission-control/protocol';
-
 export type SequencedAgentMessage = {
     readonly message: AgentMessage;
     readonly sourceSequence: number;
@@ -207,14 +208,6 @@ function appendGraphAssistantMessage(
     return true;
 }
 
-function appendToolResultMessage(messages: SequencedAgentMessage[], event: AgentEvent, sourceSequence: number): void {
-    const buffered = bufferToolResultEntry(event, sourceSequence);
-    if (buffered === undefined) {
-        return;
-    }
-    messages.push(buffered);
-}
-
 function bufferToolResultMessage(
     pending: Map<string, SequencedAgentMessage>,
     event: AgentEvent,
@@ -230,17 +223,20 @@ function bufferToolResultEntry(event: AgentEvent, sourceSequence: number): Seque
     if (event.toolResult === undefined) {
         return undefined;
     }
+    const graphPayload = graphToolResultPayload(event, event.toolResult.toolCallId);
+    const output = event.toolResult.output ?? graphPayload?.output;
+    const error = event.toolResult.error ?? graphPayload?.error;
     return {
         message: AgentMessageSchema.parse({
             role: 'tool',
             toolCallId: event.toolResult.toolCallId,
             status: event.toolResult.status,
-            ...(event.toolResult.output !== undefined ? { output: event.toolResult.output } : {}),
+            ...(output !== undefined ? { output } : {}),
             // A `failed` result MUST carry an `error` (the schema's `superRefine` rejects one
             // without). Persisted tool results normally attach one; harden the boundary so a
             // failed result replayed from an older/oddly-shaped event cannot throw here.
-            ...(event.toolResult.error !== undefined
-                ? { error: event.toolResult.error }
+            ...(error !== undefined
+                ? { error }
                 : event.toolResult.status === 'failed'
                   ? { error: { code: 'tool_failed', message: 'tool failed', retryable: false } }
                   : {}),
@@ -248,6 +244,31 @@ function bufferToolResultEntry(event: AgentEvent, sourceSequence: number): Seque
         }),
         sourceSequence,
     };
+}
+
+type GraphToolResultPayload = {
+    readonly output?: string;
+    readonly error?: ProtocolError;
+};
+
+function graphToolResultPayload(event: AgentEvent, expectedToolCallId: string): GraphToolResultPayload | undefined {
+    const emit = event.abg?.emit;
+    if (emit === undefined || (emit.type !== 'tool.completed' && emit.type !== 'tool.failed')) {
+        return undefined;
+    }
+    const payload = emit.payload;
+    if (typeof payload !== 'object' || payload === null) {
+        return undefined;
+    }
+    if (!('toolCallId' in payload) || payload.toolCallId !== expectedToolCallId) {
+        return undefined;
+    }
+    const output = 'output' in payload && typeof payload.output === 'string' ? payload.output : undefined;
+    const parsedError = 'error' in payload ? ProtocolErrorSchema.safeParse(payload.error) : undefined;
+    const error = parsedError?.success === true ? parsedError.data : undefined;
+    return output !== undefined || error !== undefined
+        ? { ...(output !== undefined ? { output } : {}), ...(error !== undefined ? { error } : {}) }
+        : undefined;
 }
 
 function flushPendingToolResults(

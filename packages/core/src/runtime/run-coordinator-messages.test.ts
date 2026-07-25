@@ -55,4 +55,87 @@ describe('readRunCoordinatorMessages', () => {
             { role: 'user', content: 'Continue with the fix.' },
         ]);
     });
+
+    it('restores graph tool output into a cold continuation transcript', async () => {
+        const store = new InMemoryEventStore();
+        await store.append({
+            type: 'prompt.promoted',
+            timestamp,
+            sessionId,
+            message: 'Read README.md.',
+            transcript: {
+                inputId: 'input_prior',
+                messageId: 'message_prior',
+                delivery: 'queue',
+            },
+        });
+        await store.append({
+            type: 'log',
+            timestamp,
+            sessionId,
+            message: 'node emitted event: llm.tool_call.proposed',
+            modelProviderSelection: { providerID: 'anthropic', modelID: 'claude-sonnet-4-6' },
+            abg: {
+                graphId: 'graph_coding_agent',
+                nodeId: 'llm_actor',
+                nodeKind: 'llm',
+                signalType: 'emit',
+                emit: {
+                    type: 'llm.tool_call.proposed',
+                    payload: { toolCallId: 'call_readme', toolName: 'file.read', input: { path: 'README.md' } },
+                },
+            },
+        });
+        await store.append({
+            type: 'tool.completed',
+            timestamp,
+            sessionId,
+            message: 'node emitted event: tool.completed',
+            toolResult: { toolCallId: 'call_readme', status: 'completed' },
+            abg: {
+                graphId: 'graph_coding_agent',
+                nodeId: 'llm_actor',
+                nodeKind: 'llm',
+                signalType: 'emit',
+                emit: {
+                    type: 'tool.completed',
+                    payload: {
+                        toolCallId: 'call_readme',
+                        toolName: 'file.read',
+                        output: '# Mission Control',
+                    },
+                },
+            },
+        });
+        await store.append({
+            type: 'model.call.completed',
+            timestamp,
+            sessionId,
+            message: '',
+            abg: {
+                graphId: 'graph_coding_agent',
+                nodeId: 'llm_actor',
+                nodeKind: 'llm',
+            },
+        });
+
+        const messages = await readRunCoordinatorMessages({ sessionId, store });
+
+        expect(messages).toEqual([
+            { role: 'user', content: 'Read README.md.' },
+            {
+                role: 'assistant',
+                content: '',
+                providerToolCalls: [
+                    {
+                        providerID: 'anthropic',
+                        toolCallId: 'call_readme',
+                        toolName: 'file.read',
+                        argumentsJson: '{"path":"README.md"}',
+                    },
+                ],
+            },
+            { role: 'tool', toolCallId: 'call_readme', status: 'completed', output: '# Mission Control' },
+        ]);
+    });
 });

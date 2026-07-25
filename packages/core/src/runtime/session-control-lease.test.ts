@@ -196,4 +196,75 @@ describe('session control lease store', () => {
 
         renewer.stop();
     });
+
+    it('retries transient renewal errors without aborting a live owner', async () => {
+        let monotonicMs = 100;
+        let scheduledDelay = 0;
+        let scheduled: (() => void | Promise<void>) | undefined;
+        let renews = 0;
+        let fenced = false;
+        const renewer = startSessionControlLeaseRenewer({
+            monotonicNow: () => monotonicMs,
+            schedule: (callback, delayMs) => {
+                scheduled = callback;
+                scheduledDelay = delayMs;
+                return callback;
+            },
+            cancel: () => undefined,
+            transientErrorRetryMs: 1_000,
+            renew: async () => {
+                renews += 1;
+                if (renews === 1) throw new Error('database busy');
+                return true;
+            },
+            onFenced: () => {
+                fenced = true;
+            },
+        });
+
+        monotonicMs += SESSION_CONTROL_RENEW_INTERVAL_MS;
+        await scheduled?.();
+        expect(fenced).toBe(false);
+        expect(scheduledDelay).toBe(1_000);
+
+        monotonicMs += 1_000;
+        await scheduled?.();
+        expect(renews).toBe(2);
+        expect(fenced).toBe(false);
+        expect(scheduledDelay).toBe(SESSION_CONTROL_RENEW_INTERVAL_MS);
+
+        renewer.stop();
+    });
+
+    it('self-fences when transient renewal errors exhaust the retry budget', async () => {
+        let monotonicMs = 100;
+        let scheduled: (() => void | Promise<void>) | undefined;
+        let fenced = false;
+        const renewer = startSessionControlLeaseRenewer({
+            monotonicNow: () => monotonicMs,
+            schedule: (callback) => {
+                scheduled = callback;
+                return callback;
+            },
+            cancel: () => undefined,
+            transientErrorRetryMs: 1_000,
+            maxTransientErrors: 1,
+            renew: async () => {
+                throw new Error('database busy');
+            },
+            onFenced: () => {
+                fenced = true;
+            },
+        });
+
+        monotonicMs += SESSION_CONTROL_RENEW_INTERVAL_MS;
+        await scheduled?.();
+        expect(fenced).toBe(false);
+
+        monotonicMs += 1_000;
+        await scheduled?.();
+        expect(fenced).toBe(true);
+
+        renewer.stop();
+    });
 });

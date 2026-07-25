@@ -99,8 +99,9 @@ describe('ChatBottomDockBase source topology', () => {
         expect(block).toContain('dockSlice.fileAutocomplete.open');
         expect(block).toContain('menuPolicy.rows > 0');
         expect(block).toContain('<SlashMenuPanel');
-        expect(block).toContain('skillNames={dockSlice.skillNames}');
+        expect(block).toContain('skillEntries={dockSlice.skillEntries}');
         expect(block).toContain('<FileAutocompletePanel');
+        expect(block).toContain('viewportColumns={columns}');
         expect(block).toContain('{promptAdjacentPanel ?? null}');
     });
 
@@ -332,7 +333,7 @@ describe('selectChatBottomDockSlice', () => {
         dispose();
     });
 
-    it('carries slash menu, workflow names, skill names, and file autocomplete state into the dock slice', () => {
+    it('carries slash menu, workflow names, skill entries, and file autocomplete state into the dock slice', () => {
         const store = createChatStore();
         const menuState = createSlashCommandMenuState();
         const fileAutocomplete = {
@@ -346,7 +347,10 @@ describe('selectChatBottomDockSlice', () => {
             inputMirror: '/',
             menuState,
             workflowNames: ['default', 'planner', 'executer'],
-            skillNames: ['planner', 'git-master'],
+            skillEntries: [
+                { name: 'planner', description: 'Creates implementation plans.' },
+                { name: 'git-master', description: 'Manages repository history.' },
+            ],
             fileAutocomplete,
         };
 
@@ -354,19 +358,25 @@ describe('selectChatBottomDockSlice', () => {
             inputMirror: '/',
             menuState,
             workflowNames: ['default', 'planner', 'executer'],
-            skillNames: ['planner', 'git-master'],
+            skillEntries: [
+                { name: 'planner', description: 'Creates implementation plans.' },
+                { name: 'git-master', description: 'Manages repository history.' },
+            ],
             fileAutocomplete,
         });
     });
 
-    it('opens skill menu for $pl with skillNames so $planner is the selected choice', () => {
+    it('opens skill menu for $pl with skill entries so $planner is the selected choice', () => {
         const store = createChatStore();
-        store.setSkillNames(['planner', 'git-master']);
+        store.setSkillEntries([
+            { name: 'planner', description: 'Creates implementation plans.' },
+            { name: 'git-master', description: 'Manages repository history.' },
+        ]);
         const slice = selectChatBottomDockSlice({
             ...store.getSnapshot(),
             inputMirror: '$pl',
         });
-        const view = createSkillCommandMenuView('$pl', slice.menuState, 5, slice.skillNames);
+        const view = createSkillCommandMenuView('$pl', slice.menuState, 5, slice.skillEntries);
 
         expect(slice.inputMirror.startsWith('$')).toBe(true);
         expect(view.open).toBe(true);

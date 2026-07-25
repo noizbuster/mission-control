@@ -270,8 +270,8 @@ describe('requireYieldBeforeExit — coding-agent graph stamp', () => {
         });
         const withoutFlag = createCodingAgentGraph({ model: MODEL_SELECTION });
 
-        expect(withFlag.nodes[0]?.config?.requireYieldBeforeExit).toBe(true);
-        expect(withoutFlag.nodes[0]?.config?.requireYieldBeforeExit).toBeUndefined();
+        expect(withFlag.nodes[0]?.config?.['requireYieldBeforeExit']).toBe(true);
+        expect(withoutFlag.nodes[0]?.config?.['requireYieldBeforeExit']).toBeUndefined();
     });
 });
 

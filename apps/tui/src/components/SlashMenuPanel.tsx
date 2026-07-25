@@ -1,85 +1,83 @@
-import { terminalDisplayWidth } from '@mission-control/tui';
-import { TextAttributes } from '@opentui/core';
-import { For, type JSX } from 'solid-js';
+/** @jsxImportSource @opentui/solid */
+
+import type { TuiSkillMenuEntry } from '@mission-control/protocol';
+import { createMemo, Show, type JSX } from 'solid-js';
 import {
     createSkillCommandMenuView,
     createSlashCommandMenuView,
     createWorkflowCommandMenuView,
     type SlashCommandMenuState,
 } from '../state/interactive-chat-command-menu';
-import { OverlayFrame } from './OverlayFrame';
-import { SELECTED_BG } from './overlay-theme';
+import { completionPromptListControls } from './prompt-list-controls';
+import { PromptListPanel, type PromptListColumn, type PromptListRow } from './PromptListPanel';
 
 export type SlashMenuPanelProps = {
     readonly inputBuffer: string;
     readonly menuState: SlashCommandMenuState;
     readonly workflowNames: readonly string[];
-    readonly skillNames: readonly string[];
+    readonly skillEntries: readonly TuiSkillMenuEntry[];
     readonly maxVisibleRows?: number;
+    readonly viewportColumns: number;
     readonly showFooter?: boolean;
 };
 
 const MAX_VISIBLE = 5;
-const FOOTER = 'Up/Down to navigate, Enter to select, Esc to close';
+const commandColumns = [
+    { id: 'command', width: 'fit', minWidth: 8 },
+    { id: 'description', width: 'fill' },
+] as const satisfies readonly PromptListColumn[];
 
-export function SlashMenuPanel({
-    inputBuffer,
-    menuState,
-    workflowNames,
-    skillNames,
-    maxVisibleRows = MAX_VISIBLE,
-    showFooter = true,
-}: SlashMenuPanelProps): JSX.Element | null {
-    const isSlash = inputBuffer.startsWith('/');
-    const isWorkflow = inputBuffer.startsWith('#');
-    const isSkill = inputBuffer.startsWith('$');
-    if (!isSlash && !isWorkflow && !isSkill) return null;
-    if (maxVisibleRows <= 0) return null;
-
-    const view = isSlash
-        ? createSlashCommandMenuView(inputBuffer, menuState, maxVisibleRows)
-        : isWorkflow
-          ? createWorkflowCommandMenuView(inputBuffer, menuState, maxVisibleRows, workflowNames)
-          : createSkillCommandMenuView(inputBuffer, menuState, maxVisibleRows, skillNames);
-
-    if (!view.open) return null;
-
-    const header = isSlash
-        ? view.query.length > 0
-            ? ` Commands matching "${view.query}" `
-            : ` Commands (${view.totalCount}) `
-        : isWorkflow
-          ? view.query.length > 0
-              ? ` Workflows matching "${view.query}" `
-              : ` Workflows (${view.totalCount}) `
-          : view.query.length > 0
-            ? ` Skills matching "${view.query}" `
-            : ` Skills (${view.totalCount}) `;
-    const idWidth =
-        view.visibleChoices.length > 0 ? Math.max(8, ...view.visibleChoices.map((c) => terminalDisplayWidth(c.id))) : 8;
+export function SlashMenuPanel(props: SlashMenuPanelProps): JSX.Element {
+    const maxVisibleRows = createMemo(() => props.maxVisibleRows ?? MAX_VISIBLE);
+    const view = createMemo(() => {
+        if (props.inputBuffer.startsWith('/')) {
+            return createSlashCommandMenuView(props.inputBuffer, props.menuState, maxVisibleRows());
+        }
+        if (props.inputBuffer.startsWith('#')) {
+            return createWorkflowCommandMenuView(
+                props.inputBuffer,
+                props.menuState,
+                maxVisibleRows(),
+                props.workflowNames,
+            );
+        }
+        return createSkillCommandMenuView(props.inputBuffer, props.menuState, maxVisibleRows(), props.skillEntries);
+    });
+    const rows = createMemo<readonly PromptListRow[]>(() => {
+        const current = view();
+        return current.visibleChoices.map((choice, index) => {
+            const globalIndex = current.startIndex + index;
+            return {
+                id: choice.id,
+                cells: [
+                    { lines: [choice.opensPicker === true ? `${choice.id} …` : choice.id] },
+                    { lines: [choice.description] },
+                ],
+                selected: globalIndex === current.selectedIndex,
+            };
+        });
+    });
+    const title = (): string => {
+        const current = view();
+        const label = props.inputBuffer.startsWith('/')
+            ? 'Commands'
+            : props.inputBuffer.startsWith('#')
+              ? 'Workflows'
+              : 'Skills';
+        return current.query.length > 0 ? `${label} matching "${current.query}"` : `${label} (${current.totalCount})`;
+    };
 
     return (
-        <OverlayFrame variant="panel" title={header.trim()} {...(showFooter ? { footer: FOOTER } : {})}>
-            <box height={1} />
-            {view.empty ? (
-                <text attributes={TextAttributes.DIM}> no matches</text>
-            ) : (
-                <For each={view.visibleChoices}>
-                    {(choice, index) => {
-                        const globalIndex = view.startIndex + index();
-                        const isSelected = globalIndex === view.selectedIndex;
-                        const padding = ' '.repeat(Math.max(0, idWidth - terminalDisplayWidth(choice.id)));
-                        const pickerMarker = choice.opensPicker === true ? ' \u2026' : '';
-                        const selectedBg = isSelected ? { bg: SELECTED_BG } : {};
-                        const line = `${isSelected ? '> ' : '  '}${choice.id}${padding}${pickerMarker}  ${choice.description}`;
-                        return (
-                            <box height={1}>
-                                <text {...selectedBg}>{line}</text>
-                            </box>
-                        );
-                    }}
-                </For>
-            )}
-        </OverlayFrame>
+        <Show when={maxVisibleRows() > 0 && view().open}>
+            <PromptListPanel
+                title={title()}
+                rows={rows()}
+                columns={commandColumns}
+                viewportColumns={props.viewportColumns}
+                emptyMessage="no matches"
+                controls={completionPromptListControls}
+                {...(props.showFooter !== undefined ? { showFooter: props.showFooter } : {})}
+            />
+        </Show>
     );
 }
