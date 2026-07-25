@@ -28,12 +28,14 @@ export type AnthropicMessagesMappingState = {
     stopReason?: string;
     inputTokens: number;
     outputTokens: number;
+    cacheReadTokens: number;
     blocksByIndex: Map<number, ContentBlockState>;
 };
 
 export type AnthropicUsage = {
     readonly input_tokens?: number | undefined;
     readonly output_tokens?: number | undefined;
+    readonly cache_read_input_tokens?: number | undefined;
 };
 
 export function createAnthropicMessagesMappingState(requestId: string): AnthropicMessagesMappingState {
@@ -42,6 +44,7 @@ export function createAnthropicMessagesMappingState(requestId: string): Anthropi
         nextSequence: 0,
         inputTokens: 0,
         outputTokens: 0,
+        cacheReadTokens: 0,
         blocksByIndex: new Map(),
     };
 }
@@ -118,6 +121,9 @@ export function updateUsage(state: AnthropicMessagesMappingState, usage: Anthrop
     }
     if (usage?.output_tokens !== undefined) {
         state.outputTokens = usage.output_tokens;
+    }
+    if (usage?.cache_read_input_tokens !== undefined) {
+        state.cacheReadTokens = usage.cache_read_input_tokens;
     }
 }
 

@@ -259,4 +259,74 @@ describe('OpenAI-compatible provider adapter family', () => {
             },
         });
     });
+
+    it('extracts prompt_tokens_details.cached_tokens into cacheReadTokens on the response_completed chunk', async () => {
+        // Given
+        const provider = createOpenAICompatibleProvider({
+            credentialResolver: createStaticProviderCredentialResolver([credential('zai-coding-plan', 'sk-zai-secret')]),
+            transport: transportFromTurns(
+                [],
+                [
+                    [
+                        {
+                            id: 'chatcmpl_cache',
+                            choices: [{ index: 0, delta: { content: 'hi' } }],
+                        },
+                        {
+                            id: 'chatcmpl_cache',
+                            choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+                            usage: {
+                                prompt_tokens: 1000,
+                                completion_tokens: 50,
+                                total_tokens: 1050,
+                                prompt_tokens_details: { cached_tokens: 800 },
+                            },
+                        },
+                    ],
+                ],
+            ),
+        });
+
+        // When
+        const chunks = await collectChunks(
+            provider.streamTurn(turnRequest({ providerID: 'zai-coding-plan' }), createProviderContext()),
+        );
+
+        // Then
+        expect(chunks.at(-1)).toMatchObject({
+            kind: 'response_completed',
+            usage: { inputTokens: 1000, outputTokens: 50, totalTokens: 1050, cacheReadTokens: 800 },
+        });
+    });
+
+    it('omits cacheReadTokens when prompt_tokens_details is absent', async () => {
+        // Given
+        const provider = createOpenAICompatibleProvider({
+            credentialResolver: createStaticProviderCredentialResolver([credential('deepseek', 'sk-deepseek-secret')]),
+            transport: transportFromTurns(
+                [],
+                [
+                    [
+                        {
+                            id: 'chatcmpl_nocache',
+                            choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+                            usage: { prompt_tokens: 100, completion_tokens: 5, total_tokens: 105 },
+                        },
+                    ],
+                ],
+            ),
+        });
+
+        // When
+        const chunks = await collectChunks(
+            provider.streamTurn(turnRequest({ providerID: 'deepseek' }), createProviderContext()),
+        );
+
+        // Then
+        expect(chunks.at(-1)).toMatchObject({
+            kind: 'response_completed',
+            usage: { inputTokens: 100, outputTokens: 5, totalTokens: 105 },
+        });
+        expect((chunks.at(-1) as { usage?: { cacheReadTokens?: number } }).usage?.cacheReadTokens).toBeUndefined();
+    });
 });

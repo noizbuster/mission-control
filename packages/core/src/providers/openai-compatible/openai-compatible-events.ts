@@ -59,6 +59,7 @@ function normalizeUsage(usage: OpenAICompatibleUsage): OpenAICompatibleUsage {
         ...(usage.prompt_tokens !== undefined ? { prompt_tokens: usage.prompt_tokens } : {}),
         ...(usage.completion_tokens !== undefined ? { completion_tokens: usage.completion_tokens } : {}),
         ...(usage.total_tokens !== undefined ? { total_tokens: usage.total_tokens } : {}),
+        ...(usage.prompt_tokens_details !== undefined ? { prompt_tokens_details: usage.prompt_tokens_details } : {}),
     };
 }
 

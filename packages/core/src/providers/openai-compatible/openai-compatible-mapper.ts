@@ -223,7 +223,12 @@ function providerToolCallFields(state: OpenAICompatibleMappingState): {
 }
 
 function usageField(usage: OpenAICompatibleUsage | undefined): {
-    readonly usage?: { readonly inputTokens: number; readonly outputTokens: number; readonly totalTokens: number };
+    readonly usage?: {
+        readonly inputTokens: number;
+        readonly outputTokens: number;
+        readonly totalTokens: number;
+        readonly cacheReadTokens?: number;
+    };
 } {
     return usage?.prompt_tokens === undefined ||
         usage.completion_tokens === undefined ||
@@ -234,6 +239,9 @@ function usageField(usage: OpenAICompatibleUsage | undefined): {
                   inputTokens: usage.prompt_tokens,
                   outputTokens: usage.completion_tokens,
                   totalTokens: usage.total_tokens,
+                  ...(usage.prompt_tokens_details?.cached_tokens !== undefined
+                      ? { cacheReadTokens: usage.prompt_tokens_details.cached_tokens }
+                      : {}),
               },
           };
 }

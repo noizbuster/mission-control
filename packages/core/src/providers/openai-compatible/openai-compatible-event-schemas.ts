@@ -5,6 +5,12 @@ const UsageSchema = z
         prompt_tokens: z.number().int().nonnegative().optional(),
         completion_tokens: z.number().int().nonnegative().optional(),
         total_tokens: z.number().int().nonnegative().optional(),
+        prompt_tokens_details: z
+            .object({
+                cached_tokens: z.number().int().nonnegative().optional(),
+            })
+            .passthrough()
+            .optional(),
     })
     .passthrough();
 
@@ -64,6 +70,7 @@ export type OpenAICompatibleUsage = {
     readonly prompt_tokens?: number | undefined;
     readonly completion_tokens?: number | undefined;
     readonly total_tokens?: number | undefined;
+    readonly prompt_tokens_details?: { readonly cached_tokens?: number | undefined } | undefined;
 };
 
 export type OpenAICompatibleToolCallDelta = z.infer<typeof ToolCallDeltaSchema>;

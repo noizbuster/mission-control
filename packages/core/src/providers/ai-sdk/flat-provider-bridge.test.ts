@@ -441,6 +441,27 @@ describe('wrapFlatProviderAsSdkModel', () => {
         });
     });
 
+    it('threads cacheReadTokens from flat usage into the SDK usage shape', async () => {
+        const provider = createDeterministicProvider([
+            {
+                kind: 'response_completed',
+                content: 'done',
+                finishReason: 'stop',
+                usage: { inputTokens: 12, outputTokens: 7, totalTokens: 19, cacheReadTokens: 8 },
+            },
+        ]);
+        const model = wrapFlatProviderAsSdkModel({ provider, providerID: 'test', modelID: 'mock' });
+        const parts = await collectStreamParts(model, 'go');
+        const finish = parts.find((part) => part.type === 'finish');
+        expect(finish).toMatchObject({
+            type: 'finish',
+            usage: {
+                inputTokens: { total: 12, noCache: 4, cacheRead: 8, cacheWrite: 0 },
+                outputTokens: { total: 7, text: 7, reasoning: 0 },
+            },
+        });
+    });
+
     it('does not support doGenerate (the graph path only streams)', async () => {
         const provider = createDeterministicProvider([]);
         const model = wrapFlatProviderAsSdkModel({ provider, providerID: 'test', modelID: 'mock' });

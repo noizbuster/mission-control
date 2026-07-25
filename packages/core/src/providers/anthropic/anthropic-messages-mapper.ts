@@ -86,6 +86,7 @@ export function* mapAnthropicMessagesStreamEvent(
                     inputTokens: state.inputTokens,
                     outputTokens: state.outputTokens,
                     totalTokens: state.inputTokens + state.outputTokens,
+                    ...(state.cacheReadTokens > 0 ? { cacheReadTokens: state.cacheReadTokens } : {}),
                 },
             };
             return;

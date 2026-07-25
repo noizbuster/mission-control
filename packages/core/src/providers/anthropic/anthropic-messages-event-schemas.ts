@@ -10,6 +10,7 @@ const AnthropicUsageSchema = z
     .object({
         input_tokens: z.number().int().nonnegative().optional(),
         output_tokens: z.number().int().nonnegative().optional(),
+        cache_read_input_tokens: z.number().int().nonnegative().optional(),
     })
     .passthrough();
 
@@ -131,6 +132,7 @@ type AnthropicContentBlockDelta =
 export type AnthropicUsage = {
     readonly input_tokens?: number | undefined;
     readonly output_tokens?: number | undefined;
+    readonly cache_read_input_tokens?: number | undefined;
 };
 
 export type MessageStartEvent = {

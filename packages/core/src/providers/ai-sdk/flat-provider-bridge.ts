@@ -640,8 +640,9 @@ function mapFinishReason(reason: ProviderFinishReason | 'error'): 'stop' | 'tool
 function mapUsage(usage: ProviderUsage | undefined): LanguageModelV3Usage {
     const input = usage?.inputTokens ?? 0;
     const output = usage?.outputTokens ?? 0;
+    const cacheRead = usage?.cacheReadTokens ?? 0;
     return {
-        inputTokens: { total: input, noCache: input, cacheRead: 0, cacheWrite: 0 },
+        inputTokens: { total: input, noCache: Math.max(0, input - cacheRead), cacheRead, cacheWrite: 0 },
         outputTokens: { total: output, text: output, reasoning: 0 },
     };
 }

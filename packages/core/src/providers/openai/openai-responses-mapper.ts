@@ -185,8 +185,22 @@ function completedResponseText(output: readonly unknown[]): string {
 }
 
 function usageFromResponse(
-    usage: { readonly input_tokens: number; readonly output_tokens: number; readonly total_tokens: number } | undefined,
-): { readonly usage?: { readonly inputTokens: number; readonly outputTokens: number; readonly totalTokens: number } } {
+    usage:
+        | {
+              readonly input_tokens: number;
+              readonly output_tokens: number;
+              readonly total_tokens: number;
+              readonly input_tokens_details?: { readonly cached_tokens?: number | undefined } | undefined;
+          }
+        | undefined,
+): {
+    readonly usage?: {
+        readonly inputTokens: number;
+        readonly outputTokens: number;
+        readonly totalTokens: number;
+        readonly cacheReadTokens?: number;
+    };
+} {
     return usage === undefined
         ? {}
         : {
@@ -194,6 +208,9 @@ function usageFromResponse(
                   inputTokens: usage.input_tokens,
                   outputTokens: usage.output_tokens,
                   totalTokens: usage.total_tokens,
+                  ...(usage.input_tokens_details?.cached_tokens !== undefined
+                      ? { cacheReadTokens: usage.input_tokens_details.cached_tokens }
+                      : {}),
               },
           };
 }

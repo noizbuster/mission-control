@@ -99,6 +99,7 @@ export const ProviderUsageSchema = z
         inputTokens: z.number().int().nonnegative(),
         outputTokens: z.number().int().nonnegative(),
         totalTokens: z.number().int().nonnegative(),
+        cacheReadTokens: z.number().int().nonnegative().optional(),
     })
     .strict();
 export type ProviderUsage = z.infer<typeof ProviderUsageSchema>;

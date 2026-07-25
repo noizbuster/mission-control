@@ -18,6 +18,12 @@ const OpenAIUsageSchema = z
         input_tokens: z.number().int().nonnegative(),
         output_tokens: z.number().int().nonnegative(),
         total_tokens: z.number().int().nonnegative(),
+        input_tokens_details: z
+            .object({
+                cached_tokens: z.number().int().nonnegative().optional(),
+            })
+            .passthrough()
+            .optional(),
     })
     .passthrough();
 
