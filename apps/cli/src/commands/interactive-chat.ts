@@ -767,6 +767,10 @@ export async function runInteractiveChatSession(
                         continue;
                     }
                 }
+                if (tuiHandle !== undefined) {
+                    tuiHandle.setGenerating(false);
+                    tuiHandle.clearAgentStatus();
+                }
                 workflowChainDepth = 0;
                 pendingWorkflowTurns.length = 0;
                 activeTurn = undefined;
@@ -778,6 +782,10 @@ export async function runInteractiveChatSession(
                     const interruptedTurn = activeTurn;
                     await interruptActiveTurnBounded(interruptedTurn);
                     activeTurn = undefined;
+                    if (tuiHandle !== undefined) {
+                        tuiHandle.setGenerating(false);
+                        tuiHandle.clearAgentStatus();
+                    }
                     workflowChainDepth = 0;
                     pendingWorkflowTurns.length = 0;
                     pendingInterrupt = false;
@@ -1059,11 +1067,13 @@ export async function runInteractiveChatSession(
                 emitTranscriptFallback(chatOutput, `Error: ${message}\n`);
                 if (tuiHandle !== undefined) {
                     tuiHandle.setGenerating(false);
+                    tuiHandle.clearAgentStatus();
                 }
                 continue;
             }
-            if (tuiHandle !== undefined) {
+            if (tuiHandle !== undefined && result.activeTurn === undefined) {
                 tuiHandle.setGenerating(false);
+                tuiHandle.clearAgentStatus();
             }
             if (!areModelProviderSelectionsEqual(currentModelProviderSelection, result.modelProviderSelection)) {
                 currentProvider =
