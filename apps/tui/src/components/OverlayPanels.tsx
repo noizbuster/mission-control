@@ -78,15 +78,14 @@ export function ApprovalOverlay({ store }: ApprovalOverlayProps): JSX.Element {
             <box flexDirection="column" marginTop={1}>
                 <For each={APPROVAL_OPTIONS}>
                     {(option, index) => {
-                        const isSelected = index() === snapshot().approvalSelectedIndex;
-                        const selectedBg = isSelected ? { bg: SELECTED_BG } : {};
+                        const isSelected = () => index() === snapshot().approvalSelectedIndex;
                         return (
                             <box flexDirection="row">
-                                <text {...selectedBg}>
-                                    {isSelected ? '> ' : '  '}
+                                <text {...(isSelected() ? { bg: SELECTED_BG } : {})}>
+                                    {isSelected() ? '> ' : '  '}
                                     {option.label}{' '}
                                 </text>
-                                <text attributes={TextAttributes.DIM} {...selectedBg}>
+                                <text attributes={TextAttributes.DIM} {...(isSelected() ? { bg: SELECTED_BG } : {})}>
                                     {option.description}
                                 </text>
                             </box>
@@ -251,16 +250,20 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): JSX.Element {
                     <box flexDirection="row">
                         <For each={snapshot().questionTabs}>
                             {(tab, index) => {
-                                const isActive = index() === snapshot().questionTabIndex;
-                                const isAnswered = (snapshot().questionAnswers[index()]?.length ?? 0) > 0;
-                                const tabBg = isActive ? { backgroundColor: ACCENTS.question } : {};
+                                const isActive = () => index() === snapshot().questionTabIndex;
+                                const isAnswered = () => (snapshot().questionAnswers[index()]?.length ?? 0) > 0;
                                 return (
                                     // biome-ignore lint/a11y/noStaticElementInteractions: opentui <box> has no role concept; Left/Right/Tab nav already exists, mouse is an enhancement
-                                    <box paddingLeft={1} paddingRight={1} onMouseOver={onTabHover(index())} {...tabBg}>
+                                    <box
+                                        paddingLeft={1}
+                                        paddingRight={1}
+                                        onMouseOver={onTabHover(index())}
+                                        {...(isActive() ? { backgroundColor: ACCENTS.question } : {})}
+                                    >
                                         <text
-                                            {...(isActive
+                                            {...(isActive()
                                                 ? { fg: '#000000' }
-                                                : isAnswered
+                                                : isAnswered()
                                                   ? {}
                                                   : { attributes: TextAttributes.DIM })}
                                         >
@@ -387,22 +390,21 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): JSX.Element {
                         ? null
                         : (() => {
                               const customIndex = snapshot().questionOptions.length;
-                              const isSelected = customIndex === snapshot().questionSelectedIndex;
-                              const rowBg = isSelected ? { backgroundColor: SELECTED_BG } : {};
+                              const isSelected = () => customIndex === snapshot().questionSelectedIndex;
                               return (
                                   // biome-ignore lint/a11y/noStaticElementInteractions: opentui <box> has no role concept; Enter on this row already enters custom mode, mouse is an enhancement
                                   <box
                                       flexDirection="column"
                                       onMouseDown={onOptionClick(customIndex)}
                                       onMouseOver={onOptionHover(customIndex)}
-                                      {...rowBg}
+                                      {...(isSelected() ? { backgroundColor: SELECTED_BG } : {})}
                                   >
                                       <box flexDirection="row">
-                                          <text {...(isSelected ? { fg: QUESTION_CURSOR_FG } : {})}>
-                                              {isSelected ? `${QUESTION_CURSOR} ` : '  '}
+                                          <text {...(isSelected() ? { fg: QUESTION_CURSOR_FG } : {})}>
+                                              {isSelected() ? `${QUESTION_CURSOR} ` : '  '}
                                           </text>
                                           <text
-                                              {...(isSelected
+                                              {...(isSelected()
                                                   ? { fg: QUESTION_SELECTED_FG }
                                                   : { attributes: TextAttributes.DIM })}
                                           >
@@ -527,12 +529,11 @@ export function ModelPickerOverlay({ store }: ModelPickerOverlayProps): JSX.Elem
             )}
             <For each={view().visibleChoices}>
                 {(choice, index) => {
-                    const globalIndex = view().startIndex + index();
-                    const isSelected = globalIndex === view().selectedIndex;
+                    const isSelected = () => view().startIndex + index() === view().selectedIndex;
                     return (
-                        <text {...(isSelected ? { bg: SELECTED_BG } : {})}>
-                            {isSelected ? '> ' : '  '}
-                            {globalIndex + 1}. {choice.name}
+                        <text {...(isSelected() ? { bg: SELECTED_BG } : {})}>
+                            {isSelected() ? '> ' : '  '}
+                            {view().startIndex + index() + 1}. {choice.name}
                         </text>
                     );
                 }}
@@ -588,11 +589,11 @@ export function LevelPickerOverlay({ store }: LevelPickerOverlayProps): JSX.Elem
         >
             <For each={APPROVAL_LEVEL_PICKER_ENTRIES}>
                 {(level, index) => {
-                    const isSelected = index() === snapshot().levelPickerSelectedIndex;
+                    const isSelected = () => index() === snapshot().levelPickerSelectedIndex;
                     return (
                         <box flexDirection="row">
-                            <text {...(isSelected ? { bg: SELECTED_BG } : {})}>
-                                {isSelected ? '> ' : '  '}
+                            <text {...(isSelected() ? { bg: SELECTED_BG } : {})}>
+                                {isSelected() ? '> ' : '  '}
                                 {padEndToDisplayWidth(level.label, 13)}
                             </text>
                             <text attributes={TextAttributes.DIM}>{level.desc}</text>
@@ -906,17 +907,16 @@ export function AgentsDashboardOverlay({ store, workspaceRoot, actions }: Agents
                         </text>
                         <For each={view().visibleEntries}>
                             {(entry, index) => {
-                                const globalIndex = view().startIndex + index();
-                                const isSelected = globalIndex === view().selectedIndex;
+                                const isSelected = () => view().startIndex + index() === view().selectedIndex;
                                 const marker = entry.disabled
                                     ? '\u2717'
                                     : entry.overrideModel !== undefined
                                       ? '*'
                                       : ' ';
                                 return (
-                                    <box flexDirection="row" {...(isSelected ? { bg: SELECTED_BG } : {})}>
+                                    <box flexDirection="row" {...(isSelected() ? { bg: SELECTED_BG } : {})}>
                                         <text>
-                                            {isSelected ? '> ' : '  '}
+                                            {isSelected() ? '> ' : '  '}
                                             {marker} {entry.name}
                                         </text>
                                     </box>

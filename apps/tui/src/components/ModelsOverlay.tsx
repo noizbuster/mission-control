@@ -57,7 +57,6 @@ export function ModelsOverlay({ store }: ModelsOverlayProps): JSX.Element {
         if (selection === undefined) return undefined;
         return buildModelContextPrefLines(selection, localPreferences.preferences().modelContextPrefs);
     });
-
     useKeyboard((key) => {
         if (key.name === 'up') {
             key.preventDefault();
@@ -163,11 +162,10 @@ export function ModelsOverlay({ store }: ModelsOverlayProps): JSX.Element {
             <box flexDirection="row" marginTop={1}>
                 <For each={view().providerTabs}>
                     {(tab) => {
-                        const isActive = tab.id === slice().activeProviderTab;
-                        const marker = isActive ? '> ' : '  ';
+                        const isActive = createMemo(() => tab.id === slice().activeProviderTab);
                         return (
-                            <text {...(isActive ? { bg: SELECTED_BG } : { attributes: TextAttributes.DIM })}>
-                                {`${marker}${tab.label} `}
+                            <text {...(isActive() ? { bg: SELECTED_BG } : { attributes: TextAttributes.DIM })}>
+                                {`${isActive() ? '> ' : '  '}${tab.label} `}
                             </text>
                         );
                     }}
@@ -195,13 +193,15 @@ export function ModelsOverlay({ store }: ModelsOverlayProps): JSX.Element {
                         </text>
                         <For each={view().leftVisible}>
                             {(entry, index) => {
-                                const globalIndex = view().startIndexLeft + index();
-                                const isFocused =
-                                    state().focusedColumn === 'left' && globalIndex === state().activeLeftIndex;
+                                const isFocused = createMemo(
+                                    () =>
+                                        state().focusedColumn === 'left' &&
+                                        view().startIndexLeft + index() === state().activeLeftIndex,
+                                );
                                 return (
                                     <box flexDirection="row">
-                                        <text {...(isFocused ? { bg: SELECTED_BG } : {})}>
-                                            {`${isFocused ? '> ' : '  '}${formatSelection(entry)}`}
+                                        <text {...(isFocused() ? { bg: SELECTED_BG } : {})}>
+                                            {`${isFocused() ? '> ' : '  '}${formatSelection(entry)}`}
                                         </text>
                                     </box>
                                 );
@@ -222,25 +222,25 @@ export function ModelsOverlay({ store }: ModelsOverlayProps): JSX.Element {
                         </text>
                         <For each={view().rightVisible}>
                             {(row: ModelsOverlayRoleRow, index) => {
-                                const globalIndex = view().startIndexRight + index();
-                                const isFocused =
-                                    state().focusedColumn === 'right' && globalIndex === state().activeRightIndex;
-                                const assignmentText =
-                                    row.assignment !== undefined
-                                        ? formatSelection(row.assignment)
-                                        : formatRoleFallback(row);
+                                const isFocused = createMemo(
+                                    () =>
+                                        state().focusedColumn === 'right' &&
+                                        view().startIndexRight + index() === state().activeRightIndex,
+                                );
                                 return (
                                     <box flexDirection="row">
-                                        <text {...(isFocused ? { bg: SELECTED_BG } : {})}>
-                                            {`${isFocused ? '> ' : '  '}${padEndToDisplayWidth(row.role, 12)}`}
+                                        <text {...(isFocused() ? { bg: SELECTED_BG } : {})}>
+                                            {`${isFocused() ? '> ' : '  '}${padEndToDisplayWidth(row.role, 12)}`}
                                         </text>
                                         <text
                                             attributes={
                                                 row.assignment !== undefined ? TextAttributes.BOLD : TextAttributes.DIM
                                             }
-                                            {...(isFocused ? { bg: SELECTED_BG } : {})}
+                                            {...(isFocused() ? { bg: SELECTED_BG } : {})}
                                         >
-                                            {assignmentText}
+                                            {row.assignment !== undefined
+                                                ? formatSelection(row.assignment)
+                                                : formatRoleFallback(row)}
                                         </text>
                                     </box>
                                 );

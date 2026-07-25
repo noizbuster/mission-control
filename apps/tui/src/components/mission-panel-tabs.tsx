@@ -37,7 +37,7 @@ export type MissionRunRow = {
     readonly detail?: string;
 };
 
-export function renderRunsTab(selectedIndex: number, rows: readonly MissionRunRow[]): JSX.Element {
+export function renderRunsTab(selectedIndex: () => number, rows: readonly MissionRunRow[]): JSX.Element {
     if (rows.length === 0) {
         return (
             <box marginTop={1}>
@@ -45,7 +45,7 @@ export function renderRunsTab(selectedIndex: number, rows: readonly MissionRunRo
             </box>
         );
     }
-    const { startIndex, visibleCount, clampedSelected } = computeWindow(selectedIndex, rows.length);
+    const { startIndex, visibleCount } = computeWindow(selectedIndex(), rows.length);
     const visibleRows = rows.slice(startIndex, startIndex + visibleCount);
     return (
         <box flexDirection="column" marginTop={1}>
@@ -54,12 +54,15 @@ export function renderRunsTab(selectedIndex: number, rows: readonly MissionRunRo
             </text>
             <For each={visibleRows}>
                 {(row, index) => {
-                    const isSelected = startIndex + index() === clampedSelected;
+                    const isSelected = () => {
+                        const win = computeWindow(selectedIndex(), rows.length);
+                        return win.startIndex + index() === win.clampedSelected;
+                    };
                     const status = row.status ?? '';
                     return (
-                        <box flexDirection="row" {...(isSelected ? { bg: SELECTED_BG } : {})}>
+                        <box flexDirection="row" {...(isSelected() ? { bg: SELECTED_BG } : {})}>
                             <text>
-                                {isSelected ? '> ' : '  '}
+                                {isSelected() ? '> ' : '  '}
                                 {row.label}
                             </text>
                             {status.length > 0 ? <text fg={statusColor(status)}>{` [${status}]`}</text> : null}
@@ -74,7 +77,7 @@ export function renderRunsTab(selectedIndex: number, rows: readonly MissionRunRo
     );
 }
 
-export function renderJobsTab(selectedIndex: number, rows: readonly JobPanelRow[]): JSX.Element {
+export function renderJobsTab(selectedIndex: () => number, rows: readonly JobPanelRow[]): JSX.Element {
     if (rows.length === 0) {
         return (
             <box marginTop={1}>
@@ -82,7 +85,7 @@ export function renderJobsTab(selectedIndex: number, rows: readonly JobPanelRow[
             </box>
         );
     }
-    const { startIndex, visibleCount, clampedSelected } = computeWindow(selectedIndex, rows.length);
+    const { startIndex, visibleCount } = computeWindow(selectedIndex(), rows.length);
     const visibleRows = rows.slice(startIndex, startIndex + visibleCount);
     return (
         <box flexDirection="column" marginTop={1}>
@@ -91,11 +94,14 @@ export function renderJobsTab(selectedIndex: number, rows: readonly JobPanelRow[
             </text>
             <For each={visibleRows}>
                 {(row, index) => {
-                    const isSelected = startIndex + index() === clampedSelected;
+                    const isSelected = () => {
+                        const win = computeWindow(selectedIndex(), rows.length);
+                        return win.startIndex + index() === win.clampedSelected;
+                    };
                     return (
-                        <box flexDirection="column" {...(isSelected ? { bg: SELECTED_BG } : {})}>
+                        <box flexDirection="column" {...(isSelected() ? { bg: SELECTED_BG } : {})}>
                             <box flexDirection="row">
-                                <text>{`${isSelected ? '> ' : '  '}${row.label}`}</text>
+                                <text>{`${isSelected() ? '> ' : '  '}${row.label}`}</text>
                                 <text fg={jobStatusColor(row.status)}>{` [${row.status}]`}</text>
                                 {row.detail !== undefined ? (
                                     <text attributes={TextAttributes.DIM}>{` ${row.detail}`}</text>
@@ -109,8 +115,7 @@ export function renderJobsTab(selectedIndex: number, rows: readonly JobPanelRow[
         </box>
     );
 }
-
-export function renderAgentsTab(selectedIndex: number, rows: readonly AgentPanelRow[]): JSX.Element {
+export function renderAgentsTab(selectedIndex: () => number, rows: readonly AgentPanelRow[]): JSX.Element {
     if (rows.length === 0) {
         return (
             <box marginTop={1}>
@@ -118,7 +123,7 @@ export function renderAgentsTab(selectedIndex: number, rows: readonly AgentPanel
             </box>
         );
     }
-    const { startIndex, visibleCount, clampedSelected } = computeWindow(selectedIndex, rows.length);
+    const { startIndex, visibleCount } = computeWindow(selectedIndex(), rows.length);
     const visibleRows = rows.slice(startIndex, startIndex + visibleCount);
     return (
         <box flexDirection="column" marginTop={1}>
@@ -127,10 +132,13 @@ export function renderAgentsTab(selectedIndex: number, rows: readonly AgentPanel
             </text>
             <For each={visibleRows}>
                 {(row, index) => {
-                    const isSelected = startIndex + index() === clampedSelected;
+                    const isSelected = () => {
+                        const win = computeWindow(selectedIndex(), rows.length);
+                        return win.startIndex + index() === win.clampedSelected;
+                    };
                     return (
-                        <box flexDirection="row" {...(isSelected ? { bg: SELECTED_BG } : {})}>
-                            <text>{`${isSelected ? '> ' : '  '}${row.label}`}</text>
+                        <box flexDirection="row" {...(isSelected() ? { bg: SELECTED_BG } : {})}>
+                            <text>{`${isSelected() ? '> ' : '  '}${row.label}`}</text>
                             <text fg={agentStatusColor(row.status)}>{` [${row.status}]`}</text>
                             {row.detail !== undefined ? (
                                 <text attributes={TextAttributes.DIM}>{` ${row.detail}`}</text>

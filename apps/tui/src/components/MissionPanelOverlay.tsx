@@ -10,13 +10,7 @@ import type { ChatAppActions } from '../state/chat-app-actions';
 import type { ChatStore, MissionPanelTab } from '../state/chat-store';
 import type { MissionControlServicesLike } from '../state/mission-services-types';
 import { buildAgentPanelRows, buildJobPanelRows } from './mission-panel-rows';
-import {
-    renderAgentsTab,
-    renderContinueTab,
-    renderDrainTab,
-    renderJobsTab,
-    renderRunsTab,
-} from './mission-panel-tabs';
+import { renderAgentsTab, renderContinueTab, renderDrainTab, renderJobsTab, renderRunsTab } from './mission-panel-tabs';
 import { OverlayFrame } from './OverlayFrame';
 
 const MISSION_PANEL_TABS: readonly MissionPanelTab[] = ['runs', 'jobs', 'agents', 'drain', 'continue'];
@@ -175,11 +169,11 @@ export function MissionPanelOverlay({
                 </For>
             </box>
             {panel().activeTab === 'runs'
-                ? renderRunsTab(panel().selectedIndex, panel().rows)
+                ? renderRunsTab(() => panel().selectedIndex, panel().rows)
                 : panel().activeTab === 'jobs'
-                  ? renderJobsTab(panel().selectedIndex, jobRows())
+                  ? renderJobsTab(() => panel().selectedIndex, jobRows())
                   : panel().activeTab === 'agents'
-                    ? renderAgentsTab(panel().selectedIndex, agentRows())
+                    ? renderAgentsTab(() => panel().selectedIndex, agentRows())
                     : panel().activeTab === 'drain'
                       ? renderDrainTab()
                       : renderContinueTab(continuationState())}
