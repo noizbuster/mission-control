@@ -1,3 +1,4 @@
+import { resolveMissionControlDataDir } from '@mission-control/core';
 import { parseArgs } from './args';
 import type { CliCommandResult } from './cli-command-result';
 import { getVersion } from './cli-version';
@@ -8,6 +9,7 @@ import { runModelsCommand } from './commands/models';
 import { runAgent } from './commands/run-agent';
 import { runAgentsCommand } from './commands/run-agents-cli';
 import { runSessionCommand } from './commands/session';
+import { installCrashGuard } from './crash-guard';
 import { SessionCliUsageError } from './session-args';
 import { pathToFileURL } from 'node:url';
 
@@ -161,6 +163,7 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
 }
 
 export async function runCli(argv: readonly string[] = process.argv.slice(2)): Promise<void> {
+    installCrashGuard({ dataDir: resolveMissionControlDataDir() });
     try {
         const result = await main(argv);
         if (result !== undefined) writeCliCommandResult(result);

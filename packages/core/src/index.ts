@@ -491,6 +491,12 @@ export {
     sessionControlSocketName,
 } from './runtime/session-control-registry-paths';
 export {
+    CRASH_RECOVERY_LEASE_GRACE_MS,
+    type ReconcileCrashedSessionsOptions,
+    type ReconcileCrashedSessionsResult,
+    reconcileCrashedSessions,
+} from './runtime/session-crash-recovery';
+export {
     createPosixSessionOwnerControlClient,
     createSessionOwnerControlClient,
     type SessionOwnerControlClient,

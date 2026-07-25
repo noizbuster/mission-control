@@ -4,6 +4,7 @@ import {
     createPersistentStore,
     createProviderAuthStoreObservabilityRedactor,
     loadResolvedMcpConfig,
+    reconcileCrashedSessions,
     resolveMissionControlDataDir,
 } from '@mission-control/core';
 import type { CliArgs } from '../args';
@@ -46,7 +47,11 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
         })
     ).config;
     const agentModelLookup = await buildAgentModelLookup(workspaceRoot);
-    const persistentStore = await createPersistentStore(resolveMissionControlDataDir());
+    const dataDir = resolveMissionControlDataDir();
+    const persistentStore = await createPersistentStore(dataDir);
+    if (persistentStore !== undefined) {
+        await reconcileCrashedSessions({ dataDir });
+    }
     const observabilityRedactor = await createProviderAuthStoreObservabilityRedactor(authStore);
     const runtime = new AgentRuntime(
         createCliRuntimeOptions({

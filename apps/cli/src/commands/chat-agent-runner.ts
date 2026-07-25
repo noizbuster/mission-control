@@ -26,10 +26,11 @@ import type { ModelProviderSelection } from '@mission-control/protocol';
 import { closeTreeSitterClient } from '@mission-control/tui/highlight';
 import type { ApprovalLevel, ChatStore, ModelChoice } from '@mission-control/tui/state';
 import { approvalLevelRules } from '@mission-control/tui/state';
+import { registerCrashGuardActiveSession } from '../crash-guard';
 import {
-    chatActionShowsWorkingStatus,
     type ChatLineAction,
     type ChatLineOptions,
+    chatActionShowsWorkingStatus,
     parseChatLine,
 } from './chat-commands';
 import { appendInputHistoryEntry } from './input-history-store';
@@ -141,6 +142,7 @@ export function startChatAgentRunner(options: AgentRunnerOptions): AgentRunnerHa
     let currentSessionId: string | undefined = options.sessionId;
     if (currentSessionId !== undefined) {
         store.setSessionId(currentSessionId);
+        registerCrashGuardActiveSession(currentSessionId);
     }
 
     const parseLine: (value: string) => ChatLineAction =
@@ -200,6 +202,7 @@ export function startChatAgentRunner(options: AgentRunnerOptions): AgentRunnerHa
         if (result.sessionId !== undefined) {
             currentSessionId = result.sessionId;
             store.setSessionId(currentSessionId);
+            registerCrashGuardActiveSession(currentSessionId);
         }
         if (result.approvalLevel !== undefined && result.approvalLevel !== currentApprovalLevel) {
             currentApprovalLevel = result.approvalLevel;

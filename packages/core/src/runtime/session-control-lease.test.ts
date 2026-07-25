@@ -320,4 +320,43 @@ describe('session control lease store', () => {
 
         renewer.stop();
     });
+    it('never surfaces an unhandled rejection when onFenced rejects (setTimeout-fired tick)', async () => {
+        // Regression: `tick` is scheduled fire-and-forget (setTimeout never awaits it), so a
+        // rejecting onFenced used to escape as an unhandled rejection and kill the host process.
+        let monotonicMs = 100;
+        let scheduled: (() => void | Promise<void>) | undefined;
+        const renewer = startSessionControlLeaseRenewer({
+            monotonicNow: () => monotonicMs,
+            schedule: (callback) => {
+                scheduled = callback;
+                return callback;
+            },
+            cancel: () => undefined,
+            renew: async () => false,
+            onFenced: () => {
+                throw new Error('fence teardown failed');
+            },
+        });
+
+        const unhandled: unknown[] = [];
+        const onUnhandled = (reason: unknown) => unhandled.push(reason);
+        process.on('unhandledRejection', onUnhandled);
+        try {
+            monotonicMs += SESSION_CONTROL_RENEW_INTERVAL_MS;
+            // Invoke exactly as the real scheduler does: fire-and-forget, no await.
+            void scheduled?.();
+            // Drain the microtask queue so the rejected promise would be reported if it leaked.
+            const drain = (): Promise<void> => {
+                const { promise, resolve } = Promise.withResolvers<void>();
+                setImmediate(resolve);
+                return promise;
+            };
+            await drain();
+            await drain();
+            expect(unhandled).toEqual([]);
+        } finally {
+            process.off('unhandledRejection', onUnhandled);
+            renewer.stop();
+        }
+    });
 });

@@ -44,7 +44,12 @@ export function startSessionControlLeaseRenewer(
     const fence = async (): Promise<void> => {
         if (stopped) return;
         stopped = true;
-        await input.onFenced();
+        // Fencing is best-effort teardown: the lease is already considered lost at this
+        // point, so a rejection from onFenced must never escape `tick`. `tick` is invoked
+        // fire-and-forget by the scheduler (setTimeout), so any escaping rejection would
+        // become an unhandled rejection and terminate the host process. Mirrors the host's
+        // own `void this.fenceEntry(entry).catch(() => undefined)` teardown pattern.
+        await Promise.resolve(input.onFenced()).catch(() => undefined);
     };
     const tick = async (): Promise<void> => {
         if (stopped) return;
