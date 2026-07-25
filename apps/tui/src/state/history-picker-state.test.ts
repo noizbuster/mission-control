@@ -1,14 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
-    beginHistoryRecall,
     clampHistoryPickerSelection,
     closeHistoryPicker,
     createHistoryPickerState,
     createHistoryPickerView,
     navigateHistoryPicker,
-    navigateHistoryRecall,
     openHistoryPicker,
-    selectedHistoryPickerText,
     type HistoryPickerEntry,
 } from './history-picker-state';
 
@@ -54,25 +51,6 @@ describe('openHistoryPicker', () => {
     });
 });
 
-describe('inline history recall', () => {
-    it('cycles from the captured draft through newest-first entries and back', () => {
-        const entries = [entry('new', 'newest'), entry('old', 'older')];
-        let state = beginHistoryRecall(createHistoryPickerState(), entries, 'draft');
-        expect(selectedHistoryPickerText(state, entries)).toBe('draft');
-
-        state = navigateHistoryRecall(state, 'down', entries.length);
-        expect(selectedHistoryPickerText(state, entries)).toBe('newest');
-        state = navigateHistoryRecall(state, 'down', entries.length);
-        expect(selectedHistoryPickerText(state, entries)).toBe('older');
-        expect(navigateHistoryRecall(state, 'down', entries.length)).toBe(state);
-
-        state = navigateHistoryRecall(state, 'up', entries.length);
-        expect(selectedHistoryPickerText(state, entries)).toBe('newest');
-        state = navigateHistoryRecall(state, 'up', entries.length);
-        expect(selectedHistoryPickerText(state, entries)).toBe('draft');
-        expect(navigateHistoryRecall(state, 'up', entries.length)).toBe(state);
-    });
-});
 
 describe('navigateHistoryPicker', () => {
     it('is a no-op when closed', () => {

@@ -5,7 +5,6 @@ import type { OpenTuiKeymap } from '../platform/keymap/keymap-instance';
 import type { TuiClipboardService } from '../platform/providers/clipboard-toast-context';
 import type { TuiLocalPreferencesService } from '../platform/providers/local-preferences-context';
 import type { TuiPromptStashService } from '../platform/providers/prompt-services-context';
-import { recallPromptHistory } from '../components/ChatInputArea';
 import type { ChatTextareaHandle } from '../components/ChatInputTextarea';
 import { registerPromptHistoryRecallLayers } from '../platform/keymap/prompt-history-recall';
 import type { ChatStore } from '../state/chat-store';
@@ -137,8 +136,12 @@ export function useKeymapLayers(deps: KeymapLayersDeps): void {
             isCursorAtBufferStart: () => (textareaHandle.get()?.cursorOffset ?? -1) === 0,
             isHistoryOpen: () => store.getSnapshot().historyPicker.open,
             hasHistoryEntries: () => store.getSnapshot().historyEntries.length > 0,
-            recall: (direction) => {
-                recallPromptHistory(store, textareaHandle.get(), direction);
+            openPicker: () => {
+                const currentInput = textareaHandle.get()?.plainText ?? store.getSnapshot().inputMirror;
+                store.openHistoryPicker(currentInput);
+            },
+            navigatePicker: (direction) => {
+                store.navigateHistoryPicker(direction);
             },
         });
         onCleanup(offLayer);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createChatStore } from '../state/chat-store';
-import { fileCompletionFrecencyKey, recallPromptHistory } from './ChatInputArea';
+import { applyHistoryRecallText, fileCompletionFrecencyKey } from './ChatInputArea';
+import { completionPromptListControls, historyPickerPromptListControls } from './prompt-list-controls';
 import { createRecordingTextarea, makeKeyEvent } from './chat-test-support';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -17,13 +18,14 @@ describe('ChatInputArea prompt-service helpers', () => {
 });
 
 describe('ChatInputArea history picker keyboard contract', () => {
-    it('wires open at buffer start, navigate, fill-only enter, and esc cancel', () => {
+    it('wires open at buffer start, navigate, fill-only Enter/Tab, and Esc cancel', () => {
         const source = readChatInputAreaSource();
-        expect(source).toContain('recallHistory');
-        expect(source).toContain('applyHistoryRecallText');
+        expect(source).toContain('openHistoryPicker');
+        expect(source).toContain('navigateHistoryPicker');
         expect(source).toContain('confirmHistoryPicker');
         expect(source).toContain('cancelHistoryPicker');
         expect(source).toContain('cursorOffset');
+        expect(source).toContain('historyPickerPromptListControls.acceptKeys.includes(\'tab\')');
     });
 
     it('confirm fills textarea without submitting a line event', () => {
@@ -42,9 +44,7 @@ describe('ChatInputArea history picker keyboard contract', () => {
 
         const textarea = createRecordingTextarea('draft', 0);
         if (selected !== undefined) {
-            textarea.setText(selected);
-            textarea.gotoBufferEnd();
-            store.setInputMirror(selected);
+            applyHistoryRecallText(store, textarea, selected);
         }
         expect(textarea.setTextCalls).toEqual(['older prompt']);
         expect(textarea.gotoBufferEndCount).toBe(1);
@@ -63,26 +63,6 @@ describe('ChatInputArea history picker keyboard contract', () => {
         expect(store.getSnapshot().inputMirror).toBe('keep me');
     });
 
-    it('recalls the prior prompt from a cursor-start input and restores the draft', () => {
-        const store = createChatStore({
-            initialHistoryEntries: [
-                { id: 'a', text: 'older prompt', timestamp: 1 },
-                { id: 'b', text: 'newer prompt', timestamp: 2 },
-            ],
-        });
-        const textarea = createRecordingTextarea('draft text', 0);
-        expect(recallPromptHistory(store, textarea, 'up')).toBe(true);
-        expect(recallPromptHistory(store, textarea, 'up')).toBe(true);
-        expect(recallPromptHistory(store, textarea, 'down')).toBe(true);
-        expect(recallPromptHistory(store, textarea, 'down')).toBe(true);
-
-        expect(textarea.setTextCalls).toEqual(['newer prompt', 'older prompt', 'newer prompt', 'draft text']);
-        expect(textarea.gotoBufferEndCount).toBe(4);
-        expect(textarea.plainText).toBe('draft text');
-        expect(store.getSnapshot().inputMirror).toBe('draft text');
-        expect(store.isHistoryPickerOpen()).toBe(false);
-    });
-
     it('makeKeyEvent supports the history picker key names used by the handler', () => {
         const up = makeKeyEvent('up');
         const enter = makeKeyEvent('return');
@@ -90,5 +70,28 @@ describe('ChatInputArea history picker keyboard contract', () => {
         expect(up.name).toBe('up');
         expect(enter.name).toBe('return');
         expect(esc.name).toBe('escape');
+        const tab = makeKeyEvent('tab');
+        expect(tab.name).toBe('tab');
+    });
+});
+
+describe('ChatInputArea prompt-list Tab acceptance contract', () => {
+    it('uses each shared panel control definition to accept the matching open list without submission', () => {
+        const source = readChatInputAreaSource();
+
+        expect(historyPickerPromptListControls.acceptKeys).toContain('tab');
+        expect(completionPromptListControls.acceptKeys).toContain('tab');
+        expect(completionPromptListControls).toEqual({
+            filterable: true,
+            selectable: true,
+            acceptKeys: ['tab', 'enter'],
+            acceptVerb: 'complete',
+            dismissible: true,
+        });
+        expect(source).toContain('historyPickerPromptListControls.acceptKeys.includes(\'tab\')');
+        expect(source).toContain('completionPromptListControls.acceptKeys.includes(\'tab\')');
+        expect(source).toContain('resolveWorkflowCommandMenuInsertText');
+        expect(source).toContain('resolveSkillCommandMenuInsertText');
+        expect(source).toContain('resolveSlashCommandMenuInsertText');
     });
 });

@@ -1,7 +1,7 @@
 // allow: SIZE_OK -- HEAD 1593 -> current 1780 pure LOC; one reactive ChatStore owns the bridge state table and actions that mutate the same state object.
 
 import type { ProviderAuthStore } from '@mission-control/core';
-import { type ModelProviderSelection, type ModelRole } from '@mission-control/protocol';
+import { type ModelProviderSelection, type ModelRole, type TuiSkillMenuEntry } from '@mission-control/protocol';
 import { normalizeQuestionOptions, type QuestionBatchEntry, type QuestionOption } from '@mission-control/tui/chat';
 import { PasteMarkerStore } from '../platform/keymap/bracketed-paste';
 import type { DiffEntry } from '../platform/keymap/diff-viewer';
@@ -15,16 +15,13 @@ import {
 } from './auth-provider-keypress';
 import type { ChatInputEvent } from './chat-input-event';
 import {
-    beginHistoryRecall,
     clampHistoryPickerSelection,
     closeHistoryPicker,
     createHistoryPickerState,
     type HistoryPickerEntry,
     type HistoryPickerState,
     navigateHistoryPicker as reduceHistoryPickerNavigation,
-    navigateHistoryRecall,
     openHistoryPicker as reduceOpenHistoryPicker,
-    selectedHistoryPickerText,
 } from './history-picker-state';
 import {
     createSlashCommandMenuState,
@@ -199,7 +196,7 @@ export type ChatStoreState = {
     readonly toolOutputExpanded: boolean;
     readonly approvalLevel: ApprovalLevel | undefined;
     readonly workflowNames: readonly string[];
-    readonly skillNames: readonly string[];
+    readonly skillEntries: readonly TuiSkillMenuEntry[];
     readonly modelCycleChoices: readonly ModelChoice[];
     readonly modelCycleIndex: number;
     /** Single source of truth for the live selection; `setModelSelection` keeps `modelCycleIndex` aligned when the base matches a cycle entry. */
@@ -400,7 +397,7 @@ export class ChatStore {
             toolOutputExpanded: false,
             approvalLevel: options?.initialApprovalLevel,
             workflowNames: [],
-            skillNames: [],
+            skillEntries: [],
             modelCycleChoices: [],
             modelCycleIndex: 0,
             currentModelSelection: undefined,
@@ -889,7 +886,7 @@ export class ChatStore {
             this.state.menuState,
             direction === 'up' ? CURSOR_UP : CURSOR_DOWN,
             this.state.inputMirror,
-            this.state.skillNames,
+            this.state.skillEntries,
         );
         this.publish();
     }
@@ -936,8 +933,8 @@ export class ChatStore {
         this.publish();
     }
 
-    setSkillNames(names: readonly string[]): void {
-        this.state.skillNames = names;
+    setSkillEntries(entries: readonly TuiSkillMenuEntry[]): void {
+        this.state.skillEntries = entries;
         this.publish();
     }
 
@@ -1127,52 +1124,30 @@ export class ChatStore {
         this.publish();
     }
 
-    /**
-     * Cycle prompt history for inline arrow-key recall. Up selects older entries;
-     * Down returns toward the captured draft after the newest entry.
-     */
-    recallHistory(direction: 'up' | 'down', currentBuffer: string): string | undefined {
-        const newestFirst = this.historyEntriesNewestFirst();
-        if (newestFirst.length === 0) {
-            return undefined;
-        }
-        const wasOpen = this.state.historyPicker.open;
-        if (!wasOpen && direction === 'down') {
-            return undefined;
-        }
-        const current = wasOpen
-            ? this.state.historyPicker
-            : beginHistoryRecall(this.state.historyPicker, newestFirst, currentBuffer);
-        const visualDirection = direction === 'up' ? 'down' : 'up';
-        const next = navigateHistoryRecall(current, visualDirection, newestFirst.length);
-        if (wasOpen && next === current) {
-            return undefined;
-        }
-        const text = selectedHistoryPickerText(next, newestFirst);
-        this.state.historyPicker = next.selectedIndex === -1 ? closeHistoryPicker(next) : next;
-        this.publish();
-        return text;
-    }
 
     confirmHistoryPicker(): string | undefined {
         if (!this.state.historyPicker.open) {
             return undefined;
         }
         const newestFirst = this.historyEntriesNewestFirst();
-        const selected = selectedHistoryPickerText(this.state.historyPicker, newestFirst);
-        this.state.historyPicker = closeHistoryPicker(this.state.historyPicker);
-        this.publish();
-        return selected;
-    }
-
-    cancelHistoryPicker(): string | undefined {
-        if (!this.state.historyPicker.open) {
+        if (newestFirst.length === 0) {
+            this.state.historyPicker = closeHistoryPicker(this.state.historyPicker);
+            this.publish();
             return undefined;
         }
-        const draftSnapshot = this.state.historyPicker.draftSnapshot;
+        const selectedIndex = Math.min(Math.max(this.state.historyPicker.selectedIndex, 0), newestFirst.length - 1);
+        const selected = newestFirst[selectedIndex];
         this.state.historyPicker = closeHistoryPicker(this.state.historyPicker);
         this.publish();
-        return draftSnapshot;
+        return selected?.text;
+    }
+
+    cancelHistoryPicker(): void {
+        if (!this.state.historyPicker.open) {
+            return;
+        }
+        this.state.historyPicker = closeHistoryPicker(this.state.historyPicker);
+        this.publish();
     }
 
     private appendHistoryEntry(text: string): void {
