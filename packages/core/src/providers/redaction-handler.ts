@@ -31,6 +31,11 @@ const DEFAULT_CREDENTIAL_PATTERNS: readonly CredentialPattern[] = [
 ];
 
 export function redactCredentialText(text: string, secrets: readonly string[] = []): string {
+    // The empty-secrets redactor is the streaming hot path: eventForProviderChunk calls this
+    // on every text_delta/reasoning_delta with the default []. It is deterministic (module-level
+    // regex patterns, no per-call state), so reuse the cached closure instead of rebuilding the
+    // Set/sort/marker-probe/closures on every token.
+    if (secrets.length === 0) return noSecretsCredentialRedactor(text);
     return createCredentialTextRedactor(secrets)(text);
 }
 
@@ -59,6 +64,9 @@ export function createCredentialTextRedactor(secrets: readonly string[] = []): (
             .map((segment) => redactSegment(segment))
             .join(marker);
 }
+// Deterministic empty-secrets redactor, built once. Safe to share: redactSegment only uses
+// String.replace over module-level global-flag patterns (no lastIndex state across calls).
+const noSecretsCredentialRedactor = createCredentialTextRedactor([]);
 
 export function createExactSecretTextRedactor(
     secrets: readonly string[],

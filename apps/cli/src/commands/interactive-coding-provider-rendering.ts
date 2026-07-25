@@ -39,7 +39,11 @@ export function renderProviderEnvelope(
             const part: AssistantTranscriptPart & { readonly requestId: string } = {
                 id: partId,
                 type: 'assistant',
-                text: redactCredentialText(text, []),
+                // chunk.delta arrives already credential-redacted by eventForProviderChunk
+                // (the single redaction site — see provider-turn-events.ts / provider-turn-runner.ts:67-72).
+                // Accumulated text is already-redacted deltas concatenated, so re-running
+                // redactCredentialText over the full string per token was O(N^2) redundant work.
+                text,
                 status: 'streaming',
                 requestId: chunk.requestId,
             };
@@ -54,7 +58,7 @@ export function renderProviderEnvelope(
             const part: ReasoningTranscriptPart & { readonly requestId: string } = {
                 id: partId,
                 type: 'reasoning',
-                text: redactCredentialText(text, []),
+                text, // already-redacted deltas concatenated (see text_delta note above)
                 status: 'streaming',
                 requestId: chunk.requestId,
             };
