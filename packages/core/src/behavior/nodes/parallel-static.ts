@@ -23,6 +23,13 @@ export async function collectStaticParallelOutcomes(
     const outcomes: StaticParallelChildOutcome[] = [];
 
     for (let start = 0; start < children.length; start += concurrency) {
+        // Honor the run-owner abort signal before launching a fresh wave so a mid-wave
+        // abort does not fan out into a storm of doomed child runs (parity with the
+        // fanOutKey branch). Partial outcomes are returned; the caller surfaces any
+        // failed children from the in-flight wave.
+        if (context.abortSignal?.aborted === true) {
+            break;
+        }
         const wave = await Promise.all(
             children
                 .slice(start, start + concurrency)

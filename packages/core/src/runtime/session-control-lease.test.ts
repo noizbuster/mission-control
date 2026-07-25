@@ -3,6 +3,7 @@ import { type LocalLibsqlDb, openLocalLibsqlDb } from '../db/local-libsql-db';
 import {
     acquireSessionControlLease,
     readSessionControlLease,
+    reclaimSessionControlLease,
     renewSessionControlLease,
     runWithSessionControlLeaseFence,
     SessionControlLeaseError,
@@ -118,6 +119,58 @@ describe('session control lease store', () => {
         expect(renewed).toMatchObject({ heartbeatWallMs: 6_000, expiresWallMs: 21_000 });
         expect(staleEpoch).toBeUndefined();
         expect(afterExpiry).toBeUndefined();
+        runtime.close();
+    });
+
+    it('reclaims (re-stamps) an expired lease that the same owner still holds', async () => {
+        const runtime = await createRuntime();
+        const acquired = await acquisition(runtime, 'owner-one', 1_000);
+
+        // Strict renew refuses once the TTL window has passed (expires at 16_000).
+        const refused = await renewSessionControlLease({
+            runtime,
+            lease: acquired.lease,
+            nowWallMs: 20_000,
+        });
+        // Reclaim re-stamps the same owner_id + epoch without bumping it.
+        const reclaimed = await reclaimSessionControlLease({
+            runtime,
+            lease: acquired.lease,
+            nowWallMs: 20_000,
+        });
+
+        expect(refused).toBeUndefined();
+        expect(reclaimed).toMatchObject({
+            ownerId: 'owner-one',
+            epoch: acquired.lease.epoch,
+            heartbeatWallMs: 20_000,
+            expiresWallMs: 35_000,
+        });
+        expect(await readSessionControlLease(runtime, DB_IDENTITY, SESSION_ID)).toMatchObject({
+            ownerId: 'owner-one',
+            epoch: acquired.lease.epoch,
+            expiresWallMs: 35_000,
+        });
+        runtime.close();
+    });
+
+    it('reclaim yields undefined once another owner has taken over the lease', async () => {
+        const runtime = await createRuntime();
+        const first = await acquisition(runtime, 'owner-one', 1_000);
+        // Takeover after expiry bumps the epoch to owner-two.
+        await acquisition(runtime, 'owner-two', 16_000);
+
+        const reclaimed = await reclaimSessionControlLease({
+            runtime,
+            lease: first.lease,
+            nowWallMs: 17_000,
+        });
+
+        expect(reclaimed).toBeUndefined();
+        expect(await readSessionControlLease(runtime, DB_IDENTITY, SESSION_ID)).toMatchObject({
+            ownerId: 'owner-two',
+            epoch: first.lease.epoch + 1,
+        });
         runtime.close();
     });
 

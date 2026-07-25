@@ -131,6 +131,57 @@ export async function renewSessionControlLease(input: LeaseActionInput): Promise
     });
 }
 
+/**
+ * Re-stamp a lease that this owner still holds after a transient heartbeat miss.
+ *
+ * `renewSessionControlLease` refuses to touch a lease whose `expires_wall_ms` has
+ * already passed, so a heartbeat renewal delayed past the TTL (write-lane backlog
+ * or event-loop saturation during a long graph fan-out) returns `undefined` and the
+ * renewer fences the run — killing long interactive sessions even though the owning
+ * process is still alive and no takeover occurred.
+ *
+ * `reclaimSessionControlLease` drops only the expiry guard: it re-stamps
+ * `heartbeat_wall_ms`/`expires_wall_ms` for the SAME `owner_id` + `epoch`. A
+ * genuinely dead process cannot reach this code, so only an alive-but-starved owner
+ * reclaims its own lease. If another process took over (different `owner_id`/
+ * `epoch`) the row no longer matches and this returns `undefined`, so the caller
+ * fences — preserving takeover safety.
+ */
+export async function reclaimSessionControlLease(input: LeaseActionInput): Promise<SessionControlLease | undefined> {
+    validateLease(input.lease);
+    assertWallTime(input.nowWallMs);
+    return runSessionControlLeaseImmediate(input.runtime, async (client) => {
+        const expiresWallMs = input.nowWallMs + (input.ttlMs ?? SESSION_CONTROL_LEASE_TTL_MS);
+        const result = await client.execute({
+            sql:
+                'UPDATE session_control_leases SET heartbeat_wall_ms = ?, expires_wall_ms = ? ' +
+                'WHERE db_identity = ? AND session_id = ? AND owner_id = ? AND epoch = ?',
+            args: [
+                input.nowWallMs,
+                expiresWallMs,
+                input.lease.dbIdentity,
+                input.lease.sessionId,
+                input.lease.ownerId,
+                input.lease.epoch,
+            ],
+        });
+        if (result.rowsAffected !== 1) return undefined;
+        await client.execute({
+            sql:
+                'UPDATE session_control_operations SET retention_until = ? ' +
+                "WHERE db_identity = ? AND session_id = ? AND owner_id = ? AND owner_epoch = ? AND status IN ('active','timed_out')",
+            args: [
+                expiresWallMs + SESSION_CONTROL_DEAD_LEASE_RETENTION_MS,
+                input.lease.dbIdentity,
+                input.lease.sessionId,
+                input.lease.ownerId,
+                input.lease.epoch,
+            ],
+        });
+        return { ...input.lease, heartbeatWallMs: input.nowWallMs, expiresWallMs };
+    });
+}
+
 export async function expireSessionControlLease(input: LeaseActionInput): Promise<boolean> {
     validateLease(input.lease);
     assertWallTime(input.nowWallMs);

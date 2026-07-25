@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createBlackboard } from '../memory/blackboard';
 import { collectSignals, createCompositeNodeTestContext } from './composite-node-test-helpers';
 import { type AbgNodeRunContext, createDefaultAbgNodeRegistry, runAbgNode } from './node-registry';
+import { collectStaticParallelOutcomes } from './nodes/parallel-static';
 
 function fanOutContext() {
     return { ...createCompositeNodeTestContext(), blackboard: createBlackboard() };
@@ -159,5 +160,205 @@ describe('ABG parallel node fanOutKey', () => {
         await collectSignals(runAbgNode(registry, node, context));
 
         expect(peak).toBe(2);
+    });
+});
+
+describe('ABG parallel node fanOutKey abort and fail-fast', () => {
+    it('stops without launching a wave when the run-owner abort signal is already set', async () => {
+        const registry = createDefaultAbgNodeRegistry();
+        let runs = 0;
+        registry.register('tracking', async function* trackingNode(node, runContext) {
+            runs += 1;
+            yield { type: 'started', graphId: runContext.graphId, nodeId: node.id };
+            yield { type: 'success', graphId: runContext.graphId, nodeId: node.id };
+        });
+        const controller = new AbortController();
+        controller.abort();
+        const context: AbgNodeRunContext = {
+            graphId: 'graph_composite',
+            now: () => '2026-06-03T10:00:00.000Z',
+            registry,
+            nodes: { trackingChild: { id: 'trackingChild', kind: 'memory', implementation: 'tracking' } },
+            blackboard: createBlackboard(),
+            abortSignal: controller.signal,
+        };
+        context.blackboard?.set('plan.todos', ['a', 'b', 'c', 'd']);
+        const node: AbgNodeSpec = {
+            id: 'delegate-wave',
+            kind: 'parallel',
+            children: ['trackingChild'],
+            config: { fanOutKey: 'plan.todos', concurrency: 2 },
+        };
+        const signals = await collectSignals(runAbgNode(registry, node, context));
+
+        expect(runs).toBe(0);
+        expect(signals.at(-1)).toMatchObject({ type: 'failure', error: { code: 'parallel_fanout_aborted' } });
+    });
+
+    it('stops launching later waves when the abort signal fires during the first wave', async () => {
+        const registry = createDefaultAbgNodeRegistry();
+        let runs = 0;
+        const controller = new AbortController();
+        registry.register('tracking', async function* trackingNode(node, runContext) {
+            runs += 1;
+            // Abort as soon as the first wave of children starts. The wave-top gate must
+            // prevent the remaining waves from launching instead of fast-failing each one.
+            controller.abort();
+            yield { type: 'started', graphId: runContext.graphId, nodeId: node.id };
+            yield { type: 'success', graphId: runContext.graphId, nodeId: node.id };
+        });
+        const context: AbgNodeRunContext = {
+            graphId: 'graph_composite',
+            now: () => '2026-06-03T10:00:00.000Z',
+            registry,
+            nodes: { trackingChild: { id: 'trackingChild', kind: 'memory', implementation: 'tracking' } },
+            blackboard: createBlackboard(),
+            abortSignal: controller.signal,
+        };
+        // 6 items, concurrency 2 => 3 waves. Only the first wave (2 children) may run.
+        context.blackboard?.set('plan.todos', ['a', 'b', 'c', 'd', 'e', 'f']);
+        const node: AbgNodeSpec = {
+            id: 'delegate-wave',
+            kind: 'parallel',
+            children: ['trackingChild'],
+            config: { fanOutKey: 'plan.todos', concurrency: 2 },
+        };
+        const signals = await collectSignals(runAbgNode(registry, node, context));
+
+        expect(runs).toBe(2);
+        expect(signals.at(-1)).toMatchObject({ type: 'failure', error: { code: 'parallel_fanout_aborted' } });
+    });
+
+    it('fail-stops scheduling later waves after a required child fails (concurrency 1)', async () => {
+        const registry = createDefaultAbgNodeRegistry();
+        let runs = 0;
+        registry.register('alwaysFail', async function* failingNode(node, runContext) {
+            runs += 1;
+            yield { type: 'started', graphId: runContext.graphId, nodeId: node.id };
+            yield {
+                type: 'failure',
+                graphId: runContext.graphId,
+                nodeId: node.id,
+                error: { code: 'child_failed', message: 'always fails' },
+            };
+        });
+        const context: AbgNodeRunContext = {
+            graphId: 'graph_composite',
+            now: () => '2026-06-03T10:00:00.000Z',
+            registry,
+            nodes: { failChild: { id: 'failChild', kind: 'memory', implementation: 'alwaysFail' } },
+            blackboard: createBlackboard(),
+        };
+        context.blackboard?.set('plan.todos', ['a', 'b', 'c', 'd']);
+        const node: AbgNodeSpec = {
+            id: 'delegate-wave',
+            kind: 'parallel',
+            children: ['failChild'],
+            config: { fanOutKey: 'plan.todos', concurrency: 1 },
+        };
+        const signals = await collectSignals(runAbgNode(registry, node, context));
+
+        // Without fail-fast every item would run (runs === 4); the fix stops after the first.
+        expect(runs).toBe(1);
+        expect(signals.at(-1)).toMatchObject({ type: 'failure', error: { code: 'parallel_fanout_child_failed' } });
+    });
+
+    it('still runs every wave after a child fails when continueOnFailure is set', async () => {
+        const registry = createDefaultAbgNodeRegistry();
+        let runs = 0;
+        registry.register('alwaysFail', async function* failingNode(node, runContext) {
+            runs += 1;
+            yield { type: 'started', graphId: runContext.graphId, nodeId: node.id };
+            yield {
+                type: 'failure',
+                graphId: runContext.graphId,
+                nodeId: node.id,
+                error: { code: 'child_failed', message: 'always fails' },
+            };
+        });
+        const context: AbgNodeRunContext = {
+            graphId: 'graph_composite',
+            now: () => '2026-06-03T10:00:00.000Z',
+            registry,
+            nodes: { failChild: { id: 'failChild', kind: 'memory', implementation: 'alwaysFail' } },
+            blackboard: createBlackboard(),
+        };
+        context.blackboard?.set('plan.todos', ['a', 'b', 'c', 'd']);
+        const node: AbgNodeSpec = {
+            id: 'delegate-wave',
+            kind: 'parallel',
+            children: ['failChild'],
+            config: { fanOutKey: 'plan.todos', concurrency: 1, continueOnFailure: true },
+        };
+        const signals = await collectSignals(runAbgNode(registry, node, context));
+
+        expect(runs).toBe(4);
+        expect(signals.at(-1)).toMatchObject({ type: 'success' });
+    });
+});
+
+describe('ABG parallel node static children abort', () => {
+    it('stops launching later waves when the abort signal fires during a wave', async () => {
+        const registry = createDefaultAbgNodeRegistry();
+        let runs = 0;
+        const controller = new AbortController();
+        registry.register('tracking', async function* trackingNode(node, runContext) {
+            runs += 1;
+            controller.abort();
+            yield { type: 'started', graphId: runContext.graphId, nodeId: node.id };
+            yield { type: 'success', graphId: runContext.graphId, nodeId: node.id };
+        });
+        const context: AbgNodeRunContext = {
+            graphId: 'graph_composite',
+            now: () => '2026-06-03T10:00:00.000Z',
+            registry,
+            nodes: {
+                a: { id: 'a', kind: 'memory', implementation: 'tracking' },
+                b: { id: 'b', kind: 'memory', implementation: 'tracking' },
+                c: { id: 'c', kind: 'memory', implementation: 'tracking' },
+                d: { id: 'd', kind: 'memory', implementation: 'tracking' },
+            },
+            blackboard: createBlackboard(),
+            abortSignal: controller.signal,
+        };
+        const node: AbgNodeSpec = {
+            id: 'wave',
+            kind: 'parallel',
+            children: ['a', 'b', 'c', 'd'],
+            config: { concurrency: 2 },
+        };
+        await collectSignals(runAbgNode(registry, node, context));
+
+        // First wave (a, b) runs and raises the abort; waves for c, d must not launch.
+        expect(runs).toBe(2);
+    });
+
+    it('does not launch a wave when collectStaticParallelOutcomes is called with an already-aborted signal', async () => {
+        const registry = createDefaultAbgNodeRegistry();
+        let runs = 0;
+        registry.register('tracking', async function* trackingNode(node, runContext) {
+            runs += 1;
+            yield { type: 'success', graphId: runContext.graphId, nodeId: node.id };
+        });
+        const controller = new AbortController();
+        controller.abort();
+        const context: AbgNodeRunContext = {
+            graphId: 'graph_composite',
+            now: () => '2026-06-03T10:00:00.000Z',
+            registry,
+            nodes: { a: { id: 'a', kind: 'memory', implementation: 'tracking' } },
+            blackboard: createBlackboard(),
+            abortSignal: controller.signal,
+        };
+        const node: AbgNodeSpec = { id: 'wave', kind: 'parallel', children: ['a'] };
+        await collectStaticParallelOutcomes(node, context, (childId, runContext) =>
+            runAbgNode(
+                runContext.registry ?? registry,
+                { id: childId, kind: 'memory', implementation: 'tracking' },
+                runContext,
+            ),
+        );
+
+        expect(runs).toBe(0);
     });
 });

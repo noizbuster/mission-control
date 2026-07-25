@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { type LocalLibsqlDb, openLocalLibsqlDb } from '../db/local-libsql-db';
-import { acquireSessionControlLease } from './session-control-lease';
+import { acquireSessionControlLease, readSessionControlLease } from './session-control-lease';
 import {
     publishPosixSessionControlOwner,
     resolveAuthenticatedPosixSessionControlOwner,
@@ -86,6 +86,37 @@ describe.runIf(process.platform !== 'win32')('POSIX exclusive session control ow
         await second.close(2_000);
         firstRuntime.close();
         secondRuntime.close();
+    });
+
+    it('owner.renew recovers a transiently expired lease via reclaim instead of fencing', async () => {
+        const runtimeDir = await createDirectory('mctrl-control-recover-runtime-');
+        const runtime = await createRuntime();
+        const dbIdentity = 'c'.repeat(64);
+        const owner = await publishPosixSessionControlOwner({
+            runtime,
+            dbIdentity,
+            sessionId: SESSION_ID,
+            ownerId: 'owner-recover',
+            nowWallMs: 1_000,
+            processIdentity: { pid: process.pid, processStartId: 'process-recover' },
+            paths: { xdgRuntimeDir: runtimeDir },
+        });
+
+        // Simulate a heartbeat that missed the 15s TTL window: the lease acquired at
+        // 1_000 expires at 16_000, so a renew at 20_000 is past expiry. The strict renew
+        // refuses; the reclaim fallback must re-stamp the same owner's lease so a single
+        // delayed heartbeat does not fence a still-alive interactive run.
+        const recovered = await owner.renew(20_000);
+
+        expect(recovered).toBe(true);
+        expect(await readSessionControlLease(runtime, dbIdentity, SESSION_ID)).toMatchObject({
+            ownerId: 'owner-recover',
+            epoch: 1,
+            heartbeatWallMs: 20_000,
+            expiresWallMs: 35_000,
+        });
+        await owner.close(21_000);
+        runtime.close();
     });
 
     it('refuses a second live owner without replacing the registry', async () => {

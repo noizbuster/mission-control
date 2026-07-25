@@ -110,6 +110,20 @@ export async function* runParallelFanOut(
     const failedChildren: string[] = [];
 
     for (let start = 0; start < items.length; start += concurrency) {
+        // Honor the run-owner abort signal before launching a fresh wave. Without this
+        // gate, a mid-fan-out abort (e.g. a session-control lease fence) fast-fails every
+        // remaining item one wave at a time, producing a storm of doomed child runs that
+        // each hit the already-aborted provider before the graph loop notices the abort.
+        if (context.abortSignal?.aborted === true) {
+            yield failure(node, context, {
+                code: 'parallel_fanout_aborted',
+                fanOutKey,
+                failedChildren,
+                completedChildren,
+                aggregateKey,
+            });
+            return;
+        }
         const end = Math.min(start + concurrency, items.length);
         const wave = await Promise.all(
             indices(start, end).map((index) => runFanOutItem(templateChildId, index, items[index], context, runChild)),
@@ -130,6 +144,13 @@ export async function* runParallelFanOut(
             } else {
                 completedChildren.push(childRef);
             }
+        }
+        // Fail-fast: when a required child has already failed and the node is not
+        // configured to tolerate per-item failures, stop scheduling remaining waves.
+        // Without this, a single child failure burns the entire fan-out budget running
+        // children that cannot change the outcome.
+        if (failedChildren.length > 0 && !continueOnFailure) {
+            break;
         }
     }
 

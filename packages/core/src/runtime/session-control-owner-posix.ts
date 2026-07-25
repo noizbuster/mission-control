@@ -7,6 +7,7 @@ import {
     acquireSessionControlLease,
     expireSessionControlLease,
     readSessionControlLease,
+    reclaimSessionControlLease,
     renewSessionControlLease,
     type SessionControlLease,
 } from './session-control-lease';
@@ -126,10 +127,22 @@ export async function publishPosixSessionControlOwner(
                 lease: acquisition.lease,
                 nowWallMs: renewalWallMs,
             });
-            if (renewed === undefined) return false;
+            // Transient-expiry recovery: if the strict renew missed the TTL window
+            // (write-lane backlog / event-loop saturation during a long graph run),
+            // re-stamp this owner's lease instead of forcing a fence. The reclaim only
+            // matches the SAME owner_id + epoch, so a lease that another process took
+            // over still yields undefined and we return false so the renewer fences.
+            const lease =
+                renewed ??
+                (await reclaimSessionControlLease({
+                    runtime: input.runtime,
+                    lease: acquisition.lease,
+                    nowWallMs: renewalWallMs,
+                }));
+            if (lease === undefined) return false;
             await publishSessionControlRegistry(
                 paths.registryPath,
-                sessionControlRegistryForLease(renewed, nonce, paths.socketPath),
+                sessionControlRegistryForLease(lease, nonce, paths.socketPath),
             );
             return true;
         },

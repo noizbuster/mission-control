@@ -2,6 +2,7 @@ import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db';
 import {
     acquireSessionControlLease,
     expireSessionControlLease,
+    reclaimSessionControlLease,
     renewSessionControlLease,
     type SessionControlLease,
 } from './session-control-lease';
@@ -105,10 +106,20 @@ export async function publishWindowsSessionControlOwner(
                 lease: acquisition.lease,
                 nowWallMs: renewalWallMs,
             });
-            if (renewed === undefined) return false;
+            // Transient-expiry recovery: re-stamp this owner's lease when the strict
+            // renew missed the TTL window. The reclaim only matches the SAME owner_id +
+            // epoch, so a taken-over lease still yields undefined and the renewer fences.
+            const lease =
+                renewed ??
+                (await reclaimSessionControlLease({
+                    runtime: input.runtime,
+                    lease: acquisition.lease,
+                    nowWallMs: renewalWallMs,
+                }));
+            if (lease === undefined) return false;
             await publishSessionControlRegistry(
                 paths.registryPath,
-                sessionControlRegistryForLease(renewed, nonce, activeProxy.endpoint),
+                sessionControlRegistryForLease(lease, nonce, activeProxy.endpoint),
                 { syncDirectory: false },
             );
             return true;
