@@ -44,7 +44,7 @@ import {
     registerEscapeClearsPendingSequence,
     registerTimedLeader,
 } from '@opentui/keymap/addons';
-import { CommandMap, expandToChords, Keybinds } from './keybind';
+import { CommandMap, commandBindings, Keybinds } from './keybind';
 
 /** The leader token name. `<leader>` in binding strings resolves to this. */
 export const LEADER_TOKEN_NAME = 'leader';
@@ -113,9 +113,7 @@ export function registerAbgMinimapToggleLayer<TTarget extends object, TEvent ext
     keymap: Keymap<TTarget, TEvent>,
     deps: AbgMinimapToggleDeps,
 ): () => void {
-    const keybinds = Keybinds.parse({});
-    const chords = expandToChords(keybinds.abg_minimap_toggle);
-    const bindings = chords.map((key) => ({ key, cmd: CommandMap.abg_minimap_toggle }));
+    const bindings = commandBindings(Keybinds.parse({}), 'abg_minimap_toggle');
 
     const commands: readonly Command<TTarget, TEvent>[] = [
         {

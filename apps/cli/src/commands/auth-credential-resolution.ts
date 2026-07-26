@@ -1,6 +1,7 @@
 import type { ModelProviderCatalogEntry, ProviderAuthField } from '@mission-control/config';
 import type { ProviderCredential } from '@mission-control/protocol';
 import type { AuthCredentialArg } from '../args';
+import { assertUnreachable } from '../assert-unreachable';
 import type { SaveProviderCredentialFieldInput } from '../auth-store';
 import type { AuthPrompt, AuthPromptOptions } from './auth-prompts';
 import { maskSecretHint } from './auth-prompts';
@@ -173,7 +174,7 @@ function createExistingCredentialMap(
         case 'oauth':
             return credentials;
         default:
-            return assertNever(credential);
+            return assertUnreachable(credential, 'provider credential type');
     }
 }
 
@@ -202,9 +203,4 @@ function resolveLegacyApiKey(
         return undefined;
     }
     return field.value;
-}
-
-function assertNever(value: never): never {
-    void value;
-    throw new Error('Unhandled provider credential type');
 }

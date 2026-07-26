@@ -1,6 +1,6 @@
-import { MC_DIR_NAME, McPersistenceError } from './paths';
 import { isErrorCode } from '../util/node-error';
 import { atomicWriteTextFile } from './atomic-write';
+import { McPersistenceError, mcFilePath } from './paths';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -82,7 +82,7 @@ export async function appendNotepad(
 }
 
 export function notepadFilePath(root: string, planName: string, file: NotepadFile): string {
-    return join(root, MC_DIR_NAME, NOTEPADS_DIR, planName, `${file}.md`);
+    return mcFilePath(root, NOTEPADS_DIR, planName, `${file}.md`);
 }
 
 /**
@@ -130,5 +130,3 @@ function assertNotepadFile(file: string): asserts file is NotepadFile {
         );
     }
 }
-
-

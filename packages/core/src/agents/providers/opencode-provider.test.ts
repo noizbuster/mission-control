@@ -36,7 +36,7 @@ describe('opencodeProvider', () => {
             '---\nname: build\ndescription: Default build agent.\nmodel: opencode/gpt-5.4\n---\nYou are a build agent.',
         );
 
-        const agents = await opencodeProvider.loadAgents(ctx);
+        const { agents } = await opencodeProvider.loadAgents(ctx);
 
         expect(agents).toHaveLength(1);
         expect(agents[0]?.name).toBe('build');
@@ -47,7 +47,7 @@ describe('opencodeProvider', () => {
     });
 
     it('(b) returns an empty array when neither project nor user dir exists', async () => {
-        const agents = await opencodeProvider.loadAgents(ctx);
+        const { agents } = await opencodeProvider.loadAgents(ctx);
         expect(agents).toEqual([]);
     });
 
@@ -70,7 +70,7 @@ describe('opencodeProvider', () => {
             ].join('\n'),
         );
 
-        const agents = await opencodeProvider.loadAgents(ctx);
+        const { agents } = await opencodeProvider.loadAgents(ctx);
 
         expect(agents).toHaveLength(1);
         const tools = agents[0]?.tools;
@@ -86,7 +86,7 @@ describe('opencodeProvider', () => {
             '---\nname: valid\ndescription: A valid agent.\n---\nbody',
         );
 
-        const agents = await opencodeProvider.loadAgents(ctx);
+        const { agents } = await opencodeProvider.loadAgents(ctx);
 
         expect(agents).toHaveLength(1);
         expect(agents[0]?.name).toBe('valid');
@@ -104,7 +104,7 @@ describe('opencodeProvider', () => {
             '---\nname: real\ndescription: A real agent.\n---\nbody',
         );
 
-        const agents = await opencodeProvider.loadAgents(ctx);
+        const { agents } = await opencodeProvider.loadAgents(ctx);
 
         expect(agents).toHaveLength(1);
         expect(agents[0]?.name).toBe('real');
@@ -122,7 +122,7 @@ describe('opencodeProvider', () => {
             '---\nname: usr\ndescription: User agent.\n---\nbody-usr',
         );
 
-        const agents = await opencodeProvider.loadAgents(ctx);
+        const { agents } = await opencodeProvider.loadAgents(ctx);
 
         expect(agents.map((a) => a.name).sort()).toEqual(['proj', 'usr']);
         const proj = agents.find((a) => a.name === 'proj');
@@ -150,7 +150,7 @@ describe('opencodeProvider', () => {
             '---\nname: singular\ndescription: Should load from singular dir.\n---\nbody',
         );
 
-        const agents = await opencodeProvider.loadAgents(ctx);
+        const { agents } = await opencodeProvider.loadAgents(ctx);
 
         expect(agents).toHaveLength(1);
         expect(agents[0]?.name).toBe('singular');

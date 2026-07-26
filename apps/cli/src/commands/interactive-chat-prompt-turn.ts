@@ -25,6 +25,7 @@ import type {
     WorkflowSpec,
 } from '@mission-control/protocol';
 import type { AbgOverlayController, ApprovalLevel } from '@mission-control/tui/state';
+import { buildAgentEvent } from './interactive-agent-event';
 import type { ChatOutput } from './interactive-chat-io';
 import { type ActiveCodingAgentTurn, startCodingAgentTurn } from './interactive-coding-agent';
 
@@ -182,15 +183,14 @@ function emitFallbackTaskEvent(
     message: string,
     modelProviderSelection: ModelProviderSelection,
 ): void {
-    const event: AgentEvent = {
+    const event: AgentEvent = buildAgentEvent({
         type,
-        timestamp: new Date().toISOString(),
         sessionId,
         taskId,
         message,
         nativeSidecarStatus: 'mock',
         modelProviderSelection,
-    };
+    });
     coding.emitEvent?.(
         coding.observabilityRedactor === undefined
             ? event

@@ -5,6 +5,7 @@ import {
     type AbgNodeModelOptions,
     type ModelProviderSelection,
 } from '@mission-control/protocol';
+import { findProviderOrThrow } from '../provider-catalog-lookup';
 import { readFile } from 'node:fs/promises';
 import { isAbsolute, resolve } from 'node:path';
 
@@ -87,10 +88,7 @@ function isMissingFileError(error: unknown): boolean {
 }
 
 function validateNodeModelOptions(model: AbgNodeModelOptions): void {
-    const provider = modelProviderCatalog.find((entry) => entry.id === model.providerID);
-    if (provider === undefined) {
-        throw new Error(`Unknown provider: ${model.providerID}`);
-    }
+    const provider = findProviderOrThrow(modelProviderCatalog, model.providerID);
     const modelEntry = provider.models.find((entry) => entry.id === model.modelID);
     if (modelEntry === undefined) {
         throw new Error(`Model ${model.modelID} is not available for provider ${model.providerID}`);

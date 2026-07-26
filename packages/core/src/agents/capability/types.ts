@@ -1,4 +1,5 @@
-import type { AgentDefinition } from '@mission-control/protocol';
+import { type AgentDefinition } from '@mission-control/protocol';
+import type { AgentDiscoveryDiagnostic } from '../agent-loader';
 
 /**
  * Context handed to every provider's {@linkcode AgentPluginProvider.loadAgents} call.
@@ -30,5 +31,16 @@ export interface AgentPluginProvider {
     readonly description: string;
     /** Higher priority wins on agent-name conflicts. */
     readonly priority: number;
-    loadAgents(ctx: LoadContext): Promise<readonly AgentDefinition[]>;
+    loadAgents(ctx: LoadContext): Promise<AgentPluginProviderLoadResult>;
 }
+
+/** Result of a provider's {@linkcode AgentPluginProvider.loadAgents} call. */
+export type AgentPluginProviderLoadResult = {
+    readonly agents: readonly AgentDefinition[];
+    /**
+     * Per-file diagnostics (parse errors, oversized files, unsupported fields).
+     * Surfaces issues that would otherwise be silently dropped — e.g. a broken
+     * Claude/Cursor agent file now emits a `parse_error` instead of disappearing.
+     */
+    readonly diagnostics: readonly AgentDiscoveryDiagnostic[];
+};

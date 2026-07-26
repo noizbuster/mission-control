@@ -1,5 +1,6 @@
 import { resolveMissionControlDataDir } from '@mission-control/core';
 import { parseArgs } from './args';
+import { assertUnreachable } from './assert-unreachable';
 import type { CliCommandResult } from './cli-command-result';
 import { getVersion } from './cli-version';
 import { runAuthCommand } from './commands/auth';
@@ -158,7 +159,7 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
             process.stdout.write(await runAgentsCommand(args));
             return;
         default:
-            assertNever(args.command);
+            assertUnreachable(args.command, 'CLI command');
     }
 }
 
@@ -196,8 +197,4 @@ function isCliEntrypoint(): boolean {
 
 if (isCliEntrypoint()) {
     await runCli();
-}
-
-function assertNever(value: never): never {
-    throw new Error(`Unexpected CLI command: ${String(value)}`);
 }

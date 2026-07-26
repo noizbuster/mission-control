@@ -18,6 +18,8 @@
  * The default persona is provider-agnostic; a per-family template can be supplied via
  * `persona` (Phase 2 wires per-model-family templates from `prompt/*.txt`).
  */
+
+import { escapeXml } from '../util/escape-xml';
 import { formatProjectContext, type ProjectInstructionResource } from './project-context-messages';
 
 export type SystemPromptEnvironment = {
@@ -185,10 +187,6 @@ function renderWorkflows(workflows: readonly SystemPromptWorkflow[]): string | u
         ...entries,
         '</available_workflows>',
     ].join('\n');
-}
-
-function escapeXml(value: string): string {
-    return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 // --- Canonical content-hash cache ---

@@ -6,6 +6,7 @@ import {
 import type { ModelProviderSelection, ProviderCredentialSummary } from '@mission-control/protocol';
 import type { CliArgs } from '../args';
 import { createProviderAuthStore, type ProviderAuthStore } from '../auth-store';
+import { findProviderOrThrow } from '../provider-catalog-lookup';
 import { rejectOAuthCredentialFlags, saveApiCredential } from './auth-login-credential';
 import { createProviderOAuthClient, type ProviderOAuthClient, resolveAuthMethodForLogin } from './auth-oauth';
 import {
@@ -59,10 +60,7 @@ async function runAuthLogin(args: CliArgs, options: AuthCommandOptions): Promise
             throw new Error('auth login requires --provider');
         }
 
-        const provider = modelProviderCatalog.find((entry) => entry.id === providerID);
-        if (provider === undefined) {
-            throw new Error(`Unknown provider: ${providerID}`);
-        }
+        const provider = findProviderOrThrow(modelProviderCatalog, providerID);
 
         const modelID = args.authModelID ?? provider.defaultModelID;
         const selection = validateProviderModelSelection({
@@ -288,10 +286,7 @@ function validateProviderID(providerID: string): void {
 }
 
 function validateProviderModelSelection(selection: ModelProviderSelection): ModelProviderSelection {
-    const provider = modelProviderCatalog.find((entry) => entry.id === selection.providerID);
-    if (provider === undefined) {
-        throw new Error(`Unknown provider: ${selection.providerID}`);
-    }
+    const provider = findProviderOrThrow(modelProviderCatalog, selection.providerID);
     if (!provider.models.some((model) => model.id === selection.modelID)) {
         throw new Error(`Model ${selection.modelID} is not available for provider ${selection.providerID}`);
     }

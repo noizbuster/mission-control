@@ -51,7 +51,7 @@ describe('clineAgentProvider', () => {
             validAgentMd('global-helper', 'Global helper agent.'),
         );
 
-        const agents = await clineAgentProvider.loadAgents(ctx);
+        const { agents } = await clineAgentProvider.loadAgents(ctx);
 
         expect(agents).toHaveLength(2);
         const project = agents.find((a) => a.name === 'code-reviewer');
@@ -68,7 +68,7 @@ describe('clineAgentProvider', () => {
     });
 
     it('(b) returns empty array when no .cline/agents directories exist', async () => {
-        const agents = await clineAgentProvider.loadAgents(ctx);
+        const { agents } = await clineAgentProvider.loadAgents(ctx);
 
         expect(agents).toEqual([]);
     });
@@ -83,7 +83,7 @@ describe('clineAgentProvider', () => {
             '---\nname: "unterminated\n---\n\nbody\n',
         );
 
-        const agents = await clineAgentProvider.loadAgents(ctx);
+        const { agents } = await clineAgentProvider.loadAgents(ctx);
 
         const names = agents.map((a: AgentDefinition) => a.name);
         expect(names).toContain('good-agent');
@@ -101,7 +101,7 @@ describe('clineAgentProvider', () => {
             validAgentMd('real-agent', 'A real agent.'),
         );
 
-        const agents = await clineAgentProvider.loadAgents(ctx);
+        const { agents } = await clineAgentProvider.loadAgents(ctx);
 
         const names = agents.map((a) => a.name);
         expect(names).toEqual(['real-agent']);
@@ -113,7 +113,7 @@ describe('clineAgentProvider', () => {
         await writeFileDeep(join(area.workspace, '.cline', 'agents', 'notes.txt'), 'not an agent');
         await writeFileDeep(join(area.workspace, '.cline', 'agents', 'data.json'), '{"not": "an agent"}');
 
-        const agents = await clineAgentProvider.loadAgents(ctx);
+        const { agents } = await clineAgentProvider.loadAgents(ctx);
 
         expect(agents.map((a) => a.name)).toEqual(['md-agent']);
     });

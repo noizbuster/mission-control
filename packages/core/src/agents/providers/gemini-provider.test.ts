@@ -46,7 +46,7 @@ describe('geminiAgentProvider', () => {
             validAgentMd('gemini-explorer', 'A Gemini explorer agent.'),
         );
 
-        const agents = await geminiAgentProvider.loadAgents({
+        const { agents } = await geminiAgentProvider.loadAgents({
             workspaceRoot: area.workspace,
             userConfigDir: area.userConfig,
         });
@@ -67,7 +67,7 @@ describe('geminiAgentProvider', () => {
         );
         await writeAgent(area.workspace, '.gemini/agents/real-agent.md', validAgentMd('real-gemini-agent'));
 
-        const agents = await geminiAgentProvider.loadAgents({
+        const { agents } = await geminiAgentProvider.loadAgents({
             workspaceRoot: area.workspace,
             userConfigDir: area.userConfig,
         });
@@ -78,7 +78,7 @@ describe('geminiAgentProvider', () => {
     });
 
     it('(c) returns an empty array and does not throw when scan directories are missing', async () => {
-        const agents = await geminiAgentProvider.loadAgents({
+        const { agents } = await geminiAgentProvider.loadAgents({
             workspaceRoot: area.workspace,
             userConfigDir: area.userConfig,
         });
@@ -90,7 +90,7 @@ describe('geminiAgentProvider', () => {
         await writeAgent(area.workspace, '.gemini/agents/good.md', validAgentMd('good-gemini'));
         await writeAgent(area.workspace, '.gemini/agents/broken.md', 'this file has no YAML frontmatter at all');
 
-        const agents = await geminiAgentProvider.loadAgents({
+        const { agents } = await geminiAgentProvider.loadAgents({
             workspaceRoot: area.workspace,
             userConfigDir: area.userConfig,
         });

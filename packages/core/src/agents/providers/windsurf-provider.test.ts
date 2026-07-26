@@ -51,7 +51,7 @@ describe('windsurfAgentProvider', () => {
             validAgentMd('shared-helper', 'Shared helper agent.'),
         );
 
-        const agents = await windsurfAgentProvider.loadAgents(ctx);
+        const { agents } = await windsurfAgentProvider.loadAgents(ctx);
 
         expect(agents).toHaveLength(2);
         const project = agents.find((a) => a.name === 'refactor-bot');
@@ -68,7 +68,7 @@ describe('windsurfAgentProvider', () => {
     });
 
     it('(b) returns empty array when no .windsurf/agents directories exist', async () => {
-        const agents = await windsurfAgentProvider.loadAgents(ctx);
+        const { agents } = await windsurfAgentProvider.loadAgents(ctx);
 
         expect(agents).toEqual([]);
     });
@@ -83,7 +83,7 @@ describe('windsurfAgentProvider', () => {
             '---\nname: "unterminated\n---\n\nbody\n',
         );
 
-        const agents = await windsurfAgentProvider.loadAgents(ctx);
+        const { agents } = await windsurfAgentProvider.loadAgents(ctx);
 
         const names = agents.map((a: AgentDefinition) => a.name);
         expect(names).toContain('good-agent');
@@ -101,7 +101,7 @@ describe('windsurfAgentProvider', () => {
             validAgentMd('real-agent', 'A real agent.'),
         );
 
-        const agents = await windsurfAgentProvider.loadAgents(ctx);
+        const { agents } = await windsurfAgentProvider.loadAgents(ctx);
 
         const names = agents.map((a) => a.name);
         expect(names).toEqual(['real-agent']);
@@ -113,7 +113,7 @@ describe('windsurfAgentProvider', () => {
         await writeFileDeep(join(area.workspace, '.windsurf', 'agents', 'readme.txt'), 'not an agent');
         await writeFileDeep(join(area.workspace, '.windsurf', 'agents', 'config.json'), '{"not": "an agent"}');
 
-        const agents = await windsurfAgentProvider.loadAgents(ctx);
+        const { agents } = await windsurfAgentProvider.loadAgents(ctx);
 
         expect(agents.map((a) => a.name)).toEqual(['md-agent']);
     });

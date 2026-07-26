@@ -46,7 +46,7 @@
 
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import type { Command, Keymap, KeymapEvent } from '@opentui/keymap';
-import { CommandMap, expandToChords, type InputBinding, type KeybindName, Keybinds } from './keybind';
+import { commandBindings, type InputBinding, type KeybindName, Keybinds } from './keybind';
 
 // ---------------------------------------------------------------------------
 // ModelProviderSelection helpers (pure)
@@ -345,15 +345,7 @@ const MODEL_SHORTCUT_BINDINGS = [
 export function modelShortcutsBindings(
     keybinds: ReturnType<typeof Keybinds.parse> = Keybinds.parse({}),
 ): readonly InputBinding[] {
-    const result: InputBinding[] = [];
-    for (const name of MODEL_SHORTCUT_BINDINGS) {
-        const cmd = CommandMap[name];
-        if (cmd === undefined) continue;
-        for (const chord of expandToChords(keybinds[name])) {
-            result.push({ key: chord, cmd });
-        }
-    }
-    return result;
+    return MODEL_SHORTCUT_BINDINGS.flatMap((name) => commandBindings(keybinds, name));
 }
 
 // ---------------------------------------------------------------------------

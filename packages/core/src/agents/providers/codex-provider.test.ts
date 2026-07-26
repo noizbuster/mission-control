@@ -46,7 +46,7 @@ describe('codexAgentProvider', () => {
             validAgentMd('codex-researcher', 'A Codex researcher agent.'),
         );
 
-        const agents = await codexAgentProvider.loadAgents({
+        const { agents } = await codexAgentProvider.loadAgents({
             workspaceRoot: area.workspace,
             userConfigDir: area.userConfig,
         });
@@ -67,7 +67,7 @@ describe('codexAgentProvider', () => {
         );
         await writeAgent(area.workspace, '.codex/agents/real-agent.md', validAgentMd('real-codex-agent'));
 
-        const agents = await codexAgentProvider.loadAgents({
+        const { agents } = await codexAgentProvider.loadAgents({
             workspaceRoot: area.workspace,
             userConfigDir: area.userConfig,
         });
@@ -78,7 +78,7 @@ describe('codexAgentProvider', () => {
     });
 
     it('(c) returns an empty array and does not throw when scan directories are missing', async () => {
-        const agents = await codexAgentProvider.loadAgents({
+        const { agents } = await codexAgentProvider.loadAgents({
             workspaceRoot: area.workspace,
             userConfigDir: area.userConfig,
         });
@@ -90,7 +90,7 @@ describe('codexAgentProvider', () => {
         await writeAgent(area.workspace, '.codex/agents/good.md', validAgentMd('good-codex'));
         await writeAgent(area.workspace, '.codex/agents/broken.md', 'this file has no YAML frontmatter at all');
 
-        const agents = await codexAgentProvider.loadAgents({
+        const { agents } = await codexAgentProvider.loadAgents({
             workspaceRoot: area.workspace,
             userConfigDir: area.userConfig,
         });

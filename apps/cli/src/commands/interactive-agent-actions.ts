@@ -7,6 +7,7 @@ import {
 } from '@mission-control/core';
 import type { AgentDefinition, ModelProviderSelection } from '@mission-control/protocol';
 import type { DashboardAgentEntry } from '@mission-control/tui/state';
+import { assertUnreachable } from '../assert-unreachable';
 import { type AgentsCommand, formatAgentDetails, formatAgentsList } from './agents-command';
 import { readDisabledSet, toggleDisabled } from './agents-disabled-config';
 import { readOverridesMap } from './agents-model-overrides-config';
@@ -71,7 +72,7 @@ export async function runAgentsAction(
         }
         return actionResult(selection, coding.activeTurn);
     }
-    return assertNever(command);
+    return assertUnreachable(command, 'agents command');
 }
 
 export async function runSkillsAction(
@@ -137,8 +138,4 @@ async function refreshAgentsDashboardIfOpen(
 function formatDashboardModel(model: AgentDefinition['model']): string | undefined {
     if (model === undefined) return undefined;
     return typeof model === 'string' ? model : `${model.providerID}/${model.modelID}`;
-}
-
-function assertNever(value: never): never {
-    throw new Error(`Unexpected agents command: ${String(value)}`);
 }

@@ -3,7 +3,7 @@
  * agent definition files in the standard markdown + YAML frontmatter
  * shape. Project-only; VS Code has no user-level agent config.
  */
-import type { AgentPluginProvider } from '../capability/types';
+import type { AgentPluginProvider, AgentPluginProviderLoadResult } from '../capability/types';
 import { scanAgentMarkdownDir } from './scan-agent-dir';
 import { join } from 'node:path';
 
@@ -12,7 +12,10 @@ export const vscodeProvider: AgentPluginProvider = {
     displayName: 'VS Code',
     description: 'Import agents from .vscode/agents/*.md',
     priority: 50,
-    async loadAgents(ctx) {
-        return scanAgentMarkdownDir(join(ctx.workspaceRoot, '.vscode', 'agents'), 'project');
+    async loadAgents(ctx): Promise<AgentPluginProviderLoadResult> {
+        return {
+            agents: await scanAgentMarkdownDir(join(ctx.workspaceRoot, '.vscode', 'agents'), 'project'),
+            diagnostics: [],
+        };
     },
 };

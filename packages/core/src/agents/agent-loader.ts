@@ -65,17 +65,13 @@ type DiscoveryState = {
 };
 
 export async function discoverAgents(options: DiscoverAgentsOptions): Promise<DiscoverAgentsResult> {
-    const builtinDiagnostics: AgentDiscoveryDiagnostic[] = [];
-
     const builtinProvider: AgentPluginProvider = {
         id: 'builtin',
         displayName: 'Mission Control',
         description: 'Project, user, plugin, and bundled agent scopes',
         priority: 100,
         async loadAgents() {
-            const scanned = await scanBuiltinScopes(options);
-            builtinDiagnostics.push(...scanned.diagnostics);
-            return scanned.agents;
+            return scanBuiltinScopes(options);
         },
     };
 
@@ -89,10 +85,7 @@ export async function discoverAgents(options: DiscoverAgentsOptions): Promise<Di
     };
     const result = await registry.loadAll(ctx);
 
-    return {
-        agents: result.agents,
-        diagnostics: [...builtinDiagnostics, ...result.diagnostics],
-    };
+    return result;
 }
 
 async function scanBuiltinScopes(

@@ -11,15 +11,13 @@
  * through `loadClaudeCompatibleAgents` (the provider interface returns only
  * agents; diagnostics are available on the helper's return value).
  */
-import type { AgentDefinition } from '@mission-control/protocol';
-import type { AgentPluginProvider, LoadContext } from '../capability/types';
+import type { AgentPluginProvider, AgentPluginProviderLoadResult, LoadContext } from '../capability/types';
 import { loadClaudeCompatibleAgents } from './_claude-compatible';
 import { join } from 'node:path';
 
-async function loadAgents(ctx: LoadContext): Promise<readonly AgentDefinition[]> {
+async function loadAgents(ctx: LoadContext): Promise<AgentPluginProviderLoadResult> {
     const dirs = [join(ctx.workspaceRoot, '.cursor', 'agents'), join(ctx.userConfigDir, 'cursor', 'agents')];
-    const result = await loadClaudeCompatibleAgents(ctx, dirs, 'cursor');
-    return result.agents;
+    return loadClaudeCompatibleAgents(ctx, dirs, 'cursor');
 }
 
 export const cursorAgentProvider: AgentPluginProvider = {

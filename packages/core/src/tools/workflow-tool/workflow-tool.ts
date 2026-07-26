@@ -17,6 +17,7 @@
  */
 import type { WorkflowSpec } from '@mission-control/protocol';
 import { z } from 'zod';
+import { escapeXml } from '../../util/escape-xml';
 import type { WorkflowRegistry } from '../../workflows/workflow-registry';
 import type { ToolRegistry } from '../tool-registry';
 import { type ToolAdvertisement, type ToolRegistration } from '../tool-registry-types';
@@ -154,8 +155,4 @@ function formatAvailableWorkflowNames(registry: WorkflowRegistry): string {
         return '(none discovered)';
     }
     return names.slice(0, 20).map(escapeXml).join(', ');
-}
-
-function escapeXml(value: string): string {
-    return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }

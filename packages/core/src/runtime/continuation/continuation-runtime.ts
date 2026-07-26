@@ -118,23 +118,9 @@ export class ContinuationRuntime {
         const work = boulder.works[this.options.workId];
         if (work === undefined) return null;
         const raw = readWorkExtension(work);
-        if (raw === undefined) {
-            if (work.runner_stop === undefined) return null;
-            return {
-                ...this.initialState(work.started_at),
-                stoppedAt: work.runner_stop.stopped_at,
-                stoppedReason: work.runner_stop.stopped_reason,
-            };
-        }
+        if (raw === undefined) return this.stoppedStateFromWork(work);
         const parsed = PersistedContinuationStateSchema.safeParse(raw);
-        if (!parsed.success) {
-            if (work.runner_stop === undefined) return null;
-            return {
-                ...this.initialState(work.started_at),
-                stoppedAt: work.runner_stop.stopped_at,
-                stoppedReason: work.runner_stop.stopped_reason,
-            };
-        }
+        if (!parsed.success) return this.stoppedStateFromWork(work);
         return {
             iteration: parsed.data.iteration,
             loopActive: parsed.data.loopActive,
@@ -143,6 +129,20 @@ export class ContinuationRuntime {
             startedAt: parsed.data.startedAt,
             stoppedAt: work.runner_stop?.stopped_at,
             stoppedReason: work.runner_stop?.stopped_reason,
+        };
+    }
+
+    /**
+     * Build the stopped continuation state from a work's `runner_stop` marker, or
+     * `null` when the work was never stopped. Shared by the two `loadState` fallback
+     * branches (no persisted extension / unparseable extension).
+     */
+    private stoppedStateFromWork(work: BoulderWork): ContinuationState | null {
+        if (work.runner_stop === undefined) return null;
+        return {
+            ...this.initialState(work.started_at),
+            stoppedAt: work.runner_stop.stopped_at,
+            stoppedReason: work.runner_stop.stopped_reason,
         };
     }
 

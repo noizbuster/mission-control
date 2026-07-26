@@ -33,7 +33,7 @@
  */
 
 import type { Command, Keymap, KeymapEvent } from '@opentui/keymap';
-import { CommandMap, expandToChords, type InputBinding, type KeybindName, Keybinds } from './keybind';
+import { CommandMap, commandBindings, type InputBinding, type KeybindName, Keybinds } from './keybind';
 
 // ---------------------------------------------------------------------------
 // Pure extraction: byte-exact substring stash
@@ -146,15 +146,7 @@ const MESSAGE_UNDO_REDO_BINDINGS = ['messages_undo', 'messages_redo'] as const s
 export function messageUndoRedoBindings(
     keybinds: ReturnType<typeof Keybinds.parse> = Keybinds.parse({}),
 ): readonly InputBinding[] {
-    const result: InputBinding[] = [];
-    for (const name of MESSAGE_UNDO_REDO_BINDINGS) {
-        const cmd = CommandMap[name];
-        if (cmd === undefined) continue;
-        for (const chord of expandToChords(keybinds[name])) {
-            result.push({ key: chord, cmd });
-        }
-    }
-    return result;
+    return MESSAGE_UNDO_REDO_BINDINGS.flatMap((name) => commandBindings(keybinds, name));
 }
 
 // ---------------------------------------------------------------------------

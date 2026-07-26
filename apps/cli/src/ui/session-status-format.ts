@@ -3,6 +3,7 @@ import {
     SessionAwaitingDetailsSchema,
     type SessionStatus,
 } from '@mission-control/protocol';
+import { assertUnreachable } from '../assert-unreachable';
 
 export type SessionStatusDisplayInput = {
     readonly status: SessionStatus | 'corrupt' | 'missing';
@@ -23,7 +24,7 @@ export function formatSessionStatusLabel(input: SessionStatusDisplayInput): stri
         case 'missing':
             return input.status;
         default:
-            return assertNever(input.status);
+            return assertUnreachable(input.status, 'session status variant');
     }
 }
 
@@ -74,10 +75,6 @@ function formatAwaitingReason(reason: SessionAwaitingDetails['reason']): string 
         case 'subagent':
             return 'awaiting subagent';
         default:
-            return assertNever(reason);
+            return assertUnreachable(reason, 'session status variant');
     }
-}
-
-function assertNever(value: never): never {
-    throw new Error(`Unhandled session status variant: ${String(value)}`);
 }

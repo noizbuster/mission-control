@@ -99,14 +99,17 @@ describe('provider priority dedup', () => {
             description: 'test',
             priority: 100,
             async loadAgents() {
-                return [
-                    {
-                        name: 'shared',
-                        description: 'From builtin project scope.',
-                        systemPrompt: 'builtin',
-                        source: 'project' as const,
-                    },
-                ];
+                return {
+                    agents: [
+                        {
+                            name: 'shared',
+                            description: 'From builtin project scope.',
+                            systemPrompt: 'builtin',
+                            source: 'project' as const,
+                        },
+                    ],
+                    diagnostics: [],
+                };
             },
         };
         registry.registerProvider(builtinProvider);
@@ -116,14 +119,17 @@ describe('provider priority dedup', () => {
             description: 'test',
             priority: 50,
             async loadAgents() {
-                return [
-                    {
-                        name: 'shared',
-                        description: 'From claude harness.',
-                        systemPrompt: 'claude',
-                        source: 'plugin' as const,
-                    },
-                ];
+                return {
+                    agents: [
+                        {
+                            name: 'shared',
+                            description: 'From claude harness.',
+                            systemPrompt: 'claude',
+                            source: 'plugin' as const,
+                        },
+                    ],
+                    diagnostics: [],
+                };
             },
         });
 

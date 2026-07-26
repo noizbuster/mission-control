@@ -1,5 +1,6 @@
 import { type PersistentMemoryStore, TursoPersistentStore } from '@mission-control/core';
 import type { CliArgs } from '../args';
+import { assertUnreachable } from '../assert-unreachable';
 import { type AgentUIRenderer, JsonRenderer, PlainRenderer } from '../ui/renderers';
 
 export function closePersistentStore(store: PersistentMemoryStore | undefined): void {
@@ -17,10 +18,6 @@ export function createRenderer(mode: CliArgs['mode'], thinking = false): AgentUI
         case 'jsonl':
             return new JsonRenderer();
         default:
-            return assertNever(mode);
+            return assertUnreachable(mode, 'CLI mode');
     }
-}
-
-function assertNever(value: never): never {
-    throw new Error(`Unexpected CLI mode: ${String(value)}`);
 }

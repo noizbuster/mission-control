@@ -75,7 +75,7 @@ const keybind = (defaultValue: BindingValue, description: string): Definition =>
  *  - `leader === "ctrl+x"`.
  *  - `command_list === "alt+x"` (palette is NOT Ctrl+P; Ctrl+P is model_cycle).
  *  - No `input_clear` entry; no `input_*` value binds bare `ctrl+c`.
-     *  - mctrl-documented chords preserved: ctrl+p/t/o/e/r/v/g/z.
+ *  - mctrl-documented chords preserved: ctrl+p/t/o/e/r/v/g/z.
  */
 export const Definitions = {
     leader: keybind(LeaderDefault, 'Leader key for keybind combinations'),
@@ -426,4 +426,21 @@ export function inputBindingsFromKeybinds(keybinds: Keybinds): readonly InputBin
         }
     }
     return result;
+}
+
+/**
+ * Build the chord→command bindings for a SINGLE keybind name. The single-name
+ * variant of {@link inputBindingsFromKeybinds}: expands `keybinds[name]` to
+ * chords and maps each to `CommandMap[name]`. Returns `[]` when the name has
+ * no command id (e.g. the `leader` token) — matching the undefined-cmd guard
+ * in {@link inputBindingsFromKeybinds}.
+ *
+ * Shared building block for the per-layer `registerXLayer` binding arrays:
+ * a single-name layer calls it once; a multi-name layer calls it per name and
+ * concatenates (see `messagesScrollBindings` / `modelShortcutsBindings`).
+ */
+export function commandBindings(keybinds: Keybinds, name: KeybindName): readonly InputBinding[] {
+    const cmd = CommandMap[name as keyof typeof CommandMap];
+    if (cmd === undefined) return [];
+    return expandToChords(keybinds[name]).map((key) => ({ key, cmd }));
 }

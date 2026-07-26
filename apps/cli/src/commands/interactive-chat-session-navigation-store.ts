@@ -7,6 +7,7 @@ import {
     readLocalSessionReplay,
 } from '@mission-control/core';
 import type { AgentEvent, AgentEventEnvelope, ModelProviderSelection } from '@mission-control/protocol';
+import { buildAgentEvent } from './interactive-agent-event';
 import { latestSelection } from './interactive-chat-session-navigation-format';
 import { createSessionWorkspaceMetadataEvent, resolveSessionWorkspaceMetadata } from './session-workspace-metadata';
 
@@ -206,13 +207,12 @@ function sessionEvent(
     modelProviderSelection: ModelProviderSelection,
     input: { readonly message: string; readonly sessionTree?: AgentEvent['sessionTree'] },
 ): AgentEvent {
-    return {
+    return buildAgentEvent({
         type,
-        timestamp: new Date().toISOString(),
         sessionId,
         message: input.message,
         nativeSidecarStatus: 'mock',
         modelProviderSelection,
         ...(input.sessionTree !== undefined ? { sessionTree: input.sessionTree } : {}),
-    };
+    });
 }

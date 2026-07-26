@@ -15,7 +15,9 @@ import {
     type ProviderAdapter,
 } from '@mission-control/core';
 import type { ModelProviderSelection, ProviderAdapterFamily } from '@mission-control/protocol';
+import { assertUnreachable } from '../assert-unreachable';
 import type { ProviderAuthStore } from '../auth-store';
+import { findProviderOrThrow } from '../provider-catalog-lookup';
 import { createCliProviderCredentialResolver } from '../provider-credential-resolver';
 import { createLocalCodingProvider } from './local-coding-provider';
 
@@ -35,10 +37,7 @@ export function createCliProviderForSelection(
     authStore: ProviderAuthStore,
     options: CliProviderFactoryOptions = {},
 ): ProviderAdapter {
-    const provider = modelProviderCatalog.find((entry) => entry.id === selection.providerID);
-    if (provider === undefined) {
-        throw new Error(`Unknown provider: ${selection.providerID}`);
-    }
+    const provider = findProviderOrThrow(modelProviderCatalog, selection.providerID);
 
     const capability = provider.capability;
     if (capability.status !== 'executable' || capability.adapterFamily === undefined) {
@@ -77,10 +76,6 @@ function createExecutableProvider(
                 transport: options.transports?.openAICompatible ?? createNodeOpenAICompatibleTransport(),
             });
         default:
-            return assertNever(adapterFamily);
+            return assertUnreachable(adapterFamily, 'provider adapter family');
     }
-}
-
-function assertNever(value: never): never {
-    throw new Error(`Unexpected provider adapter family: ${String(value)}`);
 }

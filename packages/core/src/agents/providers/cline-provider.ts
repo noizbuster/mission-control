@@ -5,14 +5,14 @@
  * {@linkcode scanAgentMarkdownDir} helper.
  */
 import type { AgentDefinition } from '@mission-control/protocol';
-import type { AgentPluginProvider, LoadContext } from '../capability/types';
+import type { AgentPluginProvider, AgentPluginProviderLoadResult, LoadContext } from '../capability/types';
 import { scanAgentMarkdownDir } from './scan-agent-dir';
 import { join } from 'node:path';
 
-async function loadAgents(ctx: LoadContext): Promise<readonly AgentDefinition[]> {
+async function loadAgents(ctx: LoadContext): Promise<AgentPluginProviderLoadResult> {
     const projectAgents = await scanAgentMarkdownDir(join(ctx.workspaceRoot, '.cline', 'agents'), 'project');
     const userAgents = await scanAgentMarkdownDir(join(ctx.userConfigDir, 'cline', 'agents'), 'user');
-    return [...projectAgents, ...userAgents];
+    return { agents: [...projectAgents, ...userAgents], diagnostics: [] };
 }
 
 export const clineAgentProvider: AgentPluginProvider = {

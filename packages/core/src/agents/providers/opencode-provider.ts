@@ -6,7 +6,7 @@
  * (`{ "*": false, "github-triage": true }`) which {@linkcode parseAgentFile}
  * normalises to the enabled-only string array.
  */
-import type { AgentPluginProvider } from '../capability/types';
+import type { AgentPluginProvider, AgentPluginProviderLoadResult } from '../capability/types';
 import { scanAgentMarkdownDir } from './scan-agent-dir';
 import { join } from 'node:path';
 
@@ -15,11 +15,11 @@ export const opencodeProvider: AgentPluginProvider = {
     displayName: 'OpenCode',
     description: 'Import agents from .opencode/agent/*.md and <config>/opencode/agent/*.md',
     priority: 50,
-    async loadAgents(ctx) {
+    async loadAgents(ctx): Promise<AgentPluginProviderLoadResult> {
         const [project, user] = await Promise.all([
             scanAgentMarkdownDir(join(ctx.workspaceRoot, '.opencode', 'agent'), 'project'),
             scanAgentMarkdownDir(join(ctx.userConfigDir, 'opencode', 'agent'), 'user'),
         ]);
-        return [...project, ...user];
+        return { agents: [...project, ...user], diagnostics: [] };
     },
 };

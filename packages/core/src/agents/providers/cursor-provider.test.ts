@@ -55,7 +55,7 @@ describe('cursorAgentProvider', () => {
             ].join('\n'),
         );
 
-        const agents = await cursorAgentProvider.loadAgents(ctx);
+        const { agents } = await cursorAgentProvider.loadAgents(ctx);
 
         expect(agents).toHaveLength(1);
         const agent = agents[0];
@@ -78,13 +78,13 @@ describe('cursorAgentProvider', () => {
             ['---', 'name: user-agent', 'description: User scoped', '---', 'User prompt.'].join('\n'),
         );
 
-        const agents = await cursorAgentProvider.loadAgents(ctx);
+        const { agents } = await cursorAgentProvider.loadAgents(ctx);
 
         expect(agents.map((a) => a.name).sort()).toEqual(['project-agent', 'user-agent']);
     });
 
     it('(b) returns empty array when .cursor/ dir does not exist', async () => {
-        const agents = await cursorAgentProvider.loadAgents(ctx);
+        const { agents } = await cursorAgentProvider.loadAgents(ctx);
 
         expect(agents).toEqual([]);
     });
@@ -92,7 +92,7 @@ describe('cursorAgentProvider', () => {
     it('returns empty array for an empty .cursor/agents/ dir', async () => {
         await mkdir(join(area.workspace, '.cursor', 'agents'), { recursive: true });
 
-        const agents = await cursorAgentProvider.loadAgents(ctx);
+        const { agents } = await cursorAgentProvider.loadAgents(ctx);
 
         expect(agents).toEqual([]);
     });
@@ -104,7 +104,7 @@ describe('cursorAgentProvider', () => {
         );
         await writeFileDeep(join(area.workspace, '.cursor', 'agents', 'broken.md'), 'no frontmatter here');
 
-        const agents = await cursorAgentProvider.loadAgents(ctx);
+        const { agents } = await cursorAgentProvider.loadAgents(ctx);
 
         expect(agents.map((a) => a.name)).toEqual(['good']);
     });
@@ -119,7 +119,7 @@ describe('cursorAgentProvider', () => {
             '---\nname: real\ndescription: Real agent\n---\nReal prompt.\n',
         );
 
-        const agents = await cursorAgentProvider.loadAgents(ctx);
+        const { agents } = await cursorAgentProvider.loadAgents(ctx);
 
         expect(agents.map((a) => a.name)).toEqual(['real']);
     });

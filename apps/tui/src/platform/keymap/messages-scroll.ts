@@ -26,7 +26,7 @@
 
 import type { Command, Keymap, KeymapEvent } from '@opentui/keymap';
 import type { ClipboardService } from '../clipboard-service';
-import { CommandMap, expandToChords, type InputBinding, type KeybindName, Keybinds } from './keybind';
+import { commandBindings, type InputBinding, type KeybindName, Keybinds } from './keybind';
 
 // ---------------------------------------------------------------------------
 // Structural ports (keep the module FFI-free and unit-testable)
@@ -99,15 +99,7 @@ const MESSAGES_SCROLL_BINDINGS = [
 export function messagesScrollBindings(
     keybinds: ReturnType<typeof Keybinds.parse> = Keybinds.parse({}),
 ): readonly InputBinding[] {
-    const result: InputBinding[] = [];
-    for (const name of MESSAGES_SCROLL_BINDINGS) {
-        const cmd = CommandMap[name];
-        if (cmd === undefined) continue;
-        for (const chord of expandToChords(keybinds[name])) {
-            result.push({ key: chord, cmd });
-        }
-    }
-    return result;
+    return MESSAGES_SCROLL_BINDINGS.flatMap((name) => commandBindings(keybinds, name));
 }
 
 /**
@@ -120,13 +112,7 @@ export function messagesScrollBindings(
 export function selectionCopyBindings(
     keybinds: ReturnType<typeof Keybinds.parse> = Keybinds.parse({}),
 ): readonly InputBinding[] {
-    const result: InputBinding[] = [];
-    const cmd = CommandMap.selection_copy;
-    if (cmd === undefined) return result;
-    for (const chord of expandToChords(keybinds.selection_copy)) {
-        result.push({ key: chord, cmd });
-    }
-    return result;
+    return commandBindings(keybinds, 'selection_copy');
 }
 
 // ---------------------------------------------------------------------------

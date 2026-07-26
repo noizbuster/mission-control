@@ -162,7 +162,7 @@ describe('claudeCodeAgentProvider', () => {
             ].join('\n'),
         );
 
-        const agents = await claudeCodeAgentProvider.loadAgents(ctx);
+        const { agents } = await claudeCodeAgentProvider.loadAgents(ctx);
 
         expect(agents).toHaveLength(1);
         const agent = agents[0];
@@ -189,7 +189,7 @@ describe('claudeCodeAgentProvider', () => {
             ].join('\n'),
         );
 
-        const agents = await claudeCodeAgentProvider.loadAgents(ctx);
+        const { agents } = await claudeCodeAgentProvider.loadAgents(ctx);
 
         expect(agents).toHaveLength(1);
         expect(agents[0]?.thinkingLevel).toBe('xhigh');
@@ -207,7 +207,7 @@ describe('claudeCodeAgentProvider', () => {
             ['---', 'name: user-agent', 'description: User scoped', '---', 'User prompt.'].join('\n'),
         );
 
-        const agents = await claudeCodeAgentProvider.loadAgents(ctx);
+        const { agents } = await claudeCodeAgentProvider.loadAgents(ctx);
 
         expect(agents.map((a) => a.name).sort()).toEqual(['project-agent', 'user-agent']);
     });
@@ -215,13 +215,13 @@ describe('claudeCodeAgentProvider', () => {
     it('(d) returns empty array with no errors for an empty .claude/agents/ dir', async () => {
         await mkdir(join(area.workspace, '.claude', 'agents'), { recursive: true });
 
-        const agents = await claudeCodeAgentProvider.loadAgents(ctx);
+        const { agents } = await claudeCodeAgentProvider.loadAgents(ctx);
 
         expect(agents).toEqual([]);
     });
 
     it('(e) returns empty array when .claude/ dir does not exist', async () => {
-        const agents = await claudeCodeAgentProvider.loadAgents(ctx);
+        const { agents } = await claudeCodeAgentProvider.loadAgents(ctx);
 
         expect(agents).toEqual([]);
     });
@@ -236,7 +236,7 @@ describe('claudeCodeAgentProvider', () => {
             '---\nname: real\ndescription: Real agent\n---\nReal prompt.\n',
         );
 
-        const agents = await claudeCodeAgentProvider.loadAgents(ctx);
+        const { agents } = await claudeCodeAgentProvider.loadAgents(ctx);
 
         expect(agents.map((a) => a.name)).toEqual(['real']);
     });
@@ -248,7 +248,7 @@ describe('claudeCodeAgentProvider', () => {
         );
         await writeFileDeep(join(area.workspace, '.claude', 'agents', 'broken.md'), 'no frontmatter here');
 
-        const agents = await claudeCodeAgentProvider.loadAgents(ctx);
+        const { agents } = await claudeCodeAgentProvider.loadAgents(ctx);
 
         expect(agents.map((a) => a.name)).toEqual(['good']);
     });

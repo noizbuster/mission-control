@@ -7,6 +7,7 @@ import {
     type ModelChoice,
     resolveModelCommand,
 } from '@mission-control/tui/state';
+import { assertUnreachable } from '../assert-unreachable';
 import { type AgentsCommand, parseAgentsCommand } from './agents-command';
 import { splitCommandParts } from './chat-command-parts';
 import { parseSessionSlashCommand } from './chat-session-commands';
@@ -445,7 +446,7 @@ function parseModelCommand(input: string, options: ChatLineOptions): ChatLineAct
         case 'invalid':
             return { kind: 'invalid', message: result.message };
         default:
-            return assertNever(result);
+            return assertUnreachable(result, 'model command result');
     }
 }
 
@@ -530,10 +531,6 @@ export function chatActionShowsWorkingStatus(kind: ChatLineAction['kind']): bool
         default:
             return assertNeverWorkingKind(kind);
     }
-}
-
-function assertNever(value: never): never {
-    throw new Error(`Unexpected model command result: ${String(value)}`);
 }
 
 function assertNeverWorkingKind(value: never): never {

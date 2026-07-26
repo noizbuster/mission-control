@@ -7,18 +7,15 @@
  *
  * Missing directories yield empty arrays. Broken or oversized files are
  * skipped with an `unsupported_field` or `parse_error` diagnostic surfaced
- * through `loadClaudeCompatibleAgents` (the provider interface returns only
- * agents; diagnostics are available on the helper's return value).
+ * through `loadClaudeCompatibleAgents` and propagated via the provider result.
  */
-import type { AgentDefinition } from '@mission-control/protocol';
-import type { AgentPluginProvider, LoadContext } from '../capability/types';
+import type { AgentPluginProvider, AgentPluginProviderLoadResult, LoadContext } from '../capability/types';
 import { loadClaudeCompatibleAgents } from './_claude-compatible';
 import { join } from 'node:path';
 
-async function loadAgents(ctx: LoadContext): Promise<readonly AgentDefinition[]> {
+async function loadAgents(ctx: LoadContext): Promise<AgentPluginProviderLoadResult> {
     const dirs = [join(ctx.workspaceRoot, '.claude', 'agents'), join(ctx.userConfigDir, 'claude', 'agents')];
-    const result = await loadClaudeCompatibleAgents(ctx, dirs, 'claude-code');
-    return result.agents;
+    return loadClaudeCompatibleAgents(ctx, dirs, 'claude-code');
 }
 
 export const claudeCodeAgentProvider: AgentPluginProvider = {

@@ -1,4 +1,5 @@
 import { findResumableRun, type GraphResumeEvent, type ResumableRunSnapshot } from '@mission-control/core';
+import { assertUnreachable } from '../assert-unreachable';
 
 export const SAFE_RECOVERY_PROMPT =
     'A prior run in this session was interrupted. Treat its terminal failure tail as non-authoritative. ' +
@@ -34,7 +35,7 @@ export function decideWorkResume(events: readonly GraphResumeEvent[]): WorkResum
                     ? { kind: 'recovery', sourceRunId: resumable.runId }
                     : { kind: 'interrupted', snapshot: resumable };
             default:
-                return assertNever(resumable);
+                return assertUnreachable(resumable, 'work-resume variant');
         }
     }
     const recoveryRunId = latestInterruptedRunId(events);
@@ -64,7 +65,7 @@ export function formatWorkResumeStartMessage(decision: WorkResumeDecision, sessi
                 'No approval-blocked or interrupted checkpoint run is waiting.\n'
             );
         default:
-            return assertNever(decision);
+            return assertUnreachable(decision, 'work-resume variant');
     }
 }
 
@@ -106,8 +107,4 @@ function isInterruptedRunBoundary(event: GraphResumeEvent): boolean {
 
 function isFullTerminalRunEvent(event: GraphResumeEvent): boolean {
     return event.type === 'run.completed' || event.type === 'run.failed' || event.type === 'run.idle';
-}
-
-function assertNever(value: never): never {
-    throw new Error(`Unexpected work-resume variant: ${String(value)}`);
 }

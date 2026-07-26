@@ -1,5 +1,6 @@
 import type { ModelProviderCatalogEntry } from '@mission-control/config';
 import type { ProviderCredential } from '@mission-control/protocol';
+import { assertUnreachable } from '../assert-unreachable';
 
 export type ModelDiscoveryInput = {
     readonly provider: ModelProviderCatalogEntry;
@@ -163,7 +164,7 @@ function resolveDiscoveryApiKey(
         case 'oauth':
             return credential.accessToken.length > 0 ? credential.accessToken : undefined;
         default:
-            return assertNever(credential);
+            return assertUnreachable(credential, 'provider credential type');
     }
 }
 
@@ -213,9 +214,4 @@ function hasModelIDContainer(value: unknown): value is {
         !Array.isArray(value) &&
         (('id' in value && typeof value.id === 'string') || ('name' in value && typeof value.name === 'string'))
     );
-}
-
-function assertNever(value: never): never {
-    void value;
-    throw new Error('Unhandled provider credential type');
 }

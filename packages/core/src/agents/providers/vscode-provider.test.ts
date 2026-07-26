@@ -30,7 +30,7 @@ describe('vscodeProvider', () => {
             '---\nname: coder\ndescription: A coding agent.\ntools: read, edit, bash\n---\nYou write code.',
         );
 
-        const agents = await vscodeProvider.loadAgents(ctx);
+        const { agents } = await vscodeProvider.loadAgents(ctx);
 
         expect(agents).toHaveLength(1);
         expect(agents[0]?.name).toBe('coder');
@@ -41,7 +41,7 @@ describe('vscodeProvider', () => {
     });
 
     it('(b) returns an empty array when .vscode/agents/ does not exist', async () => {
-        const agents = await vscodeProvider.loadAgents(ctx);
+        const { agents } = await vscodeProvider.loadAgents(ctx);
         expect(agents).toEqual([]);
     });
 
@@ -49,7 +49,7 @@ describe('vscodeProvider', () => {
         await writeAgent('.vscode/agents/AGENTS.md', '---\nname: should-not-load\ndescription: excluded.\n---\nbody');
         await writeAgent('.vscode/agents/real.md', '---\nname: real\ndescription: A real agent.\n---\nbody');
 
-        const agents = await vscodeProvider.loadAgents(ctx);
+        const { agents } = await vscodeProvider.loadAgents(ctx);
 
         expect(agents).toHaveLength(1);
         expect(agents[0]?.name).toBe('real');
@@ -59,7 +59,7 @@ describe('vscodeProvider', () => {
         await writeAgent('.vscode/agents/broken.md', 'no frontmatter here');
         await writeAgent('.vscode/agents/valid.md', '---\nname: valid\ndescription: A valid agent.\n---\nbody');
 
-        const agents = await vscodeProvider.loadAgents(ctx);
+        const { agents } = await vscodeProvider.loadAgents(ctx);
 
         expect(agents).toHaveLength(1);
         expect(agents[0]?.name).toBe('valid');
@@ -75,7 +75,7 @@ describe('vscodeProvider', () => {
         await writeAgent('.vscode/agents/a.md', '---\nname: a\ndescription: Agent A.\n---\nbody-a');
         await writeAgent('.vscode/agents/b.md', '---\nname: b\ndescription: Agent B.\n---\nbody-b');
 
-        const agents = await vscodeProvider.loadAgents(ctx);
+        const { agents } = await vscodeProvider.loadAgents(ctx);
 
         expect(agents.map((a) => a.name).sort()).toEqual(['a', 'b']);
     });
@@ -84,7 +84,7 @@ describe('vscodeProvider', () => {
         await writeAgent('.vscode/agents/notes.txt', '---\nname: txt\ndescription: should skip.\n---\nbody');
         await writeAgent('.vscode/agents/real.md', '---\nname: real\ndescription: real.\n---\nbody');
 
-        const agents = await vscodeProvider.loadAgents(ctx);
+        const { agents } = await vscodeProvider.loadAgents(ctx);
 
         expect(agents).toHaveLength(1);
         expect(agents[0]?.name).toBe('real');

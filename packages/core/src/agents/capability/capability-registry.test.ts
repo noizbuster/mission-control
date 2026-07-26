@@ -23,7 +23,7 @@ function staticProvider(id: string, priority: number, agents: readonly AgentDefi
         description: `${id} provider`,
         priority,
         async loadAgents() {
-            return agents;
+            return { agents, diagnostics: [] };
         },
     };
 }

@@ -8,13 +8,13 @@
  * per-file size guard.
  */
 import type { AgentDefinition, AgentSource } from '@mission-control/protocol';
-import type { AgentPluginProvider, LoadContext } from '../capability/types';
+import type { AgentPluginProvider, AgentPluginProviderLoadResult, LoadContext } from '../capability/types';
 import { scanAgentMarkdownDir } from './scan-agent-dir';
 import { join } from 'node:path';
 
 const MAX_FILE_BYTES = 64 * 1024;
 
-async function loadAgents(ctx: LoadContext): Promise<readonly AgentDefinition[]> {
+async function loadAgents(ctx: LoadContext): Promise<AgentPluginProviderLoadResult> {
     const scopes: ReadonlyArray<{ readonly dir: string; readonly source: AgentSource }> = [
         { dir: join(ctx.workspaceRoot, '.codex', 'agents'), source: 'project' },
         { dir: join(ctx.userConfigDir, 'codex', 'agents'), source: 'user' },
@@ -28,7 +28,7 @@ async function loadAgents(ctx: LoadContext): Promise<readonly AgentDefinition[]>
             })),
         );
     }
-    return agents;
+    return { agents, diagnostics: [] };
 }
 
 export const codexAgentProvider: AgentPluginProvider = {

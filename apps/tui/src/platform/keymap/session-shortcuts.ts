@@ -48,7 +48,7 @@
  */
 
 import type { Command, Keymap, KeymapEvent } from '@opentui/keymap';
-import { CommandMap, expandToChords, Keybinds } from './keybind';
+import { CommandMap, commandBindings, Keybinds } from './keybind';
 
 // ---------------------------------------------------------------------------
 // Session-tree direction
@@ -191,12 +191,7 @@ const SESSION_TREE_AND_STASH_BINDINGS = [
 function sessionShortcutBindings(
     keybinds: ReturnType<typeof Keybinds.parse> = Keybinds.parse({}),
 ): readonly { readonly key: string; readonly cmd: string }[] {
-    // session_queued_prompts IS rebindable in keybind.ts; source from there.
-    const queuedChords = expandToChords(keybinds.session_queued_prompts).map((key) => ({
-        key,
-        cmd: CommandMap.session_queued_prompts,
-    }));
-    return [...SESSION_TREE_AND_STASH_BINDINGS, ...queuedChords];
+    return [...SESSION_TREE_AND_STASH_BINDINGS, ...commandBindings(keybinds, 'session_queued_prompts')];
 }
 
 // ---------------------------------------------------------------------------

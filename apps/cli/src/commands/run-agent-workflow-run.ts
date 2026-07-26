@@ -16,6 +16,7 @@ import {
     startRun,
 } from '@mission-control/core';
 import type { AbgGraphSpec, AbgGraphStatus, WorkflowSpec } from '@mission-control/protocol';
+import { assertUnreachable } from '../assert-unreachable';
 
 export type NoninteractiveWorkflowRunHandle = {
     readonly location: NormalizedMissionRunStoreLocation;
@@ -86,7 +87,7 @@ export async function settleNoninteractiveWorkflowRun(
             await cancelRun(handle.location, handle.runId, outcome.reason);
             return;
         default:
-            return assertNever(outcome);
+            return assertUnreachable(outcome, 'workflow Run outcome');
     }
 }
 
@@ -111,7 +112,7 @@ export async function settleNoninteractiveWorkflowRunWithOwner(
             await settleMissionRunSessionOwner(handle.location, handle.runId, attachment, outcome);
             return;
         default:
-            return assertNever(outcome);
+            return assertUnreachable(outcome, 'workflow Run outcome');
     }
 }
 
@@ -128,7 +129,7 @@ export function workflowOutcomeFromOwnerStatus(
         case 'cancelled':
             return { status: 'cancelled', reason: 'workflow turn cancelled' };
         default:
-            return assertNever(status);
+            return assertUnreachable(status, 'workflow Run outcome');
     }
 }
 
@@ -146,10 +147,6 @@ export function workflowOutcomeFromGraphStatus(status: AbgGraphStatus, reason: s
         case 'cancelled':
             return { status: 'cancelled', reason: reason ?? 'workflow graph run cancelled' };
         default:
-            return assertNever(status);
+            return assertUnreachable(status, 'workflow Run outcome');
     }
-}
-
-function assertNever(value: never): never {
-    throw new TypeError(`Unexpected workflow Run outcome: ${String(value)}`);
 }

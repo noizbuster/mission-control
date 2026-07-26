@@ -1,12 +1,7 @@
 import { type Run, RunSchema } from '@mission-control/protocol';
-import { ZodError } from 'zod';
-import {
-    compatibilityJsonFilePath,
-    JsonCompatibilityFileError,
-    listCompatibilityJsonRecordIds,
-    readCompatibilityJsonFile,
-} from '../../persistence/json-compatibility-file';
+import { compatibilityJsonFilePath, listCompatibilityJsonRecordIds } from '../../persistence/json-compatibility-file';
 import { McPersistenceError } from '../../persistence/paths';
+import { mapJsonCompatibilityFileError, readCompatibilityRecord } from './compat-record-reader';
 import { runWithoutSessionOwnerAuthority } from './run-session-owner-authority';
 
 const RUNS_DIR = 'runs';
@@ -45,54 +40,29 @@ export async function listCompatibleRunJsonRecords(
 }
 
 export async function readCompatibleRunJsonRecord(root: string, runId: string): Promise<Run> {
-    const filePath = compatibleRunFilePath(root, runId);
-    let contents: string;
-    try {
-        contents = await readCompatibilityJsonFile(root, RUNS_DIR, runId);
-    } catch (error: unknown) {
-        throw mapCompatibilityError(error, runId);
-    }
-    let parsed: unknown;
-    try {
-        parsed = JSON.parse(contents);
-    } catch (error: unknown) {
-        throw new RunStoreError(`Run ${runId} at ${filePath} is not valid JSON`, 'legacy_run_corrupt', filePath, error);
-    }
-    try {
-        const run = RunSchema.parse(parsed);
-        if (run.id !== runId) {
-            throw new RunStoreError(`Run ${runId} at ${filePath} has a mismatched id`, 'legacy_run_corrupt', filePath);
-        }
-        return runWithoutSessionOwnerAuthority(run);
-    } catch (error: unknown) {
-        if (!(error instanceof ZodError)) throw error;
-        const firstIssue = error.issues[0]?.message ?? 'unknown schema issue';
-        throw new RunStoreError(
-            `Run ${runId} at ${filePath} failed validation: ${firstIssue}`,
-            'legacy_run_corrupt',
-            filePath,
-            error,
-        );
-    }
+    return readCompatibilityRecord<Run>({
+        root,
+        dir: RUNS_DIR,
+        id: runId,
+        filePath: compatibleRunFilePath(root, runId),
+        schema: RunSchema,
+        toError: (message, code, path, cause) => new RunStoreError(message, code, path, cause),
+        corruptCode: 'legacy_run_corrupt',
+        entityNoun: 'Run',
+        mapReadError: (error) => mapCompatibilityError(error, runId),
+        transform: runWithoutSessionOwnerAuthority,
+    });
 }
 
 function mapCompatibilityError(error: unknown, runId: string): RunStoreError {
-    if (!(error instanceof JsonCompatibilityFileError)) {
-        return new RunStoreError(`Failed to read Run ${runId}`, 'legacy_run_read_failed', undefined, error);
-    }
-    switch (error.code) {
-        case 'invalid_id':
-            return new RunStoreError(`Invalid Run id ${JSON.stringify(runId)}`, 'invalid_run_id', error.path, error);
-        case 'not_found':
-            return new RunStoreError(`Run ${runId} not found`, 'run_missing', error.path, error);
-        case 'unsafe_source':
-            return new RunStoreError(
-                `Run ${runId} is not a safe regular file`,
-                'legacy_run_unsafe_source',
-                error.path,
-                error,
-            );
-        case 'read_failed':
-            return new RunStoreError(`Failed to read Run ${runId}`, 'legacy_run_read_failed', error.path, error);
-    }
+    return mapJsonCompatibilityFileError<RunStoreError>(error, runId, {
+        toError: (message, code, path, cause) => new RunStoreError(message, code, path, cause),
+        codes: {
+            invalidId: 'invalid_run_id',
+            notFound: 'run_missing',
+            unsafeSource: 'legacy_run_unsafe_source',
+            readFailed: 'legacy_run_read_failed',
+        },
+        entityNoun: 'Run',
+    });
 }

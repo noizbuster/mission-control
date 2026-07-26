@@ -6,6 +6,7 @@ import type {
     PermissionReply,
     PermissionRequest,
 } from '@mission-control/protocol';
+import { buildAgentEvent } from './interactive-agent-event';
 import type { InteractiveToolOptions } from './interactive-coding-tools';
 
 export type VisibleApprovalAttempt = {
@@ -66,26 +67,24 @@ export function eventWithPermission(
     request: PermissionRequest,
     decision: PermissionDecision,
 ): AgentEvent {
-    return {
+    return buildAgentEvent({
         type: 'permission.requested',
-        timestamp: new Date().toISOString(),
         sessionId: options.sessionId,
         message: `permission requested: ${request.action}`,
         permissionRequest: request,
         permissionDecision: decision,
         modelProviderSelection: options.modelProviderSelection,
-    };
+    });
 }
 
 export function eventWithReply(options: InteractiveToolOptions, reply: PermissionReply): AgentEvent {
-    return {
+    return buildAgentEvent({
         type: 'permission.replied',
-        timestamp: new Date().toISOString(),
         sessionId: options.sessionId,
         message: `permission replied: ${reply.reply}`,
         permissionReply: reply,
         modelProviderSelection: options.modelProviderSelection,
-    };
+    });
 }
 
 export function eventWithApproval(
@@ -94,14 +93,13 @@ export function eventWithApproval(
     record: ApprovalRecord,
     message: string,
 ): AgentEvent {
-    return {
+    return buildAgentEvent({
         type,
-        timestamp: new Date().toISOString(),
         sessionId: options.sessionId,
         message,
         approvalRecord: record,
         modelProviderSelection: options.modelProviderSelection,
-    };
+    });
 }
 
 export function approvalIdFor(request: PermissionRequest): string {

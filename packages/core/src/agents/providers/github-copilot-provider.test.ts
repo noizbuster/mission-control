@@ -30,7 +30,7 @@ describe('githubCopilotProvider', () => {
             '---\nname: reviewer\ndescription: A code review agent.\ntools:\n  - read\n  - search\n---\nYou review code.',
         );
 
-        const agents = await githubCopilotProvider.loadAgents(ctx);
+        const { agents } = await githubCopilotProvider.loadAgents(ctx);
 
         expect(agents).toHaveLength(1);
         expect(agents[0]?.name).toBe('reviewer');
@@ -41,7 +41,7 @@ describe('githubCopilotProvider', () => {
     });
 
     it('(b) returns an empty array when .github/copilot/agents/ does not exist', async () => {
-        const agents = await githubCopilotProvider.loadAgents(ctx);
+        const { agents } = await githubCopilotProvider.loadAgents(ctx);
         expect(agents).toEqual([]);
     });
 
@@ -52,7 +52,7 @@ describe('githubCopilotProvider', () => {
         );
         await writeAgent('.github/copilot/agents/real.md', '---\nname: real\ndescription: A real agent.\n---\nbody');
 
-        const agents = await githubCopilotProvider.loadAgents(ctx);
+        const { agents } = await githubCopilotProvider.loadAgents(ctx);
 
         expect(agents).toHaveLength(1);
         expect(agents[0]?.name).toBe('real');
@@ -62,7 +62,7 @@ describe('githubCopilotProvider', () => {
         await writeAgent('.github/copilot/agents/broken.md', 'no frontmatter at all');
         await writeAgent('.github/copilot/agents/valid.md', '---\nname: valid\ndescription: A valid agent.\n---\nbody');
 
-        const agents = await githubCopilotProvider.loadAgents(ctx);
+        const { agents } = await githubCopilotProvider.loadAgents(ctx);
 
         expect(agents).toHaveLength(1);
         expect(agents[0]?.name).toBe('valid');
@@ -78,7 +78,7 @@ describe('githubCopilotProvider', () => {
         await writeAgent('.github/copilot/agents/x.md', '---\nname: x\ndescription: Agent X.\n---\nbody-x');
         await writeAgent('.github/copilot/agents/y.md', '---\nname: y\ndescription: Agent Y.\n---\nbody-y');
 
-        const agents = await githubCopilotProvider.loadAgents(ctx);
+        const { agents } = await githubCopilotProvider.loadAgents(ctx);
 
         expect(agents.map((a) => a.name).sort()).toEqual(['x', 'y']);
     });

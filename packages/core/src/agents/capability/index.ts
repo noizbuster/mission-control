@@ -42,8 +42,11 @@ export class CapabilityRegistry {
             if (this.disabledProviderIds.has(provider.id)) continue;
 
             let loaded: readonly AgentDefinition[];
+            let providerDiagnostics: readonly AgentDiscoveryDiagnostic[];
             try {
-                loaded = await provider.loadAgents(ctx);
+                const result = await provider.loadAgents(ctx);
+                loaded = result.agents;
+                providerDiagnostics = result.diagnostics;
             } catch (error: unknown) {
                 const detail = errorToString(error);
                 diagnostics.push({
@@ -55,6 +58,7 @@ export class CapabilityRegistry {
                 continue;
             }
 
+            diagnostics.push(...providerDiagnostics);
             for (const agent of loaded) {
                 if (seenNames.has(agent.name)) {
                     diagnostics.push({
@@ -69,9 +73,8 @@ export class CapabilityRegistry {
                 agents.push(agent);
             }
         }
-
         return { agents, diagnostics };
     }
 }
 
-export type { AgentPluginProvider, LoadContext } from './types';
+export type { AgentPluginProvider, AgentPluginProviderLoadResult, LoadContext } from './types';

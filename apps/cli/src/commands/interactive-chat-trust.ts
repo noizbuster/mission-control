@@ -1,5 +1,6 @@
 import type { ProjectTrustLookup } from '@mission-control/core';
 import { ProjectTrustStore } from '@mission-control/core';
+import { assertUnreachable } from '../assert-unreachable';
 import type { TrustCommandAction } from './chat-commands';
 import type { ChatOutput } from './interactive-chat-io';
 
@@ -45,7 +46,7 @@ async function runTrustActionUnsafe(
             return;
         }
         default:
-            return assertNever(action);
+            return assertUnreachable(action, 'trust command state');
     }
 }
 
@@ -57,12 +58,8 @@ function formatStoreState(status: ProjectTrustLookup): string {
         case 'corrupt':
             return ' (trust store corrupt; using the pending-review decision)';
         default:
-            return assertNever(status.storeState);
+            return assertUnreachable(status.storeState, 'trust command state');
     }
-}
-
-function assertNever(value: never): never {
-    throw new Error(`Unexpected trust command state: ${String(value)}`);
 }
 
 function errorMessage(error: unknown): string {
