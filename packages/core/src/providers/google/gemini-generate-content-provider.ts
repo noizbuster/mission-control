@@ -8,8 +8,8 @@ import {
 import {
     apiKeyForGeminiCredential,
     createGeminiGenerateContentTransportRequest,
-    resolveGeminiCredential,
 } from './gemini-generate-content-request';
+import { resolveProviderCredentialFromResolver } from '../shared/provider-helpers';
 import {
     type GeminiGenerateContentTransport,
     GeminiGenerateContentTransportError,
@@ -30,7 +30,7 @@ export function createGeminiGenerateContentProvider(options: GeminiGenerateConte
     return {
         async *streamTurn(request, context) {
             try {
-                const credential = await resolveGeminiCredential(options.credentialResolver, request.providerID);
+                const credential = await resolveProviderCredentialFromResolver(options.credentialResolver, request.providerID);
                 const apiKey = apiKeyForGeminiCredential(credential);
                 const transportRequest = createGeminiGenerateContentTransportRequest({
                     request,

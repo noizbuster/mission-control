@@ -7,10 +7,10 @@ import {
     type ProviderCredentialSummary,
 } from '@mission-control/protocol';
 import type { ModelRole } from '../agents/model-roles';
-import { randomUUID } from 'node:crypto';
-import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { atomicWriteFile } from '../persistence/atomic-write';
+import { chmod, readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { basename, dirname, join } from 'node:path';
+import { join } from 'node:path';
 
 export type SaveProviderCredentialFieldInput = {
     readonly id: string;
@@ -295,18 +295,7 @@ async function readAuthFile(authFilePath: string): Promise<ProviderAuthFile> {
 }
 
 async function writeAuthFile(authFilePath: string, authFile: ProviderAuthFile): Promise<void> {
-    const authFileDirectory = dirname(authFilePath);
-    const tempAuthFilePath = join(authFileDirectory, `.${basename(authFilePath)}.${process.pid}.${randomUUID()}.tmp`);
-
-    await mkdir(authFileDirectory, { recursive: true });
-    try {
-        await writeFile(tempAuthFilePath, `${JSON.stringify(authFile, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
-        await chmod(tempAuthFilePath, 0o600);
-        await rename(tempAuthFilePath, authFilePath);
-    } finally {
-        await rm(tempAuthFilePath, { force: true });
-    }
-    await chmod(authFilePath, 0o600);
+    await atomicWriteFile(authFilePath, `${JSON.stringify(authFile, null, 2)}\n`, { mode: 0o600 });
 }
 
 function maskCredential(apiKey: string): string {

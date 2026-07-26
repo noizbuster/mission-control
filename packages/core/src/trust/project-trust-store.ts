@@ -1,7 +1,8 @@
 import { z } from 'zod';
+import { isNodeError } from '../util/node-error';
 import { resolveMissionControlDataDir } from '../memory/data-dir';
-import { randomUUID } from 'node:crypto';
-import { mkdir, open, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
+import { atomicWriteJsonFile } from '../persistence/atomic-write';
+import { mkdir, open, readFile, realpath, rm } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
@@ -182,11 +183,7 @@ async function writeTrustFile(filePath: string, file: TrustFile): Promise<void> 
             Object.entries(file.workspaces).sort(([left], [right]) => left.localeCompare(right)),
         ),
     });
-    const tempPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
-    await ensureDirectory(dirname(filePath));
-    await writeFile(tempPath, `${JSON.stringify(sortedFile, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
-    await rename(tempPath, filePath);
-    await rm(tempPath, { force: true });
+    await atomicWriteJsonFile(filePath, sortedFile);
 }
 
 async function withTrustFileLock<T>(
@@ -243,9 +240,7 @@ export class ProjectTrustStoreError extends Error {
     }
 }
 
-function isNodeError(error: unknown, code: string): error is { readonly code: string } {
-    return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
-}
+
 
 function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);

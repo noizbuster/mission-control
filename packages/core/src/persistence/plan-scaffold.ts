@@ -9,6 +9,7 @@ import {
     formatDraftFrontmatterBlock,
     writeDraftFrontmatter,
 } from './draft-frontmatter-io';
+import { isErrorCode } from '../util/node-error';
 import { McPersistenceError, ensureMcDirs, mcFilePath } from './paths';
 import { assertValidPlanSlug, PlanFormatError } from './plan-format';
 import { randomUUID } from 'node:crypto';
@@ -222,11 +223,4 @@ async function atomicWrite(filePath: string, contents: string): Promise<void> {
     }
 }
 
-function isErrorCode(error: unknown, code: string): boolean {
-    return (
-        typeof error === 'object' &&
-        error !== null &&
-        'code' in error &&
-        (error as { readonly code?: unknown }).code === code
-    );
-}
+

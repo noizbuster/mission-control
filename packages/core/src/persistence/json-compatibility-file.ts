@@ -1,4 +1,5 @@
 import { MC_DIR_NAME, mcDirPath, mcFilePath } from './paths';
+import { isErrorCode } from '../util/node-error';
 import type { Stats } from 'node:fs';
 import { type FileHandle, lstat, open, readdir, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -140,6 +141,4 @@ function assertSafeRecordId(recordId: string, root: string): void {
     }
 }
 
-function isErrorCode(error: unknown, code: string): boolean {
-    return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
-}
+

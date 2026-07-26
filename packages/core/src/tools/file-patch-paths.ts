@@ -1,4 +1,6 @@
 import { filePatchFailure } from './file-patch-errors';
+import { isNodeError } from '../util/node-error';
+import { errorToString } from '../util/error-to-string';
 import { matchesWorkspaceDenylist, toPosixPath } from './read-tools-paths';
 import type { Stats } from 'node:fs';
 import { lstat, realpath, stat } from 'node:fs/promises';
@@ -55,7 +57,7 @@ async function resolveExistingTarget(root: string, lexicalPath: string, requeste
         physicalPath = await realpath(lexicalPath);
         stats = await stat(physicalPath);
     } catch (error: unknown) {
-        throw filePatchFailure('not_file', errorMessage(error));
+        throw filePatchFailure('not_file', errorToString(error));
     }
     ensureInside(root, physicalPath, requestedPath);
     ensureNotDenied(root, physicalPath, requestedPath);
@@ -211,10 +213,6 @@ function toRelativePath(root: string, path: string): string {
     return relativePath === '' ? '.' : toPosixPath(relativePath);
 }
 
-function isNodeError(error: unknown, code: string): error is { readonly code: string } {
-    return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
-}
 
-function errorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
-}
+
+

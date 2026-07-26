@@ -17,7 +17,8 @@ import {
     type PluginManifest,
     PluginManifestSchema,
 } from '@mission-control/protocol';
-import { defaultAutomatedDiscoveryDenylist, toPosixPath } from '../tools/read-tools-paths';
+import { absolutePathMatchesDenylist, manifestDenylistDirNames } from '../discovery/index';
+import { errorToString } from '../util/error-to-string';
 import { stripJsoncComments } from '../workflows/jsonc-parser';
 import { pluginHomeEnvKey, resolvePluginHome } from './plugin-paths';
 import type { Dirent } from 'node:fs';
@@ -28,13 +29,6 @@ export const DEFAULT_MAX_PLUGIN_FILE_BYTES = 64 * 1024;
 export const DEFAULT_MAX_PLUGINS = 256;
 const MANIFEST_FILENAME = 'plugin.json';
 const PLUGINS_DIR_NAME = 'plugins';
-
-const denylistAbsolutePathNeedles: readonly string[] = defaultAutomatedDiscoveryDenylist.map((entry) =>
-    entry.toLowerCase(),
-);
-const denylistDirNameSet: ReadonlySet<string> = new Set(
-    defaultAutomatedDiscoveryDenylist.filter((entry) => !entry.includes('/')).map((entry) => entry.toLowerCase()),
-);
 
 export type DiscoverPluginsOptions = {
     readonly pluginHome?: string;
@@ -86,7 +80,7 @@ export async function discoverPlugins(options: DiscoverPluginsOptions = {}): Pro
         if (!entry.isDirectory()) {
             continue;
         }
-        if (denylistDirNameSet.has(entry.name.toLowerCase())) {
+        if (manifestDenylistDirNames.has(entry.name.toLowerCase())) {
             continue;
         }
         const pluginDir = join(pluginsDir, entry.name);
@@ -158,7 +152,7 @@ export async function loadPluginManifest(pluginDir: string): Promise<PluginManif
     try {
         parsed = JSON.parse(stripped);
     } catch (error: unknown) {
-        throw new Error(`plugin manifest JSON parse failed: ${instanceMessage(error)}`);
+        throw new Error(`plugin manifest JSON parse failed: ${errorToString(error)}`);
     }
     const result = PluginManifestSchema.safeParse(parsed);
     if (!result.success) {
@@ -196,20 +190,14 @@ async function tryLoadPluginManifest(
     try {
         contents = await readFile(manifestPath, 'utf8');
     } catch (error: unknown) {
-        return diagnostic(dirName, 'error', 'read_failed', `read failed: ${instanceMessage(error)}`, manifestPath);
+        return diagnostic(dirName, 'error', 'read_failed', `read failed: ${errorToString(error)}`, manifestPath);
     }
     const stripped = stripJsoncComments(contents);
     let parsed: unknown;
     try {
         parsed = JSON.parse(stripped);
     } catch (error: unknown) {
-        return diagnostic(
-            dirName,
-            'error',
-            'parse_error',
-            `JSON parse failed: ${instanceMessage(error)}`,
-            manifestPath,
-        );
+        return diagnostic(dirName, 'error', 'parse_error', `JSON parse failed: ${errorToString(error)}`, manifestPath);
     }
     const result = PluginManifestSchema.safeParse(parsed);
     if (!result.success) {
@@ -238,16 +226,6 @@ function resolvePluginHomeFromOptions(options: DiscoverPluginsOptions): string {
     return resolvePluginHome(gctrlHomeFromEnv);
 }
 
-function absolutePathMatchesDenylist(absolutePath: string): boolean {
-    const posix = toPosixPath(absolutePath).toLowerCase();
-    return denylistAbsolutePathNeedles.some((needle) => {
-        if (needle.length === 0) {
-            return false;
-        }
-        return posix === needle || posix.includes(`/${needle}/`) || posix.endsWith(`/${needle}`);
-    });
-}
-
 function readNameField(value: unknown, fallback: string): string {
     if (typeof value === 'object' && value !== null && 'name' in value) {
         const candidate = (value as { readonly name?: unknown }).name;
@@ -256,8 +234,4 @@ function readNameField(value: unknown, fallback: string): string {
         }
     }
     return fallback;
-}
-
-function instanceMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
 }

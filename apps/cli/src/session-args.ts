@@ -1,4 +1,4 @@
-import type { CliArgs } from './args';
+import { createBaseArgs, type CliArgs } from './args';
 import { parseCliSessionId } from './commands/session-id';
 
 export const SESSION_STOP_USAGE = 'Usage: mc session stop <session-id> [--only | --child-only] [--timeout <duration>]';
@@ -25,7 +25,7 @@ export function parseSessionArgs(argv: readonly string[]): CliArgs {
             if (argv[1] !== undefined) {
                 throw new Error(`Unsupported session list argument: ${argv[1]}`);
             }
-            return createSessionArgs('session-list');
+            return createBaseArgs('session-list');
         case 'status': {
             if (argv.slice(1).includes('--json')) {
                 throw new Error('session status does not support --json');
@@ -34,7 +34,7 @@ export function parseSessionArgs(argv: readonly string[]): CliArgs {
             if (argv[2] !== undefined) {
                 throw new Error(`Unsupported session status argument: ${argv[2]}`);
             }
-            return { ...createSessionArgs('session-status'), ...(sessionId !== undefined ? { sessionId } : {}) };
+            return { ...createBaseArgs('session-status'), ...(sessionId !== undefined ? { sessionId } : {}) };
         }
         case 'show': {
             const sessionId = argv[1];
@@ -44,7 +44,7 @@ export function parseSessionArgs(argv: readonly string[]): CliArgs {
             if (argv[2] !== undefined) {
                 throw new Error(`Unsupported session show argument: ${argv[2]}`);
             }
-            return { ...createSessionArgs('session-show'), sessionId };
+            return { ...createBaseArgs('session-show'), sessionId };
         }
         case 'replay': {
             const sessionId = argv[1];
@@ -55,7 +55,7 @@ export function parseSessionArgs(argv: readonly string[]): CliArgs {
                 if (argv[3] !== undefined) {
                     throw new Error(`Unsupported session replay argument: ${argv[3]}`);
                 }
-                return { ...createSessionArgs('session-replay'), mode: 'tui', sessionId, replayInteractive: true };
+                return { ...createBaseArgs('session-replay'), mode: 'tui', sessionId, replayInteractive: true };
             }
             if (argv[2] !== '--jsonl') {
                 throw new Error('session replay requires --jsonl for event output (or --interactive for TUI)');
@@ -63,7 +63,7 @@ export function parseSessionArgs(argv: readonly string[]): CliArgs {
             if (argv[3] !== undefined) {
                 throw new Error(`Unsupported session replay argument: ${argv[3]}`);
             }
-            return { ...createSessionArgs('session-replay'), mode: 'jsonl', sessionId };
+            return { ...createBaseArgs('session-replay'), mode: 'jsonl', sessionId };
         }
         case 'export': {
             const sessionId = argv[1];
@@ -74,7 +74,7 @@ export function parseSessionArgs(argv: readonly string[]): CliArgs {
             if (argv[3] !== undefined) {
                 throw new Error(`Unsupported session export argument: ${argv[3]}`);
             }
-            return { ...createSessionArgs('session-export'), sessionId, filePath };
+            return { ...createBaseArgs('session-export'), sessionId, filePath };
         }
         case 'import': {
             const filePath = argv[1];
@@ -84,7 +84,7 @@ export function parseSessionArgs(argv: readonly string[]): CliArgs {
             if (argv[2] !== undefined) {
                 throw new Error(`Unsupported session import argument: ${argv[2]}`);
             }
-            return { ...createSessionArgs('session-import'), filePath };
+            return { ...createBaseArgs('session-import'), filePath };
         }
         case 'delete': {
             const sessionId = argv[1];
@@ -104,7 +104,7 @@ export function parseSessionArgs(argv: readonly string[]): CliArgs {
                 throw new SessionCliUsageError(SESSION_DELETE_USAGE);
             }
             return {
-                ...createSessionArgs('session-delete'),
+                ...createBaseArgs('session-delete'),
                 sessionId,
                 ...(expectedTreeToken !== undefined ? { expectedTreeToken } : {}),
             };
@@ -118,7 +118,7 @@ export function parseSessionArgs(argv: readonly string[]): CliArgs {
 
 function parseSessionStopArgs(argv: readonly string[]): CliArgs {
     if (argv.length === 2 && argv[1] === '--help') {
-        return { ...createSessionArgs('session-stop'), showHelp: true, helpText: SESSION_STOP_USAGE };
+        return { ...createBaseArgs('session-stop'), showHelp: true, helpText: SESSION_STOP_USAGE };
     }
     const sessionId = argv[1];
     if (sessionId === undefined || parseCliSessionId(sessionId) === undefined) {
@@ -147,7 +147,7 @@ function parseSessionStopArgs(argv: readonly string[]): CliArgs {
         throw new SessionCliUsageError(SESSION_STOP_USAGE);
     }
     return {
-        ...createSessionArgs('session-stop'),
+        ...createBaseArgs('session-stop'),
         sessionId,
         sessionStopScope: scope,
         sessionStopTimeoutMs: timeoutMs,
@@ -173,13 +173,3 @@ function parseSessionStopTimeout(duration: string | undefined): number {
     return timeoutMs;
 }
 
-function createSessionArgs(command: CliArgs['command']): CliArgs {
-    return {
-        mode: 'tui',
-        useNative: undefined,
-        command,
-        showHelp: false,
-        showVersion: false,
-        thinking: false,
-    };
-}

@@ -1,10 +1,11 @@
 import { type PermissionRule, PermissionRuleSchema } from '@mission-control/protocol';
+import { isNodeError } from '../util/node-error';
 import { z } from 'zod';
 import { resolveMissionControlDataDir } from '../memory/data-dir';
 import { normalizePermissionRules, normalizePermissionWorkspaceRoot } from './workspace-root';
-import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname, isAbsolute, join } from 'node:path';
+import { atomicWriteFile } from '../persistence/atomic-write';
+import { readFile } from 'node:fs/promises';
+import { isAbsolute, join } from 'node:path';
 
 const permissionRuleFileSchema = z
     .object({
@@ -72,16 +73,9 @@ async function writeRuleFile(
     file: PermissionRuleFile,
     options: PermissionRuleAppendOptions,
 ): Promise<void> {
-    const tempPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
-    await mkdir(dirname(filePath), { recursive: true });
-    try {
-        await writeFile(tempPath, `${JSON.stringify(file, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
-        options.beforeCommit?.();
-        await rename(tempPath, filePath);
-    } catch (error: unknown) {
-        await rm(tempPath, { force: true });
-        throw error;
-    }
+    await atomicWriteFile(filePath, `${JSON.stringify(file, null, 2)}\n`, {
+        ...(options.beforeCommit !== undefined ? { beforeCommit: options.beforeCommit } : {}),
+    });
 }
 
 function dedupeRules(rules: readonly PermissionRule[]): readonly PermissionRule[] {
@@ -103,6 +97,4 @@ function compareRules(left: PermissionRule, right: PermissionRule): number {
     return leftKey.localeCompare(rightKey);
 }
 
-function isNodeError(error: unknown, code: string): error is { readonly code: string } {
-    return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
-}
+

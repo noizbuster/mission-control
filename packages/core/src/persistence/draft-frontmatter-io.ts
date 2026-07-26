@@ -1,4 +1,5 @@
 import { ensureMcDirs, mcFilePath, McPersistenceError } from './paths';
+import { isErrorCode } from '../util/node-error';
 import { assertValidPlanSlug, PlanFormatError } from './plan-format';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
@@ -238,6 +239,4 @@ async function atomicWrite(filePath: string, contents: string): Promise<void> {
     }
 }
 
-function isErrorCode(error: unknown, code: string): boolean {
-    return typeof error === 'object' && error !== null && 'code' in error && Reflect.get(error, 'code') === code;
-}
+

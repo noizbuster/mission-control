@@ -4,6 +4,7 @@ import type { ProviderCredentialResolver } from '../credential-resolver';
 import { ProviderTurnError } from '../provider-turn-types';
 import { AnthropicMessagesEventParseError } from './anthropic-messages-events';
 import { AnthropicMessagesTransportError } from './anthropic-messages-transport';
+import { type ProviderTransportErrorOptions, mapProviderTransportError } from '../shared/provider-transport-error';
 
 export type AnthropicMessagesErrorRedactor = (text: string) => string;
 
@@ -18,7 +19,7 @@ export function mapAnthropicProviderError(error: unknown, resolver: ProviderCred
         return { code: 'schema_invalid', message: resolver.redactForOutput(error.message), retryable: false };
     }
     if (error instanceof AnthropicMessagesTransportError) {
-        return protocolErrorFromTransportError(error, resolver);
+        return mapProviderTransportError(error, resolver.redactForOutput(error.message), ANTHROPIC_TRANSPORT_ERROR_OPTIONS);
     }
     return { code: 'unknown', message: resolver.redactForOutput(String(error)), retryable: false };
 }
@@ -33,28 +34,12 @@ export function protocolErrorFromAnthropicError(
     return { code: 'unknown', message: 'Anthropic Messages stream failed', retryable: false };
 }
 
-function protocolErrorFromTransportError(
-    error: AnthropicMessagesTransportError,
-    resolver: ProviderCredentialResolver,
-): ProtocolError {
-    const message = resolver.redactForOutput(error.message);
-    if (error.kind === 'abort') {
-        return { code: 'provider_aborted', message, retryable: false };
-    }
-    if (error.kind === 'timeout') {
-        return { code: 'provider_timeout', message, retryable: true };
-    }
-    if (error.status === 401 || error.status === 403) {
-        return { code: 'provider_auth_failed', message, retryable: false };
-    }
-    if (error.status === 429 || error.status === 529) {
-        return { code: 'provider_rate_limited', message, retryable: true };
-    }
-    if (error.code === 'context_length_exceeded' || message.includes('context_length_exceeded')) {
-        return { code: 'provider_context_overflow', message, retryable: false };
-    }
-    return { code: 'unknown', message, retryable: false };
-}
+const ANTHROPIC_TRANSPORT_ERROR_OPTIONS: ProviderTransportErrorOptions = {
+    authStatusCodes: [401, 403],
+    rateLimitStatusCodes: [429, 529],
+    contextOverflow: (info, message) =>
+        info.code === 'context_length_exceeded' || message.includes('context_length_exceeded'),
+};
 
 function protocolErrorForCode(
     code: string | undefined,

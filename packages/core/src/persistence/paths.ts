@@ -1,4 +1,5 @@
 import { access, mkdir, readFile } from 'node:fs/promises';
+import { isErrorCode } from '../util/node-error';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 /**
@@ -234,11 +235,4 @@ function escapeRegExp(ch: string): string {
     return /[.*+?^${}()|[\]\\]/u.test(ch) ? `\\${ch}` : ch;
 }
 
-function isErrorCode(error: unknown, code: string): boolean {
-    return (
-        typeof error === 'object' &&
-        error !== null &&
-        'code' in error &&
-        (error as { readonly code?: unknown }).code === code
-    );
-}
+

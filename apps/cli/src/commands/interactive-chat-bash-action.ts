@@ -1,9 +1,10 @@
-import { ProjectTrustStore, redactCredentialText } from '@mission-control/core';
+import { redactCredentialText } from '@mission-control/core';
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import { actionResult, type ChatActionResult } from './interactive-chat-action-result';
 import type { CodingActionContext } from './interactive-chat-actions';
 import type { ChatOutput } from './interactive-chat-io';
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent';
+import { isWorkspaceTrusted } from './cli-trust';
 import { execSync } from 'node:child_process';
 
 export type BashAction = { readonly kind: 'bash'; readonly command: string };
@@ -81,11 +82,6 @@ export async function runBashDisplayOnlyAction(
     return actionResult(modelProviderSelection, coding.activeTurn);
 }
 
-async function isWorkspaceTrusted(workspaceRoot: string): Promise<boolean> {
-    const store = new ProjectTrustStore();
-    const lookup = await store.getDecision(workspaceRoot);
-    return lookup.decision === 'trusted';
-}
 
 type BashExecResult =
     | { readonly kind: 'success'; readonly output: string }

@@ -3,15 +3,15 @@ import { type AnthropicMessagesErrorRedactor, protocolErrorFromAnthropicError } 
 import { parseAnthropicMessagesStreamEvent, parseAnthropicToolUseContentBlock } from './anthropic-messages-events';
 import {
     type AnthropicMessagesMappingState,
+    anthropicToolCallTranscripts,
     completedText,
     completedThinking,
     createAnthropicMessagesMappingState,
     finishReasonFromAnthropicStopReason,
-    providerResponseId,
-    providerToolCallMessageFields,
     toolArgumentsJson,
     updateUsage,
 } from './anthropic-messages-state';
+import { isRecord, providerResponseId, providerToolCallMessageFields } from '../shared/provider-helpers';
 
 export { type AnthropicMessagesMappingState, createAnthropicMessagesMappingState };
 
@@ -79,7 +79,7 @@ export function* mapAnthropicMessagesStreamEvent(
                     role: 'assistant',
                     content: completedText(state),
                     ...(thinking !== '' ? { reasoning: thinking } : {}),
-                    ...providerToolCallMessageFields(state),
+                    ...providerToolCallMessageFields(anthropicToolCallTranscripts(state)),
                 },
                 finishReason: finishReasonFromAnthropicStopReason(state.stopReason),
                 usage: {
@@ -230,8 +230,4 @@ function isInputJsonDelta(
 
 function textFieldIsValid(value: unknown): boolean {
     return value === undefined || typeof value === 'string';
-}
-
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-    return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

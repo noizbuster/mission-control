@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isErrorCode } from '../util/node-error';
 import type { SessionControlRegistry } from './session-control-registry-file';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { chmod, lstat, rm } from 'node:fs/promises';
@@ -222,6 +223,4 @@ async function removeMatchingSocket(path: string, device: number, inode: number)
     }
 }
 
-function isErrorCode(error: unknown, code: string): boolean {
-    return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
-}
+

@@ -12,6 +12,7 @@
  * consistent with the DEFAULT_CODING_AGENT_PERSONA injection defense.
  */
 import type { ProtocolError } from '@mission-control/protocol';
+import { errorToString } from '../util/error-to-string';
 import { z } from 'zod';
 import type { Skill } from '../skills/skill-loader';
 import type { ToolRegistry } from './tool-registry';
@@ -91,7 +92,7 @@ export async function loadSkillBody(skills: readonly Skill[], name: string): Pro
     try {
         content = await readFile(match.filePath, 'utf8');
     } catch (error: unknown) {
-        throw skillError(`failed to read skill '${name}' at ${match.filePath}: ${instanceMessage(error)}`, false);
+        throw skillError(`failed to read skill '${name}' at ${match.filePath}: ${errorToString(error)}`, false);
     }
     return {
         name: match.name,
@@ -138,6 +139,4 @@ function skillError(message: string, retryable: boolean): ToolExecutionError {
     return new ToolExecutionError(error);
 }
 
-function instanceMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
-}
+

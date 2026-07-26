@@ -40,23 +40,15 @@ export function addToolCall(state: GeminiGenerateContentMappingState, toolCall: 
     state.toolCalls = [...state.toolCalls, toolCall];
 }
 
-export function providerToolCallMessageFields(state: GeminiGenerateContentMappingState): {
-    readonly toolCallIds?: string[];
-    readonly providerToolCalls?: ProviderToolCallTranscript[];
-} {
-    return state.toolCalls.length === 0
-        ? {}
-        : {
-              toolCallIds: state.toolCalls.map((toolCall) => toolCall.toolCallId),
-              providerToolCalls: state.toolCalls.map((toolCall) => ({
-                  providerID: 'google',
-                  toolCallId: toolCall.toolCallId,
-                  toolName: toolCall.toolName,
-                  argumentsJson: toolCall.argumentsJson,
-                  ...(toolCall.providerCallId !== undefined ? { providerCallId: toolCall.providerCallId } : {}),
-                  providerItemId: toolCall.providerItemId,
-              })),
-          };
+export function geminiToolCallTranscripts(state: GeminiGenerateContentMappingState): ProviderToolCallTranscript[] {
+    return state.toolCalls.map((toolCall) => ({
+        providerID: 'google',
+        toolCallId: toolCall.toolCallId,
+        toolName: toolCall.toolName,
+        argumentsJson: toolCall.argumentsJson,
+        ...(toolCall.providerCallId !== undefined ? { providerCallId: toolCall.providerCallId } : {}),
+        providerItemId: toolCall.providerItemId,
+    }));
 }
 
 export function finishReasonFromGemini(state: GeminiGenerateContentMappingState): ProviderFinishReason {
@@ -88,8 +80,4 @@ export function usageFromState(state: GeminiGenerateContentMappingState): Provid
         outputTokens: state.outputTokens,
         totalTokens: state.totalTokens,
     };
-}
-
-export function providerResponseId(providerResponse: string | undefined): { readonly providerResponseId?: string } {
-    return providerResponse === undefined ? {} : { providerResponseId: providerResponse };
 }

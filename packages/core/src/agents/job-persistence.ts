@@ -7,11 +7,12 @@
  */
 
 import { ProtocolErrorSchema } from '@mission-control/protocol';
+import { isErrorCode } from '../util/node-error';
 import { z } from 'zod';
 import type { BackgroundJobHandle, DurableBackgroundJobHandle } from './async-job-manager';
-import { randomUUID } from 'node:crypto';
-import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { atomicWriteJsonFile } from '../persistence/atomic-write';
+import { readdir, readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 const JSON_FILE_SUFFIX = '.json';
 
@@ -43,7 +44,7 @@ const BackgroundJobHandleSchema = z.object({
 export async function persistJob(jobsDir: string, handle: DurableBackgroundJobHandle): Promise<void> {
     const validated = BackgroundJobHandleSchema.parse(handle);
     const filePath = join(jobsDir, `${handle.jobId}${JSON_FILE_SUFFIX}`);
-    await atomicWriteJson(filePath, validated);
+    await atomicWriteJsonFile(filePath, validated);
 }
 
 /**
@@ -117,20 +118,4 @@ async function tryReadJobFile(filePath: string): Promise<BackgroundJobHandle | u
     return handle;
 }
 
-async function atomicWriteJson(filePath: string, value: unknown): Promise<void> {
-    const serialized = `${JSON.stringify(value, null, 2)}\n`;
-    const tempPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
-    await mkdir(dirname(filePath), { recursive: true });
-    await writeFile(tempPath, serialized, { encoding: 'utf8', flag: 'wx' });
-    await rename(tempPath, filePath);
-    await rm(tempPath, { force: true });
-}
 
-function isErrorCode(error: unknown, code: string): boolean {
-    return (
-        typeof error === 'object' &&
-        error !== null &&
-        'code' in error &&
-        (error as { readonly code?: unknown }).code === code
-    );
-}

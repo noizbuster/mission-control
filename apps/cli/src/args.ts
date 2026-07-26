@@ -140,7 +140,7 @@ export function parseProfileName(raw: string | undefined): string | undefined {
     return raw;
 }
 
-function createBaseArgs(command: CliCommand): Omit<CliArgs, 'modelProviderSelection'> {
+export function createBaseArgs(command: CliCommand): Omit<CliArgs, 'modelProviderSelection'> {
     return {
         mode: 'tui',
         useNative: undefined,
@@ -149,6 +149,18 @@ function createBaseArgs(command: CliCommand): Omit<CliArgs, 'modelProviderSelect
         showVersion: false,
         thinking: false,
     };
+}
+
+/**
+ * Read the value following a value-taking flag (e.g. `--model x` -> `x`). Throws if the next
+ * token is missing or looks like another flag. Shared by the per-command arg parsers.
+ */
+export function readFlagValue(argv: readonly string[], index: number, flag: string): string {
+    const value = argv[index + 1];
+    if (value === undefined || value.startsWith('--')) {
+        throw new Error(`${flag} requires a value`);
+    }
+    return value;
 }
 
 export function parseArgs(argv: readonly string[]): CliArgs {

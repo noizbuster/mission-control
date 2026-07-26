@@ -1,34 +1,16 @@
 /**
  * `RemoteMcpClient` — a remote MCP client over Streamable HTTP (primary) with an SSE fallback,
- * implementing the `McpClient` seam (`listTools` / `callTool`) declared in `../mcp-tool.ts`. It
- * mirrors `StdioMcpClient`'s hardening contract so both transports are interchangeable from the
- * caller's perspective.
+ * implementing the `McpClient` seam via `BaseMcpClient`. It speaks the MCP initialize handshake
+ * against a remote endpoint, lists and invokes tools, and tears the connection down on `close()`
+ * (also after an idle timeout). The shared `listTools`/`callTool` pagination + invocation body,
+ * the deadline race, and secret-redacting error wrapping all live in `BaseMcpClient`; this class
+ * owns only the remote transport: Streamable-HTTP→SSE `connect` with auth-error short-circuit,
+ * idle-eviction timer, transport/transport-factory seams, and the `forceTeardown` shape.
  *
- * Connect strategy (opencode `mcp/index.ts` precedent): try `StreamableHTTPClientTransport`
- * first; on a non-auth failure fall back to `SSEClientTransport`. An HTTP 401/403 surfaces as a
- * clear auth error immediately (no fallback) so a misconfigured token is not masked as a generic
- * transport failure.
- *
- * Hardening (load-bearing — same stance as todo 4):
- * - Bounded deadline on EVERY transport call (`connect` / `listTools` / `callTool`). A hung
- *   endpoint that accepts the connection but never replies would otherwise block the eager
- *   connect at session start (todo 7); the deadline turns that hang into a clean retryable
- *   failure and disconnects so the transport cannot leak.
- * - Secret redaction. The configured header/credential VALUES handed to the remote endpoint are
- *   redacted from tool OUTPUT and ERROR messages before they leave this client, because the repo
- *   AGENTS.md bans raw credentials from events/JSONL/CLI/desktop. A server can echo a header
- *   value in an error; this layer masks it. Arbitrary remote OUTPUT is untrusted DATA, bounded by
- *   the tool's output cap (not scrubbed here).
- * - Idle eviction. After `idleTimeoutMs` (default ~5min, opencode precedent) of no activity the
- *   client disconnects itself; the timer resets on each `listTools` / `callTool`. Pass
- *   `idleTimeoutMs: 0` to disable when an external manager owns the lifecycle (todo 7).
- *
- * v1 auth: headers/bearer only. Full OAuth PKCE + metadata discovery is deferred (follow-up); a
- * headers/bearer path is sufficient for v1.
- *
- * `callTool` returns opaque `unknown`; it is narrowed with `in` / `typeof` (no casts), then
- * deep-redacted structurally so both the model-facing string and the structured event payload
- * stay clean.
+ * Hardening (load-bearing, inherited): every transport call is bounded by a deadline so a hung
+ * endpoint rejects at the boundary; and configured header/credential secrets are redacted from
+ * tool output and error messages before they leave this client. Remote server output is
+ * untrusted DATA, bounded by the tool's output cap (not scrubbed here).
  */
 
 import type { ProtocolError } from '@mission-control/protocol';
@@ -37,17 +19,13 @@ import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { RequestOptions } from '@modelcontextprotocol/sdk/shared/protocol.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
-import type { McpClient, McpToolInfo } from '../mcp-tool';
-import { ToolExecutionError } from '../tool-registry-types';
-import { DEFAULT_MCP_TIMEOUT_MS, McpDeadline, raceWithDeadline } from './deadline';
+import { BaseMcpClient, CLIENT_NAME, CLIENT_VERSION, isRecord, type McpClientHandle } from './base-client';
+import { DEFAULT_MCP_TIMEOUT_MS } from './deadline';
 import { createSecretRedactor, type SecretRedactor } from './secret-redaction';
+import { ToolExecutionError } from '../tool-registry-types';
 
-const CLIENT_NAME = 'mission-control';
-const CLIENT_VERSION = '0.1.0';
 /** Idle eviction precedent from opencode (~5min): drop the connection after this long inactive. */
 export const DEFAULT_MCP_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
-/** Cap pagination so a server that always returns a cursor cannot loop forever. */
-const MAX_TOOL_PAGES = 50;
 
 /**
  * Minimal handle the client drives once connected. The real SDK `Client` satisfies this
@@ -96,24 +74,23 @@ type ActiveConnection = {
     readonly client: McpRemoteClientHandle;
 };
 
-export class RemoteMcpClient implements McpClient {
+export class RemoteMcpClient extends BaseMcpClient {
     private readonly parsedUrl: URL;
     private readonly headers: Readonly<Record<string, string>>;
-    private readonly timeoutMs: number;
+    protected readonly timeoutMs: number;
     private readonly idleTimeoutMs: number;
     private readonly clientName: string;
     private readonly clientVersion: string;
-    private readonly redactor: SecretRedactor;
+    protected readonly redactor: SecretRedactor;
     private readonly streamableFactory: RemoteTransportFactory;
     private readonly sseFactory: RemoteTransportFactory;
     private readonly clientFactory: RemoteClientFactory;
 
     private active: ActiveConnection | undefined;
-    private connected = false;
-    private closing = false;
     private idleTimerId: ReturnType<typeof setTimeout> | undefined;
 
     constructor(options: RemoteMcpClientOptions) {
+        super();
         if (typeof options.url !== 'string' || options.url.length === 0) {
             throw new ToolExecutionError({
                 code: 'tool_failed',
@@ -176,61 +153,6 @@ export class RemoteMcpClient implements McpClient {
         }
     }
 
-    async listTools(): Promise<readonly McpToolInfo[]> {
-        await this.ensureConnected();
-        const active = this.active;
-        if (active === undefined) {
-            throw this.toToolError(new Error('mcp client not connected'), 'listTools');
-        }
-        try {
-            return await this.withDeadline('mcp listTools', async (signal) => {
-                const collected: McpToolInfo[] = [];
-                let cursor: string | undefined;
-                for (let page = 0; page < MAX_TOOL_PAGES; page += 1) {
-                    const params = cursor === undefined ? {} : { cursor };
-                    const result = await active.client.listTools(params, { signal });
-                    const tools = readToolsField(result);
-                    for (const tool of tools) {
-                        const adapted = adaptTool(tool);
-                        if (adapted !== undefined) {
-                            collected.push(adapted);
-                        }
-                    }
-                    const next = readNextCursor(result);
-                    if (next === undefined) {
-                        break;
-                    }
-                    cursor = next;
-                }
-                return collected;
-            });
-        } catch (error) {
-            throw this.toToolError(error, 'listTools');
-        } finally {
-            this.resetIdleTimer();
-        }
-    }
-
-    async callTool(request: { readonly name: string; readonly arguments?: unknown }): Promise<unknown> {
-        await this.ensureConnected();
-        const active = this.active;
-        if (active === undefined) {
-            throw this.toToolError(new Error('mcp client not connected'), `callTool "${request.name}"`);
-        }
-        try {
-            return await this.withDeadline('mcp callTool', async (signal) => {
-                const args = isRecord(request.arguments) ? { arguments: request.arguments } : {};
-                const params = { name: request.name, ...args };
-                const result = await active.client.callTool(params, undefined, { signal });
-                return this.redactor.redactValue(result);
-            });
-        } catch (error) {
-            throw this.toToolError(error, `callTool "${request.name}"`);
-        } finally {
-            this.resetIdleTimer();
-        }
-    }
-
     async close(): Promise<void> {
         if (this.closing) {
             return;
@@ -240,33 +162,18 @@ export class RemoteMcpClient implements McpClient {
         await this.forceTeardown();
     }
 
+    protected getClient(): McpClientHandle | undefined {
+        return this.connected && this.active !== undefined ? this.active.client : undefined;
+    }
+
+    protected afterActivity(): void {
+        this.resetIdleTimer();
+    }
+
     private adopt(kind: 'streamable-http' | 'sse', transport: Transport, client: McpRemoteClientHandle): void {
         this.active = { kind, transport, client };
         this.connected = true;
         this.resetIdleTimer();
-    }
-
-    private async ensureConnected(): Promise<void> {
-        if (this.connected && this.active !== undefined) {
-            return;
-        }
-        throw this.toToolError(new Error('mcp client is not connected'), 'ensureConnected');
-    }
-
-    /**
-     * Race a transport call against the deadline. On expiry disconnect and wrap into a retryable
-     * `ToolExecutionError`. Mirrors `StdioMcpClient.withDeadline` over the shared helper.
-     */
-    private async withDeadline<T>(label: string, run: (signal: AbortSignal) => Promise<T>): Promise<T> {
-        try {
-            return await raceWithDeadline(label, this.timeoutMs, run);
-        } catch (error) {
-            if (error instanceof McpDeadline) {
-                await this.forceTeardown();
-                throw this.toToolError(error, label);
-            }
-            throw error;
-        }
     }
 
     private buildRequestInit(): RequestInit {
@@ -299,7 +206,7 @@ export class RemoteMcpClient implements McpClient {
         }
     }
 
-    private async forceTeardown(): Promise<void> {
+    protected async forceTeardown(): Promise<void> {
         this.connected = false;
         const active = this.active;
         this.active = undefined;
@@ -319,16 +226,6 @@ export class RemoteMcpClient implements McpClient {
         } catch {
             // best-effort
         }
-    }
-
-    private toToolError(error: unknown, label: string): ToolExecutionError {
-        const raw = error instanceof Error ? error.message : String(error);
-        const protocolError: ProtocolError = {
-            code: 'tool_failed',
-            message: this.redactor.redactText(`${label}: ${raw}`),
-            retryable: true,
-        };
-        return new ToolExecutionError(protocolError);
     }
 
     private toAuthError(error: unknown, label: string): ToolExecutionError {
@@ -391,48 +288,4 @@ function readErrorCode(error: unknown): number | undefined {
     }
     const code = error['code'];
     return typeof code === 'number' ? code : undefined;
-}
-
-/**
- * Read the `tools` array off a `listTools` result. The SDK return carries an index signature, so
- * the field is read by bracket access and narrowed structurally (no casts).
- */
-function readToolsField(result: unknown): readonly unknown[] {
-    if (!isRecord(result)) {
-        return [];
-    }
-    const tools = result['tools'];
-    if (!Array.isArray(tools)) {
-        return [];
-    }
-    return tools;
-}
-
-function readNextCursor(result: unknown): string | undefined {
-    if (!isRecord(result)) {
-        return undefined;
-    }
-    const cursor = result['nextCursor'];
-    return typeof cursor === 'string' && cursor.length > 0 ? cursor : undefined;
-}
-
-function adaptTool(tool: unknown): McpToolInfo | undefined {
-    if (!isRecord(tool)) {
-        return undefined;
-    }
-    const name = tool['name'];
-    if (typeof name !== 'string' || name.length === 0) {
-        return undefined;
-    }
-    const description = tool['description'];
-    const inputSchema = tool['inputSchema'];
-    return {
-        name,
-        ...(typeof description === 'string' ? { description } : {}),
-        ...(isRecord(inputSchema) ? { inputSchema } : {}),
-    };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

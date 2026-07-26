@@ -4,6 +4,7 @@ import type { ProviderCredentialResolver } from '../credential-resolver';
 import { ProviderTurnError } from '../provider-turn-types';
 import { OpenAICompatibleEventParseError } from './openai-compatible-events';
 import { OpenAICompatibleTransportError } from './openai-compatible-transport';
+import { type ProviderTransportErrorOptions, mapProviderTransportError } from '../shared/provider-transport-error';
 
 export type OpenAICompatibleErrorRedactor = (text: string) => string;
 
@@ -18,7 +19,11 @@ export function mapOpenAICompatibleProviderError(error: unknown, resolver: Provi
         return { code: 'schema_invalid', message: resolver.redactForOutput(error.message), retryable: false };
     }
     if (error instanceof OpenAICompatibleTransportError) {
-        return protocolErrorFromTransportError(error, resolver);
+        return mapProviderTransportError(
+            error,
+            resolver.redactForOutput(extractReadableErrorMessage(error.message)),
+            OPENAI_COMPATIBLE_TRANSPORT_ERROR_OPTIONS,
+        );
     }
     const rawMessage = error instanceof Error ? error.message : String(error);
     const message = resolver.redactForOutput(rawMessage);
@@ -53,33 +58,6 @@ export function protocolErrorFromOpenAICompatibleError(
     return { code: 'unknown', message, retryable: false };
 }
 
-function protocolErrorFromTransportError(
-    error: OpenAICompatibleTransportError,
-    resolver: ProviderCredentialResolver,
-): ProtocolError {
-    const rawMessage = extractReadableErrorMessage(error.message);
-    const message = resolver.redactForOutput(rawMessage);
-    if (error.kind === 'abort') {
-        return { code: 'provider_aborted', message, retryable: false };
-    }
-    if (error.kind === 'timeout' || error.kind === 'network') {
-        return { code: 'provider_timeout', message, retryable: true };
-    }
-    if (error.status === 401 || error.status === 403) {
-        return { code: 'provider_auth_failed', message, retryable: false };
-    }
-    if (error.status === 429 || isTransientHttpStatus(error.status) || isTransientOverloadMessage(message)) {
-        return { code: 'provider_rate_limited', message, retryable: true };
-    }
-    if (error.code === 'context_length_exceeded' || message.includes('context_length_exceeded')) {
-        return { code: 'provider_context_overflow', message, retryable: false };
-    }
-    if (isTransportNetworkMessage(message)) {
-        return { code: 'provider_timeout', message, retryable: true };
-    }
-    return { code: 'unknown', message, retryable: false };
-}
-
 function isTransportNetworkMessage(message: string): boolean {
     const lower = message.toLowerCase();
     return (
@@ -96,20 +74,17 @@ function isTransportNetworkMessage(message: string): boolean {
     );
 }
 
-function isTransientHttpStatus(status: number | undefined): boolean {
-    return status === 502 || status === 503 || status === 504 || status === 529
-        || (status !== undefined && status >= 500 && status < 600);
-}
+const TRANSIENT_OVERLOAD_MESSAGE_SUBSTRINGS: readonly string[] = [
+    'temporarily overloaded',
+    'service may be temporarily overloaded',
+    'overloaded',
+    'try again later',
+    'too many requests',
+];
 
 function isTransientOverloadMessage(message: string): boolean {
     const lower = message.toLowerCase();
-    return (
-        lower.includes('temporarily overloaded')
-        || lower.includes('service may be temporarily overloaded')
-        || lower.includes('overloaded')
-        || lower.includes('try again later')
-        || lower.includes('too many requests')
-    );
+    return TRANSIENT_OVERLOAD_MESSAGE_SUBSTRINGS.some((substring) => lower.includes(substring));
 }
 
 function extractReadableErrorMessage(raw: string): string {
@@ -133,3 +108,14 @@ function extractReadableErrorMessage(raw: string): string {
     } catch {}
     return raw;
 }
+
+const OPENAI_COMPATIBLE_TRANSPORT_ERROR_OPTIONS: ProviderTransportErrorOptions = {
+    timeoutKinds: ['timeout', 'network'],
+    authStatusCodes: [401, 403],
+    rateLimitStatusCodes: [429, 502, 503, 504, 529],
+    rateLimitOn5xx: true,
+    rateLimitMessageSubstrings: TRANSIENT_OVERLOAD_MESSAGE_SUBSTRINGS,
+    contextOverflow: (info, message) =>
+        info.code === 'context_length_exceeded' || message.includes('context_length_exceeded'),
+    networkMessagePredicate: isTransportNetworkMessage,
+};

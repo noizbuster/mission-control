@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { isErrorCode } from '../util/node-error';
 import { lstat as lstatCallback, realpath as realpathCallback } from 'node:fs';
 import { mkdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -263,6 +264,4 @@ function uppercaseWindowsDrive(path: string): string {
     return `${path[0]?.toUpperCase() ?? ''}${path.slice(1)}`;
 }
 
-function isErrorCode(error: unknown, code: string): boolean {
-    return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
-}
+

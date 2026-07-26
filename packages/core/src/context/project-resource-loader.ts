@@ -1,4 +1,5 @@
 import { createWorkspaceGuard, referenceRepositoryPath } from '../tools/read-tools-paths';
+import { errorToString } from '../util/error-to-string';
 import type { ProjectTrustDecision, ProjectTrustStore } from '../trust/project-trust-store';
 import { open } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -85,7 +86,7 @@ export async function loadProjectResources(input: ProjectResourceLoadInput): Pro
                 truncated: target.stats.size > maxBytes,
             });
         } catch (error: unknown) {
-            const reason = errorMessage(error);
+            const reason = errorToString(error);
             if (!reason.includes('not_found')) {
                 deniedResources.push({ path, reason });
             }
@@ -112,9 +113,7 @@ async function readTextPrefix(path: string, bytes: number): Promise<string> {
     }
 }
 
-function errorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
-}
+
 
 function isReferenceRepositoryPath(workspaceRoot: string, path: string): boolean {
     return referenceRepositoryPattern.test(resolve(workspaceRoot, path).replaceAll('\\', '/'));

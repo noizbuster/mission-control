@@ -1,4 +1,5 @@
 export type CliSessionCommandErrorCode =
+    | 'invalid_file_path'
     | 'invalid_session_id'
     | 'session_not_found'
     | 'session_live_locked'

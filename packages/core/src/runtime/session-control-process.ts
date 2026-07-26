@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { isErrorCode } from '../util/node-error';
 import { readFile } from 'node:fs/promises';
 
 export type SessionControlProcessIdentity = {
@@ -99,6 +100,4 @@ function readCommandOutput(
     });
 }
 
-function isErrorCode(error: unknown, code: string): boolean {
-    return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
-}
+

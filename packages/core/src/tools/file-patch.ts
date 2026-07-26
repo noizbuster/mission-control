@@ -1,4 +1,5 @@
 import type { AgentEvent } from '@mission-control/protocol';
+import { errorToString } from '../util/error-to-string';
 import {
     executeFileMutation,
     fileMutationDiffEvents,
@@ -109,7 +110,7 @@ async function applyTargets(
             const isPartial = appliedFiles.length > 0;
             const message = `${isPartial ? `applied ${appliedFiles.join(', ')}; ` : ''}failed ${
                 target.relativePath
-            }: ${errorMessage(error)}`;
+            }: ${errorToString(error)}`;
             throw filePatchFailure(
                 isPartial ? 'partial_failed' : 'patch_apply_failed',
                 message,
@@ -177,6 +178,4 @@ function patchDiffEvents(output: FilePatchOutput, context: { readonly toolCallId
     });
 }
 
-function errorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
-}
+

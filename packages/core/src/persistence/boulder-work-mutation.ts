@@ -6,6 +6,7 @@ import {
     readBoulder,
     writeBoulder,
 } from './boulder-store';
+import { isNodeError } from '../util/node-error';
 import { type FileHandle, mkdir, open, rm } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
@@ -83,6 +84,4 @@ async function withBoulderMutationLock<Result>(root: string, operation: () => Pr
     }
 }
 
-function isNodeError(error: unknown, code: string): error is { readonly code: string } {
-    return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
-}
+

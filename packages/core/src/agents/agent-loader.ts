@@ -12,26 +12,21 @@
  * diagnostics and are skipped.
  */
 import { type AgentDefinition, type AgentSource } from '@mission-control/protocol';
-import { defaultAutomatedDiscoveryDenylist, toPosixPath } from '../tools/read-tools-paths';
+import { absolutePathMatchesDenylist } from '../discovery/index';
+import { walkResourceFiles } from '../discovery/resource-walker';
+import { errorToString } from '../util/error-to-string';
 import { AgentParseError, parseAgentFile } from './agent-parser';
 import { BUNDLED_AGENT_TEMPLATES } from './bundled/index';
 import { CapabilityRegistry } from './capability/index';
 import type { AgentPluginProvider, LoadContext } from './capability/types';
 import { registerBuiltinProviders } from './providers/index';
-import type { Dirent } from 'node:fs';
-import { lstat, readdir, readFile } from 'node:fs/promises';
+import { lstat, readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 
 export const DEFAULT_MAX_AGENT_FILE_BYTES = 64 * 1024;
 export const DEFAULT_MAX_AGENTS = 256;
-const MAX_WALK_DEPTH = 10;
 const AGENT_FILE_SUFFIX = '.md';
 const BUNDLED_PATH = '<bundled>';
-
-const denylistNeedles: readonly string[] = defaultAutomatedDiscoveryDenylist.map((e) => e.toLowerCase());
-const denylistDirNames: ReadonlySet<string> = new Set(
-    defaultAutomatedDiscoveryDenylist.filter((e) => !e.includes('/')).map((e) => e.toLowerCase()),
-);
 
 export type DiscoverAgentsOptions = {
     readonly workspaceRoot: string;
@@ -113,7 +108,11 @@ async function scanBuiltinScopes(
 
     for (const scope of resolveAgentScopes(options, wsDenied)) {
         if (scope.skipped) continue;
-        for (const filePath of await walkAgentFiles(scope.dir)) {
+        for (const filePath of await walkResourceFiles(scope.dir, {
+            matchesFile: (entry) =>
+                (entry.isFile() || entry.isSymbolicLink()) && entry.name.endsWith(AGENT_FILE_SUFFIX),
+            skipSymlinkEntries: false,
+        })) {
             acceptOutcome(await tryLoadAgentFile(filePath, scope.source, maxFileSize), filePath, state);
         }
     }
@@ -186,12 +185,12 @@ async function tryLoadAgentFile(filePath: string, source: AgentSource, maxFileSi
     try {
         contents = await readFile(filePath, 'utf8');
     } catch (error: unknown) {
-        return ok(diag(fallback, 'error', 'read_failed', `read failed: ${instanceMessage(error)}`, filePath));
+        return ok(diag(fallback, 'error', 'read_failed', `read failed: ${errorToString(error)}`, filePath));
     }
     try {
         return { kind: 'loaded', agent: parseAgentFile(filePath, contents, source) };
     } catch (error: unknown) {
-        const msg = error instanceof AgentParseError ? error.message : `parse failed: ${instanceMessage(error)}`;
+        const msg = error instanceof AgentParseError ? error.message : `parse failed: ${errorToString(error)}`;
         return ok(diag(fallback, 'error', 'parse_error', msg, filePath));
     }
 }
@@ -200,8 +199,7 @@ function tryLoadBundledTemplate(template: string): LoadOutcome {
     try {
         return { kind: 'loaded', agent: parseAgentFile(BUNDLED_PATH, template, 'bundled') };
     } catch (error: unknown) {
-        const msg =
-            error instanceof AgentParseError ? error.message : `bundled parse failed: ${instanceMessage(error)}`;
+        const msg = error instanceof AgentParseError ? error.message : `bundled parse failed: ${errorToString(error)}`;
         return ok(diag(BUNDLED_PATH, 'error', 'parse_error', msg, BUNDLED_PATH));
     }
 }
@@ -215,33 +213,6 @@ function resolveAgentScopes(options: DiscoverAgentsOptions, wsDenied: boolean): 
         scopes.push({ source: 'plugin', dir, skipped: false });
     }
     return scopes;
-}
-
-async function walkAgentFiles(scopeRoot: string): Promise<readonly string[]> {
-    const results: string[] = [];
-    const queue: Array<{ readonly dir: string; readonly depth: number }> = [{ dir: scopeRoot, depth: 0 }];
-    while (queue.length > 0) {
-        const item = queue.shift();
-        if (item === undefined || item.depth > MAX_WALK_DEPTH) continue;
-        let entries: readonly Dirent[];
-        try {
-            entries = await readdir(item.dir, { withFileTypes: true });
-        } catch {
-            continue;
-        }
-        for (const entry of entries) {
-            if (entry.isDirectory()) {
-                if (!denylistDirNames.has(entry.name.toLowerCase())) {
-                    queue.push({ dir: join(item.dir, entry.name), depth: item.depth + 1 });
-                }
-                continue;
-            }
-            if (entry.name.endsWith(AGENT_FILE_SUFFIX) && (entry.isFile() || entry.isSymbolicLink())) {
-                results.push(join(item.dir, entry.name));
-            }
-        }
-    }
-    return results.sort();
 }
 
 function diag(
@@ -258,18 +229,7 @@ function ok(diagnostic: AgentDiscoveryDiagnostic): LoadOutcome {
     return { kind: 'diagnostic', diagnostic };
 }
 
-function absolutePathMatchesDenylist(absolutePath: string): boolean {
-    const posix = toPosixPath(absolutePath).toLowerCase();
-    return denylistNeedles.some(
-        (n) => n.length > 0 && (posix === n || posix.includes(`/${n}/`) || posix.endsWith(`/${n}`)),
-    );
-}
-
 function deriveAgentName(filePath: string): string {
     const base = basename(filePath).replace(/\.md$/u, '');
     return base.length > 0 ? base : basename(filePath);
-}
-
-function instanceMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
 }

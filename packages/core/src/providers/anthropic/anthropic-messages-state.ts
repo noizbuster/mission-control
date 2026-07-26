@@ -49,11 +49,8 @@ export function createAnthropicMessagesMappingState(requestId: string): Anthropi
     };
 }
 
-export function providerToolCallMessageFields(state: AnthropicMessagesMappingState): {
-    readonly toolCallIds?: string[];
-    readonly providerToolCalls?: ProviderToolCallTranscript[];
-} {
-    const providerToolCalls = Array.from(state.blocksByIndex.entries()).flatMap(([index, block]) =>
+export function anthropicToolCallTranscripts(state: AnthropicMessagesMappingState): ProviderToolCallTranscript[] {
+    return Array.from(state.blocksByIndex.entries()).flatMap(([index, block]) =>
         block.kind === 'tool_use' && block.completed
             ? [
                   {
@@ -67,12 +64,6 @@ export function providerToolCallMessageFields(state: AnthropicMessagesMappingSta
               ]
             : [],
     );
-    return providerToolCalls.length === 0
-        ? {}
-        : {
-              toolCallIds: providerToolCalls.map((toolCall) => toolCall.toolCallId),
-              providerToolCalls,
-          };
 }
 
 export function completedText(state: AnthropicMessagesMappingState): string {
@@ -125,8 +116,4 @@ export function updateUsage(state: AnthropicMessagesMappingState, usage: Anthrop
     if (usage?.cache_read_input_tokens !== undefined) {
         state.cacheReadTokens = usage.cache_read_input_tokens;
     }
-}
-
-export function providerResponseId(providerResponse: string | undefined): { readonly providerResponseId?: string } {
-    return providerResponse === undefined ? {} : { providerResponseId: providerResponse };
 }

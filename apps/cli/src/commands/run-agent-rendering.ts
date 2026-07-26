@@ -1,6 +1,6 @@
 import { type PersistentMemoryStore, TursoPersistentStore } from '@mission-control/core';
 import type { CliArgs } from '../args';
-import { type AgentUIRenderer, JsonRenderer, PlainRenderer, TuiRenderer } from '../ui/renderers';
+import { type AgentUIRenderer, JsonRenderer, PlainRenderer } from '../ui/renderers';
 
 export function closePersistentStore(store: PersistentMemoryStore | undefined): void {
     if (store instanceof TursoPersistentStore) {
@@ -11,12 +11,11 @@ export function closePersistentStore(store: PersistentMemoryStore | undefined): 
 export function createRenderer(mode: CliArgs['mode'], thinking = false): AgentUIRenderer {
     switch (mode) {
         case 'plain':
+        case 'tui':
             return new PlainRenderer({ thinking });
         case 'json':
         case 'jsonl':
             return new JsonRenderer();
-        case 'tui':
-            return new TuiRenderer({ thinking });
         default:
             return assertNever(mode);
     }

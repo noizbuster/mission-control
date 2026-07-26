@@ -1,7 +1,8 @@
 import { MC_DIR_NAME, McPersistenceError } from './paths';
-import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { isErrorCode } from '../util/node-error';
+import { atomicWriteTextFile } from './atomic-write';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 const NOTEPADS_DIR = 'notepads';
 
@@ -77,7 +78,7 @@ export async function appendNotepad(
     const existing = await readExistingForAppend(filePath);
     const next = existing + block;
     assertAppendOnly(existing, next);
-    await atomicWrite(filePath, next);
+    await atomicWriteTextFile(filePath, next);
 }
 
 export function notepadFilePath(root: string, planName: string, file: NotepadFile): string {
@@ -112,14 +113,6 @@ async function readExistingForAppend(filePath: string): Promise<string> {
     }
 }
 
-async function atomicWrite(filePath: string, contents: string): Promise<void> {
-    const tempPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
-    await mkdir(dirname(filePath), { recursive: true });
-    await writeFile(tempPath, contents, { encoding: 'utf8', flag: 'wx' });
-    await rename(tempPath, filePath);
-    await rm(tempPath, { force: true });
-}
-
 function assertSafePlanName(planName: string): void {
     if (!/^[A-Za-z0-9._-]+$/u.test(planName)) {
         throw new NotepadStoreError(
@@ -138,11 +131,4 @@ function assertNotepadFile(file: string): asserts file is NotepadFile {
     }
 }
 
-function isErrorCode(error: unknown, code: string): boolean {
-    return (
-        typeof error === 'object' &&
-        error !== null &&
-        'code' in error &&
-        (error as { readonly code?: unknown }).code === code
-    );
-}
+

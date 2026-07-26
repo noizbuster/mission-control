@@ -5,18 +5,26 @@
  * `behavior/nodes/llm-actor/llm-actor-skill-cache.ts` (`walkSkillManifestFiles` generalized
  * with a caller-supplied file matcher).
  */
+
+import { defaultAutomatedDiscoveryDenylist } from '../tools/read-tools-paths';
 import type { Dirent } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { defaultAutomatedDiscoveryDenylist } from '../tools/read-tools-paths';
 
 const MAX_MANIFEST_WALK_DEPTH = 10;
-const manifestDenylistDirNames: ReadonlySet<string> = new Set(
+export const manifestDenylistDirNames: ReadonlySet<string> = new Set(
     defaultAutomatedDiscoveryDenylist.filter((entry) => !entry.includes('/')).map((entry) => entry.toLowerCase()),
 );
 
 export type WalkResourceFilesOptions = {
     readonly matchesFile: (entry: Dirent) => boolean;
+    /**
+     * When `true` (default), symbolic-link entries — both directories and files — are
+     * skipped silently during the walk. When `false`, symlinked files are passed to
+     * {@link matchesFile} so the caller can surface them (e.g. agent discovery emits a
+     * `symlink_skipped` diagnostic via a later `lstat`).
+     */
+    readonly skipSymlinkEntries?: boolean;
 };
 
 export async function walkResourceFiles(
@@ -35,14 +43,16 @@ export async function walkResourceFiles(
             continue;
         }
         for (const entry of entries) {
-            if (entry.isSymbolicLink()) continue;
+            if (options.skipSymlinkEntries !== false && entry.isSymbolicLink()) continue;
             const fullPath = join(item.dir, entry.name);
             if (entry.isDirectory()) {
                 if (!manifestDenylistDirNames.has(entry.name.toLowerCase())) {
                     queue.push({ dir: fullPath, depth: item.depth + 1 });
                 }
-            } else if (entry.isFile() && options.matchesFile(entry)) {
-                results.push(fullPath);
+            } else if (entry.isFile() || (options.skipSymlinkEntries === false && entry.isSymbolicLink())) {
+                if (options.matchesFile(entry)) {
+                    results.push(fullPath);
+                }
             }
         }
     }

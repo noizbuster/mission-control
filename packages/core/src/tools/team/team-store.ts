@@ -37,7 +37,8 @@ import {
 } from './team-schemas';
 import { MC_DIR_NAME } from '../../persistence/paths';
 import { randomUUID } from 'node:crypto';
-import { mkdir, open, opendir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { atomicWriteJsonFile } from '../../persistence/atomic-write';
+import { mkdir, open, opendir, readFile, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
 const TEAMS_SUBDIR = 'teams';
@@ -88,15 +89,6 @@ function tasklistLockPath(root: string, teamRunId: string): string {
     return join(teamDir(root, teamRunId), TASKLIST_LOCK);
 }
 
-async function atomicWriteJson(filePath: string, value: unknown): Promise<void> {
-    const serialized = `${JSON.stringify(value, null, 2)}\n`;
-    const tempPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
-    await mkdir(dirname(filePath), { recursive: true });
-    await writeFile(tempPath, serialized, { encoding: 'utf8', flag: 'wx' });
-    await rename(tempPath, filePath);
-    await rm(tempPath, { force: true });
-}
-
 async function ensureTeamDir(root: string, teamRunId: string): Promise<void> {
     await mkdir(join(teamDir(root, teamRunId), MAILBOX_DIR), { recursive: true });
 }
@@ -106,7 +98,7 @@ async function ensureTeamDir(root: string, teamRunId: string): Promise<void> {
 export async function writeState(root: string, state: TeamState): Promise<void> {
     const validated = teamStateSchema.parse(state);
     await ensureTeamDir(root, state.teamRunId);
-    await atomicWriteJson(statePath(root, state.teamRunId), validated);
+    await atomicWriteJsonFile(statePath(root, state.teamRunId), validated);
 }
 
 export async function readState(root: string, teamRunId: string): Promise<TeamState> {
@@ -130,7 +122,7 @@ export async function readState(root: string, teamRunId: string): Promise<TeamSt
 
 export async function writeConfig(root: string, teamRunId: string, spec: TeamSpec): Promise<void> {
     await ensureTeamDir(root, teamRunId);
-    await atomicWriteJson(configPath(root, teamRunId), spec);
+    await atomicWriteJsonFile(configPath(root, teamRunId), spec);
 }
 
 /** Read-modify-write a single team state. Refreshes `updatedAt`. */
@@ -350,7 +342,7 @@ async function readTaskList(root: string, teamRunId: string): Promise<TaskList> 
 
 async function writeTaskList(root: string, teamRunId: string, list: TaskList): Promise<void> {
     await ensureTeamDir(root, teamRunId);
-    await atomicWriteJson(tasklistPath(root, teamRunId), list);
+    await atomicWriteJsonFile(tasklistPath(root, teamRunId), list);
 }
 
 export async function readTasks(root: string, teamRunId: string): Promise<readonly TeamTask[]> {

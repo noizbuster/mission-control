@@ -221,7 +221,7 @@ function requireSessionId(args: CliArgs): string {
 function requireFilePath(args: CliArgs): string {
     if (args.filePath === undefined) {
         throw new CliSessionCommandError({
-            code: 'invalid_session_id',
+            code: 'invalid_file_path',
             message: 'Session file path is required',
         });
     }

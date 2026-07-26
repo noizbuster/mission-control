@@ -5,6 +5,7 @@ import {
 } from './openai-compatible-errors';
 import type { OpenAICompatibleToolCallDelta, OpenAICompatibleUsage } from './openai-compatible-event-schemas';
 import { parseOpenAICompatibleStreamEvent } from './openai-compatible-events';
+import { providerToolCallMessageFields } from '../shared/provider-helpers';
 
 export type OpenAICompatibleMappingState = {
     readonly requestId: string;
@@ -163,7 +164,7 @@ function* completeForFinishReason(
             messageId: `message_${state.providerResponseId ?? state.requestId}`,
             role: 'assistant',
             content: state.text,
-            ...providerToolCallFields(state),
+            ...providerToolCallMessageFields([...state.completedToolCalls.values()]),
         },
         finishReason: finishReason === 'tool_calls' ? 'tool_calls' : 'stop',
         ...usageField(usage),
@@ -207,19 +208,6 @@ function completedChunk(
         providerResponseId: state.providerResponseId ?? 'unknown',
         toolCall,
     };
-}
-
-function providerToolCallFields(state: OpenAICompatibleMappingState): {
-    readonly toolCallIds?: string[];
-    readonly providerToolCalls?: ProviderToolCallTranscript[];
-} {
-    const providerToolCalls: ProviderToolCallTranscript[] = [...state.completedToolCalls.values()];
-    return providerToolCalls.length === 0
-        ? {}
-        : {
-              toolCallIds: providerToolCalls.map((toolCall) => toolCall.toolCallId),
-              providerToolCalls,
-          };
 }
 
 function usageField(usage: OpenAICompatibleUsage | undefined): {

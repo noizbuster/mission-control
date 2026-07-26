@@ -1,4 +1,5 @@
 import type { ProviderStreamChunk, ProviderToolCallTranscript } from '@mission-control/protocol';
+import { providerResponseId } from '../shared/provider-helpers';
 import { type OpenAIFunctionCallItem, parseOpenAIFunctionCallItem } from './openai-responses-events';
 
 type ToolCallState = {
@@ -136,19 +137,12 @@ export function* completeToolCallsFromResponseOutput(input: {
     }
 }
 
-export function providerResponseId(providerResponse: string | undefined): { readonly providerResponseId?: string } {
-    return providerResponse === undefined ? {} : { providerResponseId: providerResponse };
-}
-
 export function providerCallId(providerCall: string | undefined): { readonly providerCallId?: string } {
     return providerCall === undefined ? {} : { providerCallId: providerCall };
 }
 
-export function providerToolCallMessageFields(state: OpenAIResponsesMappingState): {
-    readonly toolCallIds?: string[];
-    readonly providerToolCalls?: ProviderToolCallTranscript[];
-} {
-    const providerToolCalls = Array.from(state.toolCallsByItemId.values())
+export function openaiToolCallTranscripts(state: OpenAIResponsesMappingState): ProviderToolCallTranscript[] {
+    return Array.from(state.toolCallsByItemId.values())
         .filter((toolCall) => toolCall.completed)
         .map((toolCall) => ({
             providerID: 'openai',
@@ -158,10 +152,4 @@ export function providerToolCallMessageFields(state: OpenAIResponsesMappingState
             ...(toolCall.providerCallId !== undefined ? { providerCallId: toolCall.providerCallId } : {}),
             providerItemId: toolCall.providerItemId,
         }));
-    return providerToolCalls.length === 0
-        ? {}
-        : {
-              toolCallIds: providerToolCalls.map((toolCall) => toolCall.toolCallId),
-              providerToolCalls,
-          };
 }

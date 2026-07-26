@@ -1,4 +1,5 @@
 import { hasTruncationNotice } from './ast-grep-output';
+import { errorToString } from '../util/error-to-string';
 import type { AstGrepResult, AstGrepRunOptions } from './ast-grep-runner';
 import { runAstGrep } from './ast-grep-runner';
 import type { AstGrepInput, AstGrepQueryOutput } from './ast-grep-schemas';
@@ -34,12 +35,10 @@ export async function executeAstGrepQuery(
         if (error instanceof ToolExecutionError) throw error;
         throw new ToolExecutionError({
             code: 'tool_failed',
-            message: `ast_grep failed: ${errorMessage(error)}`,
+            message: `ast_grep failed: ${errorToString(error)}`,
             retryable: true,
         });
     }
 }
 
-function errorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
-}
+

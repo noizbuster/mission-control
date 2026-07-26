@@ -12,25 +12,17 @@
  * denylist retains reference-repository and generated-directory guards.
  */
 import { type WorkflowDiscoveryDiagnostic, type WorkflowSpec, WorkflowSpecSchema } from '@mission-control/protocol';
-import { resolveUserConfigDir } from '../skills/skill-loader';
-import { defaultAutomatedDiscoveryDenylist, toPosixPath } from '../tools/read-tools-paths';
+import { absolutePathMatchesDenylist, resolveUserConfigDir } from '../discovery/index';
+import { walkResourceFiles } from '../discovery/resource-walker';
+import { errorToString } from '../util/error-to-string';
 import { stripJsoncComments } from './jsonc-parser';
-import type { Dirent } from 'node:fs';
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 
 export const DEFAULT_MAX_WORKFLOW_FILE_BYTES = 64 * 1024;
 export const DEFAULT_MAX_WORKFLOWS = 256;
-const MAX_WALK_DEPTH = 10;
 const WORKFLOW_FILE_SUFFIX_JSON = '.workflow.json';
 const WORKFLOW_FILE_SUFFIX_JSONC = '.workflow.jsonc';
-
-const denylistAbsolutePathNeedles: readonly string[] = defaultAutomatedDiscoveryDenylist.map((entry) =>
-    entry.toLowerCase(),
-);
-const denylistDirNameSet: ReadonlySet<string> = new Set(
-    defaultAutomatedDiscoveryDenylist.filter((entry) => !entry.includes('/')).map((entry) => entry.toLowerCase()),
-);
 
 export type DiscoverWorkflowsOptions = {
     readonly workspaceRoot: string;
@@ -78,7 +70,9 @@ export async function discoverWorkflows(options: DiscoverWorkflowsOptions): Prom
         if (scope.skipped) {
             continue;
         }
-        const candidates = await walkWorkflowFiles(scope.dir);
+        const candidates = await walkResourceFiles(scope.dir, {
+            matchesFile: (entry) => entry.isFile() && isWorkflowFile(entry.name),
+        });
         for (const filePath of candidates) {
             const outcome = await tryLoadWorkflowFile(filePath, maxFileBytes);
             if (outcome.kind === 'diagnostic') {
@@ -141,20 +135,14 @@ async function tryLoadWorkflowFile(filePath: string, maxFileBytes: number): Prom
     try {
         contents = await readFile(filePath, 'utf8');
     } catch (error: unknown) {
-        return diagnostic(filePath, fallbackName, 'error', 'read_failed', `read failed: ${instanceMessage(error)}`);
+        return diagnostic(filePath, fallbackName, 'error', 'read_failed', `read failed: ${errorToString(error)}`);
     }
     const stripped = stripJsoncComments(contents);
     let parsed: unknown;
     try {
         parsed = JSON.parse(stripped);
     } catch (error: unknown) {
-        return diagnostic(
-            filePath,
-            fallbackName,
-            'error',
-            'parse_error',
-            `JSON parse failed: ${instanceMessage(error)}`,
-        );
+        return diagnostic(filePath, fallbackName, 'error', 'parse_error', `JSON parse failed: ${errorToString(error)}`);
     }
     const result = WorkflowSpecSchema.safeParse(parsed);
     if (!result.success) {
@@ -204,52 +192,8 @@ function resolveWorkflowScopes(
     return scopes;
 }
 
-async function walkWorkflowFiles(scopeRoot: string): Promise<readonly string[]> {
-    const results: string[] = [];
-    const queue: Array<{ readonly dir: string; readonly depth: number }> = [{ dir: scopeRoot, depth: 0 }];
-    while (queue.length > 0) {
-        const item = queue.shift();
-        if (item === undefined || item.depth > MAX_WALK_DEPTH) {
-            continue;
-        }
-        let entries: readonly Dirent[];
-        try {
-            entries = await readdir(item.dir, { withFileTypes: true });
-        } catch {
-            continue;
-        }
-        for (const entry of entries) {
-            if (entry.isSymbolicLink()) {
-                continue;
-            }
-            const fullPath = join(item.dir, entry.name);
-            if (entry.isDirectory()) {
-                if (denylistDirNameSet.has(entry.name.toLowerCase())) {
-                    continue;
-                }
-                queue.push({ dir: fullPath, depth: item.depth + 1 });
-                continue;
-            }
-            if (entry.isFile() && isWorkflowFile(entry.name)) {
-                results.push(fullPath);
-            }
-        }
-    }
-    return results.sort();
-}
-
 function isWorkflowFile(name: string): boolean {
     return name.endsWith(WORKFLOW_FILE_SUFFIX_JSON) || name.endsWith(WORKFLOW_FILE_SUFFIX_JSONC);
-}
-
-function absolutePathMatchesDenylist(absolutePath: string): boolean {
-    const posix = toPosixPath(absolutePath).toLowerCase();
-    return denylistAbsolutePathNeedles.some((needle) => {
-        if (needle.length === 0) {
-            return false;
-        }
-        return posix === needle || posix.includes(`/${needle}/`) || posix.endsWith(`/${needle}`);
-    });
 }
 
 function deriveWorkflowName(filePath: string): string {
@@ -266,8 +210,4 @@ function readNameField(value: unknown, fallback: string): string {
         }
     }
     return fallback;
-}
-
-function instanceMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
 }

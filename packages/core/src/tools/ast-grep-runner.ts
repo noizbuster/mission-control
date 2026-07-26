@@ -22,6 +22,7 @@ import type {
     NativeAstRewriteOptions,
     NativesClient,
 } from '../native/natives-client';
+import { errorToString } from '../util/error-to-string';
 import { execFile } from 'node:child_process';
 import { statSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
@@ -742,7 +743,7 @@ export const defaultAstGrepExecutor: AstGrepCommandExecutor = (params): Promise<
         } catch (error: unknown) {
             settle({
                 stdout: '',
-                stderr: errorMessage(error),
+                stderr: errorToString(error),
                 exitCode: null,
                 timedOut: false,
                 aborted: params.signal.aborted,
@@ -752,7 +753,7 @@ export const defaultAstGrepExecutor: AstGrepCommandExecutor = (params): Promise<
         child.on('error', (error: Error) =>
             settle({
                 stdout: '',
-                stderr: errorMessage(error),
+                stderr: errorToString(error),
                 exitCode: null,
                 timedOut: false,
                 aborted: params.signal.aborted,
@@ -787,9 +788,7 @@ export const defaultAstGrepExecutor: AstGrepCommandExecutor = (params): Promise<
     });
 };
 
-function errorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
-}
+
 
 function freshAbortController(): AbortController {
     return new AbortController();

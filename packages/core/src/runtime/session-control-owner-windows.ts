@@ -1,4 +1,5 @@
 import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db';
+import { isErrorCode } from '../util/node-error';
 import {
     acquireSessionControlLease,
     expireSessionControlLease,
@@ -209,6 +210,4 @@ async function removeOwnedWindowsRegistry(registryPath: string, lease: SessionCo
     }
 }
 
-function isErrorCode(error: unknown, code: string): boolean {
-    return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
-}
+

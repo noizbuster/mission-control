@@ -1,37 +1,25 @@
 /**
  * `StdioMcpClient` — a real MCP stdio client over `@modelcontextprotocol/sdk`, implementing the
- * `McpClient` seam (`listTools` / `callTool`) declared in `../mcp-tool.ts`. It spawns the
- * configured server command over stdin/stdout, speaks the MCP initialize handshake, lists and
- * invokes tools, and tears the child down on `close()`.
+ * `McpClient` seam via `BaseMcpClient`. It spawns the configured server command over
+ * stdin/stdout, speaks the MCP initialize handshake, lists and invokes tools, and tears the
+ * child down on `close()`. The shared `listTools`/`callTool` pagination + invocation body, the
+ * deadline race, and secret-redacting error wrapping all live in `BaseMcpClient`; this class
+ * owns only the stdio transport: `connect`, `forceTeardown`, and the `StdioClientTransport` /
+ * SDK `Client` lifecycle.
  *
- * Hardening (load-bearing):
- * - Bounded deadline on EVERY transport call (`connect` / `listTools` / `callTool`). A hung
- *   server that accepts the connection but never replies would otherwise block the eager connect
- *   at session start (todo 7); the deadline turns that hang into a clean retryable failure and
- *   tears the child down so it cannot leak.
- * - Secret redaction. The expanded `environment` secret values handed to the spawned server are
- *   redacted from tool OUTPUT and ERROR messages before they leave this client, because the repo
- *   AGENTS.md bans raw credentials from events/JSONL/CLI/desktop. A server can echo an injected
- *   env value in an error; this layer masks it. Unrelated server output is untrusted DATA, bounded
- *   by the tool's output cap (not scrubbed here).
- *
- * `callTool` returns opaque `unknown`; it is narrowed with `in` / `typeof` (no casts), then
- * deep-redacted structurally so both the model-facing string and the structured event payload
- * stay clean.
+ * Hardening (load-bearing, inherited): every transport call is bounded by a deadline so a hung
+ * server rejects at the boundary instead of blocking the eager connect at session start; and the
+ * expanded `environment` secret values handed to the spawned server are redacted from tool OUTPUT
+ * and ERROR messages before they leave this client, because the repo AGENTS.md bans raw
+ * credentials from events/JSONL/CLI/desktop. Unrelated server output is untrusted DATA, bounded
+ * by the tool's output cap (not scrubbed here).
  */
 
-import type { ProtocolError } from '@mission-control/protocol';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import type { McpClient, McpToolInfo } from '../mcp-tool';
-import { ToolExecutionError } from '../tool-registry-types';
-import { DEFAULT_MCP_TIMEOUT_MS, McpDeadline, raceWithDeadline } from './deadline';
+import { BaseMcpClient, CLIENT_NAME, CLIENT_VERSION, type McpClientHandle } from './base-client';
+import { DEFAULT_MCP_TIMEOUT_MS } from './deadline';
 import { createSecretRedactor, type SecretRedactor } from './secret-redaction';
-
-const CLIENT_NAME = 'mission-control';
-const CLIENT_VERSION = '0.1.0';
-/** Cap pagination so a server that always returns a cursor cannot loop forever. */
-const MAX_TOOL_PAGES = 50;
 
 export type StdioMcpClientOptions = {
     readonly command: string;
@@ -53,22 +41,21 @@ export type StdioMcpClientOptions = {
     readonly clientVersion?: string;
 };
 
-export class StdioMcpClient implements McpClient {
+export class StdioMcpClient extends BaseMcpClient {
     private readonly command: string;
     private readonly args: readonly string[];
     private readonly env: Readonly<Record<string, string>>;
     private readonly cwd: string;
-    private readonly timeoutMs: number;
+    protected readonly timeoutMs: number;
     private readonly clientName: string;
     private readonly clientVersion: string;
-    private readonly redactor: SecretRedactor;
+    protected readonly redactor: SecretRedactor;
 
     private transport: StdioClientTransport | undefined;
     private client: Client | undefined;
-    private connected = false;
-    private closing = false;
 
     constructor(options: StdioMcpClientOptions) {
+        super();
         this.command = options.command;
         this.args = options.args === undefined ? [] : [...options.args];
         this.env = options.env === undefined ? {} : { ...options.env };
@@ -102,91 +89,11 @@ export class StdioMcpClient implements McpClient {
         }
     }
 
-    async listTools(): Promise<readonly McpToolInfo[]> {
-        await this.ensureConnected();
-        const client = this.client;
-        if (client === undefined) {
-            throw this.toToolError(new Error('mcp client not connected'), 'listTools');
-        }
-        try {
-            return await this.withDeadline('mcp listTools', async (signal) => {
-                const collected: McpToolInfo[] = [];
-                let cursor: string | undefined;
-                for (let page = 0; page < MAX_TOOL_PAGES; page += 1) {
-                    const params = cursor === undefined ? {} : { cursor };
-                    const result = await client.listTools(params, { signal });
-                    const tools = readToolsField(result);
-                    for (const tool of tools) {
-                        const adapted = adaptTool(tool);
-                        if (adapted !== undefined) {
-                            collected.push(adapted);
-                        }
-                    }
-                    const next = readNextCursor(result);
-                    if (next === undefined) {
-                        break;
-                    }
-                    cursor = next;
-                }
-                return collected;
-            });
-        } catch (error) {
-            throw this.toToolError(error, 'listTools');
-        }
+    protected getClient(): McpClientHandle | undefined {
+        return this.connected ? this.client : undefined;
     }
 
-    async callTool(request: { readonly name: string; readonly arguments?: unknown }): Promise<unknown> {
-        await this.ensureConnected();
-        const client = this.client;
-        if (client === undefined) {
-            throw this.toToolError(new Error('mcp client not connected'), `callTool "${request.name}"`);
-        }
-        try {
-            return await this.withDeadline('mcp callTool', async (signal) => {
-                const args = isRecord(request.arguments) ? { arguments: request.arguments } : {};
-                const params = { name: request.name, ...args };
-                const result = await client.callTool(params, undefined, { signal });
-                return this.redactor.redactValue(result);
-            });
-        } catch (error) {
-            throw this.toToolError(error, `callTool "${request.name}"`);
-        }
-    }
-
-    async close(): Promise<void> {
-        if (this.closing) {
-            return;
-        }
-        this.closing = true;
-        await this.forceTeardown();
-    }
-
-    private async ensureConnected(): Promise<void> {
-        if (this.connected && this.client !== undefined) {
-            return;
-        }
-        throw this.toToolError(new Error('mcp client is not connected'), 'ensureConnected');
-    }
-
-    /**
-     * Race a transport call against the deadline. The abort signal is forwarded to the SDK so it
-     * can cancel the in-flight request promptly; the race is the backstop so a server that
-     * swallows the abort still surfaces at the deadline. On expiry the child is torn down and the
-     * deadline is wrapped into a retryable `ToolExecutionError`.
-     */
-    private async withDeadline<T>(label: string, run: (signal: AbortSignal) => Promise<T>): Promise<T> {
-        try {
-            return await raceWithDeadline(label, this.timeoutMs, run);
-        } catch (error) {
-            if (error instanceof McpDeadline) {
-                await this.forceTeardown();
-                throw this.toToolError(error, label);
-            }
-            throw error;
-        }
-    }
-
-    private async forceTeardown(): Promise<void> {
+    protected async forceTeardown(): Promise<void> {
         this.connected = false;
         const transport = this.transport;
         const client = this.client;
@@ -208,57 +115,11 @@ export class StdioMcpClient implements McpClient {
         }
     }
 
-    private toToolError(error: unknown, label: string): ToolExecutionError {
-        const raw = error instanceof Error ? error.message : String(error);
-        const protocolError: ProtocolError = {
-            code: 'tool_failed',
-            message: this.redactor.redactText(`${label}: ${raw}`),
-            retryable: true,
-        };
-        return new ToolExecutionError(protocolError);
+    async close(): Promise<void> {
+        if (this.closing) {
+            return;
+        }
+        this.closing = true;
+        await this.forceTeardown();
     }
-}
-
-/**
- * Read the `tools` array off a `listTools` result. The SDK return carries an index signature, so
- * the field is read by bracket access and narrowed structurally (no casts).
- */
-function readToolsField(result: unknown): readonly unknown[] {
-    if (!isRecord(result)) {
-        return [];
-    }
-    const tools = result['tools'];
-    if (!Array.isArray(tools)) {
-        return [];
-    }
-    return tools;
-}
-
-function readNextCursor(result: unknown): string | undefined {
-    if (!isRecord(result)) {
-        return undefined;
-    }
-    const cursor = result['nextCursor'];
-    return typeof cursor === 'string' && cursor.length > 0 ? cursor : undefined;
-}
-
-function adaptTool(tool: unknown): McpToolInfo | undefined {
-    if (!isRecord(tool)) {
-        return undefined;
-    }
-    const name = tool['name'];
-    if (typeof name !== 'string' || name.length === 0) {
-        return undefined;
-    }
-    const description = tool['description'];
-    const inputSchema = tool['inputSchema'];
-    return {
-        name,
-        ...(typeof description === 'string' ? { description } : {}),
-        ...(isRecord(inputSchema) ? { inputSchema } : {}),
-    };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

@@ -10,12 +10,12 @@ import {
     completeToolCallsFromResponseOutput,
     createOpenAIResponsesMappingState,
     type OpenAIResponsesMappingState,
+    openaiToolCallTranscripts,
     providerCallId,
-    providerResponseId,
-    providerToolCallMessageFields,
     rememberFunctionCall,
     requireToolCallState,
 } from './openai-responses-tool-calls';
+import { providerResponseId, providerToolCallMessageFields } from '../shared/provider-helpers';
 
 export { createOpenAIResponsesMappingState, type OpenAIResponsesMappingState };
 
@@ -146,7 +146,7 @@ export function* mapOpenAIResponsesStreamEvent(
                     role: 'assistant',
                     content: completedResponseText(event.response.output ?? []),
                     ...(state.reasoning !== '' ? { reasoning: state.reasoning } : {}),
-                    ...providerToolCallMessageFields(state),
+                    ...providerToolCallMessageFields(openaiToolCallTranscripts(state)),
                 },
                 finishReason: 'stop',
                 ...usageFromResponse(event.response.usage),

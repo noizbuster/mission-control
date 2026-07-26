@@ -1,3 +1,4 @@
+import { modelProviderCatalog } from '@mission-control/config';
 import type { ModelProviderCatalogEntry } from '@mission-control/config';
 
 /**
@@ -44,3 +45,16 @@ export function createVariantLookup(catalog: readonly ModelProviderCatalogEntry[
         return modelMap.get(modelID)?.has(variantID) ?? false;
     };
 }
+
+/**
+ * Single shared {@link VariantLookup} over the vendored static
+ * {@link modelProviderCatalog}, imported by every provider request builder.
+ *
+ * Replacing the four per-builder `createVariantLookup(modelProviderCatalog)`
+ * closures with one shared lookup removes four parallel lazy caches over the
+ * same immutable catalog without changing behavior: each `providerID` is still
+ * scanned exactly once (lazily, on the first lookup for that provider) because
+ * `createVariantLookup` defers `catalog.find` until the first invocation — the
+ * closure created here performs no scan at module load.
+ */
+export const SHARED_VARIANT_LOOKUP: VariantLookup = createVariantLookup(modelProviderCatalog);

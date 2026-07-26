@@ -1,4 +1,5 @@
 import type { CommandChain } from './bash-run-command-guard';
+import { errorToString } from '../util/error-to-string';
 import {
     parseTrustedCommandChain,
     parseTrustedCommandLine,
@@ -70,13 +71,13 @@ export async function resolveBashCwd(workspaceRoot: string, requestedCwd?: strin
     } catch (error: unknown) {
         throw commandRunFailure(
             'command_not_allowed',
-            `cwd must resolve to an existing workspace directory: ${errorMessage(error)}`,
+            `cwd must resolve to an existing workspace directory: ${errorToString(error)}`,
         );
     }
     const directory = await stat(normalized).catch((error: unknown) => {
         throw commandRunFailure(
             'command_not_allowed',
-            `cwd must resolve to an existing workspace directory: ${errorMessage(error)}`,
+            `cwd must resolve to an existing workspace directory: ${errorToString(error)}`,
         );
     });
     if (!directory.isDirectory()) {
@@ -115,9 +116,7 @@ function resolveRequestedCwd(workspaceRoot: string, requestedCwd: string): strin
     return isAbsolute(requestedCwd) ? resolve(requestedCwd) : resolve(workspaceRoot, requestedCwd);
 }
 
-function errorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
-}
+
 
 function pathSeparator(): string {
     return process.platform === 'win32' ? '\\' : '/';

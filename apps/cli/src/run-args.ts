@@ -1,6 +1,6 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import type { CliArgs, CliMode } from './args';
-import { parseProfileName } from './args';
+import { parseProfileName, readFlagValue } from './args';
 
 type InitialRunArgs = {
     readonly graphPath?: string;
@@ -211,13 +211,6 @@ function buildRunArgs(input: {
     };
 }
 
-function readFlagValue(argv: readonly string[], index: number, flag: string): string {
-    const value = argv[index + 1];
-    if (value === undefined || value.startsWith('--')) {
-        throw new Error(`${flag} requires a value`);
-    }
-    return value;
-}
 
 function resolveModelProviderSelection(
     providerID: string | undefined,

@@ -22,6 +22,7 @@
  *   - 2+ → error (re-throw as structured `error`)
  */
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
+import { isNodeError } from '../util/node-error';
 import { repoToolFailure } from './read-tools-errors';
 import {
     createWorkspaceGuard,
@@ -571,9 +572,7 @@ function isENOENT(spawnErrorMessage: string): boolean {
     return /spawn failed:/.test(spawnErrorMessage) && /ENOENT/i.test(spawnErrorMessage);
 }
 
-function isNodeError(error: unknown, code: string): error is { readonly code: string } {
-    return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
-}
+
 
 function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);

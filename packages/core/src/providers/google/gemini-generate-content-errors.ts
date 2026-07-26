@@ -4,6 +4,7 @@ import type { ProviderCredentialResolver } from '../credential-resolver';
 import { ProviderTurnError } from '../provider-turn-types';
 import { GeminiGenerateContentEventParseError } from './gemini-generate-content-events';
 import { GeminiGenerateContentTransportError } from './gemini-generate-content-transport';
+import { type ProviderTransportErrorOptions, mapProviderTransportError } from '../shared/provider-transport-error';
 
 export function mapGeminiProviderError(error: unknown, resolver: ProviderCredentialResolver): ProtocolError {
     if (error instanceof ProviderTurnError) {
@@ -16,43 +17,18 @@ export function mapGeminiProviderError(error: unknown, resolver: ProviderCredent
         return { code: 'schema_invalid', message: resolver.redactForOutput(error.message), retryable: false };
     }
     if (error instanceof GeminiGenerateContentTransportError) {
-        return protocolErrorFromTransportError(error, resolver);
+        return mapProviderTransportError(error, resolver.redactForOutput(error.message), GEMINI_TRANSPORT_ERROR_OPTIONS);
     }
     return { code: 'unknown', message: resolver.redactForOutput(String(error)), retryable: false };
 }
 
-function protocolErrorFromTransportError(
-    error: GeminiGenerateContentTransportError,
-    resolver: ProviderCredentialResolver,
-): ProtocolError {
-    const message = resolver.redactForOutput(error.message);
-    if (error.kind === 'abort') {
-        return { code: 'provider_aborted', message, retryable: false };
-    }
-    if (error.kind === 'timeout') {
-        return { code: 'provider_timeout', message, retryable: true };
-    }
-    if (error.status === 401 || error.status === 403 || error.code === 'UNAUTHENTICATED') {
-        return { code: 'provider_auth_failed', message, retryable: false };
-    }
-    if (
-        error.status === 429
-        || error.code === 'RESOURCE_EXHAUSTED'
-        || error.status === 502
-        || error.status === 503
-        || error.status === 504
-        || error.status === 529
-        || (error.status !== undefined && error.status >= 500 && error.status < 600)
-        || message.toLowerCase().includes('overloaded')
-        || message.toLowerCase().includes('try again later')
-    ) {
-        return { code: 'provider_rate_limited', message, retryable: true };
-    }
-    if (error.code === 'DEADLINE_EXCEEDED') {
-        return { code: 'provider_timeout', message, retryable: true };
-    }
-    if (error.status === 400 && message.includes('context')) {
-        return { code: 'provider_context_overflow', message, retryable: false };
-    }
-    return { code: 'unknown', message, retryable: false };
-}
+const GEMINI_TRANSPORT_ERROR_OPTIONS: ProviderTransportErrorOptions = {
+    authStatusCodes: [401, 403],
+    authCodes: ['UNAUTHENTICATED'],
+    rateLimitStatusCodes: [429, 502, 503, 504, 529],
+    rateLimitOn5xx: true,
+    rateLimitCodes: ['RESOURCE_EXHAUSTED'],
+    rateLimitMessageSubstrings: ['overloaded', 'try again later'],
+    timeoutCodes: ['DEADLINE_EXCEEDED'],
+    contextOverflow: (info, message) => info.status === 400 && message.includes('context'),
+};

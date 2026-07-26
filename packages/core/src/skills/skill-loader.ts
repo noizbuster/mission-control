@@ -20,10 +20,11 @@
  */
 import { appName } from '@mission-control/config';
 import { parse as parseYaml } from 'yaml';
-import { defaultAutomatedDiscoveryDenylist, toPosixPath } from '../tools/read-tools-paths';
+import { absolutePathMatchesDenylist } from '../discovery/index';
+import { walkResourceFiles } from '../discovery/resource-walker';
+import { errorToString } from '../util/error-to-string';
 import { type SkillMetadata, SkillMetadataSchema, validateSkillMetadata } from './skill-metadata';
-import type { Dirent } from 'node:fs';
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -37,17 +38,6 @@ const FRONTMATTER_DELIMITER = '---';
 export const DEFAULT_MAX_SKILL_FILE_BYTES = 64 * 1024;
 /** Hard cap on total discovered skills across all scopes. */
 export const DEFAULT_MAX_SKILLS = 256;
-/** Max recursive walk depth under a scope root. */
-const MAX_WALK_DEPTH = 10;
-
-/** Denylist roots expressed as absolute-path needles (multi-segment aware). */
-const denylistAbsolutePathNeedles: readonly string[] = defaultAutomatedDiscoveryDenylist.map((entry) =>
-    entry.toLowerCase(),
-);
-/** Single-segment denylist dir names, used to prune the walk cheaply. */
-const denylistDirNameSet: ReadonlySet<string> = new Set(
-    defaultAutomatedDiscoveryDenylist.filter((entry) => !entry.includes('/')).map((entry) => entry.toLowerCase()),
-);
 
 export type SkillScope = 'user' | 'project';
 
@@ -184,7 +174,7 @@ export function parseSkillFrontmatter(contents: string): FrontmatterParseOutcome
     try {
         parsed = parseYaml(yamlText);
     } catch (error: unknown) {
-        return { ok: false, error: `YAML parse failed: ${instanceMessage(error)}` };
+        return { ok: false, error: `YAML parse failed: ${errorToString(error)}` };
     }
     if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
         return { ok: false, error: 'frontmatter must be a YAML mapping (object), not a scalar or sequence' };
@@ -221,7 +211,9 @@ export async function discoverSkills(options: DiscoverSkillsOptions): Promise<Di
         if (scope.skipped) {
             continue;
         }
-        const candidates = await walkSkillFiles(scope.dir);
+        const candidates = await walkResourceFiles(scope.dir, {
+            matchesFile: (entry) => entry.isFile() && entry.name === 'SKILL.md',
+        });
         for (const filePath of candidates) {
             const skip = await tryLoadSkillFile(filePath, scope, maxFileBytes);
             if (skip.kind === 'diagnostic') {
@@ -295,7 +287,7 @@ async function tryLoadSkillFile(
     try {
         contents = await readFile(filePath, 'utf8');
     } catch (error: unknown) {
-        return diagnostic(filePath, scope.scopeId, `skipped: read failed: ${instanceMessage(error)}`);
+        return diagnostic(filePath, scope.scopeId, `skipped: read failed: ${errorToString(error)}`);
     }
     const parsed = parseSkillFrontmatter(contents);
     if (!parsed.ok) {
@@ -356,64 +348,8 @@ function resolveScopeDescriptors(
     return scopes;
 }
 
-/**
- * Bounded recursive walk for `SKILL.md` files under a scope root.
- * Skips symlinked directories (escape defense) and denylisted directory names.
- */
-async function walkSkillFiles(scopeRoot: string): Promise<readonly string[]> {
-    const results: string[] = [];
-    const queue: Array<{ readonly dir: string; readonly depth: number }> = [{ dir: scopeRoot, depth: 0 }];
-    while (queue.length > 0) {
-        const item = queue.shift();
-        if (item === undefined || item.depth > MAX_WALK_DEPTH) {
-            continue;
-        }
-        let entries: readonly Dirent[];
-        try {
-            entries = await readdir(item.dir, { withFileTypes: true });
-        } catch {
-            continue;
-        }
-        for (const entry of entries) {
-            if (entry.isSymbolicLink()) {
-                continue;
-            }
-            const fullPath = join(item.dir, entry.name);
-            if (entry.isDirectory()) {
-                if (denylistDirNameSet.has(entry.name.toLowerCase())) {
-                    continue;
-                }
-                queue.push({ dir: fullPath, depth: item.depth + 1 });
-                continue;
-            }
-            if (entry.isFile() && entry.name === 'SKILL.md') {
-                results.push(fullPath);
-            }
-        }
-    }
-    return results.sort();
-}
-
-/**
- * True if an absolute path intersects a denylisted path (multi-segment aware).
- * Catches both `temp/ref-repos/...` and workspace roots nested inside it.
- */
-function absolutePathMatchesDenylist(absolutePath: string): boolean {
-    const posix = toPosixPath(absolutePath).toLowerCase();
-    return denylistAbsolutePathNeedles.some((needle) => {
-        if (needle.length === 0) {
-            return false;
-        }
-        return posix === needle || posix.includes(`/${needle}/`) || posix.endsWith(`/${needle}`);
-    });
-}
-
 function stripBom(value: string): string {
     return value.charCodeAt(0) === 0xfeff ? value.slice(1) : value;
-}
-
-function instanceMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
 }
 
 // Re-export for callers that want the schema directly from this module surface.

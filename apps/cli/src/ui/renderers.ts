@@ -128,37 +128,13 @@ export class PlainRenderer extends BufferedRenderer {
     }
 }
 
-export class TuiRenderer extends BufferedRenderer {
-    readonly streamedOutput = true;
-    private readonly thinking: boolean;
-    private readonly accumulator = createBlockAccumulator();
-    private readonly rendered: string[] = [];
-
-    constructor(options: BlockRendererOptions = {}) {
-        super();
-        this.thinking = options.thinking ?? false;
-    }
-
-    render(event: AgentEvent): void {
-        const redactedEvent = this.redactEvent(event);
-        const tty = process.stdout.isTTY ?? false;
-        const width = process.stdout.columns ?? 80;
-        const theme = tty ? darkTheme : noColorTheme;
-        for (const block of this.accumulator.consume(redactedEvent)) {
-            const rendered = renderBlock(block, { width, tty, thinking: this.thinking, theme });
-            process.stdout.write(rendered);
-            this.rendered.push(rendered);
-        }
-    }
-
-    getOutput(): string {
-        const info = this.finalizeInfo;
-        if (info !== undefined) {
-            return joinBlocks([...this.rendered, `${formatSessionFinalizeLineFromInfo(info)}\n`]);
-        }
-        return joinBlocks(this.rendered);
-    }
-}
+/**
+ * `TuiRenderer` is now `PlainRenderer`: the two were byte-identical (the streamed block
+ * pipeline, the `getOutput()` join, the thinking flag), so they collapsed into one class.
+ * The name is retained as a reference so existing imports keep working; `createRenderer`
+ * maps both the `'plain'` and `'tui'` CLI modes to `PlainRenderer`.
+ */
+export const TuiRenderer = PlainRenderer;
 
 export class JsonRenderer extends BufferedRenderer {
     getOutput(): string {

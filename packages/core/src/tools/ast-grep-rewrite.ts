@@ -1,4 +1,5 @@
 import { createNativesClient } from '../native/natives-client';
+import { errorToString } from '../util/error-to-string';
 import { applyStagedAstEdit } from './ast-edit-apply';
 import { type AstRewriteFn, createDefaultAstRewriter } from './ast-edit-rewriter';
 import { AST_GREP_TOOL_NAME } from './ast-grep-identity';
@@ -45,7 +46,7 @@ export async function executeAstGrepRewrite(
     } catch (error: unknown) {
         throw new ToolExecutionError({
             code: 'tool_failed',
-            message: `ast_grep rewrite failed: ${errorMessage(error)}`,
+            message: `ast_grep rewrite failed: ${errorToString(error)}`,
             retryable: true,
         });
     }
@@ -128,6 +129,4 @@ function noReplacementResult(): AstGrepRewriteOutput {
     };
 }
 
-function errorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
-}
+

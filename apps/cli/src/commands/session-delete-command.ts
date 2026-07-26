@@ -1,9 +1,6 @@
-import {
-    deleteLocalSessionTreeRows,
-    LocalSessionTreeDeleteError,
-    resolveMissionControlDataDir,
-} from '@mission-control/core';
+import { deleteLocalSessionTreeRows, LocalSessionTreeDeleteError } from '@mission-control/core';
 import { CliSessionCommandError } from './session-command-error';
+import { sessionLogsDir } from './session-archive';
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -25,9 +22,6 @@ export async function deleteSessionTree(input: {
     return deleted.map(({ sessionId, eventCount }) => `Deleted session ${sessionId} (${eventCount} events)`).join('\n');
 }
 
-function sessionLogsDir(): string {
-    return join(resolveMissionControlDataDir(), 'sessions');
-}
 
 function sessionLogPath(sessionId: string): string {
     return join(sessionLogsDir(), `${sessionId}.jsonl`);

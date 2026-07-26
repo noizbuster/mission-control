@@ -30,6 +30,7 @@ import {
     type PluginToolDefinition,
     PluginToolDefinitionSchema,
 } from '@mission-control/protocol';
+import { errorToString } from '../util/error-to-string';
 import type { ZodType } from 'zod';
 import { stripJsoncComments } from '../workflows/jsonc-parser';
 import { WorkflowRegistry } from '../workflows/workflow-registry';
@@ -206,7 +207,7 @@ export class PluginManager {
                     pluginName: plugin.manifest.name,
                     severity: 'warning',
                     code: 'content_parse_error',
-                    message: instanceMessage(error),
+                    message: errorToString(error),
                     path: filePath,
                 });
             }
@@ -235,6 +236,4 @@ export class PluginManager {
     }
 }
 
-function instanceMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
-}
+

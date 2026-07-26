@@ -1,4 +1,6 @@
 import { repoToolFailure } from './read-tools-errors';
+import { isNodeError } from '../util/node-error';
+import { errorToString } from '../util/error-to-string';
 import type { Stats } from 'node:fs';
 import { realpath, stat } from 'node:fs/promises';
 import { isAbsolute, relative, resolve } from 'node:path';
@@ -106,7 +108,7 @@ async function resolveExistingWorkspacePath(
         if (isNodeError(error, 'ENOENT')) {
             throw repoToolFailure('not_found', `path does not exist: ${path}`);
         }
-        throw repoToolFailure('read_failed', errorMessage(error));
+        throw repoToolFailure('read_failed', errorToString(error));
     }
     ensureInside(root, physicalPath, path);
     ensureNotDenied(root, denylistPolicy, physicalPath, path);
@@ -115,7 +117,7 @@ async function resolveExistingWorkspacePath(
     try {
         physicalStats = await stat(physicalPath);
     } catch (error: unknown) {
-        throw repoToolFailure('read_failed', errorMessage(error));
+        throw repoToolFailure('read_failed', errorToString(error));
     }
 
     return {
@@ -266,10 +268,6 @@ function toRelativePath(root: string, path: string): string {
     return relativePath === '' ? '.' : toPosixPath(relativePath);
 }
 
-function isNodeError(error: unknown, code: string): error is { readonly code: string } {
-    return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
-}
 
-function errorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
-}
+
+

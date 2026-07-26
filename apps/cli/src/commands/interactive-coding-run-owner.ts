@@ -9,7 +9,6 @@ import {
     extractContextTokensUsed,
     extractContextTokensUsedFromAbgEmit,
     type ObservabilityRedactor,
-    ProjectTrustStore,
     type SdkModelResolver,
     SessionRunOwner,
     type ToolInvocationSettlement,
@@ -31,6 +30,7 @@ import {
     withProductionToolSetup,
 } from './production-tool-registry';
 import { buildCodingAgentGraphForSelection, resolveGraphSdkModel } from './run-agent-graph-prompt';
+import { isWorkspaceTrusted } from './cli-trust';
 
 type OwnedTurnOptions = Omit<CodingAgentTurnOptions, 'prompt'> & { readonly prompt?: string };
 
@@ -87,7 +87,7 @@ export async function createInteractiveRunOwner(
         output: options.output,
         emitEvent: options.emitEvent,
         resolveSdkModel,
-        enableTrustedBash: await workspaceHasTrustedBash(options.workspaceRoot),
+        enableTrustedBash: await isWorkspaceTrusted(options.workspaceRoot),
         childHostCallbacks,
         ...(options.commandExecutor !== undefined ? { commandExecutor: options.commandExecutor } : {}),
         ...(options.lspClient !== undefined ? { lspClient: options.lspClient } : {}),
@@ -221,10 +221,6 @@ export async function createInteractiveRunOwner(
     return { owner, tools, observabilityRedactor, overlayWiring };
 }
 
-async function workspaceHasTrustedBash(workspaceRoot: string): Promise<boolean> {
-    const trust = await new ProjectTrustStore().getDecision(workspaceRoot);
-    return trust.decision === 'trusted';
-}
 
 async function resolveInteractiveSdkModel(options: OwnedTurnOptions): Promise<SdkModelResolver> {
     return resolveGraphSdkModel({

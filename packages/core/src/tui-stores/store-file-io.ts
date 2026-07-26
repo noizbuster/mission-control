@@ -1,7 +1,6 @@
 import type { z } from 'zod';
-import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { isNodeError } from '../util/node-error';
+import { readFile } from 'node:fs/promises';
 
 export async function readOptionalTextFile(filePath: string): Promise<string | undefined> {
     try {
@@ -14,16 +13,7 @@ export async function readOptionalTextFile(filePath: string): Promise<string | u
     }
 }
 
-export async function atomicWriteTextFile(filePath: string, contents: string): Promise<void> {
-    const tempPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
-    await mkdir(dirname(filePath), { recursive: true });
-    try {
-        await writeFile(tempPath, contents, { encoding: 'utf8', flag: 'wx' });
-        await rename(tempPath, filePath);
-    } finally {
-        await rm(tempPath, { force: true });
-    }
-}
+export { atomicWriteTextFile } from '../persistence/atomic-write';
 
 export function jsonText(value: unknown): string {
     return `${JSON.stringify(value, null, 2)}\n`;
@@ -61,8 +51,4 @@ export function parseJsonlRecords<T>(contents: string, schema: z.ZodType<T>): re
         }
     }
     return records;
-}
-
-function isNodeError(error: unknown, code: string): boolean {
-    return error instanceof Error && 'code' in error && error.code === code;
 }

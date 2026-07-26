@@ -1,8 +1,6 @@
-import { modelProviderCatalog } from '@mission-control/config';
 import type { ProviderCredential, ToolDefinition } from '@mission-control/protocol';
-import { ProviderCredentialResolutionError, type ProviderCredentialResolver } from '../credential-resolver';
 import { ProviderTurnError, type ProviderTurnRequest } from '../provider-turn-types';
-import { createVariantLookup } from '../shared/variant-cache';
+import { SHARED_VARIANT_LOOKUP } from '../shared/variant-cache';
 import type {
     OpenAIReasoningEffort,
     OpenAIResponsesInputItem,
@@ -10,25 +8,6 @@ import type {
     OpenAIResponsesTool,
     OpenAIResponsesTransportRequest,
 } from './openai-responses-transport';
-
-export async function resolveOpenAICredential(
-    resolver: ProviderCredentialResolver,
-    providerID: string,
-): Promise<ProviderCredential> {
-    try {
-        return await resolver.resolveRequiredProviderCredential({ providerID });
-    } catch (error) {
-        if (error instanceof ProviderCredentialResolutionError) {
-            throw new ProviderTurnError({
-                code: 'provider_auth_failed',
-                message: error.message,
-                retryable: false,
-                ...(error.redactions.length > 0 ? { redactions: [...error.redactions] } : {}),
-            });
-        }
-        throw error;
-    }
-}
 
 export function createOpenAIResponsesTransportRequest(input: {
     readonly request: ProviderTurnRequest;
@@ -153,10 +132,8 @@ function openAIReasoningForVariant(
     }
 }
 
-const isOpenAIVariantConfigured = createVariantLookup(modelProviderCatalog);
-
 function isConfiguredOpenAIVariant(modelID: string, variantID: string): boolean {
-    return isOpenAIVariantConfigured('openai', modelID, variantID);
+    return SHARED_VARIANT_LOOKUP('openai', modelID, variantID);
 }
 
 function openAIToolForDefinition(tool: ToolDefinition): OpenAIResponsesTool {

@@ -5,8 +5,8 @@ import { createAnthropicMessagesMappingState, mapAnthropicMessagesStreamEvent } 
 import {
     apiKeyForAnthropicCredential,
     createAnthropicMessagesTransportRequest,
-    resolveAnthropicCredential,
 } from './anthropic-messages-request';
+import { resolveProviderCredentialFromResolver } from '../shared/provider-helpers';
 import {
     type AnthropicMessagesTransport,
     AnthropicMessagesTransportError,
@@ -28,7 +28,7 @@ export function createAnthropicMessagesProvider(options: AnthropicMessagesProvid
     return {
         async *streamTurn(request, context) {
             try {
-                const credential = await resolveAnthropicCredential(options.credentialResolver, request.providerID);
+                const credential = await resolveProviderCredentialFromResolver(options.credentialResolver, request.providerID);
                 const apiKey = apiKeyForAnthropicCredential(credential);
                 const transportRequest = createAnthropicMessagesTransportRequest({
                     request,

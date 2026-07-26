@@ -1,3 +1,4 @@
+import { isRecord } from '../shared/provider-helpers';
 import { parseSseFrames, readSseStream } from '../shared/sse-stream-transport';
 import {
     type GeminiGenerateContentTransport,
@@ -67,8 +68,4 @@ function parseGoogleError(text: string): { readonly code?: string; readonly mess
         throw error;
     }
     return {};
-}
-
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-    return typeof value === 'object' && value !== null;
 }

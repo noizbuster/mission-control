@@ -1,4 +1,5 @@
 import { projectSessionReplay } from '../session-replay';
+import { errorToString } from '../util/error-to-string';
 import type { CodingReplayStep, SessionReplayProjection } from '../session-replay-types';
 import { JsonlSessionEventStoreError } from './jsonl-errors';
 import { parseJsonlSessionLog } from './jsonl-session-records';
@@ -221,7 +222,7 @@ function diagnosticForError(
         sessionId: input.sessionId,
         filePath: input.filePath,
         code: jsonlErrorCode(error),
-        message: errorMessage(error),
+        message: errorToString(error),
         ...(error instanceof JsonlSessionEventStoreError && error.lineNumber !== undefined
             ? { lineNumber: error.lineNumber }
             : {}),
@@ -235,12 +236,7 @@ function jsonlErrorCode(error: unknown): SessionProjectionDiagnostic['code'] {
     return 'unknown';
 }
 
-function errorMessage(error: unknown): string {
-    if (error instanceof Error) {
-        return error.message;
-    }
-    return 'unknown JSONL session projection error';
-}
+
 
 function assertNever(value: never): never {
     throw new Error(`Unhandled session projection variant: ${JSON.stringify(value)}`);

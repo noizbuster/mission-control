@@ -1,5 +1,5 @@
 import type { CliArgs } from './args';
-import { parseProfileName } from './args';
+import { createBaseArgs, parseProfileName, readFlagValue } from './args';
 
 export type McpSubcommand = 'add' | 'list' | 'remove' | 'test';
 export type McpScope = 'project' | 'user';
@@ -196,24 +196,7 @@ function parseMcpTestArgs(argv: readonly string[]): CliArgs {
     };
 }
 
-function createBaseArgs(command: McpCliCommand): CliArgs {
-    return {
-        mode: 'tui',
-        useNative: undefined,
-        command,
-        showHelp: false,
-        showVersion: false,
-        thinking: false,
-    };
-}
 
-function readFlagValue(argv: readonly string[], index: number, flag: string): string {
-    const value = argv[index + 1];
-    if (value === undefined || value.startsWith('--')) {
-        throw new Error(`${flag} requires a value`);
-    }
-    return value;
-}
 
 function readTypeValue(value: string): 'local' | 'remote' {
     if (value !== 'local' && value !== 'remote') {

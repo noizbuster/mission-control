@@ -12,7 +12,6 @@ import {
     resolveProjectTrustDecision,
     resolveUserConfigPath,
     StdioMcpClient,
-    ToolExecutionError,
     writeProjectMcpServer,
     writeUserMcpServer,
 } from '@mission-control/core';
@@ -238,8 +237,7 @@ function buildClientFromServer(
 }
 
 function formatTestFailure(name: string, error: unknown): string {
-    const message =
-        error instanceof ToolExecutionError ? error.message : error instanceof Error ? error.message : String(error);
+    const message = error instanceof Error ? error.message : String(error);
     return `MCP server ${name} test failed: ${message}\n`;
 }
 

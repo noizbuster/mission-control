@@ -5,8 +5,8 @@ import { createOpenAIResponsesMappingState, mapOpenAIResponsesStreamEvent } from
 import {
     bearerTokenForCredential,
     createOpenAIResponsesTransportRequest,
-    resolveOpenAICredential,
 } from './openai-responses-request';
+import { resolveProviderCredentialFromResolver } from '../shared/provider-helpers';
 import {
     defaultOpenAIResponsesEndpoint,
     type OpenAIResponsesTransport,
@@ -28,7 +28,7 @@ export function createOpenAIResponsesProvider(options: OpenAIResponsesProviderOp
     return {
         async *streamTurn(request, context) {
             try {
-                const credential = await resolveOpenAICredential(options.credentialResolver, request.providerID);
+                const credential = await resolveProviderCredentialFromResolver(options.credentialResolver, request.providerID);
                 const bearerToken = bearerTokenForCredential(credential);
                 const transportRequest = createOpenAIResponsesTransportRequest({
                     request,

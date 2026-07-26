@@ -1,4 +1,5 @@
 import type { SessionControlLease } from './session-control-lease';
+import { isErrorCode } from '../util/node-error';
 import { SessionControlOwnerError } from './session-control-owner-error';
 import type { SessionControlProcessState } from './session-control-process';
 import { authenticateSessionControlEndpoint, sessionControlNonceHash } from './session-control-registry-auth';
@@ -114,6 +115,4 @@ async function pathExists(path: string): Promise<boolean> {
     }
 }
 
-function isErrorCode(error: unknown, code: string): boolean {
-    return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
-}
+

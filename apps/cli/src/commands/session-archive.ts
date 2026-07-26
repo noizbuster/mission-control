@@ -5,7 +5,7 @@ import {
     JSONL_SESSION_EVENT_RECORD_KIND,
     JSONL_SESSION_LOG_HEADER_KIND,
     JSONL_SESSION_LOG_RECORD_VERSION,
-    ProjectTrustStore,
+    normalizeWorkspaceRoot,
     parseJsonlSessionLog,
     parseSessionArchive,
     readLocalSessionReplay,
@@ -15,6 +15,7 @@ import {
 import { redactAgentEventEnvelopeForObservability } from '@mission-control/core/redaction';
 import type { AgentEventEnvelope } from '@mission-control/protocol';
 import { createProviderAuthStore } from '../auth-store';
+import { isWorkspaceTrusted } from './cli-trust';
 import { deriveSessionCatalogProjection } from './session-catalog-projection';
 import { parseCliSessionId } from './session-id';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -133,18 +134,18 @@ function serializeJsonlRecord(record: unknown): string {
 
 export async function importSessionArchiveFile(input: { readonly filePath: string }): Promise<string> {
     const archive = parseSessionArchive(await readFile(input.filePath, 'utf8'));
-    const trust = await new ProjectTrustStore().getDecision(process.cwd());
-    if (trust.decision !== 'trusted') {
+    const workspaceRoot = await normalizeWorkspaceRoot(process.cwd());
+    if (!(await isWorkspaceTrusted(process.cwd()))) {
         throw new SessionArchiveCommandError({
             code: 'untrusted_workspace',
-            message: `Session import requires a trusted workspace: ${trust.workspaceRoot}`,
+            message: `Session import requires a trusted workspace: ${workspaceRoot}`,
         });
     }
     validateSessionArchiveManifestForImport({
         manifest: archive.manifest,
         expectedSessionId: archive.manifest.sessionId,
-        expectedCwd: trust.workspaceRoot,
-        trustedRoot: trust.workspaceRoot,
+        expectedCwd: workspaceRoot,
+        trustedRoot: workspaceRoot,
     });
     const sessionId = requireValidSessionId(archive.manifest.sessionId);
     const parsedLog = parseJsonlSessionLog({
@@ -178,17 +179,17 @@ async function workspaceForArchive(
     if (cwd !== undefined && trustedRoot !== undefined) {
         return { cwd, trustedRoot };
     }
-    const trust = await new ProjectTrustStore().getDecision(process.cwd());
-    if (trust.decision !== 'trusted') {
+    if (!(await isWorkspaceTrusted(process.cwd()))) {
         throw new SessionArchiveCommandError({
             code: 'missing_trust',
             message: 'Session export requires workspace metadata or a trusted current workspace',
         });
     }
-    return { cwd: trust.workspaceRoot, trustedRoot: trust.workspaceRoot };
+    const workspaceRoot = await normalizeWorkspaceRoot(process.cwd());
+    return { cwd: workspaceRoot, trustedRoot: workspaceRoot };
 }
 
-function sessionLogsDir(): string {
+export function sessionLogsDir(): string {
     return join(resolveMissionControlDataDir(), 'sessions');
 }
 

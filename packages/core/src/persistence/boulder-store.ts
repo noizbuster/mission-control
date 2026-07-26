@@ -1,8 +1,8 @@
 import { z } from 'zod';
+import { isErrorCode } from '../util/node-error';
 import { McPersistenceError, mcFilePath } from './paths';
-import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { atomicWriteJsonFile } from './atomic-write';
+import { readFile } from 'node:fs/promises';
 
 const BOULDER_FILE_NAME = 'boulder.json';
 
@@ -177,7 +177,7 @@ export async function readBoulder(root: string): Promise<BoulderState | null> {
 export async function writeBoulder(root: string, state: BoulderState): Promise<void> {
     const filePath = boulderFilePath(root);
     const validated = BoulderStateSchema.parse(state);
-    await atomicWriteJson(filePath, validated);
+    await atomicWriteJsonFile(filePath, validated);
 }
 
 /**
@@ -247,20 +247,4 @@ function mergeTaskSessions(
     return { ...existing, ...incoming };
 }
 
-async function atomicWriteJson(filePath: string, value: unknown): Promise<void> {
-    const serialized = `${JSON.stringify(value, null, 2)}\n`;
-    const tempPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
-    await mkdir(dirname(filePath), { recursive: true });
-    await writeFile(tempPath, serialized, { encoding: 'utf8', flag: 'wx' });
-    await rename(tempPath, filePath);
-    await rm(tempPath, { force: true });
-}
 
-function isErrorCode(error: unknown, code: string): boolean {
-    return (
-        typeof error === 'object' &&
-        error !== null &&
-        'code' in error &&
-        (error as { readonly code?: unknown }).code === code
-    );
-}

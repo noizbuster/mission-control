@@ -8,8 +8,8 @@
  * (temp-file-then-rename).
  */
 
-import { randomBytes } from 'node:crypto';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { atomicWriteJsonFile } from '@mission-control/core';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const DISABLED_CONFIG_VERSION = 1;
@@ -99,14 +99,10 @@ async function readDisabledDoc(options: DisabledConfigOptions): Promise<Disabled
 
 async function writeDisabledDoc(options: DisabledConfigOptions, doc: DisabledDoc): Promise<void> {
     const targetPath = resolveDisabledConfigPath(options);
-    await mkdir(join(targetPath, '..'), { recursive: true });
     const payload: Record<string, unknown> = {
         ...doc.extra,
         disabled: [...doc.disabled],
         version: doc.version,
     };
-    const serialized = `${JSON.stringify(payload, null, 2)}\n`;
-    const tmpPath = `${targetPath}.tmp-${randomBytes(6).toString('hex')}`;
-    await writeFile(tmpPath, serialized, 'utf8');
-    await rename(tmpPath, targetPath);
+    await atomicWriteJsonFile(targetPath, payload);
 }

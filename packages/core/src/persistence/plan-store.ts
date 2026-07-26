@@ -1,4 +1,5 @@
 import { McPersistenceError } from './paths';
+import { isErrorCode } from '../util/node-error';
 import { readFile } from 'node:fs/promises';
 
 /**
@@ -188,11 +189,4 @@ function isCountedHeading(headingText: string): boolean {
     return COUNTED_TODOS_HEADING.test(headingText) || COUNTED_FINAL_WAVE_HEADING.test(headingText);
 }
 
-function isErrorCode(error: unknown, code: string): boolean {
-    return (
-        typeof error === 'object' &&
-        error !== null &&
-        'code' in error &&
-        (error as { readonly code?: unknown }).code === code
-    );
-}
+

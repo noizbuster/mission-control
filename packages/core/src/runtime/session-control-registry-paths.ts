@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { isErrorCode } from '../util/node-error';
 import { lstat, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
@@ -224,6 +225,4 @@ function validateIdentity(dbIdentity: string, sessionId: string): void {
     }
 }
 
-function isErrorCode(error: unknown, code: string): boolean {
-    return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
-}
+

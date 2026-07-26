@@ -1,13 +1,12 @@
-import { modelProviderCatalog } from '@mission-control/config';
 import type {
     AgentMessage,
     ProviderCredential,
     ProviderToolCallTranscript,
     ToolDefinition,
 } from '@mission-control/protocol';
-import { ProviderCredentialResolutionError, type ProviderCredentialResolver } from '../credential-resolver';
 import { ProviderTurnError, type ProviderTurnRequest } from '../provider-turn-types';
-import { createVariantLookup } from '../shared/variant-cache';
+import { parseJsonObjectToolInput } from '../shared/provider-helpers';
+import { SHARED_VARIANT_LOOKUP } from '../shared/variant-cache';
 import {
     defaultGeminiGenerateContentBaseEndpoint,
     type GeminiContent,
@@ -20,25 +19,6 @@ import {
 
 const API_KEY_FIELD = 'apiKey';
 const GOOGLE_PROVIDER_ID = 'google';
-
-export async function resolveGeminiCredential(
-    resolver: ProviderCredentialResolver,
-    providerID: string,
-): Promise<ProviderCredential> {
-    try {
-        return await resolver.resolveRequiredProviderCredential({ providerID });
-    } catch (error) {
-        if (error instanceof ProviderCredentialResolutionError) {
-            throw new ProviderTurnError({
-                code: 'provider_auth_failed',
-                message: error.message,
-                retryable: false,
-                ...(error.redactions.length > 0 ? { redactions: [...error.redactions] } : {}),
-            });
-        }
-        throw error;
-    }
-}
 
 export function createGeminiGenerateContentTransportRequest(input: {
     readonly request: ProviderTurnRequest;
@@ -110,10 +90,8 @@ function geminiThinkingForVariant(
     }
 }
 
-const isGeminiVariantConfigured = createVariantLookup(modelProviderCatalog);
-
 function isConfiguredGeminiVariant(modelID: string, variantID: string): boolean {
-    return isGeminiVariantConfigured(GOOGLE_PROVIDER_ID, modelID, variantID);
+    return SHARED_VARIANT_LOOKUP(GOOGLE_PROVIDER_ID, modelID, variantID);
 }
 
 function systemInstructionFromMessages(
@@ -251,29 +229,7 @@ function geminiFunctionDeclarationForTool(tool: ToolDefinition): GeminiFunctionD
     };
 }
 
-function parseToolInput(argumentsJson: string): Readonly<Record<string, unknown>> {
-    let parsed: unknown;
-    try {
-        parsed = JSON.parse(argumentsJson);
-    } catch (error) {
-        if (error instanceof SyntaxError) {
-            throw new ProviderTurnError({
-                code: 'schema_invalid',
-                message: `Gemini function call args are not valid JSON: ${error.message}`,
-                retryable: false,
-            });
-        }
-        throw error;
-    }
-    if (isRecord(parsed)) {
-        return parsed;
-    }
-    throw new ProviderTurnError({
-        code: 'schema_invalid',
-        message: 'Gemini function call args must be a JSON object',
-        retryable: false,
-    });
-}
+const parseToolInput = parseJsonObjectToolInput('Gemini function call args');
 
 function endpointForModel(baseEndpoint: string, modelID: string): string {
     const normalized = modelID.startsWith('models/') ? modelID : `models/${modelID}`;
@@ -288,9 +244,6 @@ function missingApiKeyError(providerID: string): ProviderTurnError {
     });
 }
 
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-    return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 function assertNever(value: never): never {
     throw new TypeError(`Unexpected Gemini credential or message variant: ${JSON.stringify(value)}`);

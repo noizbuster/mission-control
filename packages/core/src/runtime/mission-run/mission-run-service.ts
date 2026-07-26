@@ -148,10 +148,7 @@ export async function settleMissionRunSessionOwner(
 }
 
 export async function cancelRun(location: MissionRunStoreLocation, runId: string, reason: string): Promise<Run> {
-    const normalized = normalizeMissionRunStoreLocation(location);
-    const cancelled = await updateRunStatus(normalized, runId, 'cancelled', { terminalReason: reason });
-    await detachMissionRun(runId);
-    return cancelled;
+    return terminateRun(location, runId, 'cancelled', { terminalReason: reason });
 }
 
 /**
@@ -163,7 +160,6 @@ export async function completeRun(
     runId: string,
     result: RunCompletionInput = {},
 ): Promise<Run> {
-    const normalized = normalizeMissionRunStoreLocation(location);
     const patch: RunPatch = {
         ...(result.cost !== undefined ? { cost: result.cost } : {}),
         ...(result.terminalReason !== undefined ? { terminalReason: result.terminalReason } : {}),
@@ -171,9 +167,7 @@ export async function completeRun(
         ...(result.childSessionIds !== undefined ? { childSessionIds: result.childSessionIds } : {}),
         ...(result.taskRetryState !== undefined ? { taskRetryState: result.taskRetryState } : {}),
     };
-    const completed = await updateRunStatus(normalized, runId, 'completed', patch);
-    await detachMissionRun(runId);
-    return completed;
+    return terminateRun(location, runId, 'completed', patch);
 }
 
 /**
@@ -187,7 +181,6 @@ export async function failRun(
     reason: string,
     result: Omit<RunCompletionInput, 'terminalReason'> = {},
 ): Promise<Run> {
-    const normalized = normalizeMissionRunStoreLocation(location);
     const patch: RunPatch = {
         terminalReason: reason,
         ...(result.cost !== undefined ? { cost: result.cost } : {}),
@@ -195,15 +188,29 @@ export async function failRun(
         ...(result.childSessionIds !== undefined ? { childSessionIds: result.childSessionIds } : {}),
         ...(result.taskRetryState !== undefined ? { taskRetryState: result.taskRetryState } : {}),
     };
-    const failed = await updateRunStatus(normalized, runId, 'failed', patch);
-    await detachMissionRun(runId);
-    return failed;
+    return terminateRun(location, runId, 'failed', patch);
 }
 
 async function detachMissionRun(runId: string): Promise<void> {
     const attachment = missionRunAttachments.get(runId);
     missionRunAttachments.delete(runId);
     await attachment?.detach();
+}
+
+/**
+ * Normalize the store location, apply a terminal status transition with `patch`,
+ * then detach the run's control attachment. Shared by cancel/complete/fail.
+ */
+async function terminateRun(
+    location: MissionRunStoreLocation,
+    runId: string,
+    status: 'cancelled' | 'completed' | 'failed',
+    patch: RunPatch,
+): Promise<Run> {
+    const normalized = normalizeMissionRunStoreLocation(location);
+    const result = await updateRunStatus(normalized, runId, status, patch);
+    await detachMissionRun(runId);
+    return result;
 }
 
 export async function releaseMissionRunControlAttachment(runId: string): Promise<void> {

@@ -10,10 +10,10 @@ import {
     addToolCall,
     createGeminiGenerateContentMappingState,
     finishReasonFromGemini,
-    providerResponseId,
-    providerToolCallMessageFields,
+    geminiToolCallTranscripts,
     usageFromState,
 } from './gemini-generate-content-state';
+import { providerResponseId, providerToolCallMessageFields } from '../shared/provider-helpers';
 
 export { createGeminiGenerateContentMappingState, type GeminiGenerateContentMappingState };
 
@@ -146,7 +146,7 @@ function completedChunk(
             role: 'assistant',
             content: state.text,
             ...(state.thoughts !== '' ? { reasoning: state.thoughts } : {}),
-            ...providerToolCallMessageFields(state),
+            ...providerToolCallMessageFields(geminiToolCallTranscripts(state)),
         },
         finishReason: finishReasonFromGemini(state),
         usage: usageFromState(state),

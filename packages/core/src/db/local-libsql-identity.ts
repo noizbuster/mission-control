@@ -1,4 +1,5 @@
 import { lstat, realpath } from 'node:fs/promises';
+import { isMissingPathError } from '../util/node-error';
 import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -135,6 +136,4 @@ function rejectedUrlScheme(url: string): string {
     return schemeSeparator <= 0 ? 'unsupported' : url.slice(0, schemeSeparator);
 }
 
-function isMissingPathError(error: unknown): boolean {
-    return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT';
-}
+

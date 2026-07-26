@@ -9,6 +9,8 @@
  * the read tools use, and stays read-class. The tool name stays `glob`.
  */
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
+import { isNodeError } from '../util/node-error';
+import { errorToString } from '../util/error-to-string';
 import type { NativesClient } from '../native/natives-client';
 import {
     formatGlobModelOutput,
@@ -156,7 +158,7 @@ async function resolveGlobBase(guard: WorkspaceGuard, requestedPath: string | un
         if (isNodeError(error, 'ENOENT')) {
             throw repoToolFailure('not_found', `glob base does not exist: ${requestedPath}`);
         }
-        throw repoToolFailure('read_failed', errorMessage(error));
+        throw repoToolFailure('read_failed', errorToString(error));
     }
     const rel = relative(guard.root, physical);
     if (rel.startsWith('..') || isAbsolute(rel)) {
@@ -210,10 +212,6 @@ async function requireReadPermission(
     );
 }
 
-function isNodeError(error: unknown, code: string): error is { readonly code: string } {
-    return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
-}
 
-function errorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
-}
+
+

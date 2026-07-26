@@ -5,8 +5,8 @@ import { createOpenAICompatibleMappingState, mapOpenAICompatibleStreamEvent } fr
 import {
     bearerTokenForOpenAICompatibleCredential,
     createOpenAICompatibleTransportRequest,
-    resolveOpenAICompatibleCredential,
 } from './openai-compatible-request';
+import { resolveProviderCredentialFromResolver } from '../shared/provider-helpers';
 import { OPENAI_COMPATIBLE_PROVIDER_SPECS, type OpenAICompatibleProviderSpec } from './openai-compatible-specs';
 import {
     type OpenAICompatibleTransport,
@@ -28,7 +28,7 @@ export function createOpenAICompatibleProvider(options: OpenAICompatibleProvider
     return {
         async *streamTurn(request, context) {
             try {
-                const credential = await resolveOpenAICompatibleCredential(
+                const credential = await resolveProviderCredentialFromResolver(
                     options.credentialResolver,
                     request.providerID,
                 );

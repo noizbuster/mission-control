@@ -11,9 +11,8 @@ const runRowSchema = z.object({ passthrough_json: z.string() });
 
 export async function writeMissionToDb(dataDir: string, mission: Mission): Promise<void> {
     const validated = MissionSchema.parse(mission);
-    const runtime = await openMissionRunRuntime(dataDir);
-    try {
-        await runLocalLibsqlWrite(runtime, (client) =>
+    await withMissionRunRuntime(dataDir, (runtime) =>
+        runLocalLibsqlWrite(runtime, (client) =>
             client.execute({
                 sql:
                     'INSERT INTO missions (mission_id, status, workflow_name, created_at, updated_at, payload_json) ' +
@@ -29,15 +28,12 @@ export async function writeMissionToDb(dataDir: string, mission: Mission): Promi
                     JSON.stringify(validated),
                 ],
             }),
-        );
-    } finally {
-        runtime.close();
-    }
+        ),
+    );
 }
 
 export async function readMissionFromDb(dataDir: string, missionId: string): Promise<Mission | undefined> {
-    const runtime = await openMissionRunRuntime(dataDir);
-    try {
+    return withMissionRunRuntime(dataDir, async (runtime) => {
         const result = await runtime.client.execute({
             sql: 'SELECT payload_json FROM missions WHERE mission_id = ?',
             args: [missionId],
@@ -47,21 +43,16 @@ export async function readMissionFromDb(dataDir: string, missionId: string): Pro
             return undefined;
         }
         return MissionSchema.parse(JSON.parse(missionRowSchema.parse(row).payload_json));
-    } finally {
-        runtime.close();
-    }
+    });
 }
 
 export async function listMissionsFromDb(dataDir: string): Promise<readonly Mission[]> {
-    const runtime = await openMissionRunRuntime(dataDir);
-    try {
+    return withMissionRunRuntime(dataDir, async (runtime) => {
         const result = await runtime.client.execute(
             'SELECT payload_json FROM missions ORDER BY updated_at, mission_id',
         );
         return result.rows.map((row) => MissionSchema.parse(JSON.parse(missionRowSchema.parse(row).payload_json)));
-    } finally {
-        runtime.close();
-    }
+    });
 }
 
 export async function writeRunToDb(
@@ -70,19 +61,16 @@ export async function writeRunToDb(
     options: { readonly conflict?: 'replace' | 'ignore' } = {},
 ): Promise<boolean> {
     const validated = RunSchema.parse(run);
-    const runtime = await openMissionRunRuntime(dataDir);
     const timestamp = new Date().toISOString();
-    try {
-        return await runLocalLibsqlWrite(runtime, async (client) => {
-            return runLocalLibsqlClientTransaction(client, async () => {
+    return withMissionRunRuntime(dataDir, (runtime) =>
+        runLocalLibsqlWrite(runtime, async (client) =>
+            runLocalLibsqlClientTransaction(client, async () => {
                 const written = await writeRunRow(client, validated, timestamp, options.conflict ?? 'replace');
                 if (written) await refreshRunSessions(client, [validated.sessionId], timestamp);
                 return written;
-            });
-        });
-    } finally {
-        runtime.close();
-    }
+            }),
+        ),
+    );
 }
 
 export async function mutateRunInDb(
@@ -90,19 +78,15 @@ export async function mutateRunInDb(
     runId: string,
     mutate: (run: Run) => Run,
 ): Promise<Run | undefined> {
-    const runtime = await openMissionRunRuntime(dataDir);
-    try {
-        return await runLocalLibsqlWrite(runtime, async (client) => {
-            return runLocalLibsqlClientTransaction(client, async () => {
+    return withMissionRunRuntime(dataDir, (runtime) =>
+        runLocalLibsqlWrite(runtime, async (client) =>
+            runLocalLibsqlClientTransaction(client, async () => {
                 const timestamp = new Date().toISOString();
                 return mutateRunWithClient(client, runId, mutate, timestamp);
-            });
-        });
-    } finally {
-        runtime.close();
-    }
+            }),
+        ),
+    );
 }
-
 export async function mutateRunWithClient(
     client: Client,
     runId: string,
@@ -120,20 +104,14 @@ export async function mutateRunWithClient(
 }
 
 export async function readRunFromDb(dataDir: string, runId: string): Promise<Run | undefined> {
-    const runtime = await openMissionRunRuntime(dataDir);
-    try {
-        return await selectRun(runtime.client, runId);
-    } finally {
-        runtime.close();
-    }
+    return withMissionRunRuntime(dataDir, (runtime) => selectRun(runtime.client, runId));
 }
 
 export async function listRunsFromDb(
     dataDir: string,
     filter: { readonly missionId?: string; readonly parentId?: string } = {},
 ): Promise<readonly Run[]> {
-    const runtime = await openMissionRunRuntime(dataDir);
-    try {
+    return withMissionRunRuntime(dataDir, async (runtime) => {
         const conditions: string[] = [];
         const args: string[] = [];
         if (filter.missionId !== undefined) {
@@ -150,13 +128,24 @@ export async function listRunsFromDb(
             args,
         });
         return result.rows.map((row) => RunSchema.parse(JSON.parse(runRowSchema.parse(row).passthrough_json)));
-    } finally {
-        runtime.close();
-    }
+    });
 }
 
 async function openMissionRunRuntime(dataDir: string): Promise<LocalLibsqlDb> {
     return openMissionControlDb({ dataDir });
+}
+
+/**
+ * Open the mission-run DB, run `fn`, and always close. Replaces the 7 inline
+ * `open → try → finally close` blocks in this module.
+ */
+async function withMissionRunRuntime<T>(dataDir: string, fn: (runtime: LocalLibsqlDb) => Promise<T>): Promise<T> {
+    const runtime = await openMissionRunRuntime(dataDir);
+    try {
+        return await fn(runtime);
+    } finally {
+        runtime.close();
+    }
 }
 
 async function selectRun(client: Client, runId: string): Promise<Run | undefined> {

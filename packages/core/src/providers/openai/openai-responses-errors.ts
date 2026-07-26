@@ -3,6 +3,7 @@ import type { ProviderCredentialResolver } from '../credential-resolver';
 import { ProviderTurnError } from '../provider-turn-types';
 import { OpenAIResponsesEventParseError } from './openai-responses-events';
 import { OpenAIResponsesTransportError } from './openai-responses-transport';
+import { type ProviderTransportErrorOptions, mapProviderTransportError } from '../shared/provider-transport-error';
 
 export type OpenAIResponsesErrorRedactor = (text: string) => string;
 
@@ -14,7 +15,7 @@ export function mapOpenAIProviderError(error: unknown, resolver: ProviderCredent
         return { code: 'schema_invalid', message: resolver.redactForOutput(error.message), retryable: false };
     }
     if (error instanceof OpenAIResponsesTransportError) {
-        return protocolErrorFromTransportError(error, resolver);
+        return mapProviderTransportError(error, resolver.redactForOutput(error.message), OPENAI_TRANSPORT_ERROR_OPTIONS);
     }
     return { code: 'unknown', message: resolver.redactForOutput(String(error)), retryable: false };
 }
@@ -48,37 +49,14 @@ export function protocolErrorFromOpenAIError(
     return { code: 'unknown', message: 'OpenAI Responses stream failed', retryable: false };
 }
 
-function protocolErrorFromTransportError(
-    error: OpenAIResponsesTransportError,
-    resolver: ProviderCredentialResolver,
-): ProtocolError {
-    const message = resolver.redactForOutput(error.message);
-    if (error.kind === 'abort') {
-        return { code: 'provider_aborted', message, retryable: false };
-    }
-    if (error.kind === 'timeout') {
-        return { code: 'provider_timeout', message, retryable: true };
-    }
-    if (error.status === 401 || error.status === 403) {
-        return { code: 'provider_auth_failed', message, retryable: false };
-    }
-    if (
-        error.status === 429
-        || error.status === 502
-        || error.status === 503
-        || error.status === 504
-        || error.status === 529
-        || (error.status !== undefined && error.status >= 500 && error.status < 600)
-        || message.toLowerCase().includes('overloaded')
-        || message.toLowerCase().includes('try again later')
-    ) {
-        return { code: 'provider_rate_limited', message, retryable: true };
-    }
-    if (error.code === 'context_length_exceeded' || message.includes('context_length_exceeded')) {
-        return { code: 'provider_context_overflow', message, retryable: false };
-    }
-    return { code: 'unknown', message, retryable: false };
-}
+const OPENAI_TRANSPORT_ERROR_OPTIONS: ProviderTransportErrorOptions = {
+    authStatusCodes: [401, 403],
+    rateLimitStatusCodes: [429, 502, 503, 504, 529],
+    rateLimitOn5xx: true,
+    rateLimitMessageSubstrings: ['overloaded', 'try again later'],
+    contextOverflow: (info, message) =>
+        info.code === 'context_length_exceeded' || message.includes('context_length_exceeded'),
+};
 
 function isOpenAIErrorRecord(value: unknown): value is { readonly code?: string; readonly message?: string } {
     return typeof value === 'object' && value !== null;

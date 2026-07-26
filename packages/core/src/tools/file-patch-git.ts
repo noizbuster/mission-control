@@ -1,4 +1,5 @@
 import { filePatchFailure } from './file-patch-errors';
+import { errorToString } from '../util/error-to-string';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
@@ -10,7 +11,7 @@ export async function isDirtyTrackedTarget(workspaceRoot: string, path: string):
         const result = await execFileAsync('git', ['status', '--porcelain', '--', path], { cwd: workspaceRoot });
         stdout = result.stdout;
     } catch (error: unknown) {
-        throw filePatchFailure('git_status_failed', errorMessage(error));
+        throw filePatchFailure('git_status_failed', errorToString(error));
     }
     return stdout
         .split('\n')
@@ -18,6 +19,4 @@ export async function isDirtyTrackedTarget(workspaceRoot: string, path: string):
         .some((line) => !line.startsWith('??') && !line.startsWith('!!'));
 }
 
-function errorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
-}
+

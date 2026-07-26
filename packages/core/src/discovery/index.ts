@@ -7,7 +7,10 @@
  * dir resolver moved out of the skill cache).
  */
 export { resolveUserConfigDir } from '../skills/skill-loader';
+
 import { defaultAutomatedDiscoveryDenylist, toPosixPath } from '../tools/read-tools-paths';
+
+export { manifestDenylistDirNames } from './resource-walker';
 
 const manifestDenylistNeedles: readonly string[] = defaultAutomatedDiscoveryDenylist.map((entry) =>
     entry.toLowerCase(),

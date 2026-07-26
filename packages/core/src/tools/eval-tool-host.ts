@@ -1,3 +1,4 @@
+import { globToRegExp } from './glob-tool';
 import {
     createWorkspaceGuard,
     directDependencySourcePaths,
@@ -125,22 +126,6 @@ async function walk(root: string, current: string, regex: RegExp, results: strin
             await walk(root, resolve(current, entry.name), regex, results, depth + 1);
         }
     }
-}
-
-function globToRegExp(pattern: string): RegExp {
-    let expression = '';
-    for (const char of pattern) {
-        if (char === '*') {
-            expression += '[^/]*';
-        } else if (char === '?') {
-            expression += '[^/]';
-        } else if (('.+^$' + '{}()|[]\\').includes(char)) {
-            expression += `\\${char}`;
-        } else {
-            expression += char;
-        }
-    }
-    return new RegExp(`^${expression}$`);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

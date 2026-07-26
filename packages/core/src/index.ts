@@ -192,6 +192,12 @@ export {
 } from './permission/session';
 export { PermissionRuleStore, type PermissionRuleStoreOptions } from './permission/store';
 export { createAllowPermissionDecision, createDefaultPermissionDecision } from './permissions';
+export {
+    type AtomicWriteFileOptions,
+    atomicWriteFile,
+    atomicWriteJsonFile,
+    atomicWriteTextFile,
+} from './persistence/atomic-write';
 export { readBoulder } from './persistence/boulder-store';
 export {
     ensureMcDirs,

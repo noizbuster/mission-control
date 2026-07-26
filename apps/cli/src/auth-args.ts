@@ -1,4 +1,4 @@
-import type { AuthCredentialArg, CliArgs } from './args';
+import { createBaseArgs, readFlagValue, type AuthCredentialArg, type CliArgs } from './args';
 
 type AuthCliCommand = Extract<CliArgs['command'], 'auth-login' | 'auth-list' | 'auth-logout'>;
 
@@ -90,24 +90,7 @@ function parseAuthLogoutArgs(argv: readonly string[]): CliArgs {
     };
 }
 
-function createBaseArgs(command: AuthCliCommand): CliArgs {
-    return {
-        mode: 'tui',
-        useNative: undefined,
-        command,
-        showHelp: false,
-        showVersion: false,
-        thinking: false,
-    };
-}
 
-function readFlagValue(argv: readonly string[], index: number, flag: string): string {
-    const value = argv[index + 1];
-    if (value === undefined || value.startsWith('--')) {
-        throw new Error(`${flag} requires a value`);
-    }
-    return value;
-}
 
 function parseCredentialFlag(value: string): AuthCredentialArg {
     const separatorIndex = value.indexOf('=');

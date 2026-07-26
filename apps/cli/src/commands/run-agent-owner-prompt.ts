@@ -7,7 +7,6 @@ import {
     type LspClient,
     type ObservabilityRedactor,
     PermissionGate,
-    ProjectTrustStore,
     type ProviderAdapter,
     type ProviderAuthStore,
     type RunCoordinatorTurnRunner,
@@ -25,6 +24,7 @@ import { resolveMissionControlServices } from './mission-control-services-resolv
 import { createNonInteractiveToolRegistry } from './noninteractive-tool-registry';
 import { closeProductionToolRegistry, type ProductionToolRegistry } from './production-tool-registry';
 import { emitOwnerPromptTaskEvent, nextOwnerPromptTaskId } from './run-agent-owner-prompt-events';
+import { isWorkspaceTrusted } from './cli-trust';
 
 export type RunOwnerPromptInput = {
     readonly sessionId: string;
@@ -102,7 +102,7 @@ export async function runOwnerPrompt(input: RunOwnerPromptInput): Promise<RunOwn
         tools = await createNonInteractiveToolRegistry({
             workspaceRoot: input.workspaceRoot,
             config: input.config ?? {},
-            enableTrustedBash: await workspaceHasTrustedBash(input.workspaceRoot),
+            enableTrustedBash: await isWorkspaceTrusted(input.workspaceRoot),
             requestPermission: (request) =>
                 gate.requestPermission(request, {
                     sessionId: input.sessionId,
@@ -207,10 +207,6 @@ export async function runOwnerPrompt(input: RunOwnerPromptInput): Promise<RunOwn
     return resultFromReceipt('failed', receipt);
 }
 
-async function workspaceHasTrustedBash(workspaceRoot: string): Promise<boolean> {
-    const trust = await new ProjectTrustStore().getDecision(workspaceRoot);
-    return trust.decision === 'trusted';
-}
 
 function resultFromReceipt(
     status: RunOwnerPromptResult['status'],

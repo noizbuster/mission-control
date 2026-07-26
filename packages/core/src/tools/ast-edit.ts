@@ -26,6 +26,7 @@
  * `dryRun:false` re-run pattern with a single primitive.
  */
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
+import { errorToString } from '../util/error-to-string';
 import type { z } from 'zod';
 import { createNativesClient, type NativeAstReplaceChange } from '../native/natives-client';
 import { defaultAstSearchFileCollector } from './ast-grep-runner';
@@ -130,7 +131,7 @@ async function executeAstEdit(
     } catch (error: unknown) {
         throw new ToolExecutionError({
             code: 'tool_failed',
-            message: `ast_edit failed: ${errorMessage(error)}`,
+            message: `ast_edit failed: ${errorToString(error)}`,
             retryable: true,
         });
     }
@@ -186,6 +187,4 @@ async function executeAstEdit(
     };
 }
 
-function errorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
-}
+

@@ -25,7 +25,6 @@ import {
     type LspClient,
     MAX_PROVIDER_CHUNK_TIMEOUT_MS,
     McpConnectionManager,
-    ProjectTrustStore,
     type ProviderAdapter,
     type SdkModelResolver,
     SdkModelResolverError,
@@ -41,6 +40,7 @@ import type {
 import type { ProviderAuthStore } from '../auth-store';
 import { createCliProviderCredentialResolver } from '../provider-credential-resolver';
 import { buildCodingAgentSystemPromptEnv, loadTrustedProjectInstructionResources } from './coding-agent-context';
+import { isWorkspaceTrusted } from './cli-trust';
 import { createGraphObservabilityRedactor } from './graph-observability-redactor';
 import { createNonInteractiveToolRegistry } from './noninteractive-tool-registry';
 import {
@@ -109,7 +109,7 @@ export async function runCodingPromptOnGraph(input: RunCodingPromptOnGraphInput)
             : await createNonInteractiveToolRegistry({
                   workspaceRoot: input.workspaceRoot,
                   config: input.config ?? {},
-                  enableTrustedBash: await workspaceHasTrustedBash(input.workspaceRoot),
+                  enableTrustedBash: await isWorkspaceTrusted(input.workspaceRoot),
                   requestPermission: (request) => input.runtime.requestPermission(request),
                   resolveSdkModel,
                   modelProviderSelection: input.selection,
@@ -156,10 +156,6 @@ export async function runCodingPromptOnGraph(input: RunCodingPromptOnGraphInput)
     }
 }
 
-async function workspaceHasTrustedBash(workspaceRoot: string): Promise<boolean> {
-    const trust = await new ProjectTrustStore().getDecision(workspaceRoot);
-    return trust.decision === 'trusted';
-}
 
 /**
  * Minimal input for resolving the AI-SDK model used by the graph engine. Shared by the one-shot

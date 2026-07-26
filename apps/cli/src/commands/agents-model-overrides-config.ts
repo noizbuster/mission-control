@@ -16,9 +16,8 @@
  * never throws.
  */
 
-import type { ModelPattern } from '@mission-control/core';
-import { randomBytes } from 'node:crypto';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { atomicWriteJsonFile, type ModelPattern } from '@mission-control/core';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const OVERRIDES_CONFIG_VERSION = 1;
@@ -120,7 +119,6 @@ async function readOverridesDoc(options: OverridesConfigOptions): Promise<Overri
 
 async function writeOverridesDoc(options: OverridesConfigOptions, doc: OverridesDoc): Promise<void> {
     const targetPath = resolveOverridesConfigPath(options);
-    await mkdir(join(targetPath, '..'), { recursive: true });
     const overridesObject: Record<string, string> = {};
     for (const [name, value] of doc.overrides) {
         overridesObject[name] = value;
@@ -130,10 +128,7 @@ async function writeOverridesDoc(options: OverridesConfigOptions, doc: Overrides
         overrides: overridesObject,
         version: doc.version,
     };
-    const serialized = `${JSON.stringify(payload, null, 2)}\n`;
-    const tmpPath = `${targetPath}.tmp-${randomBytes(6).toString('hex')}`;
-    await writeFile(tmpPath, serialized, 'utf8');
-    await rename(tmpPath, targetPath);
+    await atomicWriteJsonFile(targetPath, payload);
 }
 
 /**

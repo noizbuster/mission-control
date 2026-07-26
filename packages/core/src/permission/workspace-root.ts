@@ -1,4 +1,5 @@
 import type { PermissionRequest, PermissionRule } from '@mission-control/protocol';
+import { isNodeError } from '../util/node-error';
 import { realpath } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
@@ -42,6 +43,4 @@ export async function normalizePermissionRequest(request: PermissionRequest): Pr
     };
 }
 
-function isNodeError(error: unknown, code: string): error is { readonly code: string } {
-    return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
-}
+
