@@ -1,5 +1,5 @@
-import { access, mkdir, readFile } from 'node:fs/promises';
 import { isErrorCode } from '../util/node-error';
+import { access, mkdir, readFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 /**
@@ -25,9 +25,9 @@ export class McPersistenceError extends Error {
         message: string,
         readonly code: string,
         readonly path?: string,
-        options?: { readonly cause?: unknown },
+        cause?: unknown,
     ) {
-        super(message, options);
+        super(message, cause !== undefined ? { cause } : undefined);
         this.name = 'McPersistenceError';
     }
 }
@@ -234,5 +234,3 @@ function globToRegex(glob: string, anchored: boolean): RegExp {
 function escapeRegExp(ch: string): string {
     return /[.*+?^${}()|[\]\\]/u.test(ch) ? `\\${ch}` : ch;
 }
-
-

@@ -18,12 +18,12 @@ import {
     PluginManifestSchema,
 } from '@mission-control/protocol';
 import { absolutePathMatchesDenylist, manifestDenylistDirNames } from '../discovery/index';
+import { type JsoncLoadFailure, jsoncDiagnosticFields, loadJsoncResource } from '../discovery/load-jsonc';
 import { errorToString } from '../util/error-to-string';
-import { stripJsoncComments } from '../workflows/jsonc-parser';
 import { pluginHomeEnvKey, resolvePluginHome } from './plugin-paths';
 import type { Dirent } from 'node:fs';
-import { readdir, readFile, stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { readdir } from 'node:fs/promises';
+import { basename, join } from 'node:path';
 
 export const DEFAULT_MAX_PLUGIN_FILE_BYTES = 64 * 1024;
 export const DEFAULT_MAX_PLUGINS = 256;
@@ -132,34 +132,34 @@ export async function discoverPlugins(options: DiscoverPluginsOptions = {}): Pro
  */
 export async function loadPluginManifest(pluginDir: string): Promise<PluginManifest> {
     const manifestPath = join(pluginDir, MANIFEST_FILENAME);
-    if (absolutePathMatchesDenylist(manifestPath)) {
-        throw new Error(`plugin manifest path matches denylist: ${pluginDir}`);
+    const outcome = await loadJsoncResource<PluginManifest, JsoncLoadFailure>({
+        filePath: manifestPath,
+        maxFileBytes: DEFAULT_MAX_PLUGIN_FILE_BYTES,
+        schema: PluginManifestSchema,
+        fallbackName: basename(pluginDir),
+        toDiagnostic: (failure) => ({ kind: 'diagnostic', diagnostic: failure }),
+    });
+    if (outcome.kind === 'loaded') {
+        return outcome.data;
     }
-    let stats: { readonly size: number };
-    try {
-        stats = await stat(manifestPath);
-    } catch {
+    if (outcome.kind === 'drop') {
         throw new Error(`plugin manifest not found: ${manifestPath}`);
     }
-    if (stats.size > DEFAULT_MAX_PLUGIN_FILE_BYTES) {
-        throw new Error(
-            `plugin manifest exceeds size bound (${stats.size} > ${DEFAULT_MAX_PLUGIN_FILE_BYTES} bytes): ${manifestPath}`,
-        );
+    const failure = outcome.diagnostic;
+    switch (failure.stage) {
+        case 'denylisted':
+            throw new Error(`plugin manifest path matches denylist: ${pluginDir}`);
+        case 'size_exceeded':
+            throw new Error(
+                `plugin manifest exceeds size bound (${failure.size} > ${failure.maxFileBytes} bytes): ${manifestPath}`,
+            );
+        case 'read_failed':
+            throw failure.error;
+        case 'parse_error':
+            throw new Error(`plugin manifest JSON parse failed: ${errorToString(failure.error)}`);
+        case 'validation_error':
+            throw new Error(`plugin manifest validation failed: ${failure.issues}`);
     }
-    const contents = await readFile(manifestPath, 'utf8');
-    const stripped = stripJsoncComments(contents);
-    let parsed: unknown;
-    try {
-        parsed = JSON.parse(stripped);
-    } catch (error: unknown) {
-        throw new Error(`plugin manifest JSON parse failed: ${errorToString(error)}`);
-    }
-    const result = PluginManifestSchema.safeParse(parsed);
-    if (!result.success) {
-        const issues = result.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ');
-        throw new Error(`plugin manifest validation failed: ${issues}`);
-    }
-    return result.data;
 }
 
 async function tryLoadPluginManifest(
@@ -168,54 +168,26 @@ async function tryLoadPluginManifest(
     maxFileBytes: number,
 ): Promise<FileLoadOutcome> {
     const manifestPath = join(pluginDir, MANIFEST_FILENAME);
-    if (absolutePathMatchesDenylist(manifestPath)) {
-        return diagnostic(dirName, 'warning', 'denylisted', `path matches the discovery denylist`, pluginDir);
-    }
-    let stats: { readonly size: number };
-    try {
-        stats = await stat(manifestPath);
-    } catch {
-        return { kind: 'drop' };
-    }
-    if (stats.size > maxFileBytes) {
-        return diagnostic(
-            dirName,
-            'warning',
-            'size_exceeded',
-            `manifest exceeds size bound (${stats.size} > ${maxFileBytes} bytes)`,
-            manifestPath,
-        );
-    }
-    let contents: string;
-    try {
-        contents = await readFile(manifestPath, 'utf8');
-    } catch (error: unknown) {
-        return diagnostic(dirName, 'error', 'read_failed', `read failed: ${errorToString(error)}`, manifestPath);
-    }
-    const stripped = stripJsoncComments(contents);
-    let parsed: unknown;
-    try {
-        parsed = JSON.parse(stripped);
-    } catch (error: unknown) {
-        return diagnostic(dirName, 'error', 'parse_error', `JSON parse failed: ${errorToString(error)}`, manifestPath);
-    }
-    const result = PluginManifestSchema.safeParse(parsed);
-    if (!result.success) {
-        const name = readNameField(parsed, dirName);
-        const issues = result.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ');
-        return diagnostic(name, 'error', 'validation_error', `schema validation failed: ${issues}`, manifestPath);
-    }
-    return { kind: 'loaded', manifest: result.data };
-}
-
-function diagnostic(
-    pluginName: string,
-    severity: 'error' | 'warning',
-    code: string,
-    message: string,
-    path: string,
-): FileLoadOutcome {
-    return { kind: 'diagnostic', diagnostic: { pluginName, severity, code, message, path } };
+    const outcome = await loadJsoncResource<PluginManifest, PluginDiscoveryDiagnostic>({
+        filePath: manifestPath,
+        maxFileBytes,
+        schema: PluginManifestSchema,
+        fallbackName: dirName,
+        toDiagnostic: (failure) => {
+            const { severity, message } = jsoncDiagnosticFields(failure, 'manifest');
+            return {
+                kind: 'diagnostic',
+                diagnostic: {
+                    pluginName: failure.name,
+                    severity,
+                    code: failure.stage,
+                    message,
+                    path: failure.stage === 'denylisted' ? pluginDir : manifestPath,
+                },
+            };
+        },
+    });
+    return outcome.kind === 'loaded' ? { kind: 'loaded', manifest: outcome.data } : outcome;
 }
 
 function resolvePluginHomeFromOptions(options: DiscoverPluginsOptions): string {
@@ -224,14 +196,4 @@ function resolvePluginHomeFromOptions(options: DiscoverPluginsOptions): string {
     }
     const gctrlHomeFromEnv = options.env?.[pluginHomeEnvKey];
     return resolvePluginHome(gctrlHomeFromEnv);
-}
-
-function readNameField(value: unknown, fallback: string): string {
-    if (typeof value === 'object' && value !== null && 'name' in value) {
-        const candidate = (value as { readonly name?: unknown }).name;
-        if (typeof candidate === 'string' && candidate.length > 0) {
-            return candidate;
-        }
-    }
-    return fallback;
 }

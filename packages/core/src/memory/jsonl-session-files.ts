@@ -1,8 +1,9 @@
 import type { AgentEventEnvelope } from '@mission-control/protocol';
-import { SessionEventLog } from '../session-log';
+import type { SessionEventLog } from '../session-log';
 import { type DataDirResolutionOptions, resolveMissionControlDataDir } from './data-dir';
 import { JsonlSessionEventStoreError, jsonlStoreError } from './jsonl-errors';
 import { createJsonlSessionLogHeader, parseJsonlSessionLog, serializeJsonlRecord } from './jsonl-session-records';
+import { logFromEvents } from './sqlite-session-event-store-rows';
 import { type FileHandle, mkdir, open, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -30,10 +31,7 @@ export async function openJsonlSessionFile(options: OpenJsonlSessionFileOptions)
     await ensureSessionLogFile({ sessionId, filePath, now: options.now });
     const contents = await readFile(filePath, 'utf8');
     const parsedLog = parseJsonlSessionLog({ contents, filePath, sessionId });
-    const log = new SessionEventLog();
-    for (const envelope of parsedLog.envelopes) {
-        log.append(envelope.event);
-    }
+    const log = logFromEvents(parsedLog.envelopes.map((envelope) => envelope.event));
     const fileHandle = await open(filePath, 'a');
     return {
         sessionId,

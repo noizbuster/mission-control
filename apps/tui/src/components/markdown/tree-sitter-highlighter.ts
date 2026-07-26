@@ -22,7 +22,7 @@
  * failure path degrades to monochrome and logs a diagnostic to stderr.
  */
 
-import { resolveMissionControlDataDir } from '@mission-control/core';
+import { errorToString, resolveMissionControlDataDir } from '@mission-control/core';
 import type { FiletypeParserOptions, SimpleHighlight, TextChunk, TreeSitterClient } from '@opentui/core';
 import {
     addDefaultParsers,
@@ -188,7 +188,7 @@ async function doInit(): Promise<void> {
         syntaxStyle = runtime.buildSyntaxStyle();
     } catch (error: unknown) {
         syntaxStyle = null;
-        const message = error instanceof Error ? error.message : String(error);
+        const message = errorToString(error);
         process.stderr.write(`tree-sitter SyntaxStyle unavailable: ${message}\n`);
     }
 }

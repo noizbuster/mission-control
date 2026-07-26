@@ -25,7 +25,7 @@ export interface PlanContent {
 
 export class PlanFormatError extends McPersistenceError {
     constructor(message: string, code: string, slug?: string, cause?: unknown) {
-        super(message, code, slug, cause !== undefined ? { cause } : undefined);
+        super(message, code, slug, cause);
         this.name = 'PlanFormatError';
     }
 }

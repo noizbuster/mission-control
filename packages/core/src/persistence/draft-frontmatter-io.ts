@@ -37,7 +37,7 @@ export const DUAL_REVIEW_RECEIPTS_HEADING = '## Dual review receipts';
 
 export class DraftFrontmatterError extends McPersistenceError {
     constructor(message: string, code: string, path?: string, cause?: unknown) {
-        super(message, code, path, cause !== undefined ? { cause } : undefined);
+        super(message, code, path, cause);
         this.name = 'DraftFrontmatterError';
     }
 }

@@ -29,6 +29,7 @@
 // never-throws validation + path/mtime cache). The T17 file lane permits only
 // `keybind-config-loader.*`, so the cache/validation cannot move to a sibling.
 import { appName } from '@mission-control/config';
+import { errorToString } from '@mission-control/core';
 import {
     type BindingItem,
     type BindingValue,
@@ -241,7 +242,7 @@ function loadScope(filePath: string, scope: KeybindConfigScope, maxFileBytes: nu
     try {
         parsed = JSON.parse(readFileSync(filePath, 'utf8'));
     } catch (error: unknown) {
-        const reason = error instanceof Error ? error.message : String(error);
+        const reason = errorToString(error);
         return {
             kind: 'diagnostic',
             diagnostic: mkDiagnostic(scope, filePath, `skipped: read/parse failed: ${reason}`),

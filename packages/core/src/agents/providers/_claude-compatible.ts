@@ -15,6 +15,7 @@
  */
 import { AGENT_THINKING_LEVELS, type AgentDefinition, type AgentThinkingLevel } from '@mission-control/protocol';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { errorToString } from '../../util/error-to-string';
 import type { AgentDiscoveryDiagnostic } from '../agent-loader';
 import { AgentParseError, parseAgentFile } from '../agent-parser';
 import type { LoadContext } from '../capability/types';
@@ -219,7 +220,7 @@ function parseOrDiagnose(
     try {
         return { agent: parseAgentFile(filePath, content, 'plugin'), error: undefined };
     } catch (err: unknown) {
-        const msg = err instanceof AgentParseError ? err.message : `parse failed: ${instanceMessage(err)}`;
+        const msg = err instanceof AgentParseError ? err.message : `parse failed: ${errorToString(err)}`;
         return {
             agent: undefined,
             error: {
@@ -321,8 +322,4 @@ function isStringRecord(value: unknown): value is Record<string, unknown> {
 function deriveAgentName(filePath: string): string {
     const base = basename(filePath).replace(/\.md$/u, '');
     return base.length > 0 ? base : basename(filePath);
-}
-
-function instanceMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
 }

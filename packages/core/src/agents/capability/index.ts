@@ -1,4 +1,5 @@
 import type { AgentDefinition } from '@mission-control/protocol';
+import { errorToString } from '../../util/error-to-string';
 import type { AgentDiscoveryDiagnostic, DiscoverAgentsResult } from '../agent-loader';
 import type { AgentPluginProvider, LoadContext } from './types';
 
@@ -44,7 +45,7 @@ export class CapabilityRegistry {
             try {
                 loaded = await provider.loadAgents(ctx);
             } catch (error: unknown) {
-                const detail = error instanceof Error ? error.message : String(error);
+                const detail = errorToString(error);
                 diagnostics.push({
                     agentName: `<provider:${provider.id}>`,
                     severity: 'error',

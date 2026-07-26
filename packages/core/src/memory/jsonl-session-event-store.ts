@@ -25,6 +25,7 @@ import { defaultSession, deriveSession } from './jsonl-session-projection';
 import { createJsonlSessionEventRecord, serializeJsonlRecord } from './jsonl-session-records';
 import type { MemoryStore, SessionCompactionRecordInput } from './memory-store';
 import { createSessionCompactionEvent } from './session-compaction-event';
+import { logFromEvents } from './sqlite-session-event-store-rows';
 import { randomUUID } from 'node:crypto';
 
 export { JsonlSessionEventStoreError } from './jsonl-errors';
@@ -59,11 +60,10 @@ export class JsonlSessionEventStore implements MemoryStore {
         this.sessionId = input.sessionId;
         this.filePath = input.filePath;
         this.fileHandle = input.fileHandle;
-        this.log = new SessionEventLog();
         this.observabilityRedactor = input.observabilityRedactor;
-        for (const event of input.log.getEvents()) {
-            this.log.append(redactAgentEventForObservability(event, this.observabilityRedactor));
-        }
+        this.log = logFromEvents(
+            input.log.getEvents().map((event) => redactAgentEventForObservability(event, this.observabilityRedactor)),
+        );
         this.now = input.now;
         this.createEventId = input.createEventId;
         this.nextSequence = input.nextSequence;

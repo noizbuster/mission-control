@@ -6,6 +6,7 @@
 
 import type { TuiPromptHistoryEntry } from '@mission-control/protocol';
 import { formatHistoryContentPreview, formatHistoryTimeColumn } from './history-picker-format';
+import { clampIndex } from './list-windowing';
 
 /** Aligns with durable `TuiPromptHistoryEntry` (id, text, timestamp ms). */
 export type HistoryPickerEntry = TuiPromptHistoryEntry;
@@ -72,7 +73,6 @@ export function openHistoryPicker(
     };
 }
 
-
 /**
  * Move selection by one step. `up` decreases index (toward newer / top);
  * `down` increases index (toward older / bottom). No-op when closed or empty.
@@ -93,7 +93,6 @@ export function navigateHistoryPicker(
     return { ...state, selectedIndex: next };
 }
 
-
 /** Close the picker; keeps selectedIndex and draftSnapshot. */
 export function closeHistoryPicker(state: HistoryPickerState): HistoryPickerState {
     if (!state.open) {
@@ -102,15 +101,11 @@ export function closeHistoryPicker(state: HistoryPickerState): HistoryPickerStat
     return { ...state, open: false };
 }
 
-
 /**
  * Clamp `selectedIndex` into `[0, entryCount-1]` (or 0 when empty).
  * Use when the entry list shrinks under an open picker.
  */
-export function clampHistoryPickerSelection(
-    state: HistoryPickerState,
-    entryCount: number,
-): HistoryPickerState {
+export function clampHistoryPickerSelection(state: HistoryPickerState, entryCount: number): HistoryPickerState {
     const selectedIndex = entryCount <= 0 ? 0 : clampIndex(state.selectedIndex, entryCount);
     if (selectedIndex === state.selectedIndex) {
         return state;
@@ -170,13 +165,6 @@ export function createHistoryPickerView(
         endIndex,
         rows,
     };
-}
-
-function clampIndex(index: number, entryCount: number): number {
-    if (entryCount <= 0) {
-        return 0;
-    }
-    return Math.min(Math.max(index, 0), entryCount - 1);
 }
 
 /**

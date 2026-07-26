@@ -1,6 +1,7 @@
 import type { ContinuationState } from '@mission-control/core';
 import { TextAttributes } from '@opentui/core';
 import { For, type JSX } from 'solid-js';
+import { clampIndex, windowStartIndex } from '../state/list-windowing';
 import {
     type AgentPanelRow,
     agentStatusColor,
@@ -22,11 +23,8 @@ type WindowedView = {
 /** Centered half-window projection shared by every list tab. Pure. */
 function computeWindow(selectedIndex: number, totalCount: number): WindowedView {
     const visibleCount = Math.min(MISSION_PANEL_MAX_VISIBLE, totalCount);
-    const clampedSelected = Math.min(Math.max(selectedIndex, 0), Math.max(totalCount - 1, 0));
-    const startIndex =
-        totalCount <= visibleCount
-            ? 0
-            : Math.min(Math.max(clampedSelected - Math.floor(visibleCount / 2), 0), totalCount - visibleCount);
+    const clampedSelected = clampIndex(selectedIndex, totalCount);
+    const startIndex = windowStartIndex(clampedSelected, totalCount, visibleCount);
     return { startIndex, visibleCount, clampedSelected };
 }
 

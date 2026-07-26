@@ -22,7 +22,7 @@ const MISSIONS_DIR = 'missions';
 
 export class MissionStoreError extends McPersistenceError {
     constructor(message: string, code: string, path?: string, cause?: unknown) {
-        super(message, code, path, cause !== undefined ? { cause } : undefined);
+        super(message, code, path, cause);
         this.name = 'MissionStoreError';
     }
 }

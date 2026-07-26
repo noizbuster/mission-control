@@ -1,5 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 
+import { errorToString } from '@mission-control/core';
 import type { KeyEvent, PasteEvent } from '@opentui/core';
 import { decodePasteBytes } from '@opentui/core';
 import type { JSX } from 'solid-js';
@@ -22,10 +23,10 @@ import {
     resolveWorkflowCommandMenuSubmission,
 } from '../state/interactive-chat-command-menu';
 import { buildFileAutocompleteCompletion } from '../state/interactive-chat-file-autocomplete';
-import { completionPromptListControls, historyPickerPromptListControls } from './prompt-list-controls';
 import { ChatInputTextarea, type ChatTextareaHandle } from './ChatInputTextarea';
-import { applyHistoryRecallText } from './prompt-history-recall';
 import type { ChatScrollboxHandle } from './ChatTranscript';
+import { applyHistoryRecallText } from './prompt-history-recall';
+import { completionPromptListControls, historyPickerPromptListControls } from './prompt-list-controls';
 
 const DOUBLE_ESC_WINDOW_MS = 500;
 const DOUBLE_ESC_ACTION_ENV = 'MCTRL_DOUBLE_ESC_ACTION';
@@ -36,8 +37,6 @@ const noopCursorChange = (): void => {};
 export function fileCompletionFrecencyKey(completed: string): string {
     return completed.endsWith('/') ? completed.slice(0, -1) : completed;
 }
-
-
 
 function resolveDoubleEscAction(): 'tree' | 'fork' | 'interrupt' | 'none' {
     const action = process.env[DOUBLE_ESC_ACTION_ENV];
@@ -131,7 +130,11 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
                     }
 
                     if (promptMenuInteractionsEnabled() && captured.startsWith('$')) {
-                        const insertText = resolveSkillCommandMenuInsertText(captured, snap.menuState, snap.skillEntries);
+                        const insertText = resolveSkillCommandMenuInsertText(
+                            captured,
+                            snap.menuState,
+                            snap.skillEntries,
+                        );
                         if (insertText !== undefined) {
                             props.textareaRef.get()?.setText(insertText);
                             props.textareaRef.get()?.gotoBufferEnd();
@@ -207,7 +210,9 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
             if (snap.historyPicker.open) {
                 const selected = props.store.confirmHistoryPicker();
                 if (selected !== undefined) {
-                    applyHistoryRecallText(props.textareaRef.get(), selected, (text) => props.store.setInputMirror(text));
+                    applyHistoryRecallText(props.textareaRef.get(), selected, (text) =>
+                        props.store.setInputMirror(text),
+                    );
                 }
                 return;
             }
@@ -215,7 +220,11 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
             return;
         }
 
-        if (key.name === 'tab' && historyPickerPromptListControls.acceptKeys.includes('tab') && snap.historyPicker.open) {
+        if (
+            key.name === 'tab' &&
+            historyPickerPromptListControls.acceptKeys.includes('tab') &&
+            snap.historyPicker.open
+        ) {
             key.preventDefault();
             const selected = props.store.confirmHistoryPicker();
             if (selected !== undefined) {
@@ -235,7 +244,11 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
             return;
         }
 
-        if (key.name === 'tab' && promptMenuInteractionsEnabled() && completionPromptListControls.acceptKeys.includes('tab')) {
+        if (
+            key.name === 'tab' &&
+            promptMenuInteractionsEnabled() &&
+            completionPromptListControls.acceptKeys.includes('tab')
+        ) {
             const buffer = plainText();
             if (isWorkflowCommandMenuOpen(buffer)) {
                 key.preventDefault();
@@ -246,7 +259,9 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
             }
             if (isSkillCommandMenuOpen(buffer)) {
                 key.preventDefault();
-                applyCommandMenuCompletion(resolveSkillCommandMenuInsertText(buffer, snap.menuState, snap.skillEntries));
+                applyCommandMenuCompletion(
+                    resolveSkillCommandMenuInsertText(buffer, snap.menuState, snap.skillEntries),
+                );
                 return;
             }
             if (isSlashCommandMenuOpen(buffer)) {
@@ -302,7 +317,7 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
                 try {
                     props.store.toggleAbgOverlay();
                 } catch (error: unknown) {
-                    const message = error instanceof Error ? error.message : String(error);
+                    const message = errorToString(error);
                     props.store.emitOutput(`Error: ABG overlay toggle failed: ${message}\n`);
                 }
                 return;

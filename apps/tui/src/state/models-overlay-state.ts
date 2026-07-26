@@ -18,6 +18,7 @@
  */
 
 import { MODEL_ROLE_IDS, type ModelProviderSelection, type ModelRole } from '@mission-control/protocol';
+import { computeWindow } from './list-windowing';
 
 /** A role row in the right column. `assignment` is the persisted selection if any. */
 export type ModelsOverlayRoleRow = {
@@ -327,24 +328,6 @@ export function setModelsOverlaySearchQuery(state: ModelsOverlayState, query: st
 /** Set the active provider tab and reset `activeLeftIndex` to 0. Pure. */
 export function setModelsOverlayProviderTab(state: ModelsOverlayState, tabId: string): ModelsOverlayState {
     return { ...state, activeProviderTab: tabId, activeLeftIndex: 0 };
-}
-
-type WindowSlice = {
-    readonly startIndex: number;
-    readonly endIndex: number;
-    readonly clampedIndex: number;
-};
-
-/** Compute the visible window and clamped active index for a single column. */
-function computeWindow(activeIndex: number, total: number, visibleLimit: number): WindowSlice {
-    const clampedIndex = total <= 0 ? 0 : Math.min(Math.max(activeIndex, 0), total - 1);
-    const startIndex =
-        total <= visibleLimit
-            ? 0
-            : Math.min(Math.max(clampedIndex - Math.floor(visibleLimit / 2), 0), total - visibleLimit);
-    const visibleCount = Math.min(visibleLimit, total);
-    const endIndex = total === 0 ? 0 : startIndex + visibleCount - 1;
-    return { startIndex, endIndex, clampedIndex };
 }
 
 /**

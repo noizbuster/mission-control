@@ -16,14 +16,14 @@ export type NotepadAppendOptions = {
 
 export class NotepadAppendOnlyError extends McPersistenceError {
     constructor(message: string, path?: string, cause?: unknown) {
-        super(message, 'notepad_truncation_rejected', path, cause !== undefined ? { cause } : undefined);
+        super(message, 'notepad_truncation_rejected', path, cause);
         this.name = 'NotepadAppendOnlyError';
     }
 }
 
 export class NotepadStoreError extends McPersistenceError {
     constructor(message: string, code: string, path?: string, cause?: unknown) {
-        super(message, code, path, cause !== undefined ? { cause } : undefined);
+        super(message, code, path, cause);
         this.name = 'NotepadStoreError';
     }
 }

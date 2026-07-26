@@ -17,6 +17,7 @@
  * whole agent-state dir stays hidden from the picker.
  */
 
+import { clampIndex, windowStartIndex } from './list-windowing';
 import { type Dirent, readdirSync } from 'node:fs';
 import { isAbsolute, posix, relative, resolve } from 'node:path';
 
@@ -134,7 +135,7 @@ export function resolveFileAutocomplete(state: FileAutocompleteState): string | 
     if (!state.open || state.matches.length === 0) {
         return undefined;
     }
-    const clamped = Math.min(Math.max(state.selectedIndex, 0), state.matches.length - 1);
+    const clamped = clampIndex(state.selectedIndex, state.matches.length);
     return state.matches[clamped]?.name;
 }
 
@@ -147,7 +148,7 @@ export function buildFileAutocompleteCompletion(state: FileAutocompleteState): s
     if (!state.open || state.matches.length === 0) {
         return undefined;
     }
-    const clamped = Math.min(Math.max(state.selectedIndex, 0), state.matches.length - 1);
+    const clamped = clampIndex(state.selectedIndex, state.matches.length);
     const match = state.matches[clamped];
     if (match === undefined) {
         return undefined;
@@ -175,8 +176,8 @@ export function createFileAutocompleteView(
     }
     const totalCount = state.matches.length;
     const visibleLimit = Math.max(1, maxVisibleChoices);
-    const selectedIndex = clampSelection(state.selectedIndex, totalCount);
-    const startIndex = getWindowStartIndex(selectedIndex, totalCount, visibleLimit);
+    const selectedIndex = clampIndex(state.selectedIndex, totalCount);
+    const startIndex = windowStartIndex(selectedIndex, totalCount, visibleLimit);
     return {
         open: true,
         prefix: state.prefix,
@@ -277,19 +278,4 @@ function containsPath(root: string, target: string): boolean {
     }
     const rel = relative(root, target);
     return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
-}
-
-function clampSelection(selectedIndex: number, totalCount: number): number {
-    if (totalCount <= 0) {
-        return 0;
-    }
-    return Math.min(Math.max(selectedIndex, 0), totalCount - 1);
-}
-
-function getWindowStartIndex(selectedIndex: number, totalCount: number, visibleLimit: number): number {
-    if (totalCount <= visibleLimit) {
-        return 0;
-    }
-    const halfWindow = Math.floor(visibleLimit / 2);
-    return Math.min(Math.max(selectedIndex - halfWindow, 0), totalCount - visibleLimit);
 }

@@ -1,6 +1,7 @@
 import type { AbgNodeSpec, AbgPolicySpec, AbgSignal } from '@mission-control/protocol';
 import { createAbgEmitSignal } from '../abg-emit';
 import type { AbgNodeRunContext, AbgNodeRunner } from '../node-registry';
+import { readBooleanConfig, readStringConfig } from './composite-node-utils';
 
 export function createLeafNodeRunners(): readonly (readonly [string, AbgNodeRunner])[] {
     return [
@@ -153,16 +154,6 @@ function findBlockingPolicy(node: AbgNodeSpec, policies: readonly AbgPolicySpec[
         }
     }
     return undefined;
-}
-
-function readBooleanConfig(node: AbgNodeSpec, key: string): boolean | undefined {
-    const value = node.config?.[key];
-    return typeof value === 'boolean' ? value : undefined;
-}
-
-function readStringConfig(node: AbgNodeSpec, key: string): string | undefined {
-    const value = node.config?.[key];
-    return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
 export type { AbgNodeRunner };

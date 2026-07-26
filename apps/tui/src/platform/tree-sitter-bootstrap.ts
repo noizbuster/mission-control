@@ -1,4 +1,4 @@
-import { resolveMissionControlDataDir } from '@mission-control/core';
+import { errorToString, resolveMissionControlDataDir } from '@mission-control/core';
 import { addDefaultParsers, getTreeSitterClient } from '@opentui/core';
 import { TREE_SITTER_PARSERS } from '../components/markdown/parsers-config';
 
@@ -13,7 +13,7 @@ export async function bootstrapTreeSitter(): Promise<void> {
         await client.setDataPath(resolveMissionControlDataDir());
     } catch (error: unknown) {
         bootstrapped = false;
-        const message = error instanceof Error ? error.message : String(error);
+        const message = errorToString(error);
         process.stderr.write(`tree-sitter bootstrap failed: ${message}\n`);
     }
 }

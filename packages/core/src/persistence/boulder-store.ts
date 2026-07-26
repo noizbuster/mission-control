@@ -113,7 +113,7 @@ export type BoulderWorkPatch = {
 
 export class BoulderStoreError extends McPersistenceError {
     constructor(message: string, code: string, path?: string, cause?: unknown) {
-        super(message, code, path, cause !== undefined ? { cause } : undefined);
+        super(message, code, path, cause);
         this.name = 'BoulderStoreError';
     }
 }

@@ -616,4 +616,5 @@ export {
 export * from './tools/index';
 export * from './trust/index';
 export * as TuiStores from './tui-stores/index';
+export { errorToString } from './util/error-to-string';
 export * from './workflows/index';

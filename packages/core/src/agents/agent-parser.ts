@@ -14,6 +14,7 @@
  */
 import { type AgentDefinition, AgentDefinitionSchema, type AgentSource } from '@mission-control/protocol';
 import { parse as parseYaml } from 'yaml';
+import { errorToString } from '../util/error-to-string';
 
 const FRONTMATTER_DELIMITER = '---';
 
@@ -87,7 +88,7 @@ export function parseAgentFile(filePath: string, content: string, source: AgentS
     try {
         parsed = parseYaml(yamlText);
     } catch (error: unknown) {
-        throw new AgentParseError(`YAML parse failed: ${instanceMessage(error)}`, filePath, error);
+        throw new AgentParseError(`YAML parse failed: ${errorToString(error)}`, filePath, error);
     }
 
     if (!isStringRecord(parsed)) {
@@ -150,8 +151,4 @@ function isStringRecord(value: unknown): value is Record<string, unknown> {
 
 function stripBom(value: string): string {
     return value.charCodeAt(0) === 0xfeff ? value.slice(1) : value;
-}
-
-function instanceMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
 }

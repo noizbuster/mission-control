@@ -12,8 +12,8 @@ import {
     JSONL_SESSION_LOG_RECORD_VERSION,
 } from './memory/jsonl-session-records';
 import { projectSessionTree } from './memory/session-tree-projection';
+import { logFromEvents } from './memory/sqlite-session-event-store-rows';
 import { projectBranchSummaries, projectSessionBranchTree } from './session-branch-projection';
-import { SessionEventLog } from './session-log';
 import { projectCodingSteps, projectReplayDiagnostics } from './session-replay-coding';
 import { projectApprovals, projectToolOutcomes } from './session-replay-event-projections';
 import { deriveReplaySession } from './session-replay-session';
@@ -53,10 +53,7 @@ export function projectSessionReplay(input: {
             envelope.event.sessionId === input.sessionId,
     );
     const events = envelopes.map((envelope) => envelope.event);
-    const log = new SessionEventLog();
-    for (const event of events) {
-        log.append(event);
-    }
+    const log = logFromEvents(events);
     const branchTree = projectSessionBranchTree({ sessionId: input.sessionId, envelopes });
     const sessionTree = projectSessionTree({ sessionId: input.sessionId, envelopes });
 

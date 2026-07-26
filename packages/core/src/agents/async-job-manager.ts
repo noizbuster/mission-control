@@ -15,6 +15,7 @@ import type { Client } from '@libsql/client';
 import type { ProtocolError } from '@mission-control/protocol';
 import type { SessionControlEpoch } from '../runtime/session-control-cancellation';
 import type { SessionControlAttachment, SessionControlHost } from '../runtime/session-control-host';
+import { errorToString } from '../util/error-to-string';
 import { LifecycleCleanupError } from './lifecycle-cleanup-error';
 import { randomBytes } from 'node:crypto';
 
@@ -648,7 +649,7 @@ function terminalJobHandle(entry: JobEntry, outcome: JobExecutionOutcome): Termi
     return {
         ...entry.handle,
         status: 'failed',
-        error: outcome.error instanceof Error ? outcome.error.message : String(outcome.error),
+        error: errorToString(outcome.error),
         completedAt,
     };
 }
@@ -664,7 +665,7 @@ function applyTerminalJobHandle(target: BackgroundJobHandle, terminal: TerminalB
 function applySettlementFailure(target: BackgroundJobHandle, error: unknown): void {
     target.status = 'failed';
     target.completedAt = new Date().toISOString();
-    target.error = error instanceof Error ? error.message : String(error);
+    target.error = errorToString(error);
     delete target.result;
 }
 

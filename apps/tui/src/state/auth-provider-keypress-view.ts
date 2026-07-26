@@ -3,6 +3,7 @@ import type {
     ProviderPromptKeypressState,
     ProviderPromptView,
 } from './auth-provider-keypress-types';
+import { clampIndex, windowStartIndex } from './list-windowing';
 
 export function createProviderPromptView(
     state: ProviderPromptKeypressState,
@@ -11,8 +12,8 @@ export function createProviderPromptView(
 ): ProviderPromptView {
     const visibleLimit = Math.max(1, maxVisibleChoices);
     const filteredChoices = filterProviderPromptChoices(choices, state.searchQuery);
-    const selectedIndex = clampSelectedIndex(state.selectedIndex, filteredChoices.length);
-    const startIndex = getWindowStartIndex(selectedIndex, filteredChoices.length, visibleLimit);
+    const selectedIndex = clampIndex(state.selectedIndex, filteredChoices.length);
+    const startIndex = windowStartIndex(selectedIndex, filteredChoices.length, visibleLimit);
     const endIndex = Math.min(filteredChoices.length, startIndex + visibleLimit);
     return {
         filteredChoices,
@@ -37,19 +38,4 @@ export function filterProviderPromptChoices(
         (choice) =>
             choice.id.toLowerCase().includes(normalizedQuery) || choice.name.toLowerCase().includes(normalizedQuery),
     );
-}
-
-function clampSelectedIndex(selectedIndex: number, choiceCount: number): number {
-    if (choiceCount <= 0) {
-        return 0;
-    }
-    return Math.min(Math.max(selectedIndex, 0), choiceCount - 1);
-}
-
-function getWindowStartIndex(selectedIndex: number, choiceCount: number, visibleLimit: number): number {
-    if (choiceCount <= visibleLimit) {
-        return 0;
-    }
-    const centeredStart = selectedIndex - Math.floor(visibleLimit / 2);
-    return Math.min(Math.max(centeredStart, 0), choiceCount - visibleLimit);
 }

@@ -38,6 +38,7 @@ import {
     updateFileAutocomplete,
 } from './interactive-chat-file-autocomplete';
 import { createVariantChoices, type ModelChoice } from './interactive-chat-model';
+import { clampIndex, windowStartIndex } from './list-windowing';
 import {
     type ModelsOverlayRoleRow,
     type ModelsOverlayState,
@@ -1124,7 +1125,6 @@ export class ChatStore {
         this.publish();
     }
 
-
     selectedHistoryPickerText(): string | undefined {
         if (!this.state.historyPicker.open) {
             return undefined;
@@ -1133,7 +1133,7 @@ export class ChatStore {
         if (newestFirst.length === 0) {
             return undefined;
         }
-        const selectedIndex = Math.min(Math.max(this.state.historyPicker.selectedIndex, 0), newestFirst.length - 1);
+        const selectedIndex = clampIndex(this.state.historyPicker.selectedIndex, newestFirst.length);
         return newestFirst[selectedIndex]?.text;
     }
 
@@ -1432,7 +1432,7 @@ export class ChatStore {
         const next = this.state.agentsDashboard.selectedIndex + delta;
         this.state.agentsDashboard = {
             ...this.state.agentsDashboard,
-            selectedIndex: Math.min(Math.max(next, 0), count - 1),
+            selectedIndex: clampIndex(next, count),
         };
         this.publish();
     }
@@ -1534,7 +1534,7 @@ export class ChatStore {
         const next = this.state.missionPanel.selectedIndex + direction;
         this.state.missionPanel = {
             ...this.state.missionPanel,
-            selectedIndex: Math.min(Math.max(next, 0), count - 1),
+            selectedIndex: clampIndex(next, count),
         };
         this.publish();
     }
@@ -2001,11 +2001,8 @@ export function createSessionPickerView(
     const filteredIds = new Set(filteredChoices.map((choice) => choice.id));
     const filteredEntries = entries.filter((entry) => filteredIds.has(entry.sessionId));
     const totalCount = filteredEntries.length;
-    const selectedIndex = totalCount <= 0 ? 0 : Math.min(Math.max(state.selectedIndex, 0), totalCount - 1);
-    const startIndex =
-        totalCount <= visibleLimit
-            ? 0
-            : Math.min(Math.max(selectedIndex - Math.floor(visibleLimit / 2), 0), totalCount - visibleLimit);
+    const selectedIndex = clampIndex(state.selectedIndex, totalCount);
+    const startIndex = windowStartIndex(selectedIndex, totalCount, visibleLimit);
     const endIndex = Math.min(totalCount, startIndex + visibleLimit);
     return {
         filteredEntries,
@@ -2063,11 +2060,8 @@ export function createAgentsDashboardView(state: AgentsDashboardState, maxVisibl
     ];
     const filteredEntries = state.sourceTab === 'all' ? agents : agents.filter((a) => a.source === state.sourceTab);
     const totalCount = filteredEntries.length;
-    const selectedIndex = totalCount <= 0 ? 0 : Math.min(Math.max(state.selectedIndex, 0), totalCount - 1);
-    const startIndex =
-        totalCount <= visibleLimit
-            ? 0
-            : Math.min(Math.max(selectedIndex - Math.floor(visibleLimit / 2), 0), totalCount - visibleLimit);
+    const selectedIndex = clampIndex(state.selectedIndex, totalCount);
+    const startIndex = windowStartIndex(selectedIndex, totalCount, visibleLimit);
     const visibleCount = Math.min(visibleLimit, totalCount);
     const endIndex = totalCount === 0 ? 0 : startIndex + visibleCount - 1;
     const visibleEntries = totalCount === 0 ? [] : filteredEntries.slice(startIndex, endIndex + 1);

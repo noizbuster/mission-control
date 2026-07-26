@@ -4,20 +4,11 @@ import type { ConversationSummary } from '../../../context/compaction';
 import type { Blackboard } from '../../../memory/blackboard';
 import type { ToolAdvertisement } from '../../../tools/tool-registry-types';
 import { type ParseStructuredOutputResult, type StructuredOutputShape } from '../../structured-blackboard';
+import { readStringConfig } from '../composite-node-utils';
 import { expandCapabilityLabels } from './capability-expand';
 import type { LlmActorTurnResult } from './llm-actor-node';
 
 export { CAPABILITY_EXPAND, expandCapabilityLabels } from './capability-expand';
-
-export function readStringConfig(node: AbgNodeSpec, key: string): string | undefined {
-    const value = node.config?.[key];
-    return typeof value === 'string' && value.length > 0 ? value : undefined;
-}
-
-export function readBooleanConfig(node: AbgNodeSpec, key: string): boolean | undefined {
-    const value = node.config?.[key];
-    return typeof value === 'boolean' ? value : undefined;
-}
 
 /**
  * Advertise only tools whose `capabilityClasses` intersect the node's allowed set.

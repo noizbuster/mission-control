@@ -35,6 +35,7 @@ import { createMemo, For, type JSX, Show } from 'solid-js';
 import { DiffView } from '../../components/diff/DiffView';
 import { type DiffLine, renderDiff } from '../../components/diff/render-diff';
 import { hasDiffContent } from '../../components/ToolCard';
+import { clampIndex } from '../../state/list-windowing';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -198,8 +199,7 @@ function entryIndexAt(model: DiffViewerModel, cursor: number): number {
 }
 
 function clampCursor(model: DiffViewerModel, value: number): number {
-    if (model.totalLines <= 0) return 0;
-    return Math.min(Math.max(value, 0), model.totalLines - 1);
+    return clampIndex(value, model.totalLines);
 }
 
 /** `j`/`k`: move the cursor by `delta` lines, clamped to the buffer bounds. */

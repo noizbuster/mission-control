@@ -13,10 +13,8 @@
  */
 import { type WorkflowDiscoveryDiagnostic, type WorkflowSpec, WorkflowSpecSchema } from '@mission-control/protocol';
 import { absolutePathMatchesDenylist, resolveUserConfigDir } from '../discovery/index';
+import { jsoncDiagnosticFields, loadJsoncResource } from '../discovery/load-jsonc';
 import { walkResourceFiles } from '../discovery/resource-walker';
-import { errorToString } from '../util/error-to-string';
-import { stripJsoncComments } from './jsonc-parser';
-import { readFile, stat } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 
 export const DEFAULT_MAX_WORKFLOW_FILE_BYTES = 64 * 1024;
@@ -112,58 +110,26 @@ export async function discoverWorkflows(options: DiscoverWorkflowsOptions): Prom
 }
 
 async function tryLoadWorkflowFile(filePath: string, maxFileBytes: number): Promise<FileLoadOutcome> {
-    const fallbackName = deriveWorkflowName(filePath);
-    if (absolutePathMatchesDenylist(filePath)) {
-        return diagnostic(filePath, fallbackName, 'warning', 'denylisted', 'path matches the discovery denylist');
-    }
-    let fileStats: { readonly size: number };
-    try {
-        fileStats = await stat(filePath);
-    } catch {
-        return { kind: 'drop' };
-    }
-    if (fileStats.size > maxFileBytes) {
-        return diagnostic(
-            filePath,
-            fallbackName,
-            'warning',
-            'size_exceeded',
-            `file exceeds size bound (${fileStats.size} > ${maxFileBytes} bytes)`,
-        );
-    }
-    let contents: string;
-    try {
-        contents = await readFile(filePath, 'utf8');
-    } catch (error: unknown) {
-        return diagnostic(filePath, fallbackName, 'error', 'read_failed', `read failed: ${errorToString(error)}`);
-    }
-    const stripped = stripJsoncComments(contents);
-    let parsed: unknown;
-    try {
-        parsed = JSON.parse(stripped);
-    } catch (error: unknown) {
-        return diagnostic(filePath, fallbackName, 'error', 'parse_error', `JSON parse failed: ${errorToString(error)}`);
-    }
-    const result = WorkflowSpecSchema.safeParse(parsed);
-    if (!result.success) {
-        const name = readNameField(parsed, fallbackName);
-        const issues = result.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ');
-        return diagnostic(filePath, name, 'error', 'validation_error', `schema validation failed: ${issues}`);
-    }
-    return { kind: 'loaded', spec: result.data };
-}
-
-function diagnostic(
-    filePath: string,
-    workflowName: string,
-    severity: 'error' | 'warning',
-    code: string,
-    message: string,
-): FileLoadOutcome {
-    return {
-        kind: 'diagnostic',
-        diagnostic: { workflowName, severity, code, message, path: filePath },
-    };
+    const outcome = await loadJsoncResource<WorkflowSpec, WorkflowDiscoveryDiagnostic>({
+        filePath,
+        maxFileBytes,
+        schema: WorkflowSpecSchema,
+        fallbackName: deriveWorkflowName(filePath),
+        toDiagnostic: (failure) => {
+            const { severity, message } = jsoncDiagnosticFields(failure, 'file');
+            return {
+                kind: 'diagnostic',
+                diagnostic: {
+                    workflowName: failure.name,
+                    severity,
+                    code: failure.stage,
+                    message,
+                    path: filePath,
+                },
+            };
+        },
+    });
+    return outcome.kind === 'loaded' ? { kind: 'loaded', spec: outcome.data } : outcome;
 }
 
 function resolveWorkflowScopes(
@@ -200,14 +166,4 @@ function deriveWorkflowName(filePath: string): string {
     const base = basename(filePath);
     const stripped = base.replace(/\.workflow\.jsonc?$/u, '');
     return stripped.length > 0 ? stripped : base;
-}
-
-function readNameField(value: unknown, fallback: string): string {
-    if (typeof value === 'object' && value !== null && 'name' in value) {
-        const candidate = (value as { readonly name?: unknown }).name;
-        if (typeof candidate === 'string' && candidate.length > 0) {
-            return candidate;
-        }
-    }
-    return fallback;
 }

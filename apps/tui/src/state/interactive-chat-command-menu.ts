@@ -1,6 +1,7 @@
-import { padEndToDisplayWidth, truncateTerminalText } from '@mission-control/tui';
 import type { TuiSkillMenuEntry } from '@mission-control/protocol';
+import { padEndToDisplayWidth, truncateTerminalText } from '@mission-control/tui';
 import { readTerminalCursorDirection } from './interactive-chat-terminal-keys';
+import { clampIndex, windowStartIndex } from './list-windowing';
 
 export type SlashCommandMenuChoice = {
     readonly id: string;
@@ -277,9 +278,9 @@ function createCommandMenuView(
         return closedMenuView;
     }
     const filteredChoices = filterCommandChoices(query, choices);
-    const selectedIndex = clampSelection(state.selectedIndex, filteredChoices.length);
+    const selectedIndex = clampIndex(state.selectedIndex, filteredChoices.length);
     const visibleLimit = Math.max(1, maxVisibleChoices);
-    const startIndex = getWindowStartIndex(selectedIndex, filteredChoices.length, visibleLimit);
+    const startIndex = windowStartIndex(selectedIndex, filteredChoices.length, visibleLimit);
     return {
         open: true,
         query,
@@ -542,19 +543,4 @@ function filterCommandChoices(
         return a.originalIndex - b.originalIndex;
     });
     return ranked.map((entry) => entry.choice);
-}
-
-function clampSelection(selectedIndex: number, totalCount: number): number {
-    if (totalCount <= 0) {
-        return 0;
-    }
-    return Math.min(Math.max(selectedIndex, 0), totalCount - 1);
-}
-
-function getWindowStartIndex(selectedIndex: number, totalCount: number, visibleLimit: number): number {
-    if (totalCount <= visibleLimit) {
-        return 0;
-    }
-    const halfWindow = Math.floor(visibleLimit / 2);
-    return Math.min(Math.max(selectedIndex - halfWindow, 0), totalCount - visibleLimit);
 }

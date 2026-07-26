@@ -1,3 +1,4 @@
+import { errorToString } from '@mission-control/core';
 import { useKeyboard } from '@opentui/solid';
 import type { Setter } from 'solid-js';
 import { ABG_OVERLAY_TABS } from '../components/AbgOverlay';
@@ -58,7 +59,7 @@ export function useGlobalKeyboard(deps: GlobalKeyboardDeps): void {
             try {
                 store.toggleAbgOverlay();
             } catch (error: unknown) {
-                const message = error instanceof Error ? error.message : String(error);
+                const message = errorToString(error);
                 store.emitOutput(`Error: ABG overlay toggle failed: ${message}\n`);
             }
             return;

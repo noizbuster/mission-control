@@ -57,7 +57,7 @@ export type ScaffoldPlanFilesResult = {
 
 export class PlanScaffoldError extends McPersistenceError {
     constructor(message: string, code: string, path?: string, cause?: unknown) {
-        super(message, code, path, cause !== undefined ? { cause } : undefined);
+        super(message, code, path, cause);
         this.name = 'PlanScaffoldError';
     }
 }
