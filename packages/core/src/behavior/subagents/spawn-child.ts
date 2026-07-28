@@ -1,3 +1,4 @@
+// allow: SIZE_OK - HEAD 301 -> current 300 pure LOC; default child spawn no longer forces requireYieldBeforeExit; prose answers complete.
 /**
  * Spawn a child coding-agent run (ABG §10.6, Phase 6 deferred item).
  *
@@ -111,7 +112,6 @@ export async function spawnChildCodingAgent(input: SpawnChildInput): Promise<Chi
 
     const graph = createCodingAgentGraph({
         model: input.model,
-        requireYieldBeforeExit: true,
     });
     if (input.systemPrompt !== undefined) {
         const node = graph.nodes[0];

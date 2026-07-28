@@ -1,5 +1,17 @@
 # PRD: Stabilize task() subagent yield and child observability
 
+> **SUPERSEDED (2026-07-27).** The "force `yield` before exit" direction in Goals below
+> was reversed as a root-cause fix for the same ~43–47% `task()` failure rate. Structural
+> analysis (`session_1785066275305` and 8 others) showed `requireYieldBeforeExit` *trapped*
+> models that answer in prose: it forced `llm.loop_active` back on, burned turns until
+> soft-land / `maxNodeRuns`, and then `createChildGraphSpawnFn` discarded the child's actual
+> work as a `task_yield_missing` failure. The fix instead (1) stops forcing
+> `requireYieldBeforeExit` on default child spawns — a prose-only turn completes the child —
+> and (2) treats a completed graph that never called `yield` as a degraded **success** whose
+> output is the child's final text. Only a genuinely failed graph is a child failure. See
+> `packages/core/src/agents/child-graph-spawn.ts`, `behavior/subagents/spawn-child.ts`. The
+> SQL-observability goals below remain valid and unaddressed by this change.
+
 | Field | Value |
 | --- | --- |
 | Status | ready-for-implementation |

@@ -51,7 +51,7 @@ export const CHILD_NETWORK_ALLOWED_CATEGORIES: ReadonlySet<string> = new Set([
 ]);
 
 const DEFAULT_CHILD_SUMMARY_LIMIT = 4000;
-/** Prefix on salvage text when the child never called `yield`. Exported for settlement classifiers. */
+/** Prefix on salvage text attached to a FAILED child graph. Exported for settlement classifiers. */
 export const DEGRADED_SALVAGE_LABEL = '[degraded salvage] ';
 
 export type HardDropOptions = {
@@ -111,8 +111,9 @@ export function defaultSpawnFn(): Promise<ChildSpawnResult> {
 }
 
 /**
- * Build the default spawn fn. Only an explicit `yield` result is a completed
- * child task; a graph that ends without one is a failed, bounded salvage result.
+ * Build the default spawn fn. An explicit `yield` result is the clean channel; a graph
+ * that COMPLETED without yield returns the child's final assistant text as a degraded
+ * (but successful) result. Only a graph that genuinely FAILED is a child failure.
  */
 export function createChildGraphSpawnFn(
     deps: ChildGraphSpawnDeps,
@@ -161,24 +162,43 @@ export function createChildGraphSpawnFn(
                 ...(failure !== undefined ? { failure } : {}),
             };
         }
-
-        const salvage = boundedDegradedSalvage(
-            observabilityRedactor.redactText(taskOutput.summary),
-            deps.summaryLimit ?? DEFAULT_CHILD_SUMMARY_LIMIT,
-        );
-        const failureKind = taskOutput.status === 'failed' ? ('graph_failed' as const) : ('yield_missing' as const);
+        const summary = observabilityRedactor.redactText(taskOutput.summary);
+        if (taskOutput.status === 'failed') {
+            // The child graph terminated with a real error. The last assistant text is
+            // best-effort context attached to the failure, prefixed so callers can tell a
+            // salvaged fragment from a clean result.
+            return {
+                sessionId: context.sessionId,
+                status: 'failed',
+                output: boundedDegradedSalvage(summary, deps.summaryLimit ?? DEFAULT_CHILD_SUMMARY_LIMIT),
+                failureKind: 'graph_failed' as const,
+                ...(failure !== undefined ? { failure } : {}),
+            };
+        }
+        // The child graph COMPLETED (possibly via soft-land) but never called `yield`. The
+        // child's final assistant text IS its result: return it as a completed (degraded)
+        // outcome, not a failure. The previous behavior forced `status: 'failed'` here,
+        // which surfaced as `tool.failed` / `task_yield_missing` to the parent and made it
+        // abandon delegation — discarding the child's actual work and driving a ~43%
+        // task-tool failure rate across sessions. `failureKind: 'yield_missing'` records the
+        // degraded settlement for observability; the parent receives the child's output and
+        // judges completeness from the text itself.
         return {
             sessionId: context.sessionId,
-            status: 'failed',
-            output: observabilityRedactor.redactText(salvage),
-            failureKind,
-            ...(failure !== undefined ? { failure } : {}),
+            status: 'completed',
+            output: boundSummary(summary, deps.summaryLimit ?? DEFAULT_CHILD_SUMMARY_LIMIT),
+            failureKind: 'yield_missing' as const,
         };
     };
 }
 
 function boundedDegradedSalvage(summary: string, limit: number): string {
     return `${DEGRADED_SALVAGE_LABEL}${summary}`.slice(0, Math.max(0, limit));
+}
+
+/** Truncate a completed child's final assistant text to the summary bound (no alarm label). */
+function boundSummary(summary: string, limit: number): string {
+    return summary.slice(0, Math.max(0, limit));
 }
 
 function stringifyYieldResult(value: unknown): string {

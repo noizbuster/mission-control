@@ -1,4 +1,4 @@
-// allow: SIZE_OK -- HEAD 437 -> current 484 pure LOC; one child-session authority and spawn state-machine regression matrix.
+// allow: SIZE_OK - HEAD 578 -> current 578 pure LOC; yield_missing now settles as completed-degraded; redaction and bound tests updated.
 import type { LanguageModelV3, LanguageModelV3StreamPart } from '@ai-sdk/provider';
 import type { AgentDefinition } from '@mission-control/protocol';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
@@ -556,19 +556,22 @@ describe('ConcreteTaskToolRuntime', () => {
             });
         }
 
-        it('fails with salvage when a child completes without yielding', async () => {
+        it('completes with the child final text when a child does not yield', async () => {
             const callCount = { value: 0 };
             const runtime = buildDefaultSpawnRuntime(callCount, () => textOnlyChunks('child completed'));
 
             const result = await runtime.runChildSession(makeRequest());
 
+            // A child that finishes with a prose answer (no tool calls) completes on the first
+            // turn; its final text is the result. Missing `yield` is a degraded settlement
+            // (failureKind), not a failure — the parent receives the child's actual work.
             expect(result).toMatchObject({
                 sessionId: 'sess-test-1',
-                status: 'failed',
-                output: '[degraded salvage] child completed',
+                status: 'completed',
+                output: 'child completed',
                 failureKind: 'yield_missing',
             });
-            expect(callCount.value).toBeGreaterThan(1);
+            expect(callCount.value).toBe(1);
         });
 
         it('returns the yielded result when the child calls yield', async () => {
@@ -601,7 +604,7 @@ describe('ConcreteTaskToolRuntime', () => {
             await expect(runtime.runChildSession(makeRequest())).rejects.toThrow(/spawnFn not wired/);
         });
 
-        it('bounds degraded salvage to the configured summary limit', async () => {
+        it('bounds the completed child final text to the configured summary limit', async () => {
             const callCount = { value: 0 };
             const runtime = buildDefaultSpawnRuntime(callCount, () => textOnlyChunks('x'.repeat(200)), 64);
 
@@ -610,9 +613,9 @@ describe('ConcreteTaskToolRuntime', () => {
                 prompt: 'explore the codebase',
             });
 
-            expect(callCount.value).toBeGreaterThan(1);
-            expect(result.status).toBe('failed');
-            expect(result.output).toMatch(/^\[degraded salvage\] /);
+            expect(callCount.value).toBe(1);
+            expect(result.status).toBe('completed');
+            expect(result.output).not.toMatch(/\[degraded salvage\]/);
             expect(result.output.length).toBeLessThanOrEqual(64);
             expect(result.failureKind).toBe('yield_missing');
         });
@@ -654,7 +657,7 @@ describe('ConcreteTaskToolRuntime', () => {
             });
         });
 
-        it('redacts credentials from degraded salvage after a child misses yield', async () => {
+        it('redacts credentials from a completed child final text after a missed yield', async () => {
             // Given
             const knownCredential = ['known', 'degraded', 'child', 'credential'].join('_');
             const callCount = { value: 0 };
@@ -668,10 +671,10 @@ describe('ConcreteTaskToolRuntime', () => {
             // When
             const result = await runtime.runChildSession(makeRequest());
 
-            // Then
-            expect(result.status).toBe('failed');
+            // Then: the child's final text is the (completed) result and is still redacted.
+            expect(result.status).toBe('completed');
             expect(result.failureKind).toBe('yield_missing');
-            expect(result.output).toMatch(/^\[degraded salvage\] /);
+            expect(result.output).not.toMatch(/\[degraded salvage\]/);
             expect(result.output).toContain('keep-this-salvage');
             expect(result.output).toContain('[REDACTED_CREDENTIAL]');
             expect(result.output).not.toContain(knownCredential);

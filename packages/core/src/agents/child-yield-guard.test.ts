@@ -1,3 +1,4 @@
+// allow: SIZE_OK - HEAD 455 -> current 455 pure LOC; missing-yield on a completed child graph is now a degraded success, not a failure.
 /**
  * Child-only yield guard: requireYieldBeforeExit keeps llm.loop_active until yield
  * or soft-land / maxNodeRuns, without changing parent coding-agent graphs.
@@ -511,7 +512,7 @@ describe('requireYieldBeforeExit — child graph integration', () => {
         expect(spawnCalls).toBe(1);
     });
 
-    it('fails with bounded salvage when a child does not call yield', async () => {
+    it('completes with the child final text when a child does not call yield', async () => {
         let spawnCalls = 0;
         const model = new MockLanguageModelV3({
             provider: 'test',
@@ -527,12 +528,16 @@ describe('requireYieldBeforeExit — child graph integration', () => {
 
         const result = await spawn(makeSpawnContext(childRegistry));
 
+        // Default child spawn no longer forces requireYieldBeforeExit, so a prose-only turn
+        // completes on the first model call. Missing `yield` is a degraded (but successful)
+        // settlement: the child's final text is the result, surfaced as completed — not the
+        // old task_yield_missing failure that discarded the work.
         expect(result).toEqual({
             sessionId: 'sess-spawn-yield-guard',
-            status: 'failed',
-            output: `${DEGRADED_SALVAGE_LABEL}completed without an explicit yield`,
+            status: 'completed',
+            output: 'completed without an explicit yield',
             failureKind: 'yield_missing',
         });
-        expect(spawnCalls).toBeGreaterThan(1);
+        expect(spawnCalls).toBe(1);
     });
 });

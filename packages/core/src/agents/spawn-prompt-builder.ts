@@ -15,13 +15,19 @@ import type { AgentDefinition } from '@mission-control/protocol';
 
 /**
  * Base directive every delegated subagent receives. Establishes the delegation
- * contract and instructs the child to submit results via the `yield` tool.
+ * contract: `yield` is the preferred clean/structured result channel, and a turn with
+ * no further tool calls is also treated as completion (its text becomes the result), so
+ * the child must make any text-only turn a complete final answer rather than a partial
+ * thought. This replaced the old must-yield-or-fail contract, which trapped models that
+ * answer in prose and discarded their work as a failure.
  */
 export const SUBAGENT_BASE_DIRECTIVE =
-    'You are a delegated subagent. Complete your assigned task, then you MUST call the `yield` tool ' +
-    'with your final result before stopping. Do not end with only assistant prose — without `yield`, ' +
-    'your parent receives a failed degraded salvage and may retry or drop your work. ' +
-    'When the work is done (or you must report a blocked/partial outcome), call `yield` immediately.';
+    'You are a delegated subagent. Complete your assigned task fully before stopping. ' +
+    'When you have your final result, call the `yield` tool with it — `yield` is the preferred way ' +
+    'to submit a clean, structured result and signals unambiguous completion. If you deliver your ' +
+    'final answer as text instead (a turn with no further tool calls), that text is treated as your ' +
+    'result, so make any text-only turn a complete final answer, not a partial thought or a plan to ' +
+    'continue. Call `yield` as soon as the work is done or you are blocked.';
 
 export interface BuildChildSystemPromptInput {
     readonly agent: AgentDefinition;
