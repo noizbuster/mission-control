@@ -1,30 +1,59 @@
-# Skills Agent Guide
+<!-- Parent: ../AGENTS.md -->
+<!-- Generated: 2026-07-30T00:00:00+09:00 | Updated: 2026-07-30T00:00:00+09:00 -->
 
-## Overview
+# skills
 
-`packages/core/src/skills` owns `SKILL.md` discovery (multi-scope, first-wins) and metadata parsing. The on-demand `skill` tool lives in `packages/core/src/tools/skill-tool.ts`. Interactive chat loads skills via `$name [args]` in `apps/cli` (dollar-prefix only; slash never expands to skill).
+## Purpose
 
-## Where To Look
+`SKILL.md` discovery (multi-scope, first-wins) and metadata parsing. Pure data loading — discovery + frontmatter. The on-demand `skill` tool lives in `../tools/skill-tool.ts`. Interactive chat loads skills via `$name [args]` in `apps/cli` (dollar-prefix only; slash never expands to skill). Skill bodies are instruction DATA, never file-edit tools or executable code.
 
-| Task | Location | Notes |
-| --- | --- | --- |
-| Metadata schema | `skill-metadata.ts` | `SkillMetadataSchema` (Zod): name (lowercase a-z0-9-), optional description, disableModelInvocation. |
-| Discovery + loader | `skill-loader.ts` | `discoverSkills({workspaceRoot})` — 3-scope scan (global-user → project-mctrl → project-agents), automated-discovery denylist (including `temp/ref-repos`), symlink defense, 64KB size bound. |
-| Frontmatter parser | `skill-loader.ts:parseSkillFrontmatter` | YAML frontmatter between `---` fences + markdown body. Uses `yaml` package. |
-| Barrel export | `index.ts` | `discoverSkills`, `Skill`, `SkillMetadataSchema`. |
+## Key Files
 
-## Conventions
+| File | Description |
+|------|-------------|
+| `index.ts` | Barrel: `discoverSkills`, `Skill`, `SkillMetadataSchema`, parse helpers |
+| `skill-loader.ts` | `discoverSkills({workspaceRoot})`, `parseSkillFrontmatter`, scope scan + denylist |
+| `skill-metadata.ts` | `SkillMetadataSchema` (Zod): name `a-z0-9-`, optional description, `disableModelInvocation` |
+| `loader.test.ts` | Discovery/frontmatter/denylist/symlink/size/injection tests |
 
-- SKILL.md bodies are DATA, never executed/evaluated/imported as code.
-- Do NOT load skills from `temp/ref-repos/**` — automatic discovery keeps a dedicated guard even though repo tools may inspect reference sources.
-- First-wins by scope priority: global-user > project-mctrl > project-agents.
+## Subdirectories
+
+_None._
+
+## For AI Agents
+
+### Working In This Directory
+
+- SKILL.md bodies are DATA — never `eval` / `import` / `require`.
+- Do **not** load from `temp/ref-repos/**` — automated-discovery denylist (including dedicated guard).
+- First-wins scope priority: **global-user → project-mctrl → project-agents**.
 - Malformed frontmatter → skip with diagnostic, no throw.
+- Size bound 64KB (`DEFAULT_MAX_SKILL_FILE_BYTES`); count bound via `DEFAULT_MAX_SKILLS`.
+- Symlink lstat defense — reject escapes outside allowed roots.
+- Do not eager-inject skill bodies into the system prompt; metadata only via `../context` `<available_skills>` XML; bodies on demand via `skill` tool.
+- Mirrors discovery patterns in `../agents/agent-loader.ts` and `../workflows/`.
 
-## Tests
+### Testing Requirements
 
-- `loader.test.ts` (26 tests): valid/invalid frontmatter, first-wins, denylist, symlink escape, size bound, prompt-injection inertness.
+- `loader.test.ts` — valid/invalid frontmatter, first-wins, denylist, symlink escape, size bound, prompt-injection inertness
+- Focused: `pnpm exec vitest run packages/core/src/skills/loader.test.ts`
 
-## Anti-Patterns
+### Common Patterns
 
-- Do NOT `eval`/`import`/`require` a SKILL.md body — it is reference text only.
-- Do NOT eager-inject skill bodies into the system prompt — they load on demand via the `skill` tool.
+- Frontmatter between `---` fences + markdown body; parsed with `yaml` package.
+- `SkillSourceInfo` / `SkillScope` track provenance for diagnostics and prompt location tags.
+- `resolveUserConfigDir` + `skillsConfigDirEnvKey` for user-global scope resolution.
+
+## Dependencies
+
+### Internal
+
+- Re-exported from `packages/core/src/index.ts`
+- Consumers: `../context/system-prompt.ts` (metadata XML), `../tools/skill-tool.ts` (body load), `apps/cli` (`$name` expansion)
+
+### External
+
+- `yaml` — frontmatter parsing
+- `zod` — `SkillMetadataSchema`
+
+<!-- MANUAL: Any manually added notes below this line are preserved on regeneration -->

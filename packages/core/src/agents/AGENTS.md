@@ -1,80 +1,106 @@
-# Agents Agent Guide
+<!-- Parent: ../AGENTS.md -->
+<!-- Generated: 2026-07-30T00:00:00+09:00 | Updated: 2026-07-30T00:00:00+09:00 -->
 
-## Overview
+# agents
 
-`packages/core/src/agents` owns agent discovery, declaration parsing, the live session registry, child-agent lifecycle, model resolution, spawn policy, and the concrete runtime that bridges the full-parity `task()` tool to real agent execution. Discovery scans four builtin scopes (project `.mctrl/agents/`, user `<config>/agents/`, plugin `additionalDirs`, bundled templates) plus nine cross-harness importers (Claude Code, Cursor, Codex, Gemini, Cline, Windsurf, VS Code, GitHub Copilot, OpenCode). The builtin loader runs at priority 100 so mission-control's own agents win name conflicts; cross-harness importers run at priority 50. First-wins by name across every provider.
+## Purpose
 
-## Where To Look
+Agent discovery, declaration parsing, live session registry, child-agent lifecycle, model resolution, spawn policy, and the concrete runtime that bridges full-parity `task()` to real agent execution. Discovery scans four builtin scopes (project `.mctrl/agents/`, user `<config>/agents/`, plugin `additionalDirs`, bundled templates) plus nine cross-harness importers. Builtin loader priority 100; cross-harness priority 50. First-wins by name.
 
-| Task | Location | Notes |
-| --- | --- | --- |
-| Discovery entry | `agent-loader.ts` | `discoverAgents` wires the builtin 4-scope provider plus the 9 cross-harness providers into a `CapabilityRegistry`. Symlink lstat defense, denylist pruning, 64KB size bound, 256-agent count bound, never throws. Mirrors `discoverSkills` / `discoverWorkflows`. |
-| Declaration parser | `agent-parser.ts` | `parseAgentFile` splits `---` YAML frontmatter from the markdown body, normalizes `tools` (CSV string, array, or object map), validates through `AgentDefinitionSchema`. Raises `AgentParseError` on any failure; never returns a partial or defaulted agent. |
-| Static agent index | `agent-registry.ts` | `AgentIndex` is the in-memory name-keyed map of discovered plus programmatically registered agents. First-wins on `register`; preserves insertion order for stable `list()` / `names()`. Purely in-memory, no I/O. |
-| Live session registry | `runtime-registry.ts` | `RuntimeAgentRegistry` tracks the main session plus every subagent and advisor by stable id. `listVisibleTo` hides advisors and the caller. In-memory only; owns state, not lifecycle. |
-| Lifecycle manager | `lifecycle-manager.ts` | `AgentLifecycleManager` owns the idle, parked, revived cycle for adopted subagents. Arms a TTL timer on idle (default 7 min), parks on expiry by disposing live resources while keeping the ref and `sessionFile`, revives on demand through `ensureLive`. Only this manager flips `parked` to `idle`. Concurrent revives coalesce onto one in-flight promise. |
-| Model roles | `model-roles.ts` | Ten built-in roles: `default`, `smol`, `slow`, `vision`, `plan`, `designer`, `commit`, `title`, `task`, `advisor`. `parseModelAlias` / `formatModelAlias` convert between `mctrl/<role>` and the typed `ModelRole`. Legacy category aliases `opus` and `sonnet` map onto the new set. |
-| Model resolver | `model-resolver.ts` | Exact `mctrl/task` inherits the parent/session model. Otherwise `resolveAgentModel` applies named agent override, `agent.model` (alias, legacy alias, or concrete object), parent active model, then session default. No provider or model values are hardcoded. |
-| Task tool runtime | `task-tool-runtime.ts`, `task-tool-runtime-authority.ts` | `ConcreteTaskToolRuntime` resolves the child and delegates authority preparation to `prepareChildSpawnAuthority` / `buildChildToolSurface`. The surface intersects tool allowlists, depth-gates nested `task`/`job`/`subagent` (`PRODUCTION_MAX_TASK_DEPTH=3`), hard-drops `workflow`/`team`, category-scopes `network` via `CHILD_NETWORK_ALLOWED_CATEGORIES`, adds `yield`, and installs category plus derived path-policy invocation checks. Fingerprint includes `taskDepth` + max depth. `spawnFn` is injectable. When `resolveSdkModel` exists, `createChildGraphSpawnFn` runs the bounded child graph; without one, the pure-test default rejects. |
-| Async job manager | `async-job-manager.ts` | `AsyncJobManager` bounds concurrent background child-agent execution via a `maxConcurrency` semaphore (default 4). Jobs beyond the limit queue and start on slot release. Cooperative cancellation through a per-job `AbortController` whose signal forwards to the execute function. In-memory only. |
-| Spawn policy | `spawn-policy.ts` | `canSpawn` evaluates three checks in order (first denial wins): self-recursion (`parentId === childId`), `MCTRL_BLOCKED_AGENT` env var, then the parent `spawns` allowlist. `undefined` or `[]` denies all (safe default); `'*'` allows all; an array allows only the listed names. Policy only; does not perform the spawn. |
-| Approval tier | `approval-tier.ts` | Standalone tier resolver. Each tool declares a `ToolTier` (`read`, `write`, `exec`); `ApprovalMode` and per-tool policies resolve approval metadata. Live child tools retain the permission callbacks cloned from their parent registrations; path policies are enforced independently. |
-| Recursion + nested depth | `recursion-policy.ts` | Production nested `task` uses only `PRODUCTION_MAX_TASK_DEPTH = 3` via `canSpawnAtDepth(PRODUCTION_MAX_TASK_DEPTH, childDepth)`: spawn while `taskDepth < 3`; depth 3 is the blocked leaf. `DEFAULT_MAX_RECURSION_DEPTH = 2` and `HARD_RECURSION_CAP = 10` remain compatibility / unlimited-import bookkeeping only and cannot raise the live product cap. `AgentDefinition.recursion` is metadata, not authority. Not unlimited recursion; not OMC free recursion. |
-| Child network allowlist | `child-graph-spawn.ts` | `CHILD_HARD_DROPPED_CAPABILITY_KINDS` always includes `network`; `CHILD_NETWORK_ALLOWED_CATEGORIES` is the filter-time exception (`allowNetworkCapability`). ON: `architect`, `librarian`, `deep`, `reasoner`, `oracle`, `designer`, `planner`. OFF: `explore`, `reviewer`, `quick`. Independent of nesting (`allowSubagentNesting`). |
-| Runaway guard | `runaway-guard.ts` | `RunawayGuard` counts assistant `message_end` events per child session. At the per-category soft budget it signals one steering notice; at 1.5x the budget it signals a graceful abort. Counter-based, no timers. `formatSalvageSnippet` builds the cancelled-child summary line. |
-| Job persistence | `job-persistence.ts` | `persistJob` / `loadPersistedJobs` store each `BackgroundJobHandle` as one JSON file at `<jobsDir>/<jobId>.json`. Atomic temp-file-then-rename writes follow the `.mc/` boulder-store convention. `loadPersistedJobs` never throws on per-file corruption; unreadable, unparseable, or schema-invalid files are skipped. |
-| Job recovery | `job-recovery.ts` | `recoverJobs` reconciles persisted jobs after a restart. Active jobs (`queued`, `running`) transition to `cancelled` with a salvage snippet and completion timestamp, then are re-persisted. Terminal jobs are preserved unchanged. No auto-reexecution. |
-| Spawn prompt builder | `spawn-prompt-builder.ts` | `buildChildSystemPrompt` assembles the child system prompt from up to four layers: subagent base directive (delegation contract plus `yield` instruction), role preamble, agent body, parent context. Empty layers are omitted. The parent persona is never injected; the child identity is independent. |
-| Path policy derive | `path-policy-derive.ts` | `deriveChildPathPolicies` merges the child's own `pathPolicies` with every `deny` rule from the parent, so inherited restrictions override conflicting child allows under last-match-wins. `evaluatePathPolicies` wraps the existing `evaluateRules` wildcard evaluator. |
-| Capability registry | `capability/index.ts`, `capability/types.ts` | `CapabilityRegistry` is the priority-based provider registry. `loadAll` sorts providers descending by priority, invokes each `loadAgents`, deduplicates by name (highest priority wins). A rejecting provider produces a `provider_error` diagnostic and does not halt the load. `enableProvider` / `disableProvider` toggle individual providers. |
-| Cross-harness providers | `providers/` | Nine importers scan their own directories and return `AgentDefinition` objects: `claude-provider`, `cursor-provider`, `codex-provider`, `gemini-provider`, `cline-provider`, `windsurf-provider`, `vscode-provider`, `github-copilot-provider`, `opencode-provider`. `_claude-compatible.ts` is the shared frontmatter conversion base for Claude Code and Cursor. `scan-agent-dir.ts` is the shared directory walker. `index.ts` wires all nine via `registerBuiltinProviders` at priority 50. |
-| Bundled agents | `bundled/index.ts`, `bundled-src/*.md` | Twelve bundled templates: `architect`, `deep`, `designer`, `executor`, `explore`, `librarian`, `oracle`, `planner`, `quick`, `reasoner`, `reviewer`, `writer`. `bundled/*.md.ts` are auto-generated from `bundled-src/*.md` by `scripts/generate-bundled-agents.mjs`. Edit the source `.md` files and regenerate, never the generated `.md.ts`. |
-| Deprecated scaffold | `registry.ts`, `sub-agent.ts` | `SubAgentRegistry` and `SubAgent` are deprecated scaffold. Use `AgentIndex` and `AgentDefinition` instead. Slated for removal in v3. |
+## Key Files
 
-## Conventions
+| File | Description |
+|------|-------------|
+| `index.ts` | Public barrel: discovery, registry, lifecycle, task runtime, recursion policy |
+| `agent-loader.ts` | `discoverAgents` — 4-scope builtin + 9 cross-harness via `CapabilityRegistry` |
+| `agent-parser.ts` | `parseAgentFile` — YAML frontmatter + body → validated `AgentDefinition` |
+| `agent-registry.ts` | `AgentIndex` — in-memory name-keyed map; first-wins `register` |
+| `runtime-registry.ts` | `RuntimeAgentRegistry` — main + subagents/advisors by stable id |
+| `lifecycle-manager.ts` | `AgentLifecycleManager` — idle/park/revive TTL cycle (default 7 min) |
+| `model-roles.ts` | Ten roles: `default`, `smol`, `slow`, `vision`, `plan`, `designer`, `commit`, `title`, `task`, `advisor` |
+| `model-resolver.ts` | `resolveAgentModel` — override → agent.model → parent → session default |
+| `task-tool-runtime.ts` | `ConcreteTaskToolRuntime` — child resolve + spawn bridge |
+| `task-tool-runtime-authority.ts` | `prepareChildSpawnAuthority` / `buildChildToolSurface` |
+| `task-tool-runtime-foreground.ts` | Foreground child execution path |
+| `task-tool-runtime-background.ts` | Background job execution path |
+| `task-tool-runtime-control.ts` | Attachment, listeners, settlement control plane |
+| `async-job-manager.ts` | `AsyncJobManager` — semaphore (default 4) + cooperative cancel |
+| `spawn-policy.ts` | `canSpawn` — self-recursion, `MCTRL_BLOCKED_AGENT`, parent `spawns` allowlist |
+| `approval-tier.ts` | Tool tier (`read`/`write`/`exec`) × approval mode resolver |
+| `recursion-policy.ts` | `PRODUCTION_MAX_TASK_DEPTH=3`; compat `DEFAULT_MAX_RECURSION_DEPTH=2` |
+| `child-graph-spawn.ts` | `CHILD_HARD_DROPPED_CAPABILITY_KINDS`, `CHILD_NETWORK_ALLOWED_CATEGORIES` |
+| `child-tool-permissions.ts` | Category + path-policy invocation checks for child tools |
+| `child-tool-resources.ts` | Child resource scoping helpers |
+| `path-policy-derive.ts` | `deriveChildPathPolicies` — parent denies override child allows |
+| `spawn-prompt-builder.ts` | `buildChildSystemPrompt` — base + role + body + parent context layers |
+| `runaway-guard.ts` | Soft steer + hard abort on assistant `message_end` budgets |
+| `stall-detection.ts` | `findStalledTargets` — silent-duration stall scan |
+| `job-persistence.ts` | Atomic JSON job files under `<jobsDir>/<jobId>.json` |
+| `job-recovery.ts` | Crash reconcile: active → cancelled + salvage; no auto-reexec |
+| `agent-job-sql-mirror.ts` | SQL mirror for background job handles/lifecycle |
+| `sql-task-runtime-services.ts` | `createSqlTaskRuntimeServices` wiring |
+| `iso-client.ts` | Isolation client seam for child runs |
+| `child-activity-touch.ts` | Activity signals for child host callbacks |
+| `legacy-compat.ts` | Legacy agent shape shims |
+| `registry.ts` / `sub-agent.ts` | **Deprecated** scaffold — use `AgentIndex` / `AgentDefinition` |
 
-- Agent declarations are markdown plus YAML frontmatter. The frontmatter carries typed fields (`name`, `description`, `model`, `tools`, `pathPolicies`, `spawns`, `tier`, `role`, `output`); the body becomes `systemPrompt`. `parseAgentFile` BOM-strips, fence-splits, YAML-parses, normalizes `tools`, and schema-validates. It never returns a partial or defaulted agent; callers receive a fully validated `AgentDefinition` or an exception.
-- Discovery is first-wins by name across all providers. The builtin 4-scope loader runs at priority 100; cross-harness importers run at priority 50. Duplicate names produce a `duplicate_name` diagnostic and the later entry is dropped.
-- The four builtin scopes are project `<workspace>/.mctrl/agents/`, user `<config>/agents/`, plugin `additionalDirs`, and bundled templates. Discovery mirrors `discoverSkills` and `discoverWorkflows`: symlink lstat defense, shared read-tool denylist pruning, 64KB size bound, 256-agent count bound, never throws. Broken files, symlinks, and oversized entries produce diagnostics and are skipped.
-- Exact `mctrl/task` inherits the parent active model or session default. For every other declaration, a named agent override wins before concrete or role-based `agent.model`; parent active model and session default are the final fallbacks. Legacy `opus` and `sonnet` aliases map through `LEGACY_CATEGORY_MODEL_ALIASES`; no provider or model id is hardcoded.
-- Tier-based approval is a separate dimension from workflow `PolicyEffectRule` and workspace `PermissionRule`. The current child runtime does not merge or convert either permission vocabulary into the other.
-- Child authority is layered: the parent `task()` invocation is permission-gated; retained child tools clone their workspace approval callbacks; category restrictions and derived `AgentDefinition.pathPolicies` independently restrict invocations; and structural filtering removes `task`/`job` (unless depth-allowed nesting) plus hard-drops `workflow`/`team`, with separate exceptions for depth-allowed `subagent` nesting and category-scoped `network` (`CHILD_NETWORK_ALLOWED_CATEGORIES`). `AgentDefinition.recursion` is compatibility metadata and cannot re-enable those tools or raise `PRODUCTION_MAX_TASK_DEPTH`. Resuming requires the recomputed authority fingerprint to match the stored digest (fingerprint includes `taskDepth` + `PRODUCTION_MAX_TASK_DEPTH`).
-- **Nested depth (production):** only `PRODUCTION_MAX_TASK_DEPTH = 3`. Children at depths 0/1/2 may keep nested `task` when nesting is allowed; at depth 3 the leaf omits `task`/`job` and hard-drops `subagent`. Still no unlimited recursion.
-- **Child network matrix:** not universally denied. ON categories and same-named bundled agents may retain parent `webfetch` / `web_search` / `mcp__*`: `architect`, `librarian`, `deep`, `reasoner`, `oracle`, `designer`, `planner`. OFF categories never receive network: `explore`, `reviewer`, `quick`. Prefer routing external lookup through `librarian` (or ON categories the parent chooses). Webfetch claims only for ON paths.
-- The `yield` tool is the child-agent result submission contract. `buildChildToolSurface` registers it on every child surface; the child calls `yield` with its final result, optionally validated against the agent's declared `output` schema. The runtime emits a `YieldSignal` to terminate the child loop.
-- Category permissions plus child policies and inherited parent denies filter universal denials and remain active as invocation-time resource checks. Destructive capabilities are policy-controlled.
-- Path policies on `AgentDefinition.pathPolicies` use the same `action` / `resource` / `effect` vocabulary as workflow policy-gate rules. `deriveChildPathPolicies` forwards parent denies so a child cannot escape a parent restriction under last-match-wins evaluation.
-- Job persistence uses atomic temp-file-then-rename writes, the same convention as the `.mc/` boulder store. `loadPersistedJobs` never throws on per-file corruption. Recovery transitions active jobs to `cancelled`; it never auto-reexecutes them.
-- In-memory registries (`RuntimeAgentRegistry`, `AsyncJobManager`) hold state only. Persistence is opt-in through `job-persistence.ts`. Idle, park, and revive lifecycle is owned by `AgentLifecycleManager`, not the registry. The registry never holds a live session object; the disposer is supplied as an adopt-time callback.
+## Subdirectories
 
-## Tests
+| Directory | Purpose |
+|-----------|---------|
+| `bundled/` | Generated `*.md.ts` templates + barrel (see `bundled/AGENTS.md`) |
+| `bundled-src/` | Editable source `.md` for bundled agents (see `bundled-src-guide.md`) |
+| `capability/` | `CapabilityRegistry` priority provider registry (see `capability/AGENTS.md`) |
+| `providers/` | Nine cross-harness agent importers (see `providers/AGENTS.md`) |
 
-- Parser: `agent-parser.test.ts` covers frontmatter split, `tools` normalization across all three dialects, BOM strip, and every error path.
-- Loader: `agent-loader.test.ts` covers the four builtin scopes, denylist pruning, symlink defense, size and count bounds, bundled templates, and diagnostic codes.
-- Static index: `agent-registry.test.ts` covers first-wins registration, insertion-order listing, and diagnostics buffering.
-- Live registry: `runtime-registry.test.ts` covers adopt, release, update, advisor visibility, and the main-id no-op.
-- Lifecycle: `lifecycle-manager.test.ts` covers TTL arming, park, revive (including cold revive via the persisted-subagent factory), and concurrent `ensureLive` coalescing.
-- Model roles and resolver: `model-roles.test.ts`, `model-resolver.test.ts` cover alias parse/format and the four-tier precedence including the `mctrl/task` special case.
-- Task tool runtime: `task-tool-runtime.test.ts` covers agent lookup and child tool construction; `task-tool-runtime-{control,foreground,background}*.test.ts` cover attachment, listener, settlement, cancellation, and cleanup-error lifecycles.
-- Async job manager: `async-job-manager.test.ts`, `async-job-manager-{callback-fence,writer-invariant,cleanup}.test.ts` cover semaphore admission, fenced settlement, queue cancellation, control detachment, and awaiter resolution.
-- Spawn policy: `spawn-policy.test.ts` covers self-recursion, the env var block, and the three allowlist shapes.
-- Approval tier: `approval-tier.test.ts` covers mode thresholds and the per-tool policy override.
-- Recursion / nested depth: `recursion-policy.test.ts` covers the strict less-than boundary, unlimited-with-hard-cap, zero-depth, and `PRODUCTION_MAX_TASK_DEPTH=3` production gate. Child network: `child-network-allowlist.test.ts`, `child-tool-surface-gates.test.ts`.
-- Runaway guard: `runaway-guard.test.ts` covers steer, abort, one-shot steer suppression, and salvage snippet formatting.
-- Job persistence and recovery: `job-persistence.test.ts`, `job-recovery.test.ts` cover atomic writes, corrupt-file tolerance, and crash reconciliation.
-- Spawn prompt builder: `spawn-prompt-builder.test.ts` covers layered assembly, role sanitization, and blank-layer omission.
-- Capability registry: `capability/capability-registry.test.ts` covers priority sort, name dedup, provider-error diagnostics, and enable/disable.
-- Cross-harness providers: `providers/*.test.ts` (one per provider) plus `providers/index.test.ts` cover directory scanning, frontmatter conversion, and the shared Claude-compatible base.
-- Bundled agents: `bundled/bundled-agents.test.ts` covers generation parity and schema validity.
+## For AI Agents
 
-## Anti-Patterns
+### Working In This Directory
 
-- `AGENTS.md` is documentation, not an agent declaration. It is markdown but lacks the required YAML frontmatter and must never be picked up by discovery. The loader's `.md` suffix match plus the `parseAgentFile` frontmatter gate enforce this; do not weaken either.
-- `import { type: 'text' }` or any runtime text import of agent bodies is forbidden. Bundled agents are compiled into `bundled/*.md.ts` by `scripts/generate-bundled-agents.mjs`. Edit the source in `bundled-src/` and regenerate.
-- A body-only directive is not enough for `planner` or any agent that needs path enforcement. `planner` must declare `pathPolicies` with explicit `deny` rules for `write`, `edit`, `patch`, and `bash` outside `.mc/plans/**` and `.mc/notepads/**`. The policies enforce; the prose directive is a soft reminder only.
-- Do not collapse path `PolicyEffectRule` (action/resource/effect, agent and workflow layer) with workspace `PermissionRule` (permission/pattern/decision). They are two separate permission systems by design.
-- Do not claim unlimited nested `task` or OMC free recursion. Nesting is allowed only while `taskDepth < PRODUCTION_MAX_TASK_DEPTH` (3); at the depth-3 leaf the surface omits `task`/`job` and hard-drops `subagent`. Do not weaken the depth gate, the nested-deny omit site (`withNestSubagentPermission` / `nestSubagent`), or the fingerprint fields that include depth.
-- Do not claim every child has network. Network stays in `CHILD_HARD_DROPPED_CAPABILITY_KINDS`; only `CHILD_NETWORK_ALLOWED_CATEGORIES` gets the filter-time exception. Do not delete `network` from the hard-drop set globally.
-- Do not bypass `CapabilityRegistry` priority ordering for agent discovery. The builtin 4-scope provider must stay at priority 100 so mission-control's own agents win name conflicts over imported ones.
-- Do not edit `bundled/*.md.ts` files by hand. They are auto-generated from `bundled-src/*.md`. Edit the source and rerun the generator.
-- Do not auto-reexecute cancelled jobs on recovery. `recoverJobs` transitions active jobs to `cancelled` with a salvage snippet; re-running them is the caller's decision, never automatic.
+- Agent declarations = markdown + YAML frontmatter (`name`, `description`, `model`, `tools`, `pathPolicies`, `spawns`, `tier`, `role`, `output`); body → `systemPrompt`.
+- `parseAgentFile` never returns partial agents — fully validated or throw `AgentParseError`.
+- `AGENTS.md` is documentation, not a declaration — must never be discovered as an agent.
+- Edit `bundled-src/*.md` then run `scripts/generate-bundled-agents.mjs`; never hand-edit `bundled/*.md.ts`.
+- Child authority layers: parent `task()` gate → cloned approval callbacks → category + pathPolicies → structural filter (`task`/`job` depth-gated; hard-drop `workflow`/`team`; category-scoped `network`).
+- `AgentDefinition.recursion` is compatibility metadata only — cannot raise `PRODUCTION_MAX_TASK_DEPTH`.
+- Fingerprint includes `taskDepth` + max depth; resume requires match.
+- `yield` is the child result contract; every child surface gets it via `buildChildToolSurface`.
+- Path `PolicyEffectRule` (action/resource/effect) ≠ workspace `PermissionRule` — two systems by design.
+
+### Testing Requirements
+
+- Parser/loader/index: `agent-parser.test.ts`, `agent-loader.test.ts`, `agent-registry.test.ts`
+- Lifecycle/registry: `runtime-registry.test.ts`, `lifecycle-manager.test.ts`
+- Model: `model-roles.test.ts`, `model-resolver.test.ts`, `model-resolver-precedence.test.ts`
+- Task runtime: `task-tool-runtime*.test.ts` (authority, foreground, background, control, permissions, cancellation)
+- Jobs: `async-job-manager*.test.ts`, `job-persistence.test.ts`, `job-recovery.test.ts`, `agent-job-sql-mirror*.test.ts`
+- Policy: `spawn-policy.test.ts`, `approval-tier.test.ts`, `recursion-policy.test.ts`, `child-network-allowlist.test.ts`, `child-tool-surface-gates.test.ts`
+- Focused: `pnpm exec vitest run packages/core/src/agents/<file>.test.ts`
+
+### Common Patterns
+
+- **Nested depth:** spawn while `taskDepth < 3`; depth 3 leaf omits `task`/`job` and hard-drops `subagent`.
+- **Child network ON:** `architect`, `librarian`, `deep`, `reasoner`, `oracle`, `designer`, `planner`. **OFF:** `explore`, `reviewer`, `quick`.
+- **Spawn allowlist:** `undefined`/`[]` deny all; `'*'` allow all; array = explicit names.
+- Exact `mctrl/task` inherits parent/session model.
+- Job persistence = atomic temp-then-rename (boulder-store convention). Recovery never auto-reexecutes.
+- Registries hold state only; lifecycle owned by `AgentLifecycleManager`.
+
+## Dependencies
+
+### Internal
+
+- `@mission-control/protocol` — `AgentDefinition`, schemas
+- `../behavior/` — coding-agent graph/registry for child spawn
+- `../tools/` — tool registry, task/yield tools, ask-user
+- `../runtime/` — session control cancellation/epoch
+- `../providers/` — observability redactor
+- `../persistence/` — boulder conventions (job files)
+- `../util/` — `errorToString`
+
+### External
+
+- `zod` — schema validation via protocol
+- `yaml` — frontmatter parse (via agent-parser path)
+
+<!-- MANUAL: Any manually added notes below this line are preserved on regeneration -->

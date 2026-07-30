@@ -1,8 +1,8 @@
 # Mission Control Agent Guide
 
-**Generated:** 2026-06-20T00:30:00+09:00
-**Commit:** 5b04ce5
-**Branch:** master
+**Generated:** 2026-07-30T00:00:00+09:00
+**Commit:** 257b66bb
+**Branch:** dev
 
 ## Overview
 
@@ -24,25 +24,36 @@ Design references:
 
 ```text
 mission-control/
-|-- apps/cli/ # mc CLI (argument parsing, command orchestration, noninteractive renderers)
-|-- apps/tui/ # private OpenTUI app: React components, keymap platform, TUI mount/store seam (consumed by apps/cli)
-|-- apps/desktop/ # React/Vite UI plus Tauri shell
-|-- packages/protocol/ # shared Zod schemas and exported protocol types
-|-- packages/core/ # runtime, sessions, providers, tools, sidecar fallback, ABG scaffolding, MCP clients, skills
-|-- packages/config/ # product constants and vendored model catalog snapshot
-|-- native/sidecar/ # Rust JSON Lines sidecar binary
-|-- scripts/ # install, packaging, catalog sync helpers, smoke tests
-|-- tests/ # root workspace, README, workflow, integration, contract tests
-|-- examples/abg/ # valid and intentionally invalid authorable graph fixtures
-`-- .mc/plans/ # work plans and execution state (gitignored agent state)
+|-- apps/                 # user-facing apps (see apps/AGENTS.md)
+|   |-- cli/              # mc CLI (args, commands, noninteractive renderers)
+|   |-- tui/              # private OpenTUI app: Solid components, keymap, chat mount (consumed by cli)
+|   `-- desktop/          # React/Vite UI plus Tauri shell
+|-- packages/             # shared TS libraries (see packages/AGENTS.md)
+|   |-- protocol/         # shared Zod schemas and exported protocol types
+|   |-- config/           # product constants and vendored model catalog snapshot
+|   `-- core/             # runtime, sessions, providers, tools, ABG, MCP, skills, agents
+|-- native/               # Rust native components (see native/AGENTS.md)
+|   |-- sidecar/          # JSON Lines sidecar binary (mission-control-sidecar)
+|   `-- natives/          # N-API cdylib acceleration (grep/glob/AST/tokens)
+|-- docs/                 # long-form design docs and PRDs (see docs/AGENTS.md)
+|-- examples/             # workflow/graph and plan fixtures (see examples/AGENTS.md)
+|   |-- abg/              # valid and intentionally invalid authorable graph fixtures
+|   `-- plans/            # example plan markdown for checklist parity
+|-- scripts/              # install, packaging, catalog sync, smokes (see scripts/AGENTS.md)
+|-- tests/                # root workspace/README/workflow/contract tests (see tests/AGENTS.md)
+|-- tooling/              # shared Vite lib config helpers (see tooling/AGENTS.md)
+`-- .mc/plans/            # work plans and execution state (gitignored agent state)
 ```
 
 Scoped guidance:
 
+- `apps/AGENTS.md`
 - `apps/cli/AGENTS.md`
 - `apps/tui/AGENTS.md`
 - `apps/desktop/AGENTS.md`
+- `packages/AGENTS.md`
 - `packages/protocol/AGENTS.md`
+- `packages/config/AGENTS.md`
 - `packages/core/AGENTS.md`
 - `packages/core/src/behavior/AGENTS.md`
 - `packages/core/src/context/AGENTS.md`
@@ -50,7 +61,21 @@ Scoped guidance:
 - `packages/core/src/runtime/AGENTS.md`
 - `packages/core/src/tools/AGENTS.md`
 - `packages/core/src/tools/mcp/AGENTS.md`
+- `packages/core/src/tools/task/AGENTS.md`
 - `packages/core/src/agents/AGENTS.md`
+- `packages/core/src/skills/AGENTS.md`
+- `native/AGENTS.md`
+- `native/sidecar/AGENTS.md`
+- `native/natives/AGENTS.md`
+- `docs/AGENTS.md`
+- `docs/prds/AGENTS.md`
+- `examples/AGENTS.md`
+- `examples/abg/AGENTS.md`
+- `examples/plans/AGENTS.md`
+- `scripts/AGENTS.md`
+- `tests/AGENTS.md`
+- `tooling/AGENTS.md`
+- `tooling/vite/AGENTS.md`
 
 ## Where To Look
 

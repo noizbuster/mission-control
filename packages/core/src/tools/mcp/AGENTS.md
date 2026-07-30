@@ -1,48 +1,77 @@
-# MCP Tools Agent Guide
+<!-- Parent: ../AGENTS.md -->
+<!-- Generated: 2026-07-30T00:00:00+09:00 | Updated: 2026-07-30T00:00:00+09:00 -->
 
-## Overview
+# mcp
 
-`packages/core/src/tools/mcp` owns the real MCP (Model Context Protocol) client: stdio + remote transports, config discovery, connection lifecycle, namespaced tool surfacing, and secret redaction.
+## Purpose
 
-## Where To Look
+Real MCP (Model Context Protocol) client stack: stdio + remote transports, config discovery/merge, connection lifecycle, namespaced tool surfacing (`mcp__<server>__<tool>`), project-trust gates, and secret redaction.
 
-| Task | Location | Notes |
-| --- | --- | --- |
-| McpClient seam | `mcp-tool.ts` (parent) | `McpClient` interface (`listTools`/`callTool`), `InProcessMcpClient` for tests. |
-| Stdio transport | `stdio-client.ts` | `StdioMcpClient` over `StdioClientTransport`; 5s bounded deadline on every call. |
-| Remote transport | `http-client.ts` | `RemoteMcpClient` (StreamableHTTP + SSE fallback); one justified `as Transport` cast (SDK exactOptionalPropertyTypes defect). |
-| Shared deadline | `deadline.ts` | `raceWithDeadline(label, ms, run)` + `McpDeadline`; shared by both clients. |
-| Secret redaction | `secret-redaction.ts` | `createSecretRedactor(secrets)` longest-first deep-recursive mask → `[REDACTED]`. |
-| Config loader | `config.ts` | `config.json` mcp section + trust-gated `.mcp.json` runtime merge; `${VAR}` allowlist (user-config-only); `expandedSecrets` collection. `loadRuntimeMcpConfig` reads project config only for the canonical `trusted` decision, while management reads retain scope visibility. Profile-aware when `profileName` is set: `loadResolvedMcpConfig` reads only the selected profile candidate (`mission-control.<profile>.jsonc|.json`, then `config.<profile>.jsonc|.json`; first existing wins) and never falls back to base `config.json`. `resolveUserConfigPath` throws profile-not-found listing candidates; `resolveUserConfigPathForWrite` creates `mission-control.<profile>.jsonc` when none exists (writes drop comments). JSONC comments stripped; trailing commas unsupported. |
-| Connection manager | `connection-manager.ts` | `McpConnectionManager.connectAll()/disconnectScope()/disconnectAll()`; one-shot connect, teardown fencing, scope-aware close-once ownership, graceful degradation, 50-tool cap. |
-| Default client selection | `default-client.ts` | Creates local stdio clients in the selected workspace and remote HTTP clients without cwd semantics. |
-| Namespaced surfacing | `surfacing.ts` | `registerNamespacedMcpTools` → `mcp__<server>__<tool>` merged into the registry; graph-path permission self-gating plus live project-trust revalidation. |
-| Test fixture | `fixtures/stdio-fixture-server.mjs` | Hand-rolled JSON-RPC 2.0 stdio server (modes: normal/cwd/hung/crash/metadata-secret). |
+## Key Files
 
-## Conventions
+| File | Description |
+|------|-------------|
+| `stdio-client.ts` | `StdioMcpClient` over stdio transport; deadline on every call |
+| `http-client.ts` | `RemoteMcpClient` (StreamableHTTP + SSE fallback) |
+| `base-client.ts` | Shared client base behavior |
+| `deadline.ts` | `raceWithDeadline` + `McpDeadline` (default 5000ms) |
+| `secret-redaction.ts` | Longest-first deep mask of configured secrets → `[REDACTED]` |
+| `config.ts`, `config-*.ts` | Load/merge/write MCP config; profile-aware paths; `${VAR}` allowlist |
+| `connection-manager.ts`, `connection-lifecycle.ts` | `connectAll` / scope disconnect / teardown fencing; 50-tool cap |
+| `default-client.ts` | Build stdio (workspace cwd) vs remote clients |
+| `surfacing.ts`, `surfacing-names.ts` | Registry registration + name sanitization; live trust revalidation |
+| `live-authority.ts` | Invocation-time authority helpers |
+| `fixtures/stdio-fixture-server.mjs` | Hand-rolled JSON-RPC stdio fixture server |
 
-- Every transport call (`connect`/`listTools`/`callTool`) MUST go through `raceWithDeadline` (default 5000ms).
-- Server `env`/header secrets are NEVER serialized into events/logs/output — redacted via `createSecretRedactor` before `ToolResult`.
-- Arbitrary MCP output is untrusted DATA (capped, not scrubbed); only configured env/header secrets are masked.
-- Connect user-scope and trusted-workspace project servers EAGERLY at session start (the AI-SDK bridge snapshots `advertise()` per node-run — lazy connect = turn-1 tool blindness). Resolve project trust before `connectAll()` and before reading or merging `.mcp.json`.
-- Config scope controls provenance, project trust, and name precedence, not process location. Launch every local stdio server, whether user or project scope, with `cwd` set to the selected `workspaceRoot`; never use the launcher `process.cwd()`. Remote servers have no cwd.
-- Re-read canonical trust before every project-scope MCP invocation. Any non-`trusted` result or lookup failure must close and remove project connections before returning a non-retryable failure; user-scope connections and invocation-time network approval remain independent.
-- **Child network is category-scoped, not universally denied.** `network` stays in `CHILD_HARD_DROPPED_CAPABILITY_KINDS` (`../../agents/child-graph-spawn.ts`). The filter-time exception is `CHILD_NETWORK_ALLOWED_CATEGORIES` via `allowNetworkCapability`:
-  - **ON** (may retain parent `webfetch` / `web_search` / `mcp__*`): `librarian`, `deep`, `reasoner`, `oracle`, `designer`, `planner`
-  - **OFF** (network hard-dropped; no webfetch/mcp on child): `explore`, `reviewer`, `quick`
-  - Webfetch / namespaced MCP claims on children apply only to ON paths. Prefer routing external lookup via `librarian` (or another ON category when chosen).
-- Research workflow parents (`research-explore`, planner `explore`/`research`) declare parent capabilities `read+subagent+network+bash` so they can advertise network tools, `task()`, and read-only bash (mutations still prompt-gated and policy-gated); that is separate from the child matrix above. See `../../behavior/AGENTS.md` and `../task/AGENTS.md`.
+Parent seam: `../mcp-tool.ts` (`McpClient`, `InProcessMcpClient`).
 
-## Tests
+## Subdirectories
 
-- Transport: `stdio-client.test.ts` (7), `http-client.test.ts` (11, mocked — no real network).
-- Redaction: `secret-redaction.test.ts` (6).
-- Config: `config.test.ts` (11).
-- Surfacing: `surfacing.test.ts` (5), `surfacing-resilience.test.ts` (4), `project-trust-gate.test.ts` (6), `project-trust-revocation.test.ts` (6), `live-authority-races.test.ts` (3).
+| Directory | Purpose |
+|-----------|---------|
+| `fixtures/` | Stdio fixture server for tests |
 
-## Anti-Patterns
+## For AI Agents
 
-- Do NOT make real network calls in tests — use mocked transports or the loopback fixture server.
-- Do NOT leave a transport call without a deadline — a hung server must reject at the boundary.
-- Do NOT register MCP tools into child/subagent registries for OFF categories; network remains hard-dropped unless the child category/agent is in `CHILD_NETWORK_ALLOWED_CATEGORIES`. Do not claim all children have network.
-- Do NOT bypass the `${VAR}` allowlist — project configs cannot extend it.
+### Working In This Directory
+
+- Every transport call (`connect`/`listTools`/`callTool`) MUST use `raceWithDeadline` (default 5000ms).
+- Server env/header secrets NEVER enter events/logs/output — redact before `ToolResult`.
+- Arbitrary MCP output is untrusted DATA (capped, not scrubbed); only configured secrets are masked.
+- Connect user-scope + trusted-workspace project servers **eagerly** at session start (AI-SDK bridge snapshots `advertise()` per node-run).
+- Resolve project trust before `connectAll()` and before reading/merging `.mcp.json`.
+- Launch every local stdio server with `cwd = workspaceRoot` (not launcher `process.cwd()`). Remote has no cwd.
+- Re-read canonical trust before every project-scope invocation; non-`trusted` or lookup failure closes project connections and fails non-retryably.
+- Child network is category-scoped (`CHILD_NETWORK_ALLOWED_CATEGORIES` in `../../agents/`). ON: librarian/deep/reasoner/oracle/designer/planner. OFF: explore/reviewer/quick.
+- Profile-aware config: selected profile candidates only; no silent fallback to base `config.json` when profile set.
+
+### Testing Requirements
+
+- `stdio-client.test.ts`, `http-client.test.ts` (mocked — no real network)
+- `secret-redaction.test.ts`, `config.test.ts`
+- `surfacing.test.ts`, `surfacing-resilience.test.ts`, `surfacing-names.test.ts`
+- `project-trust-gate.test.ts`, `project-trust-revocation.test.ts`, `live-authority-races.test.ts`
+- `connection-manager-workspace-cwd.test.ts`
+- Use fixture server or mocks only
+
+### Common Patterns
+
+- Graceful degradation on partial connect failures; close-once ownership per scope
+- Namespaced tools self-gate permissions + revalidate trust live
+- Config writes drop comments; JSONC strip on read; trailing commas unsupported
+
+## Dependencies
+
+### Internal
+
+- `../` tool registry and parent `mcp-tool.ts`
+- `../../trust/` — project trust decisions
+- `../../agents/child-graph-spawn.ts` — child network matrix
+- `@mission-control/protocol` / config loaders as used
+
+### External
+
+- MCP SDK client transports (`StdioClientTransport`, StreamableHTTP/SSE)
+- Node child_process for stdio servers
+
+<!-- MANUAL: -->

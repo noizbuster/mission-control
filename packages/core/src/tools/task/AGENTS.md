@@ -1,62 +1,68 @@
-# Task Tool Agent Guide
+<!-- Parent: ../AGENTS.md -->
+<!-- Generated: 2026-07-30T00:00:00+09:00 | Updated: 2026-07-30T00:00:00+09:00 -->
 
-## Overview
+# task
 
-`packages/core/src/tools/task` owns the full-parity `task()` tool registration and its built-in category catalog. The tool delegates a sub-task to a child agent session, routing by category to preset model, permissions, tools, and system-prompt addendum, or by explicit `subagent_type`. It supports single-spawn, batch fan-out, background execution, session resume, and **bounded** nested `task` while `taskDepth < PRODUCTION_MAX_TASK_DEPTH` (3). The simpler scaffold `task` tool lives one directory up at `../task-tool.ts`; this directory holds the full-parity replacement that coexists with it during the migration.
+## Purpose
 
-## Where To Look
+Full-parity `task()` tool registration and built-in category catalog. Delegates a sub-task to a child agent session, routing by category (or explicit `subagent_type`/`agent`) with preset model, permissions, tools, and system-prompt addendum. Supports single-spawn, batch fan-out, background execution, session resume, and **bounded** nested `task` while `taskDepth < PRODUCTION_MAX_TASK_DEPTH` (3). Scaffold `../task-tool.ts` coexists during migration; this directory is the production path.
 
-| Task | Location | Notes |
-| --- | --- | --- |
-| Full-parity tool | `task-tool.ts` | `createFullParityTaskToolRegistration` builds the schema-bound `task` tool. Validates parameters, resolves routing, derives child permissions, and delegates session lifecycle to an injected `TaskToolRuntime`. Schema enforces XOR between batch `tasks[]` and single `prompt` / `assignment`. When both `prompt` and `assignment` are set, assignment wins and differing prompt text merges into `context`. Capability class `'subagent'`. Depth-gates nested `task` via `PRODUCTION_MAX_TASK_DEPTH`. |
-| Category catalog | `category-catalog.ts` | `BUILTIN_CATEGORIES` plus `getCategory`. Ten presets: `architect`, `quick`, `deep`, `reasoner`, `designer`, `explore`, `oracle`, `librarian`, `planner`, `reviewer`. Each carries an optional model alias, permission rules, tool allowlist, and system-prompt addendum. Network family tools (`webfetch`, `web_search`) appear only on ON categories (see matrix below). |
-| Runtime authority | `../../agents/task-tool-runtime-authority.ts`, `../../agents/child-tool-permissions.ts`, `../../agents/child-graph-spawn.ts` | `buildChildToolSurface` intersects tool allowlists, applies hard drops with depth and network exceptions, adds `yield`, and installs category plus derived `pathPolicies` checks. `CHILD_NETWORK_ALLOWED_CATEGORIES` and `PRODUCTION_MAX_TASK_DEPTH` live under `../../agents/`. |
-| Tests | `task-tool.test.ts` | Routing resolution, permission derivation, batch fan-out, background handle, resume, nested depth, and model output formatting. |
+## Key Files
 
-## Conventions
+| File | Description |
+|------|-------------|
+| `task-tool.ts` | `createFullParityTaskToolRegistration` — schema, routing, permission derivation, runtime delegate |
+| `category-catalog.ts` | `BUILTIN_CATEGORIES` / `getCategory` — ten presets |
+| `task-tool-contract.ts` | Shared contract types/helpers |
+| `task-tool-routing.ts` | Category / subagent_type / agent resolution order |
+| `task-tool.test.ts` | Routing, batch, background, resume, depth, formatting |
+| `task-tool-batch-concurrency.test.ts` | Batch wave concurrency |
+| `task-tool-cancellation.test.ts` | Cooperative cancellation |
 
-- Routing resolves in priority order: explicit `category`, then `subagent_type`, then `agent` (oh-my-pi alias), then the `deep` fallback. Explicit category routing carries the category only; the runtime resolves its agent by category id. A category name supplied through `subagent_type` or `agent` carries both fields.
-- Child permissions contain category rules plus a trailing nested-subagent deny **unless** nesting is depth-allowed (`nestSubagent` / `withNestSubagentPermission`). Parent agent `pathPolicies` are enforced independently by `ConcreteTaskToolRuntime`, where inherited denies override child allows. No category and no `AgentDefinition.recursion` value can raise the live depth cap through policy alone.
-- **Nested depth (production):** only `PRODUCTION_MAX_TASK_DEPTH = 3` in `../../agents/recursion-policy.ts`. Spawn while `taskDepth < 3` (depths 0/1/2 may keep nested `task`); depth 3 is the blocked leaf (MAIN → d1 → d2 → d3). Still no unlimited recursion; not OMC free recursion. `DEFAULT_MAX_RECURSION_DEPTH` (2) is compatibility bookkeeping only.
-- **Child network matrix (category-scoped, not universal deny):** `network` stays in `CHILD_HARD_DROPPED_CAPABILITY_KINDS`; the allowlist is a filter-time exception (`allowNetworkCapability`).
-  - **ON** (may retain parent `webfetch` / `web_search` / `mcp__*`): `librarian`, `deep`, `reasoner`, `oracle`, `designer`, `planner`
-  - **OFF** (network hard-dropped): `explore`, `reviewer`, `quick`
-  - Webfetch claims only for ON paths. Prefer routing external docs/web lookup via `librarian` (or another ON category the parent chooses: `deep` / `reasoner` / `oracle` / `designer`).
-- The `TaskToolRuntime` abstraction keeps the tool free of real provider calls. `ConcreteTaskToolRuntime` (in `../../agents/task-tool-runtime.ts`) is the live implementation; tests inject a recording double. The runtime resolves the agent, resolves the model, builds the child system prompt, constructs the child tool surface, and delegates the graph run to an injectable `spawnFn`.
-- `buildChildToolSurface` always hard-drops `workflow`/`team`, hard-drops `subagent` unless depth-allowed, hard-drops `network` unless the category id (else agent name) is in `CHILD_NETWORK_ALLOWED_CATEGORIES`, drops `task`/`job` unless depth-allowed nesting, and adds `yield`. Category rules and child-plus-parent-deny `pathPolicies` can filter universally denied tools up front and are enforced again against concrete invocation resources. Destructive tools are policy-controlled rather than hard-dropped.
-- Background execution routes through `AsyncJobManager` (in `../../agents/async-job-manager.ts`) via the runtime's `startBackgroundSession`. The manager bounds concurrency with a semaphore (default 4), queues overflow, and forwards cooperative cancellation through a per-job `AbortController`. `run_in_background: true` returns a `backgroundId` immediately; the caller polls the job through `awaitJob`.
-- Approval remains layered. The parent `task()` call is permission-gated, retained child tools keep the workspace permission callbacks cloned with their registrations, category rules and derived `AgentDefinition.pathPolicies` separately restrict invocation, and structural filtering applies the depth and network exceptions above. The standalone tier resolver does not merge workspace `PermissionRule` or workflow `PolicyEffectRule` into either policy vocabulary.
-- Batch mode (`tasks[]`) runs at most four children at a time, then starts the next wave. Each item carries its own `agent` and `assignment`; the optional top-level `context` propagates as `parentContext` to every child. A failed child becomes a `failed` batch entry carrying the error message; it does not abort sibling tasks or later waves.
-- Session resume uses `task_id`. The runtime requires an idle or parked child owned by the same parent and recomputes its SHA-256 `authorityFingerprint` digest (includes `taskDepth` + `PRODUCTION_MAX_TASK_DEPTH`). It resumes only when that digest matches the stored authority; an unknown id or mismatch raises a non-retryable `ToolExecutionError`.
+## Subdirectories
 
-## Research parents (workflow graphs)
+_None._
 
-Workflow llm nodes that research (not implement) advertise parent capabilities
-`['read', 'subagent', 'network', 'bash']` so they can call `task()`, use parent network tools,
-and run read-only bash (`git log`, `rg`, `find`, `pnpm list`, …) for direct exploration without
-forcing a `task()` round-trip. Mutations stay forbidden by prompt and the approval gate
-(permission profile default `ask`):
+## For AI Agents
 
-- `research-explore` on `default` / `fixer` (`../../behavior/fixer-workflow-graph.ts`)
-- planner `explore` and `research` (`../../behavior/planner-workflow-graph.ts`)
+### Working In This Directory
 
-The `default` / `fixer` graph also gives `maturity-sample` and `evidence-check` `['read', 'bash']`
-for sampling and personal verification (lsp/build/test evidence the prompts already demanded).
+- Routing priority: explicit `category` → `subagent_type` → `agent` (oh-my-pi alias) → `deep` fallback. Explicit category carries category only; runtime resolves agent by category id. Category name via `subagent_type`/`agent` sets both fields.
+- Schema XOR: batch `tasks[]` vs single `prompt`/`assignment`. If both `prompt` and `assignment`, assignment wins; differing prompt merges into `context`.
+- Capability class `'subagent'`. Nested depth gated by `PRODUCTION_MAX_TASK_DEPTH = 3` in `../../agents/recursion-policy.ts` (depths 0/1/2 may nest; depth 3 leaf). Not unlimited / not OMC free recursion. `DEFAULT_MAX_RECURSION_DEPTH` is bookkeeping only.
+- Child network matrix (filter-time exception; `network` stays hard-dropped globally):
+  - **ON** (may retain webfetch/web_search/mcp__*): librarian, deep, reasoner, oracle, designer, planner
+  - **OFF**: explore, reviewer, quick
+- `buildChildToolSurface` (agents): hard-drops `workflow`/`team`; hard-drops `subagent` unless depth-allowed; hard-drops `network` unless ON category; drops `task`/`job` unless nesting allowed; always adds `yield`. Parent `pathPolicies` denies override child allows.
+- No real provider calls in the tool — inject `TaskToolRuntime` (`ConcreteTaskToolRuntime` in agents). Tests use recording doubles.
+- Background: `AsyncJobManager` semaphore (default 4); `run_in_background` returns `backgroundId`.
+- Batch: max four concurrent children per wave; item failure → `failed` entry, siblings continue.
+- Resume via `task_id` + SHA-256 `authorityFingerprint` (includes depth caps); mismatch → non-retryable error.
+- Research workflow parents (`research-explore`, planner explore/research) advertise `read+subagent+network+bash` at parent level — separate from child matrix. See `../../behavior/AGENTS.md`.
 
-Soft bias on those parents: prefer `explore` / `librarian` children; route external lookup via
-`librarian` (or ON categories when chosen). See `../../behavior/AGENTS.md` **Workflow subagent
-research path**. Executer F1–F4 critics are hybrid dual-review (`subagent` + `outputEnum`
-APPROVE/REJECT); F3 is tests-as-claims evidence only (**no bash**).
+### Testing Requirements
 
-## Tests
+- Primary: `task-tool.test.ts` (routing XOR, permissions, single/batch, background, resume, depth, `toModelOutput`)
+- Also: `task-tool-batch-concurrency.test.ts`, `task-tool-cancellation.test.ts`
+- Parent factory/parity tests live one level up (`task-tool-full-parity-*.test.ts`)
 
-- `task-tool.test.ts` covers every routing path, the `category` XOR `subagent_type` XOR `agent` constraint, child permission derivation, the single-spawn happy path, four-item batch waves with per-item failure isolation, background handle return, resume of known and unknown sessions, nested depth gating, and `toModelOutput` formatting for batch, running, failed, and completed results.
+### Common Patterns
 
-## Anti-Patterns
+- Thin tool + injected runtime; authority fingerprint for resume safety
+- Category catalog drives allowlists and prompt addenda; network tools only on ON categories
+- Layered approval: parent `task()` gate + child tool callbacks + category/pathPolicies + structural hard drops
 
-- Do not remove the depth-gated nested-subagent deny, the registry-layer `task` omission at the leaf, hard drops, or invocation policy. They are independent child-authority guards. Do not claim unlimited nesting or OMC free recursion.
-- Do not claim all children have network. Only `CHILD_NETWORK_ALLOWED_CATEGORIES` may retain webfetch/web_search/mcp; OFF categories stay hard-dropped. Do not delete `network` from the hard-drop set globally.
-- Do not call real provider methods from the tool. Everything effectful goes through `TaskToolRuntime`; the tool only validates, routes, derives permissions, and delegates.
-- Do not mix batch and single-spawn in one call. The schema enforces XOR between `tasks[]` and `prompt` / `assignment`; both present is a validation error, not a runtime branch.
-- Do not let a batch item failure abort sibling tasks. Each item resolves independently; a rejection becomes a `failed` entry in the batch result.
-- Do not treat the simpler `../task-tool.ts` and this full-parity tool as alternatives the model chooses between. The full-parity registration is the production path; the simpler one is scaffold that coexists during the migration and must not diverge in the child safety contract.
+## Dependencies
+
+### Internal
+
+- `../../agents/task-tool-runtime*.ts`, `child-tool-permissions.ts`, `child-graph-spawn.ts`, `async-job-manager.ts`, `recursion-policy.ts`
+- `../../behavior/` — workflow research parent capabilities
+- `../` registry / permission self-gating patterns
+- `@mission-control/protocol` — tool/agent schemas
+
+### External
+
+- Zod schemas for tool I/O
+
+<!-- MANUAL: -->

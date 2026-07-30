@@ -1,48 +1,109 @@
-# Runtime Agent Guide
+<!-- Parent: ../AGENTS.md -->
+<!-- Generated: 2026-07-30T00:00:00+09:00 | Updated: 2026-07-30T00:00:00+09:00 -->
 
-## Overview
+# runtime
 
-`packages/core/src/runtime` owns session run coordination: the `SessionRunOwner`, the run coordinator (queue/steer/resume/interrupt), the graph turn runner adapter, the bounded scheduler, the per-key drain-lane coordinator v2 with session-input delivery, the Mission/Run store, and the session-spanning continuation runtime. The original `run-coordinator.ts` handles interactive coding-agent runs; the v2 coordinator handles the workflow-path drain-lane.
+## Purpose
 
-## Where To Look
+Session run coordination: `SessionRunOwner`, interactive run coordinator (queue/steer/resume/interrupt), per-key drain-lane coordinator v2 with session-input delivery, graph turn-runner adapter, bounded scheduler, session-control ownership/leases/operations/stop-tree, crash recovery, plus Mission/Run store and session-spanning continuation runtime (subdirs).
 
-| Task | Location | Notes |
-| --- | --- | --- |
-| Session run owner | `run-owner.ts` | `SessionRunOwner` — owns the tool registry, turn runner, durable event sink, provider envelope forwarding. |
-| Run coordinator | `run-coordinator.ts`, `run-coordinator-lifecycle.ts` | Prompt admission, wake/run/resume/interrupt, drain loop, receipt settlement. |
-| Coordinator types | `run-coordinator-types.ts` | `RunCoordinatorTurnRunner`, `SessionRunOwnerOptions`. |
-| Per-key drain-lane coordinator v2 | `run-coordinator-v2.ts` | `RunCoordinatorV2` — coalesces `run`/`wake` demands per key, `interrupt` with seq suppression, `awaitIdle`, successor lanes on failure, demand coalescing via `coalesceDemand`. Native Promise/AbortController port of the opencode Effect drain-lane. |
-| Session input delivery | `session-input-delivery.ts` | `SessionInputDelivery` — FIFO steer/queue admission (`admitInput`, `promoteSteers`, `promoteNextQueued`, `pendingSteerCount`/`pendingQueuedCount`). |
-| Graph turn runner | `graph-coordinator-turn.ts` | `createGraphTurnRunner` — adapts `runAbgGraph` as a `RunCoordinatorTurnRunner`; seeds Blackboard from admitted conversation. |
-| Bounded scheduler | `graph-coordinator-scheduler.ts` | Graph, provider-tool, and shell concurrency gates. |
-| Mission/Run store | `mission-run/mission-store.ts`, `mission-run/run-store.ts` | Authoritative durable SQL CRUD in `mission-control.db`. `mission_runs` owns Run state; JSONL is only the linked session timeline and replay/import/export compatibility format. Store-owned `.mc/{missions,runs}/*.json` reads remain separate. `mission-store.ts` (`createMission`/`readMission`/`updateMission`/`listMissions`), `run-store.ts` (`createRun`/`readRun`/`updateRunStatus`/`listRunsForMission`, `ALLOWED_RUN_TRANSITIONS`, `TERMINAL_RUN_STATUSES`, `assertRunTransition`). |
-| Mission/Run service | `mission-run/mission-run-service.ts` | `materializeMission` (turns a `WorkflowSpec` into a `Mission`), `startRun` (two-phase `pending` then `running`), `blockRun`, `cancelRun`, `completeRun`, `failRun`. Timestamps auto-managed; `RunPatch` excludes them. |
-| Continuation runtime | `continuation/continuation-runtime.ts` | `ContinuationRuntime` (`runWithContinuation`, `shouldContinue`, `advance`, `signalDone`, `persistState`/`loadState`, `ContinuationOutcome`). Bounds session-spanning graph resume via `maxIterations` plus DONE signal; state persists in the boulder work `continuation_runtime` passthrough field. Distinct from graph-level `maxNodeRuns`. |
+## Key Files
 
-## Conventions
+| File | Description |
+|------|-------------|
+| `run-owner.ts` | `SessionRunOwner` — tool registry, turn runner, durable sink, provider envelope forwarding |
+| `run-owner-prompt-input.ts` | Prompt input shaping for owner admission |
+| `run-coordinator.ts` | Interactive coding-agent coordinator entry |
+| `run-coordinator-lifecycle.ts` | Wake/run/resume/interrupt drain loop + receipt settlement |
+| `run-coordinator-admission.ts` | Prompt admission gates |
+| `run-coordinator-drain.ts` | Drain-loop internals |
+| `run-coordinator-engine.ts` | Coordinator engine core |
+| `run-coordinator-active-run.ts` | Active-run tracking |
+| `run-coordinator-messages.ts` | Coordinator message helpers |
+| `run-coordinator-promotion.ts` | Steer/queue promotion |
+| `run-coordinator-ids.ts` | Run/coordinator id helpers |
+| `run-coordinator-types.ts` | `RunCoordinatorTurnRunner`, `SessionRunOwnerOptions` |
+| `run-coordinator-v2.ts` | `RunCoordinatorV2` — per-key drain-lane, demand coalesce, interrupt seq suppression |
+| `session-input-delivery.ts` | FIFO steer/queue admission (`admitInput`, `promoteSteers`, …) |
+| `session-input-delivery-sql.ts` | SQL-backed input delivery |
+| `graph-coordinator-turn.ts` | `createGraphTurnRunner` — adapts `runAbgGraph` as turn runner |
+| `graph-coordinator-turn-messages.ts` | Turn message assembly / duplicate-id handling |
+| `graph-resume-state.ts` | Graph resume state capture/restore |
+| `scheduler.ts` | Bounded scheduler (graph/provider-tool/shell gates at runtime layer) |
+| `execution-context.ts` | Execution context bag |
+| `executor.ts` | Low-level executor seam |
+| `local-runtime-db.ts` | Local runtime DB access for session control |
+| `session-control-host.ts` | Session control host API |
+| `session-control-process.ts` | Process-level control wiring |
+| `session-control-lease.ts` | Ownership lease acquire/renew |
+| `session-control-operation.ts` | Control operations + settlement/GC |
+| `session-control-owner-posix.ts` | POSIX owner takeover/stale/release |
+| `session-control-owner-windows.ts` | Windows owner path |
+| `session-control-proxy-windows.ts` | Windows proxy lifecycle |
+| `session-control-platform.ts` | Platform dispatch |
+| `session-control-cancellation.ts` | `SessionControlEpoch` cancellation |
+| `session-control-registry-*.ts` | Registry file/auth/paths |
+| `session-owner-control-*.ts` | Owner control client/server/framing/token |
+| `session-stop-service.ts` | Stop service orchestration |
+| `session-stop-tree.ts` | Stop-tree resolve/fixed-point |
+| `session-stop-mutation.ts` | Stop mutations |
+| `session-crash-recovery.ts` | Crash recovery paths |
+| `session-child-spawn-barrier.ts` | Child spawn barrier |
+| `session-store-identity.ts` | Session store identity helpers |
+| `session-tree-token.ts` | Session tree token |
 
-- The coordinator owns queue/steer/resume around whichever turn runner is installed.
-- `haltOnFailedToolSettlement: true` terminates the run on the first non-approval, non-retryable tool failure.
-- Tool registries are built by the CLI layer (`createInteractiveToolRegistry`/`createNonInteractiveToolRegistry`) and passed in — the runtime does NOT own tool registration.
-- The graph turn runner seeds `initialMessages` from admitted conversation + threads approval decisions.
-- `RunCoordinatorV2` is the workflow-path drain-lane; the original `run-coordinator.ts`/`run-coordinator-lifecycle.ts` stay for interactive coding-agent runs. Both coexist by design.
-- Mission/Run records are authoritative durable SQL rows in `mission-control.db`; JSONL is the linked session timeline and replay/import/export compatibility format, never an authoritative Run store. `.mc/{missions,runs}/*.json` is separate compatibility data read only by its owning store. Run status transitions must go through `assertRunTransition` / `updateRunStatus`: pending → {running,cancelled}; running → {blocked,completed,failed,cancelled}; blocked → {running,cancelled}. `blocked` is nonterminal and resumable; `cancelled` is terminal and non-resumable, with `terminalReason` supplied by `cancelRun` and `endedAt` auto-managed by the store.
-- `materializeMission` is a pure factory (no I/O). The caller persists via `createMission`; `startRun` reads the persisted mission by id.
-- `ContinuationRuntime` bounds cross-session resume; `maxNodeRuns` bounds a single graph execution. Do not conflate the two.
+## Subdirectories
 
-## Tests
+| Directory | Purpose |
+|-----------|---------|
+| `continuation/` | Session-spanning `ContinuationRuntime` (see `continuation/AGENTS.md`) |
+| `mission-run/` | Mission/Run SQL stores + service (see `mission-run/AGENTS.md`) |
 
-- `run-owner.ts` consumers: `apps/cli/src/commands/run-agent-owner-prompt.ts`, `interactive-coding-agent.ts`.
-- Coordinator: `graph-coordinator-turn.test.ts`, `graph-coordinator.test.ts`.
-- Drain-lane v2 + delivery: `run-coordinator-v2.test.ts` (covers `RunCoordinatorV2` and `SessionInputDelivery`).
-- Mission/Run store + service: `mission-run/mission-run-service.test.ts`.
-- Continuation runtime: `continuation/continuation-runtime.test.ts`.
+## For AI Agents
 
-## Anti-Patterns
+### Working In This Directory
 
-- Do NOT bypass `scheduleQueuedNodes` for runnable nodes.
-- Do NOT emit graph events without `graphId`, `sessionId`, timestamp.
-- Do NOT let the SDK own the observe→decide→act loop — the graph (via `stopWhen: stepCountIs(1)`) always owns it.
-- Do NOT persist continuation state via `updateBoulderWork`; its patch type excludes custom fields. Read and write the boulder directly so the `continuation_runtime` passthrough field survives.
-- Do NOT set Run timestamps directly; `updateRunStatus` auto-manages `startedAt`/`endedAt`.
-- Do NOT transition Run status without `assertRunTransition`; same-status transitions are idempotent no-ops, but illegal jumps must fail.
+- Coordinator owns queue/steer/resume around the installed turn runner.
+- Tool registries are built by CLI (`createInteractiveToolRegistry` / `createNonInteractiveToolRegistry`) and passed in — runtime does **not** own tool registration.
+- `haltOnFailedToolSettlement: true` terminates on first non-approval, non-retryable tool failure.
+- Graph turn runner seeds `initialMessages` from admitted conversation and threads approval decisions.
+- `RunCoordinatorV2` = workflow-path drain-lane; original `run-coordinator*.ts` = interactive coding-agent. Both coexist by design.
+- Mission/Run authoritative state is SQL in `mission-control.db`; JSONL is session timeline/replay compatibility only — never authoritative Run store.
+- Run transitions must go through `assertRunTransition` / `updateRunStatus`: pending→{running,cancelled}; running→{blocked,completed,failed,cancelled}; blocked→{running,cancelled}.
+- `blocked` is nonterminal/resumable; `cancelled` is terminal with `terminalReason`; timestamps auto-managed.
+- Do not bypass `scheduleQueuedNodes` for runnable nodes.
+- Graph events require `graphId`, `sessionId`, timestamp.
+- SDK must not own observe→decide→act — graph pins `stopWhen: stepCountIs(1)`.
+
+### Testing Requirements
+
+- Coordinator/turn: `run-coordinator-*.test.ts`, `run-coordinator-v2.test.ts`, `graph-coordinator-turn*.test.ts`
+- Session control: `session-control-*.test.ts`, `session-owner-control*.test.ts`, `session-stop-*.test.ts`
+- Resume/crash: `session-resume-abg-regression.test.ts`, `session-crash-recovery.test.ts`
+- Mission/continuation: see subdir tests
+- Owner consumers also live in `apps/cli` (`run-agent-owner-prompt.ts`, `interactive-coding-agent.ts`)
+- Focused: `pnpm exec vitest run packages/core/src/runtime/<file>.test.ts`
+
+### Common Patterns
+
+- Demand coalescing via `coalesceDemand` on v2 lanes; `awaitIdle` for drain completion.
+- Session input: steers promote before queued prompts.
+- POSIX owner uses lease + forgery defenses; Windows has separate proxy/owner modules.
+- Stop-tree resolves child sessions to fixed point before mutation.
+- `local-runtime-db` backs control SQL; do not open ad-hoc DB handles beside it.
+
+## Dependencies
+
+### Internal
+
+- `../behavior/` — `runAbgGraph`, coding-agent graph
+- `../memory/` — session event store projections
+- `../persistence/` — boulder store (continuation passthrough)
+- `../db/` — libSQL / schema access patterns
+- `@mission-control/protocol` — run/session control schemas
+
+### External
+
+- Node `crypto` / process primitives for owner tokens and leases
+
+<!-- MANUAL: Any manually added notes below this line are preserved on regeneration -->

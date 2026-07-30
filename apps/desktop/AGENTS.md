@@ -1,43 +1,59 @@
-# Desktop Agent Guide
+<!-- Parent: ../AGENTS.md -->
+<!-- Generated: 2026-07-30T00:00:00+09:00 | Updated: 2026-07-30T00:00:00+09:00 -->
 
-## Overview
+# desktop
 
-`apps/desktop` owns the React/Vite desktop UI and the Tauri command bridge. Browser-facing code stays in `src`; native command handlers and session reading stay in `src-tauri`.
+## Purpose
 
-## Where To Look
+`apps/desktop` owns the React/Vite desktop UI and the Tauri v2 native shell. Browser-facing code stays in `src/`; native command handlers and session-log reading stay in `src-tauri/`. UI talks only through `DesktopAgentClient` (mock + Tauri), never into `packages/core` runtime internals or workspace files directly.
 
-| Task | Location | Notes |
-| --- | --- | --- |
-| React bootstrap | `src/main.tsx` | Mounts the desktop shell. |
-| Main shell | `src/App.tsx` | UI state, event log, provider controls, session inspector wiring. |
-| Composer/write flows | `src/ChatComposer.tsx`, `src/useDesktopWriteActions.ts` | Calls the client abstraction, then reloads projections. |
-| Client boundary | `src/lib/agent-client.ts` | Mock and Tauri clients; all Tauri payloads are parsed here. |
-| Desktop schemas | `src/lib/desktop-*.ts` | Zod schemas for command receipts and session payloads. |
-| Inspector projection | `src/lib/session-inspector.ts` | Timeline, graph, approval, patch, command views. |
-| Redaction | `src/lib/redaction.ts`, `src/lib/tool-call-preview.ts` | User-visible secret masking. |
-| Tauri command surface | `src-tauri/src/lib.rs` | Registered command names and Rust tests. |
-| Session reading | `src-tauri/src/session_*.rs`, `src-tauri/src/sessions.rs` | Session header, event, sequence, timestamp invariants. |
-| Tauri config | `src-tauri/tauri.conf.json` | Product metadata and Vite build hooks. |
+## Key Files
 
-## Conventions
+| File | Description |
+|------|-------------|
+| `package.json` | `@mission-control/desktop`; React 19 + Vite 8 + Tauri API + workspace protocol/core/config |
+| `project.json` | Nx `desktop:*` targets (`test`, `tauri-test`, build/dev) |
+| `tsconfig.json` | Package TS config |
+| `vite.config.ts` | Vite dev/build for the webview UI |
+| `index.html` | Webview HTML shell |
+| `DESIGN.md` | Desktop UI design notes |
 
-- `src` is UI/client-only. It must talk through `DesktopAgentClient`, not directly through native files or runtime internals.
-- `src-tauri` owns native command handlers, session access, and snapshot parsing only. The desktop shell must not directly mutate workspace files.
-- Keep the mock desktop client first-class; it is deliberate scaffold/demo behavior.
-- Tauri command names and payload shapes are shared contracts. Update `src/lib/agent-client.ts`, `src/lib/desktop-command-schemas.ts`, `src-tauri/src/lib.rs`, and tests together.
-- Parse every native response with Zod before rendering it.
-- Redact user-visible event text, approval previews, command output, and credential-like strings.
+## Subdirectories
 
-## Tests
+| Directory | Purpose |
+|-----------|---------|
+| `src/` | React UI + client boundary (see `src/AGENTS.md`) |
+| `src-tauri/` | Tauri/Rust shell + command bridge (see `src-tauri/AGENTS.md`) |
 
-- React behavior tests live beside UI code as `App*.test.tsx`.
-- Client boundary tests live in `src/lib/agent-client*.test.ts`.
-- Tauri Rust tests live in `src-tauri/src/lib.rs` and `src-tauri/src/session_log_invariant_tests.rs`.
-- For session-log or command changes, run both `NX_DAEMON=false NX_ISOLATE_PLUGINS=false pnpm exec nx run desktop:test` and `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml`.
+## For AI Agents
 
-## Anti-Patterns
+### Working In This Directory
+- `src` is UI/client-only via `DesktopAgentClient`.
+- `src-tauri` owns native handlers, session access, snapshot parsing only — no direct workspace mutation from the shell beyond defined commands.
+- Keep the mock desktop client first-class (scaffold/demo).
+- Tauri command names + payload shapes are shared contracts: update `src/lib/agent-client.ts`, `src/lib/desktop-command-schemas.ts`, `src-tauri/src/lib.rs` / `desktop_commands.rs`, and tests together.
+- Parse every native response with Zod before rendering.
+- Redact user-visible event text, approval previews, command output, credential-like strings.
 
-- Do not make the UI reach into `packages/core` runtime internals.
-- Do not remove corrupt/missing/empty session states; the inspector has tests for all of them.
-- Do not use `unwrap`, `expect`, or `panic` in Rust production paths; Cargo lints deny them.
-- Do not edit `dist` or `src-tauri/target`.
+### Testing Requirements
+- React: `NX_DAEMON=false NX_ISOLATE_PLUGINS=false pnpm exec nx run desktop:test`
+- Rust: `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml` (or `nx run desktop:tauri-test`)
+- Session-log or command changes require **both** TS and Rust test runs.
+
+### Common Patterns
+- Colocated `App*.test.tsx`, `src/lib/*.test.ts`, Rust tests in `src-tauri/src/*tests*.rs` and `lib.rs`.
+
+## Dependencies
+
+### Internal
+- `@mission-control/protocol` — schemas/types for events/sessions
+- `@mission-control/core` — limited shared helpers (not runtime ownership in UI)
+- `@mission-control/config` — product constants
+
+### External
+- `react`, `react-dom`, `@vitejs/plugin-react`, `vite`
+- `@tauri-apps/api` ^2
+- `zod`
+- Rust: Tauri 2 (see `src-tauri/Cargo.toml`)
+
+<!-- MANUAL: -->
