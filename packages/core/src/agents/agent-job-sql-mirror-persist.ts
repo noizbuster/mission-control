@@ -1,4 +1,7 @@
 import type { Client } from '@libsql/client';
+import { and, eq, notInArray, sql } from 'drizzle-orm';
+import { drizzleFromClient } from '../db/drizzle-client';
+import { asyncJobs, runtimeAgents, sessionRelations, sessions } from '../db/schema';
 import { ensurePublicSessionRow } from '../memory/session-awaiting-sql';
 import { ensureSessionWithIdentity } from '../memory/session-identity-sql';
 import { runtimeStatusToDb } from './agent-job-sql-mirror-rows';
@@ -30,35 +33,45 @@ export async function upsertRuntimeAgentRow(input: { readonly client: Client; re
             now: input.ref.lastActivity,
         });
     }
-    await input.client.execute({
-        sql:
-            'INSERT INTO runtime_agents ' +
-            '(agent_id, kind, session_id, parent_agent_id, status, activity, created_at, updated_at, metadata_json) ' +
-            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ' +
-            'ON CONFLICT(agent_id) DO UPDATE SET kind = excluded.kind, session_id = excluded.session_id, ' +
-            'parent_agent_id = excluded.parent_agent_id, status = excluded.status, activity = excluded.activity, ' +
-            'updated_at = excluded.updated_at, metadata_json = excluded.metadata_json',
-        args: [
-            input.ref.id,
-            input.ref.kind,
-            input.ref.sessionId,
-            input.ref.parentId ?? null,
-            runtimeStatusToDb(input.ref.status),
-            input.ref.activity ?? null,
-            input.ref.createdAt,
-            input.ref.lastActivity,
-            JSON.stringify({
-                displayName: input.ref.displayName,
-                ...(input.ref.sessionFile !== undefined ? { sessionFile: input.ref.sessionFile } : {}),
-                ...(input.ref.authorityFingerprint !== undefined
-                    ? { authorityFingerprint: input.ref.authorityFingerprint }
-                    : {}),
-                ...(input.ref.taskDepth !== undefined ? { taskDepth: input.ref.taskDepth } : {}),
-                ...(input.ref.category !== undefined ? { category: input.ref.category } : {}),
-                ...(input.ref.title !== undefined ? { title: input.ref.title } : {}),
-            }),
-        ],
+    const db = drizzleFromClient(input.client);
+    const metadataJson = JSON.stringify({
+        displayName: input.ref.displayName,
+        ...(input.ref.sessionFile !== undefined ? { sessionFile: input.ref.sessionFile } : {}),
+        ...(input.ref.authorityFingerprint !== undefined
+            ? { authorityFingerprint: input.ref.authorityFingerprint }
+            : {}),
+        ...(input.ref.taskDepth !== undefined ? { taskDepth: input.ref.taskDepth } : {}),
+        ...(input.ref.category !== undefined ? { category: input.ref.category } : {}),
+        ...(input.ref.title !== undefined ? { title: input.ref.title } : {}),
     });
+    const status = runtimeStatusToDb(input.ref.status);
+    const parentAgentId = input.ref.parentId ?? null;
+    const activity = input.ref.activity ?? null;
+    await db
+        .insert(runtimeAgents)
+        .values({
+            agentId: input.ref.id,
+            kind: input.ref.kind,
+            sessionId: input.ref.sessionId,
+            parentAgentId,
+            status,
+            activity,
+            createdAt: input.ref.createdAt,
+            updatedAt: input.ref.lastActivity,
+            metadataJson,
+        })
+        .onConflictDoUpdate({
+            target: runtimeAgents.agentId,
+            set: {
+                kind: input.ref.kind,
+                sessionId: input.ref.sessionId,
+                parentAgentId,
+                status,
+                activity,
+                updatedAt: input.ref.lastActivity,
+                metadataJson,
+            },
+        });
 }
 
 export async function upsertJobRow(input: {
@@ -95,33 +108,51 @@ export async function upsertJobRow(input: {
             });
         }
     }
-    await input.client.execute({
-        sql:
-            'INSERT INTO async_jobs ' +
-            '(job_id, parent_session_id, child_session_id, agent_id, status, queued_at, started_at, completed_at, failed_at, cancelled_at, cancellation_reason, result_json, error_json, metadata_json) ' +
-            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ' +
-            'ON CONFLICT(job_id) DO UPDATE SET parent_session_id = excluded.parent_session_id, ' +
-            'child_session_id = excluded.child_session_id, agent_id = excluded.agent_id, status = excluded.status, ' +
-            'started_at = excluded.started_at, completed_at = excluded.completed_at, failed_at = excluded.failed_at, ' +
-            'cancelled_at = excluded.cancelled_at, cancellation_reason = excluded.cancellation_reason, ' +
-            'result_json = excluded.result_json, error_json = excluded.error_json, metadata_json = excluded.metadata_json',
-        args: [
-            input.handle.jobId,
-            input.handle.parentSessionId ?? null,
-            input.handle.sessionId,
-            input.handle.agentId ?? null,
-            input.handle.status,
-            input.handle.startedAt,
-            input.handle.status === 'queued' ? null : input.handle.startedAt,
-            input.handle.status === 'completed' ? terminalAt : null,
-            input.handle.status === 'failed' ? terminalAt : null,
-            input.handle.status === 'cancelled' ? terminalAt : null,
-            input.handle.cancellationReason ?? null,
-            input.handle.result === undefined ? null : JSON.stringify(input.handle.result),
-            null,
-            JSON.stringify({ blocking: input.handle.blocking }),
-        ],
-    });
+    const db = drizzleFromClient(input.client);
+    const parentSessionId = input.handle.parentSessionId ?? null;
+    const agentId = input.handle.agentId ?? null;
+    const startedAt = input.handle.status === 'queued' ? null : input.handle.startedAt;
+    const completedAt = input.handle.status === 'completed' ? terminalAt : null;
+    const failedAt = input.handle.status === 'failed' ? terminalAt : null;
+    const cancelledAt = input.handle.status === 'cancelled' ? terminalAt : null;
+    const cancellationReason = input.handle.cancellationReason ?? null;
+    const resultJson = input.handle.result === undefined ? null : JSON.stringify(input.handle.result);
+    const metadataJson = JSON.stringify({ blocking: input.handle.blocking });
+    await db
+        .insert(asyncJobs)
+        .values({
+            jobId: input.handle.jobId,
+            parentSessionId,
+            childSessionId: input.handle.sessionId,
+            agentId,
+            status: input.handle.status,
+            queuedAt: input.handle.startedAt,
+            startedAt,
+            completedAt,
+            failedAt,
+            cancelledAt,
+            cancellationReason,
+            resultJson,
+            errorJson: null,
+            metadataJson,
+        })
+        .onConflictDoUpdate({
+            target: asyncJobs.jobId,
+            set: {
+                parentSessionId,
+                childSessionId: input.handle.sessionId,
+                agentId,
+                status: input.handle.status,
+                startedAt,
+                completedAt,
+                failedAt,
+                cancelledAt,
+                cancellationReason,
+                resultJson,
+                errorJson: null,
+                metadataJson,
+            },
+        });
     if (input.handle.parentSessionId !== undefined) {
         await upsertSubagentRelation({
             client: input.client,
@@ -144,12 +175,16 @@ export async function markChildSessionRunning(input: {
         sessionId: input.sessionId,
         now: input.now,
     });
-    await input.client.execute({
-        sql:
-            'UPDATE sessions SET parent_session_id = ?, status = ?, updated_at = ?, last_activity_at = ? ' +
-            'WHERE session_id = ? AND status NOT IN (?, ?)',
-        args: [input.parentSessionId, 'running', input.now, input.now, input.sessionId, 'stopped', 'failed'],
-    });
+    const db = drizzleFromClient(input.client);
+    await db
+        .update(sessions)
+        .set({
+            parentSessionId: input.parentSessionId,
+            status: 'running',
+            updatedAt: input.now,
+            lastActivityAt: input.now,
+        })
+        .where(and(eq(sessions.sessionId, input.sessionId), notInArray(sessions.status, ['stopped', 'failed'])));
 }
 
 export async function markChildSessionSettled(input: {
@@ -165,23 +200,17 @@ export async function markChildSessionSettled(input: {
         now: input.now,
     });
     const sessionStatus = input.status === 'failed' ? 'failed' : 'idle';
-    await input.client.execute({
-        sql:
-            'UPDATE sessions SET parent_session_id = COALESCE(parent_session_id, ?), status = ?, ' +
-            'failed_at = CASE WHEN ? = ? THEN COALESCE(failed_at, ?) ELSE failed_at END, ' +
-            'updated_at = ?, last_activity_at = ? WHERE session_id = ? AND status NOT IN (?)',
-        args: [
-            input.parentSessionId,
-            sessionStatus,
-            sessionStatus,
-            'failed',
-            input.now,
-            input.now,
-            input.now,
-            input.sessionId,
-            'stopped',
-        ],
-    });
+    const db = drizzleFromClient(input.client);
+    await db
+        .update(sessions)
+        .set({
+            parentSessionId: sql`COALESCE(${sessions.parentSessionId}, ${input.parentSessionId})`,
+            status: sessionStatus,
+            failedAt: sql`CASE WHEN ${sessionStatus} = ${'failed'} THEN COALESCE(${sessions.failedAt}, ${input.now}) ELSE ${sessions.failedAt} END`,
+            updatedAt: input.now,
+            lastActivityAt: input.now,
+        })
+        .where(and(eq(sessions.sessionId, input.sessionId), notInArray(sessions.status, ['stopped'])));
 }
 
 export async function upsertSubagentRelation(input: {
@@ -191,22 +220,25 @@ export async function upsertSubagentRelation(input: {
     readonly now: string;
     readonly metadata: Readonly<Record<string, string | null>>;
 }): Promise<void> {
-    await input.client.execute({
-        sql:
-            'INSERT INTO session_relations ' +
-            '(relation_id, parent_session_id, child_session_id, kind, created_at, metadata_json) ' +
-            'VALUES (?, ?, ?, ?, ?, ?) ' +
-            'ON CONFLICT(parent_session_id, child_session_id, kind) DO UPDATE SET created_at = excluded.created_at, ' +
-            'metadata_json = excluded.metadata_json',
-        args: [
-            relationId(input.parentSessionId, input.childSessionId, 'subagent'),
-            input.parentSessionId,
-            input.childSessionId,
-            'subagent',
-            input.now,
-            JSON.stringify(input.metadata),
-        ],
-    });
+    const db = drizzleFromClient(input.client);
+    const metadataJson = JSON.stringify(input.metadata);
+    await db
+        .insert(sessionRelations)
+        .values({
+            relationId: relationId(input.parentSessionId, input.childSessionId, 'subagent'),
+            parentSessionId: input.parentSessionId,
+            childSessionId: input.childSessionId,
+            kind: 'subagent',
+            createdAt: input.now,
+            metadataJson,
+        })
+        .onConflictDoUpdate({
+            target: [sessionRelations.parentSessionId, sessionRelations.childSessionId, sessionRelations.kind],
+            set: {
+                createdAt: input.now,
+                metadataJson,
+            },
+        });
 }
 
 function relationId(parentSessionId: string, childSessionId: string, kind: string): string {

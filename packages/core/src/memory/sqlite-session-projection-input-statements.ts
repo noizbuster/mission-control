@@ -1,92 +1,85 @@
-import type { InStatement } from '@libsql/client';
 import type { AgentEventEnvelope } from '@mission-control/protocol';
+import { and, eq, inArray, sql } from 'drizzle-orm';
+import type { MissionControlDrizzleDb } from '../db/drizzle-client';
+import { sessionInputs } from '../db/schema';
 
-export function inputProjectionStatements(envelopes: readonly AgentEventEnvelope[]): readonly InStatement[] {
-    return envelopes.flatMap((envelope) => {
+export async function projectInputStatements(
+    db: MissionControlDrizzleDb,
+    envelopes: readonly AgentEventEnvelope[],
+): Promise<void> {
+    for (const envelope of envelopes) {
         const transcript = envelope.event.transcript;
-        if (transcript?.inputId === undefined) {
-            return [];
-        }
+        if (transcript?.inputId === undefined) continue;
         switch (envelope.event.type) {
             case 'prompt.admitted':
-                if (transcript.delivery === undefined) {
-                    return [];
-                }
-                return [
-                    {
-                        sql: `
-                            INSERT INTO session_inputs (
-                                input_id, session_id, delivery, status, prompt, admitted_seq,
-                                created_at, admitted_at, metadata_json
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                            ON CONFLICT(input_id) DO UPDATE SET
-                                session_id = excluded.session_id,
-                                delivery = excluded.delivery,
-                                status = excluded.status,
-                                prompt = excluded.prompt,
-                                admitted_seq = excluded.admitted_seq,
-                                admitted_at = excluded.admitted_at,
-                                promoted_seq = NULL,
-                                promoted_at = NULL,
-                                cancelled_at = NULL,
-                                metadata_json = excluded.metadata_json
-                        `,
-                        args: [
-                            transcript.inputId,
-                            envelope.sessionId,
-                            transcript.delivery,
-                            'admitted',
-                            envelope.event.message ?? '',
-                            envelope.sequence,
-                            envelope.event.timestamp,
-                            envelope.event.timestamp,
-                            JSON.stringify({ messageId: transcript.messageId ?? null }),
-                        ],
-                    },
-                ];
+                if (transcript.delivery === undefined) break;
+                await db
+                    .insert(sessionInputs)
+                    .values({
+                        inputId: transcript.inputId,
+                        sessionId: envelope.sessionId,
+                        delivery: transcript.delivery,
+                        status: 'admitted',
+                        prompt: envelope.event.message ?? '',
+                        admittedSeq: envelope.sequence,
+                        createdAt: envelope.event.timestamp,
+                        admittedAt: envelope.event.timestamp,
+                        metadataJson: JSON.stringify({ messageId: transcript.messageId ?? null }),
+                    })
+                    .onConflictDoUpdate({
+                        target: sessionInputs.inputId,
+                        set: {
+                            sessionId: sql`excluded.session_id`,
+                            delivery: sql`excluded.delivery`,
+                            status: sql`excluded.status`,
+                            prompt: sql`excluded.prompt`,
+                            admittedSeq: sql`excluded.admitted_seq`,
+                            admittedAt: sql`excluded.admitted_at`,
+                            promotedSeq: null,
+                            promotedAt: null,
+                            cancelledAt: null,
+                            metadataJson: sql`excluded.metadata_json`,
+                        },
+                    });
+                break;
             case 'prompt.promoted':
-                return [
-                    {
-                        sql: `
-                            UPDATE session_inputs
-                            SET status = ?, promoted_seq = ?, promoted_at = ?, cancelled_at = NULL
-                            WHERE input_id = ? AND session_id = ? AND status IN (?, ?)
-                        `,
-                        args: [
-                            'promoted',
-                            envelope.sequence,
-                            envelope.event.timestamp,
-                            transcript.inputId,
-                            envelope.sessionId,
-                            'pending',
-                            'admitted',
-                        ],
-                    },
-                ];
+                await db
+                    .update(sessionInputs)
+                    .set({
+                        status: 'promoted',
+                        promotedSeq: envelope.sequence,
+                        promotedAt: envelope.event.timestamp,
+                        cancelledAt: null,
+                    })
+                    .where(
+                        and(
+                            eq(sessionInputs.inputId, transcript.inputId),
+                            eq(sessionInputs.sessionId, envelope.sessionId),
+                            inArray(sessionInputs.status, ['pending', 'admitted']),
+                        ),
+                    );
+                break;
             case 'prompt.cancelled':
-                return [
-                    {
-                        sql: `
-                            UPDATE session_inputs
-                            SET status = ?, cancelled_at = ?, metadata_json = ?
-                            WHERE input_id = ? AND session_id = ? AND status IN (?, ?)
-                        `,
-                        args: [
-                            'cancelled',
-                            envelope.event.timestamp,
-                            JSON.stringify({
-                                requestId: transcript.requestId ?? null,
-                                reason: transcript.reason ?? null,
-                            }),
-                            transcript.inputId,
-                            envelope.sessionId,
-                            'pending',
-                            'admitted',
-                        ],
-                    },
-                ];
+                await db
+                    .update(sessionInputs)
+                    .set({
+                        status: 'cancelled',
+                        cancelledAt: envelope.event.timestamp,
+                        metadataJson: JSON.stringify({
+                            requestId: transcript.requestId ?? null,
+                            reason: transcript.reason ?? null,
+                        }),
+                    })
+                    .where(
+                        and(
+                            eq(sessionInputs.inputId, transcript.inputId),
+                            eq(sessionInputs.sessionId, envelope.sessionId),
+                            inArray(sessionInputs.status, ['pending', 'admitted']),
+                        ),
+                    );
+                break;
             default:
-                return [];
+                break;
         }
-    });
+    }
 }

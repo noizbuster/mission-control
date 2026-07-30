@@ -1,5 +1,8 @@
 import type { Client } from '@libsql/client';
+import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { drizzleFromClient } from '../db/drizzle-client';
+import { desktopApprovalEffects } from '../db/schema';
 import {
     DESKTOP_APPROVAL_EFFECT_OUTCOMES,
     type DesktopApprovalEffect,
@@ -8,63 +11,63 @@ import {
 } from '../desktop-approval-effect';
 
 const identityRowSchema = z.object({
-    session_id: z.string(),
-    approval_id: z.string(),
-    run_id: z.string(),
-    tool_call_id: z.string(),
-    tool_name: z.string(),
-    arguments_json: z.string(),
-    workspace_root: z.string(),
-    requested_at: z.string(),
+    sessionId: z.string(),
+    approvalId: z.string(),
+    runId: z.string(),
+    toolCallId: z.string(),
+    toolName: z.string(),
+    argumentsJson: z.string(),
+    workspaceRoot: z.string(),
+    requestedAt: z.string(),
 });
 
 const pendingRowSchema = identityRowSchema.extend({
     state: z.literal('pending'),
-    execution_token: z.null(),
-    lease_expires_at: z.null(),
+    executionToken: z.null(),
+    leaseExpiresAt: z.null(),
     outcome: z.null(),
-    executing_at: z.null(),
-    settled_at: z.null(),
-    unknown_at: z.null(),
-    resolved_at: z.null(),
+    executingAt: z.null(),
+    settledAt: z.null(),
+    unknownAt: z.null(),
+    resolvedAt: z.null(),
 });
 
 const executionFields = {
-    execution_token: z.string(),
-    lease_expires_at: z.string(),
-    executing_at: z.string(),
+    executionToken: z.string(),
+    leaseExpiresAt: z.string(),
+    executingAt: z.string(),
 } as const;
 
 const executingRowSchema = identityRowSchema.extend({
     state: z.literal('executing'),
     ...executionFields,
     outcome: z.null(),
-    settled_at: z.null(),
-    unknown_at: z.null(),
-    resolved_at: z.null(),
+    settledAt: z.null(),
+    unknownAt: z.null(),
+    resolvedAt: z.null(),
 });
 
 const settledRowSchema = identityRowSchema.extend({
     state: z.literal('settled'),
     ...executionFields,
     outcome: z.enum(DESKTOP_APPROVAL_EFFECT_OUTCOMES),
-    settled_at: z.string(),
-    unknown_at: z.null(),
-    resolved_at: z.null(),
+    settledAt: z.string(),
+    unknownAt: z.null(),
+    resolvedAt: z.null(),
 });
 
 const unresolvedUnknownRowSchema = identityRowSchema.extend({
     state: z.literal('unknown'),
     ...executionFields,
     outcome: z.null(),
-    settled_at: z.null(),
-    unknown_at: z.string(),
-    resolved_at: z.null(),
+    settledAt: z.null(),
+    unknownAt: z.string(),
+    resolvedAt: z.null(),
 });
 
 const resolvedUnknownRowSchema = unresolvedUnknownRowSchema.extend({
     outcome: z.enum(DESKTOP_APPROVAL_EFFECT_OUTCOMES),
-    resolved_at: z.string(),
+    resolvedAt: z.string(),
 });
 
 const effectRowSchema = z.union([
@@ -77,18 +80,36 @@ const effectRowSchema = z.union([
 type EffectRow = z.infer<typeof effectRowSchema>;
 type ExecutionRow = Exclude<EffectRow, z.infer<typeof pendingRowSchema>>;
 
-const selectEffectSql =
-    'SELECT session_id,approval_id,run_id,tool_call_id,tool_name,arguments_json,workspace_root,state,' +
-    'execution_token,lease_expires_at,outcome,requested_at,executing_at,settled_at,unknown_at,resolved_at ' +
-    'FROM desktop_approval_effects WHERE session_id = ? AND approval_id = ?';
-
 export async function readSqliteDesktopApprovalEffect(
     client: Client,
     sessionId: string,
     approvalId: string,
 ): Promise<DesktopApprovalEffectRecord | undefined> {
-    const result = await client.execute({ sql: selectEffectSql, args: [sessionId, approvalId] });
-    const row = result.rows[0];
+    const db = drizzleFromClient(client);
+    const rows = await db
+        .select({
+            sessionId: desktopApprovalEffects.sessionId,
+            approvalId: desktopApprovalEffects.approvalId,
+            runId: desktopApprovalEffects.runId,
+            toolCallId: desktopApprovalEffects.toolCallId,
+            toolName: desktopApprovalEffects.toolName,
+            argumentsJson: desktopApprovalEffects.argumentsJson,
+            workspaceRoot: desktopApprovalEffects.workspaceRoot,
+            state: desktopApprovalEffects.state,
+            executionToken: desktopApprovalEffects.executionToken,
+            leaseExpiresAt: desktopApprovalEffects.leaseExpiresAt,
+            outcome: desktopApprovalEffects.outcome,
+            requestedAt: desktopApprovalEffects.requestedAt,
+            executingAt: desktopApprovalEffects.executingAt,
+            settledAt: desktopApprovalEffects.settledAt,
+            unknownAt: desktopApprovalEffects.unknownAt,
+            resolvedAt: desktopApprovalEffects.resolvedAt,
+        })
+        .from(desktopApprovalEffects)
+        .where(
+            and(eq(desktopApprovalEffects.sessionId, sessionId), eq(desktopApprovalEffects.approvalId, approvalId)),
+        );
+    const row = rows[0];
     return row === undefined ? undefined : effectRecordFromRow(effectRowSchema.parse(row));
 }
 
@@ -96,7 +117,7 @@ function effectRecordFromRow(row: EffectRow): DesktopApprovalEffectRecord {
     const effect = effectFromRow(row);
     switch (row.state) {
         case 'pending':
-            return { effect, state: 'pending', requestedAt: row.requested_at };
+            return { effect, state: 'pending', requestedAt: row.requestedAt };
         case 'executing':
             return executionRecordFromRow(effect, row);
         case 'settled':
@@ -104,18 +125,18 @@ function effectRecordFromRow(row: EffectRow): DesktopApprovalEffectRecord {
                 ...executionRecordFromRow(effect, row),
                 state: 'settled',
                 outcome: row.outcome,
-                settledAt: row.settled_at,
+                settledAt: row.settledAt,
             };
         case 'unknown': {
             const execution = executionRecordFromRow(effect, row);
             return row.outcome === null
-                ? { ...execution, state: 'unknown', unknownAt: row.unknown_at }
+                ? { ...execution, state: 'unknown', unknownAt: row.unknownAt }
                 : {
                       ...execution,
                       state: 'unknown',
-                      unknownAt: row.unknown_at,
+                      unknownAt: row.unknownAt,
                       outcome: row.outcome,
-                      resolvedAt: row.resolved_at,
+                      resolvedAt: row.resolvedAt,
                   };
         }
         default:
@@ -130,22 +151,22 @@ function executionRecordFromRow(
     return {
         effect,
         state: 'executing',
-        executionToken: row.execution_token,
-        leaseExpiresAt: row.lease_expires_at,
-        requestedAt: row.requested_at,
-        executingAt: row.executing_at,
+        executionToken: row.executionToken,
+        leaseExpiresAt: row.leaseExpiresAt,
+        requestedAt: row.requestedAt,
+        executingAt: row.executingAt,
     };
 }
 
 function effectFromRow(row: z.infer<typeof identityRowSchema>): DesktopApprovalEffect {
     return {
-        sessionId: row.session_id,
-        approvalId: row.approval_id,
-        runId: row.run_id,
-        toolCallId: row.tool_call_id,
-        toolName: row.tool_name,
-        argumentsJson: row.arguments_json,
-        workspaceRoot: row.workspace_root,
+        sessionId: row.sessionId,
+        approvalId: row.approvalId,
+        runId: row.runId,
+        toolCallId: row.toolCallId,
+        toolName: row.toolName,
+        argumentsJson: row.argumentsJson,
+        workspaceRoot: row.workspaceRoot,
     };
 }
 

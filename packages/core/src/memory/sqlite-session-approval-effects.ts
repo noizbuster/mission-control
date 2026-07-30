@@ -1,4 +1,7 @@
 import type { Client } from '@libsql/client';
+import { and, eq, gt, isNull, lte } from 'drizzle-orm';
+import { drizzleFromClient } from '../db/drizzle-client';
+import { desktopApprovalEffects } from '../db/schema';
 import type {
     DesktopApprovalEffect,
     DesktopApprovalEffectClaimInput,
@@ -18,13 +21,21 @@ export async function reserveSqliteDesktopApprovalEffect(
     effect: DesktopApprovalEffect,
     requestedAt: string,
 ): Promise<boolean> {
-    const inserted = await client.execute({
-        sql:
-            'INSERT OR IGNORE INTO desktop_approval_effects ' +
-            '(session_id,approval_id,run_id,tool_call_id,tool_name,arguments_json,workspace_root,state,requested_at) ' +
-            'VALUES (?,?,?,?,?,?,?,?,?)',
-        args: [...effectArgs(effect), 'pending', requestedAt],
-    });
+    const db = drizzleFromClient(client);
+    const inserted = await db
+        .insert(desktopApprovalEffects)
+        .values({
+            sessionId: effect.sessionId,
+            approvalId: effect.approvalId,
+            runId: effect.runId,
+            toolCallId: effect.toolCallId,
+            toolName: effect.toolName,
+            argumentsJson: effect.argumentsJson,
+            workspaceRoot: effect.workspaceRoot,
+            state: 'pending',
+            requestedAt,
+        })
+        .onConflictDoNothing();
     if (inserted.rowsAffected === 1) return true;
     const existing = await readSqliteDesktopApprovalEffect(client, effect.sessionId, effect.approvalId);
     return existing?.state === 'pending' && sameDesktopApprovalEffect(existing.effect, effect);
@@ -58,22 +69,22 @@ export async function settleSqliteDesktopApprovalEffect(
     input: DesktopApprovalEffectSettlementInput,
     settledAt: string,
 ): Promise<boolean> {
-    const result = await client.execute({
-        sql:
-            'UPDATE desktop_approval_effects SET state = ?, outcome = ?, settled_at = ? ' +
-            'WHERE session_id = ? AND approval_id = ? AND run_id = ? AND tool_call_id = ? ' +
-            'AND tool_name = ? AND arguments_json = ? AND workspace_root = ? ' +
-            'AND state = ? AND execution_token = ? AND lease_expires_at > ?',
-        args: [
-            'settled',
-            input.outcome,
+    const db = drizzleFromClient(client);
+    const result = await db
+        .update(desktopApprovalEffects)
+        .set({
+            state: 'settled',
+            outcome: input.outcome,
             settledAt,
-            ...effectArgs(input.effect),
-            'executing',
-            input.executionToken,
-            settledAt,
-        ],
-    });
+        })
+        .where(
+            and(
+                effectIdentityWhere(input.effect),
+                eq(desktopApprovalEffects.state, 'executing'),
+                eq(desktopApprovalEffects.executionToken, input.executionToken),
+                gt(desktopApprovalEffects.leaseExpiresAt, settledAt),
+            ),
+        );
     return result.rowsAffected === 1;
 }
 
@@ -82,24 +93,36 @@ export async function resolveSqliteDesktopApprovalEffect(
     sessionId: string,
     input: DesktopApprovalEffectResolutionInput,
 ): Promise<DesktopApprovalEffectRecord | undefined> {
-    await client.execute({
-        sql:
-            'UPDATE desktop_approval_effects SET outcome = ?, resolved_at = ? ' +
-            'WHERE session_id = ? AND approval_id = ? AND state = ? AND outcome IS NULL AND resolved_at IS NULL',
-        args: [input.outcome, input.resolvedAt, sessionId, input.approvalId, 'unknown'],
-    });
+    const db = drizzleFromClient(client);
+    await db
+        .update(desktopApprovalEffects)
+        .set({
+            outcome: input.outcome,
+            resolvedAt: input.resolvedAt,
+        })
+        .where(
+            and(
+                eq(desktopApprovalEffects.sessionId, sessionId),
+                eq(desktopApprovalEffects.approvalId, input.approvalId),
+                eq(desktopApprovalEffects.state, 'unknown'),
+                isNull(desktopApprovalEffects.outcome),
+                isNull(desktopApprovalEffects.resolvedAt),
+            ),
+        );
     const record = await readSqliteDesktopApprovalEffect(client, sessionId, input.approvalId);
     if (record?.state !== 'unknown' || record.outcome !== input.outcome) return undefined;
     return record;
 }
 
 export async function recoverExpiredSqliteDesktopApprovalEffects(client: Client, now: string): Promise<number> {
-    const result = await client.execute({
-        sql:
-            'UPDATE desktop_approval_effects SET state = ?, unknown_at = ? ' +
-            'WHERE state = ? AND lease_expires_at <= ?',
-        args: ['unknown', now, 'executing', now],
-    });
+    const db = drizzleFromClient(client);
+    const result = await db
+        .update(desktopApprovalEffects)
+        .set({
+            state: 'unknown',
+            unknownAt: now,
+        })
+        .where(and(eq(desktopApprovalEffects.state, 'executing'), lte(desktopApprovalEffects.leaseExpiresAt, now)));
     return result.rowsAffected;
 }
 
@@ -111,14 +134,16 @@ async function claimPendingEffect(
     if (input.leaseExpiresAt <= now) {
         throw new TypeError('desktop approval effect execution lease must expire after the claim time');
     }
-    const result = await client.execute({
-        sql:
-            'UPDATE desktop_approval_effects ' +
-            'SET state = ?, execution_token = ?, lease_expires_at = ?, executing_at = ? ' +
-            'WHERE session_id = ? AND approval_id = ? AND run_id = ? AND tool_call_id = ? ' +
-            'AND tool_name = ? AND arguments_json = ? AND workspace_root = ? AND state = ?',
-        args: ['executing', input.executionToken, input.leaseExpiresAt, now, ...effectArgs(input.effect), 'pending'],
-    });
+    const db = drizzleFromClient(client);
+    const result = await db
+        .update(desktopApprovalEffects)
+        .set({
+            state: 'executing',
+            executionToken: input.executionToken,
+            leaseExpiresAt: input.leaseExpiresAt,
+            executingAt: now,
+        })
+        .where(and(effectIdentityWhere(input.effect), eq(desktopApprovalEffects.state, 'pending')));
     if (result.rowsAffected !== 1) return claimResultAfterLostTransition(client, input.effect);
     return { status: 'claimed', record: await requireExecutingRecord(client, input.effect) };
 }
@@ -129,22 +154,22 @@ async function recoverExpiredClaim(
     existing: DesktopApprovalEffectExecutingRecord,
     now: string,
 ): Promise<DesktopApprovalEffectClaimResult> {
-    await client.execute({
-        sql:
-            'UPDATE desktop_approval_effects SET state = ?, unknown_at = ? ' +
-            'WHERE session_id = ? AND approval_id = ? AND run_id = ? AND tool_call_id = ? ' +
-            'AND tool_name = ? AND arguments_json = ? AND workspace_root = ? ' +
-            'AND state = ? AND execution_token = ? AND lease_expires_at = ? AND lease_expires_at <= ?',
-        args: [
-            'unknown',
-            now,
-            ...effectArgs(input.effect),
-            'executing',
-            existing.executionToken,
-            existing.leaseExpiresAt,
-            now,
-        ],
-    });
+    const db = drizzleFromClient(client);
+    await db
+        .update(desktopApprovalEffects)
+        .set({
+            state: 'unknown',
+            unknownAt: now,
+        })
+        .where(
+            and(
+                effectIdentityWhere(input.effect),
+                eq(desktopApprovalEffects.state, 'executing'),
+                eq(desktopApprovalEffects.executionToken, existing.executionToken),
+                eq(desktopApprovalEffects.leaseExpiresAt, existing.leaseExpiresAt),
+                lte(desktopApprovalEffects.leaseExpiresAt, now),
+            ),
+        );
     return claimResultAfterLostTransition(client, input.effect);
 }
 
@@ -178,16 +203,16 @@ async function requireExecutingRecord(
     return record;
 }
 
-function effectArgs(effect: DesktopApprovalEffect): readonly string[] {
-    return [
-        effect.sessionId,
-        effect.approvalId,
-        effect.runId,
-        effect.toolCallId,
-        effect.toolName,
-        effect.argumentsJson,
-        effect.workspaceRoot,
-    ];
+function effectIdentityWhere(effect: DesktopApprovalEffect) {
+    return and(
+        eq(desktopApprovalEffects.sessionId, effect.sessionId),
+        eq(desktopApprovalEffects.approvalId, effect.approvalId),
+        eq(desktopApprovalEffects.runId, effect.runId),
+        eq(desktopApprovalEffects.toolCallId, effect.toolCallId),
+        eq(desktopApprovalEffects.toolName, effect.toolName),
+        eq(desktopApprovalEffects.argumentsJson, effect.argumentsJson),
+        eq(desktopApprovalEffects.workspaceRoot, effect.workspaceRoot),
+    );
 }
 
 function assertNeverEffectRecord(record: never): never {

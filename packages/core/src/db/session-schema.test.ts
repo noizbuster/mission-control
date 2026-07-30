@@ -5,6 +5,8 @@ import {
     approvals,
     asyncJobs,
     contextEpochs,
+    desktopApprovalEffects,
+    desktopToolProposals,
     memoryEntries,
     missionRuns,
     missions,
@@ -18,6 +20,8 @@ import {
     sessionLifecycleStatuses,
     sessionMessages,
     sessionParts,
+    sessionProjectionDiagnostics,
+    sessionProjectionRuns,
     sessionRelations,
     sessions,
     toolCalls,
@@ -73,6 +77,10 @@ describe('database schema exports', () => {
             contextEpochs,
             runtimeAgents,
             asyncJobs,
+            desktopToolProposals,
+            desktopApprovalEffects,
+            sessionProjectionRuns,
+            sessionProjectionDiagnostics,
         ];
 
         // When: table names are read from Drizzle metadata.
@@ -97,6 +105,10 @@ describe('database schema exports', () => {
             'context_epochs',
             'runtime_agents',
             'async_jobs',
+            'desktop_tool_proposals',
+            'desktop_approval_effects',
+            'session_projection_runs',
+            'session_projection_diagnostics',
         ]);
     });
 

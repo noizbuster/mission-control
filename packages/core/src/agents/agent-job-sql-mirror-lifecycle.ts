@@ -1,4 +1,7 @@
 import type { Client } from '@libsql/client';
+import { and, eq } from 'drizzle-orm';
+import { drizzleFromClient } from '../db/drizzle-client';
+import { sessionAwaits } from '../db/schema';
 import {
     ensurePublicSessionRow,
     persistSessionAwaiting,
@@ -37,24 +40,41 @@ export async function startSubagentWaitWithJob(
         parentSessionId: input.parentSessionId,
         now,
     });
-    await client.execute({
-        sql:
-            'INSERT OR REPLACE INTO session_awaits ' +
-            '(wait_id, session_id, reason, source_kind, source_id, job_id, child_session_id, status, created_at, metadata_json) ' +
-            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        args: [
-            input.childSessionId,
-            input.parentSessionId,
-            'subagent',
-            'child_session',
-            input.childSessionId,
-            input.childSessionId,
-            input.childSessionId,
-            'pending',
-            now,
-            JSON.stringify({ mode: input.mode }),
-        ],
-    });
+    const db = drizzleFromClient(client);
+    const metadataJson = JSON.stringify({ mode: input.mode });
+    await db
+        .insert(sessionAwaits)
+        .values({
+            waitId: input.childSessionId,
+            sessionId: input.parentSessionId,
+            reason: 'subagent',
+            sourceKind: 'child_session',
+            sourceId: input.childSessionId,
+            jobId: input.childSessionId,
+            childSessionId: input.childSessionId,
+            status: 'pending',
+            createdAt: now,
+            metadataJson,
+        })
+        .onConflictDoUpdate({
+            target: sessionAwaits.waitId,
+            set: {
+                sessionId: input.parentSessionId,
+                reason: 'subagent',
+                sourceKind: 'child_session',
+                sourceId: input.childSessionId,
+                runId: null,
+                toolCallId: null,
+                approvalId: null,
+                jobId: input.childSessionId,
+                childSessionId: input.childSessionId,
+                status: 'pending',
+                createdAt: now,
+                resolvedAt: null,
+                cancelledAt: null,
+                metadataJson,
+            },
+        });
     await upsertSubagentRelation({
         client,
         parentSessionId: input.parentSessionId,
@@ -96,12 +116,20 @@ export async function resolveSubagentWaitWithJob(
         status: input.status,
         now,
     });
-    await client.execute({
-        sql:
-            'UPDATE session_awaits SET status = ?, resolved_at = ? ' +
-            'WHERE session_id = ? AND child_session_id = ? AND status = ?',
-        args: ['resolved', now, input.parentSessionId, input.childSessionId, 'pending'],
-    });
+    const db = drizzleFromClient(client);
+    await db
+        .update(sessionAwaits)
+        .set({
+            status: 'resolved',
+            resolvedAt: now,
+        })
+        .where(
+            and(
+                eq(sessionAwaits.sessionId, input.parentSessionId),
+                eq(sessionAwaits.childSessionId, input.childSessionId),
+                eq(sessionAwaits.status, 'pending'),
+            ),
+        );
     await upsertJobRow({ client, handle: resolvedSubagentJob(input, now) });
     await refreshSessionAwaitingFromPendingWaits({ client, sessionId: input.parentSessionId, now });
 }

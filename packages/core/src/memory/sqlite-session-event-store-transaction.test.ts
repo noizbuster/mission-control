@@ -45,7 +45,7 @@ describe('SQLite session event transaction rollback', () => {
                             state: 'running',
                         }),
                     ),
-                ).rejects.toThrow(/injected post-event failure/u);
+                ).rejects.toThrow(/injected post-event failure|Failed query: insert into "session_projection_runs"/u);
 
                 // Then: no partial event/projection/sequence state survives and no write transaction remains open.
                 expect(

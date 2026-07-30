@@ -1,5 +1,7 @@
 import type { Client } from '@libsql/client';
-import { z } from 'zod';
+import { inArray } from 'drizzle-orm';
+import { drizzleFromClient } from '../db/drizzle-client';
+import { sessionRelations, sessions } from '../db/schema';
 
 export const SESSION_STOP_TREE_MAX_SESSIONS = 4_096;
 export type CanonicalSessionLifecycleStatus = 'idle' | 'running' | 'awaiting' | 'stopped' | 'failed';
@@ -27,42 +29,44 @@ export type CanonicalSessionTreeResult =
       }
     | { readonly ok: false; readonly errorCode: 'session_not_found' | 'unstable_session_tree' };
 
-const sessionRowSchema = z.object({
-    session_id: z.string(),
-    parent_session_id: z.string().nullable(),
-    status: z.enum(['idle', 'running', 'awaiting', 'stopped', 'failed']),
-});
-const relationRowSchema = z.object({
-    parent_session_id: z.string().nullable(),
-    child_session_id: z.string(),
-    kind: z.string(),
-});
 const executionRelationKinds = new Set(['parent_child', 'subagent']);
 
 export async function readCanonicalSessionTree(
     client: Client,
     targetSessionId: string,
 ): Promise<CanonicalSessionTreeResult> {
-    const [sessions, relations] = await Promise.all([
-        client.execute('SELECT session_id, parent_session_id, status FROM sessions ORDER BY session_id'),
-        client.execute(
-            "SELECT parent_session_id, child_session_id, kind FROM session_relations WHERE kind IN ('parent_child', 'subagent') ORDER BY child_session_id, relation_id",
-        ),
+    const db = drizzleFromClient(client);
+    const [sessionRows, relationRows] = await Promise.all([
+        db
+            .select({
+                sessionId: sessions.sessionId,
+                parentSessionId: sessions.parentSessionId,
+                status: sessions.status,
+            })
+            .from(sessions)
+            .orderBy(sessions.sessionId),
+        db
+            .select({
+                parentSessionId: sessionRelations.parentSessionId,
+                childSessionId: sessionRelations.childSessionId,
+                kind: sessionRelations.kind,
+            })
+            .from(sessionRelations)
+            .where(inArray(sessionRelations.kind, ['parent_child', 'subagent']))
+            .orderBy(sessionRelations.childSessionId, sessionRelations.relationId),
     ]);
     return resolveCanonicalSessionTree({
         targetSessionId,
-        sessions: sessions.rows.map((row) => {
-            const parsed = sessionRowSchema.parse(row);
-            return { sessionId: parsed.session_id, parentSessionId: parsed.parent_session_id, status: parsed.status };
-        }),
-        relations: relations.rows.map((row) => {
-            const parsed = relationRowSchema.parse(row);
-            return {
-                parentSessionId: parsed.parent_session_id,
-                childSessionId: parsed.child_session_id,
-                kind: parsed.kind,
-            };
-        }),
+        sessions: sessionRows.map((row) => ({
+            sessionId: row.sessionId,
+            parentSessionId: row.parentSessionId,
+            status: row.status as CanonicalSessionLifecycleStatus,
+        })),
+        relations: relationRows.map((row) => ({
+            parentSessionId: row.parentSessionId,
+            childSessionId: row.childSessionId,
+            kind: row.kind,
+        })),
     });
 }
 

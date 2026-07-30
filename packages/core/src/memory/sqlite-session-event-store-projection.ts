@@ -1,8 +1,9 @@
 import type { Client } from '@libsql/client';
 import type { AgentEventEnvelope } from '@mission-control/protocol';
+import { drizzleFromClient } from '../db/drizzle-client';
 import { refreshSessionAwaitingFromPendingWaits } from './session-awaiting-sql';
 import { deriveSessionProjectionRecordsFromEnvelopes } from './session-projection';
-import { replaceStatements } from './sqlite-session-projection-statements';
+import { replaceSessionProjectionRecords } from './sqlite-session-projection-statements';
 
 export async function replaceSqliteSessionProjection(input: {
     readonly client: Client;
@@ -14,14 +15,13 @@ export async function replaceSqliteSessionProjection(input: {
         filePath: `sqlite:${input.sessionId}`,
         envelopes: input.envelopes,
     });
-    for (const statement of replaceStatements({
+    const db = drizzleFromClient(input.client);
+    await replaceSessionProjectionRecords(db, {
         sessionId: input.sessionId,
         records: projection.records,
         diagnostics: projection.diagnostics,
         envelopes: input.envelopes,
-    })) {
-        await input.client.execute(statement);
-    }
+    });
     await refreshSessionAwaitingFromPendingWaits({
         client: input.client,
         sessionId: input.sessionId,

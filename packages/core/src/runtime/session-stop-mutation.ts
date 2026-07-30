@@ -1,15 +1,21 @@
 import type { Client } from '@libsql/client';
 import type { SessionAbortAffectedCounts } from '@mission-control/protocol';
-import { z } from 'zod';
+import { and, eq, inArray, isNotNull, max } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/sqlite-core';
+import { drizzleFromClient } from '../db/drizzle-client';
+import {
+    approvals,
+    asyncJobs,
+    missionRuns,
+    sessionAwaits,
+    sessionInputs,
+    sessionProjectionRuns,
+    sessions,
+    toolCalls,
+} from '../db/schema';
 import { refreshSessionAwaitingFromPendingWaits } from '../memory/session-awaiting-sql';
 import type { ObservabilityRedactor } from '../providers/observability-redactor';
 import { updateRunStatusWithClient } from './mission-run/run-store';
-
-const inputRowSchema = z.object({ input_id: z.string(), delivery: z.enum(['steer', 'queue']) });
-const approvalRowSchema = z.object({ approval_id: z.string() });
-const idRowSchema = z.object({ id: z.string() });
-const jobRowSchema = z.object({ job_id: z.string(), status: z.enum(['queued', 'running']) });
-const statusRowSchema = z.object({ status: z.enum(['idle', 'running', 'awaiting', 'stopped', 'failed']) });
 
 export type StopMutationInput = {
     readonly client: Client;
@@ -30,56 +36,41 @@ export async function readSessionTerminalStatus(
     client: Client,
     sessionId: string,
 ): Promise<'missing' | 'active' | 'terminal'> {
-    const result = await client.execute({ sql: 'SELECT status FROM sessions WHERE session_id = ?', args: [sessionId] });
-    const row = result.rows[0];
+    const db = drizzleFromClient(client);
+    const rows = await db
+        .select({ status: sessions.status })
+        .from(sessions)
+        .where(eq(sessions.sessionId, sessionId))
+        .limit(1);
+    const row = rows[0];
     if (row === undefined) return 'missing';
-    const status = statusRowSchema.parse(row).status;
-    return status === 'stopped' || status === 'failed' ? 'terminal' : 'active';
+    return row.status === 'stopped' || row.status === 'failed' ? 'terminal' : 'active';
 }
 
 export async function applyStopMutation(input: StopMutationInput): Promise<StopMutationResult> {
+    const db = drizzleFromClient(input.client);
     const [activeRunIds, inputs, approvalIds, waitIds, missionRunIds, jobs, toolCallIds] = await Promise.all([
-        selectIds(
-            input.client,
-            `SELECT current.run_id AS id FROM session_projection_runs current
-             WHERE current.session_id = ? AND current.run_id IS NOT NULL
-               AND current.sequence = (SELECT MAX(latest.sequence) FROM session_projection_runs latest
-                   WHERE latest.session_id = current.session_id AND latest.run_id = current.run_id)
-               AND current.state IN ('running','blocked_on_approval') ORDER BY current.run_id`,
-            [input.sessionId],
-        ),
-        selectInputs(input.client, input.sessionId),
-        selectApprovalIds(input.client, input.sessionId),
-        selectIds(
-            input.client,
-            "SELECT wait_id AS id FROM session_awaits WHERE session_id = ? AND status = 'pending' ORDER BY wait_id",
-            [input.sessionId],
-        ),
-        selectIds(
-            input.client,
-            "SELECT run_id AS id FROM mission_runs WHERE session_id = ? AND status IN ('pending','running','blocked') ORDER BY run_id",
-            [input.sessionId],
-        ),
-        selectJobs(input.client, input.sessionId),
-        selectIds(
-            input.client,
-            "SELECT tool_call_id AS id FROM tool_calls WHERE session_id = ? AND status IN ('pending','running') ORDER BY tool_call_id",
-            [input.sessionId],
-        ),
+        selectActiveProjectionRunIds(db, input.sessionId),
+        selectInputs(db, input.sessionId),
+        selectApprovalIds(db, input.sessionId),
+        selectPendingWaitIds(db, input.sessionId),
+        selectMissionRunIds(db, input.sessionId),
+        selectJobs(db, input.sessionId),
+        selectToolCallIds(db, input.sessionId),
     ]);
 
-    await input.client.execute({
-        sql: "UPDATE session_inputs SET status = 'cancelled', cancelled_at = ? WHERE session_id = ? AND status IN ('pending','admitted')",
-        args: [input.timestamp, input.sessionId],
-    });
-    await input.client.execute({
-        sql: "UPDATE session_awaits SET status = 'cancelled', cancelled_at = ? WHERE session_id = ? AND status = 'pending'",
-        args: [input.timestamp, input.sessionId],
-    });
-    await input.client.execute({
-        sql: "UPDATE approvals SET status = 'cancelled', decided_at = ? WHERE session_id = ? AND status = 'pending'",
-        args: [input.timestamp, input.sessionId],
-    });
+    await db
+        .update(sessionInputs)
+        .set({ status: 'cancelled', cancelledAt: input.timestamp })
+        .where(and(eq(sessionInputs.sessionId, input.sessionId), inArray(sessionInputs.status, ['pending', 'admitted'])));
+    await db
+        .update(sessionAwaits)
+        .set({ status: 'cancelled', cancelledAt: input.timestamp })
+        .where(and(eq(sessionAwaits.sessionId, input.sessionId), eq(sessionAwaits.status, 'pending')));
+    await db
+        .update(approvals)
+        .set({ status: 'cancelled', decidedAt: input.timestamp })
+        .where(and(eq(approvals.sessionId, input.sessionId), eq(approvals.status, 'pending')));
     for (const runId of missionRunIds) {
         await updateRunStatusWithClient(
             input.client,
@@ -94,16 +85,14 @@ export async function applyStopMutation(input: StopMutationInput): Promise<StopM
             },
         );
     }
-    await input.client.execute({
-        sql:
-            "UPDATE async_jobs SET status = 'cancelled', cancelled_at = ?, cancellation_reason = ? " +
-            "WHERE parent_session_id = ? AND status = 'queued'",
-        args: [input.timestamp, 'operator_aborted', input.sessionId],
-    });
-    await input.client.execute({
-        sql: "UPDATE async_jobs SET cancellation_reason = ? WHERE parent_session_id = ? AND status = 'running'",
-        args: ['operator_aborted', input.sessionId],
-    });
+    await db
+        .update(asyncJobs)
+        .set({ status: 'cancelled', cancelledAt: input.timestamp, cancellationReason: 'operator_aborted' })
+        .where(and(eq(asyncJobs.parentSessionId, input.sessionId), eq(asyncJobs.status, 'queued')));
+    await db
+        .update(asyncJobs)
+        .set({ cancellationReason: 'operator_aborted' })
+        .where(and(eq(asyncJobs.parentSessionId, input.sessionId), eq(asyncJobs.status, 'running')));
     await refreshSessionAwaitingFromPendingWaits({
         client: input.client,
         sessionId: input.sessionId,
@@ -132,42 +121,102 @@ export async function refreshStoppedSession(client: Client, sessionId: string, t
 }
 
 export async function readSessionStatus(client: Client, sessionId: string): Promise<string | undefined> {
-    const result = await client.execute({ sql: 'SELECT status FROM sessions WHERE session_id = ?', args: [sessionId] });
-    const row = result.rows[0];
-    return row === undefined ? undefined : statusRowSchema.parse(row).status;
+    const db = drizzleFromClient(client);
+    const rows = await db
+        .select({ status: sessions.status })
+        .from(sessions)
+        .where(eq(sessions.sessionId, sessionId))
+        .limit(1);
+    return rows[0]?.status;
 }
 
-async function selectIds(client: Client, sql: string, args: readonly string[]): Promise<readonly string[]> {
-    const result = await client.execute({ sql, args: [...args] });
-    return result.rows.map((row) => idRowSchema.parse(row).id);
+type Db = ReturnType<typeof drizzleFromClient>;
+
+async function selectActiveProjectionRunIds(db: Db, sessionId: string): Promise<readonly string[]> {
+    const latest = alias(sessionProjectionRuns, 'latest');
+    const maxSequence = db
+        .select({ value: max(latest.sequence) })
+        .from(latest)
+        .where(and(eq(latest.sessionId, sessionProjectionRuns.sessionId), eq(latest.runId, sessionProjectionRuns.runId)));
+    const rows = await db
+        .select({ id: sessionProjectionRuns.runId })
+        .from(sessionProjectionRuns)
+        .where(
+            and(
+                eq(sessionProjectionRuns.sessionId, sessionId),
+                isNotNull(sessionProjectionRuns.runId),
+                eq(sessionProjectionRuns.sequence, maxSequence),
+                inArray(sessionProjectionRuns.state, ['running', 'blocked_on_approval']),
+            ),
+        )
+        .orderBy(sessionProjectionRuns.runId);
+    return rows.map((row) => row.id).filter((id): id is string => id !== null);
+}
+
+async function selectPendingWaitIds(db: Db, sessionId: string): Promise<readonly string[]> {
+    const rows = await db
+        .select({ id: sessionAwaits.waitId })
+        .from(sessionAwaits)
+        .where(and(eq(sessionAwaits.sessionId, sessionId), eq(sessionAwaits.status, 'pending')))
+        .orderBy(sessionAwaits.waitId);
+    return rows.map((row) => row.id);
+}
+
+async function selectMissionRunIds(db: Db, sessionId: string): Promise<readonly string[]> {
+    const rows = await db
+        .select({ id: missionRuns.runId })
+        .from(missionRuns)
+        .where(
+            and(
+                eq(missionRuns.sessionId, sessionId),
+                inArray(missionRuns.status, ['pending', 'running', 'blocked']),
+            ),
+        )
+        .orderBy(missionRuns.runId);
+    return rows.map((row) => row.id);
+}
+
+async function selectToolCallIds(db: Db, sessionId: string): Promise<readonly string[]> {
+    const rows = await db
+        .select({ id: toolCalls.toolCallId })
+        .from(toolCalls)
+        .where(and(eq(toolCalls.sessionId, sessionId), inArray(toolCalls.status, ['pending', 'running'])))
+        .orderBy(toolCalls.toolCallId);
+    return rows.map((row) => row.id);
 }
 
 async function selectInputs(
-    client: Client,
+    db: Db,
     sessionId: string,
 ): Promise<readonly { readonly inputId: string; readonly delivery: 'steer' | 'queue' }[]> {
-    const result = await client.execute({
-        sql: "SELECT input_id, delivery FROM session_inputs WHERE session_id = ? AND status IN ('pending','admitted') ORDER BY input_id",
-        args: [sessionId],
-    });
-    return result.rows.map((row) => {
-        const parsed = inputRowSchema.parse(row);
-        return { inputId: parsed.input_id, delivery: parsed.delivery };
-    });
+    const rows = await db
+        .select({ inputId: sessionInputs.inputId, delivery: sessionInputs.delivery })
+        .from(sessionInputs)
+        .where(and(eq(sessionInputs.sessionId, sessionId), inArray(sessionInputs.status, ['pending', 'admitted'])))
+        .orderBy(sessionInputs.inputId);
+    return rows.map((row) => ({ inputId: row.inputId, delivery: row.delivery }));
 }
 
-async function selectApprovalIds(client: Client, sessionId: string): Promise<readonly string[]> {
-    const result = await client.execute({
-        sql: "SELECT approval_id FROM approvals WHERE session_id = ? AND status = 'pending' ORDER BY approval_id",
-        args: [sessionId],
-    });
-    return result.rows.map((row) => approvalRowSchema.parse(row).approval_id);
+async function selectApprovalIds(db: Db, sessionId: string): Promise<readonly string[]> {
+    const rows = await db
+        .select({ approvalId: approvals.approvalId })
+        .from(approvals)
+        .where(and(eq(approvals.sessionId, sessionId), eq(approvals.status, 'pending')))
+        .orderBy(approvals.approvalId);
+    return rows.map((row) => row.approvalId);
 }
 
-async function selectJobs(client: Client, sessionId: string): Promise<readonly z.infer<typeof jobRowSchema>[]> {
-    const result = await client.execute({
-        sql: "SELECT job_id, status FROM async_jobs WHERE parent_session_id = ? AND status IN ('queued','running') ORDER BY job_id",
-        args: [sessionId],
-    });
-    return result.rows.map((row) => jobRowSchema.parse(row));
+async function selectJobs(
+    db: Db,
+    sessionId: string,
+): Promise<readonly { readonly job_id: string; readonly status: 'queued' | 'running' }[]> {
+    const rows = await db
+        .select({ jobId: asyncJobs.jobId, status: asyncJobs.status })
+        .from(asyncJobs)
+        .where(and(eq(asyncJobs.parentSessionId, sessionId), inArray(asyncJobs.status, ['queued', 'running'])))
+        .orderBy(asyncJobs.jobId);
+    return rows.map((row) => ({
+        job_id: row.jobId,
+        status: row.status as 'queued' | 'running',
+    }));
 }

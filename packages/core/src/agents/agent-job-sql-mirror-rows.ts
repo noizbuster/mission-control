@@ -1,6 +1,6 @@
-import type { InValue } from '@libsql/client';
 import { ProtocolErrorSchema } from '@mission-control/protocol';
 import { z } from 'zod';
+import type { RuntimeAgentStatus } from '../db/session-schema-literals';
 import type { SessionPendingWait } from '../memory/session-status-derivation';
 import type { BackgroundJobHandle } from './async-job-manager';
 import type { AgentKind, AgentRef, AgentStatus } from './runtime-registry';
@@ -18,15 +18,15 @@ const runtimeAgentMetadataSchema = z
 
 const runtimeAgentRowSchema = z
     .object({
-        agent_id: z.string().min(1),
+        agentId: z.string().min(1),
         kind: z.enum(['main', 'sub', 'advisor']),
-        session_id: z.string().min(1),
-        parent_agent_id: z.string().nullable().optional(),
+        sessionId: z.string().min(1),
+        parentAgentId: z.string().nullable().optional(),
         status: z.enum(['idle', 'running', 'parked', 'completed', 'failed', 'cancelled']),
         activity: z.string().nullable().optional(),
-        created_at: z.string().min(1),
-        updated_at: z.string().min(1),
-        metadata_json: z.string().nullable().optional(),
+        createdAt: z.string().min(1),
+        updatedAt: z.string().min(1),
+        metadataJson: z.string().nullable().optional(),
     })
     .strict();
 
@@ -46,20 +46,20 @@ const jobMetadataSchema = z
 
 const asyncJobRowSchema = z
     .object({
-        job_id: z.string().min(1),
-        parent_session_id: z.string().nullable().optional(),
-        child_session_id: z.string().min(1),
-        agent_id: z.string().nullable().optional(),
+        jobId: z.string().min(1),
+        parentSessionId: z.string().nullable().optional(),
+        childSessionId: z.string().min(1),
+        agentId: z.string().nullable().optional(),
         status: z.enum(['queued', 'running', 'completed', 'failed', 'cancelled']),
-        queued_at: z.string().min(1),
-        started_at: z.string().nullable().optional(),
-        completed_at: z.string().nullable().optional(),
-        failed_at: z.string().nullable().optional(),
-        cancelled_at: z.string().nullable().optional(),
-        cancellation_reason: z.string().nullable().optional(),
-        result_json: z.string().nullable().optional(),
-        error_json: z.string().nullable().optional(),
-        metadata_json: z.string().nullable().optional(),
+        queuedAt: z.string().min(1),
+        startedAt: z.string().nullable().optional(),
+        completedAt: z.string().nullable().optional(),
+        failedAt: z.string().nullable().optional(),
+        cancelledAt: z.string().nullable().optional(),
+        cancellationReason: z.string().nullable().optional(),
+        resultJson: z.string().nullable().optional(),
+        errorJson: z.string().nullable().optional(),
+        metadataJson: z.string().nullable().optional(),
     })
     .strict();
 
@@ -71,37 +71,37 @@ const waitMetadataSchema = z
 
 const pendingWaitRowSchema = z
     .object({
-        wait_id: z.string().min(1),
+        waitId: z.string().min(1),
         reason: z.enum(['approval', 'user_input', 'subagent']),
-        source_kind: z.enum(['approval', 'run', 'tool_call', 'job', 'child_session', 'operator']),
-        source_id: z.string().min(1),
-        job_id: z.string().nullable().optional(),
-        child_session_id: z.string().nullable().optional(),
-        metadata_json: z.string().nullable().optional(),
+        sourceKind: z.enum(['approval', 'run', 'tool_call', 'job', 'child_session', 'operator']),
+        sourceId: z.string().min(1),
+        jobId: z.string().nullable().optional(),
+        childSessionId: z.string().nullable().optional(),
+        metadataJson: z.string().nullable().optional(),
     })
     .strict();
 
 export function parseAgentRef(row: unknown): AgentRef | undefined {
     const parsed = runtimeAgentRowSchema.safeParse(row);
     if (!parsed.success) return undefined;
-    const metadata = parseJson(parsed.data.metadata_json, runtimeAgentMetadataSchema);
+    const metadata = parseJson(parsed.data.metadataJson, runtimeAgentMetadataSchema);
     if (metadata === undefined) return undefined;
     return {
-        id: parsed.data.agent_id,
+        id: parsed.data.agentId,
         displayName: metadata.displayName,
         kind: parsed.data.kind satisfies AgentKind,
-        ...(parsed.data.parent_agent_id !== null && parsed.data.parent_agent_id !== undefined
-            ? { parentId: parsed.data.parent_agent_id }
+        ...(parsed.data.parentAgentId !== null && parsed.data.parentAgentId !== undefined
+            ? { parentId: parsed.data.parentAgentId }
             : {}),
         status: runtimeStatusFromDb(parsed.data.status),
-        sessionId: parsed.data.session_id,
+        sessionId: parsed.data.sessionId,
         ...(metadata.sessionFile !== undefined ? { sessionFile: metadata.sessionFile } : {}),
         ...(metadata.authorityFingerprint !== undefined ? { authorityFingerprint: metadata.authorityFingerprint } : {}),
         ...(metadata.taskDepth !== undefined ? { taskDepth: metadata.taskDepth } : {}),
         ...(metadata.category !== undefined ? { category: metadata.category } : {}),
         ...(metadata.title !== undefined ? { title: metadata.title } : {}),
-        createdAt: parsed.data.created_at,
-        lastActivity: parsed.data.updated_at,
+        createdAt: parsed.data.createdAt,
+        lastActivity: parsed.data.updatedAt,
         ...(parsed.data.activity !== null && parsed.data.activity !== undefined
             ? { activity: parsed.data.activity }
             : {}),
@@ -111,7 +111,7 @@ export function parseAgentRef(row: unknown): AgentRef | undefined {
 export function parseJob(row: unknown): BackgroundJobHandle | undefined {
     const parsed = asyncJobRowSchema.safeParse(row);
     if (!parsed.success) return undefined;
-    const parsedResult = parseJson(parsed.data.result_json, jobResultSchema);
+    const parsedResult = parseJson(parsed.data.resultJson, jobResultSchema);
     const result =
         parsedResult === undefined
             ? undefined
@@ -120,24 +120,24 @@ export function parseJob(row: unknown): BackgroundJobHandle | undefined {
                   output: parsedResult.output,
                   ...(parsedResult.failure !== undefined ? { failure: parsedResult.failure } : {}),
               };
-    const metadata = parseJson(parsed.data.metadata_json, jobMetadataSchema) ?? {};
-    const completedAt = parsed.data.completed_at ?? parsed.data.failed_at ?? parsed.data.cancelled_at ?? undefined;
+    const metadata = parseJson(parsed.data.metadataJson, jobMetadataSchema) ?? {};
+    const completedAt = parsed.data.completedAt ?? parsed.data.failedAt ?? parsed.data.cancelledAt ?? undefined;
     return {
-        jobId: parsed.data.job_id,
-        sessionId: parsed.data.child_session_id,
-        ...(parsed.data.parent_session_id !== null && parsed.data.parent_session_id !== undefined
-            ? { parentSessionId: parsed.data.parent_session_id }
+        jobId: parsed.data.jobId,
+        sessionId: parsed.data.childSessionId,
+        ...(parsed.data.parentSessionId !== null && parsed.data.parentSessionId !== undefined
+            ? { parentSessionId: parsed.data.parentSessionId }
             : {}),
-        ...(parsed.data.agent_id !== null && parsed.data.agent_id !== undefined
-            ? { agentId: parsed.data.agent_id }
+        ...(parsed.data.agentId !== null && parsed.data.agentId !== undefined
+            ? { agentId: parsed.data.agentId }
             : {}),
         ...(metadata.blocking !== undefined ? { blocking: metadata.blocking } : {}),
         status: parsed.data.status,
-        startedAt: parsed.data.queued_at,
+        startedAt: parsed.data.queuedAt,
         ...(result !== undefined ? { result } : {}),
         ...(completedAt !== undefined ? { completedAt } : {}),
-        ...(parsed.data.cancellation_reason !== null && parsed.data.cancellation_reason !== undefined
-            ? { cancellationReason: parsed.data.cancellation_reason }
+        ...(parsed.data.cancellationReason !== null && parsed.data.cancellationReason !== undefined
+            ? { cancellationReason: parsed.data.cancellationReason }
             : {}),
     };
 }
@@ -146,21 +146,21 @@ export function parsePendingWait(row: unknown): SessionPendingWait | undefined {
     const parsed = pendingWaitRowSchema.safeParse(row);
     if (!parsed.success) return undefined;
     if (parsed.data.reason !== 'subagent') return undefined;
-    const metadata = parseJson(parsed.data.metadata_json, waitMetadataSchema) ?? { mode: 'sync' };
-    const childSessionId = parsed.data.child_session_id ?? parsed.data.source_id;
+    const metadata = parseJson(parsed.data.metadataJson, waitMetadataSchema) ?? { mode: 'sync' };
+    const childSessionId = parsed.data.childSessionId ?? parsed.data.sourceId;
     return {
-        waitId: parsed.data.wait_id,
+        waitId: parsed.data.waitId,
         reason: 'subagent',
         source: {
             kind: 'subagent',
-            jobId: parsed.data.job_id ?? parsed.data.wait_id,
+            jobId: parsed.data.jobId ?? parsed.data.waitId,
             childSessionId,
             mode: metadata.mode,
         },
     };
 }
 
-export function runtimeStatusToDb(status: AgentStatus): InValue {
+export function runtimeStatusToDb(status: AgentStatus): RuntimeAgentStatus {
     switch (status) {
         case 'idle':
         case 'running':

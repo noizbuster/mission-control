@@ -1,11 +1,14 @@
 import type { Client } from '@libsql/client';
 import type { SessionStopBarrierKind } from '@mission-control/protocol';
+import { and, eq, lte } from 'drizzle-orm';
+import { drizzleFromClient } from '../db/drizzle-client';
 import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db';
+import { sessionControlOperations } from '../db/schema';
 import type { SessionControlLease } from './session-control-lease';
 import {
     insertSessionControlOperation,
     isLiveOperationLease,
-    operationFromRow,
+    operationFromDrizzleRow,
     runSessionControlOperationImmediate,
     selectSessionControlOperation,
 } from './session-control-operation-sql';
@@ -104,21 +107,24 @@ export async function completeSessionControlOperationWithClient(
     if (!allHandlesSettled(operation)) {
         throw new Error('session control operation cannot complete before every captured handle settles');
     }
-    await client.execute({
-        sql:
-            'UPDATE session_control_operations SET status = ?, receipt_json = ?, barrier_released_at = ?, ' +
-            "terminal_at = ?, retention_until = ? WHERE db_identity = ? AND session_id = ? AND operation_id = ? AND status = 'active'",
-        args: [
-            input.status,
-            JSON.stringify(input.receipt),
-            input.barrierReleasedAt,
-            input.nowWallMs,
-            input.nowWallMs + SESSION_CONTROL_SETTLED_RETENTION_MS,
-            operation.dbIdentity,
-            operation.sessionId,
-            operation.operationId,
-        ],
-    });
+    const db = drizzleFromClient(client);
+    await db
+        .update(sessionControlOperations)
+        .set({
+            status: input.status,
+            receiptJson: JSON.stringify(input.receipt),
+            barrierReleasedAt: input.barrierReleasedAt,
+            terminalAt: input.nowWallMs,
+            retentionUntil: input.nowWallMs + SESSION_CONTROL_SETTLED_RETENTION_MS,
+        })
+        .where(
+            and(
+                eq(sessionControlOperations.dbIdentity, operation.dbIdentity),
+                eq(sessionControlOperations.sessionId, operation.sessionId),
+                eq(sessionControlOperations.operationId, operation.operationId),
+                eq(sessionControlOperations.status, 'active'),
+            ),
+        );
 }
 
 export async function timeoutSessionControlOperation(
@@ -152,11 +158,17 @@ export async function recoverExpiredSessionControlOperations(input: {
 }): Promise<readonly string[]> {
     assertOperationWallTime(input.nowWallMs);
     const operationIds = await runSessionControlOperationImmediate(input.runtime, async (client) => {
-        const result = await client.execute({
-            sql: "SELECT * FROM session_control_operations WHERE status = 'active' AND deadline_wall_ms <= ?",
-            args: [input.nowWallMs],
-        });
-        const expired = result.rows.map(operationFromRow);
+        const db = drizzleFromClient(client);
+        const rows = await db
+            .select()
+            .from(sessionControlOperations)
+            .where(
+                and(
+                    eq(sessionControlOperations.status, 'active'),
+                    lte(sessionControlOperations.deadlineWallMs, input.nowWallMs),
+                ),
+            );
+        const expired = rows.map(operationFromDrizzleRow);
         for (const operation of expired) {
             await writeTimeout(
                 client,
@@ -205,19 +217,23 @@ async function writeTimeout(
     barrierReleasedAt: number,
     terminalAt: number,
 ): Promise<void> {
-    await client.execute({
-        sql:
-            "UPDATE session_control_operations SET status = 'timed_out', receipt_json = ?, barrier_released_at = ?, " +
-            "terminal_at = ? WHERE db_identity = ? AND session_id = ? AND operation_id = ? AND status = 'active'",
-        args: [
-            JSON.stringify(receipt),
+    const db = drizzleFromClient(client);
+    await db
+        .update(sessionControlOperations)
+        .set({
+            status: 'timed_out',
+            receiptJson: JSON.stringify(receipt),
             barrierReleasedAt,
             terminalAt,
-            operation.dbIdentity,
-            operation.sessionId,
-            operation.operationId,
-        ],
-    });
+        })
+        .where(
+            and(
+                eq(sessionControlOperations.dbIdentity, operation.dbIdentity),
+                eq(sessionControlOperations.sessionId, operation.sessionId),
+                eq(sessionControlOperations.operationId, operation.operationId),
+                eq(sessionControlOperations.status, 'active'),
+            ),
+        );
 }
 
 function allHandlesSettled(operation: SessionControlOperation): boolean {

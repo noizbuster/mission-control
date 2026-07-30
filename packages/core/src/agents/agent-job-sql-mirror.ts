@@ -1,14 +1,12 @@
 import type { Client } from '@libsql/client';
+import { and, asc, eq } from 'drizzle-orm';
+import { drizzleFromClient } from '../db/drizzle-client';
 import { type LocalLibsqlWriteTarget, runLocalLibsqlWrite } from '../db/local-libsql-db';
 import { runLocalLibsqlClientTransaction } from '../db/local-libsql-transaction';
+import { asyncJobs, runtimeAgents, sessionAwaits } from '../db/schema';
 import type { SessionBackgroundJob, SessionPendingWait } from '../memory/session-status-derivation';
 import { resolveAskUserInputWait, startAskUserInputWait } from '../tools/ask-user-wait-sql';
-import {
-    activeJobStatuses,
-    backgroundJobFrom,
-    cancelRecoveredJob,
-    selectJobColumns,
-} from './agent-job-sql-mirror-handles';
+import { activeJobStatuses, backgroundJobFrom, cancelRecoveredJob } from './agent-job-sql-mirror-handles';
 import {
     recordJobWithLifecycle,
     resolveSubagentWaitWithJob,
@@ -53,9 +51,10 @@ export class SqlAgentJobMirror implements RuntimeAgentPersistenceMirror, TaskToo
 
     releaseRuntimeAgent(agentId: string): void {
         this.enqueue(() =>
-            this.write((client) =>
-                client.execute({ sql: 'DELETE FROM runtime_agents WHERE agent_id = ?', args: [agentId] }),
-            ),
+            this.write(async (client) => {
+                const db = drizzleFromClient(client);
+                await db.delete(runtimeAgents).where(eq(runtimeAgents.agentId, agentId));
+            }),
         );
     }
 
@@ -74,20 +73,49 @@ export class SqlAgentJobMirror implements RuntimeAgentPersistenceMirror, TaskToo
     }
 
     async loadRuntimeAgents(): Promise<readonly AgentRef[]> {
-        const result = await this.client.execute(
-            'SELECT agent_id, kind, session_id, parent_agent_id, status, activity, created_at, updated_at, metadata_json FROM runtime_agents ORDER BY created_at, agent_id',
-        );
-        return result.rows.flatMap((row) => {
+        const db = drizzleFromClient(this.client);
+        const rows = await db
+            .select({
+                agentId: runtimeAgents.agentId,
+                kind: runtimeAgents.kind,
+                sessionId: runtimeAgents.sessionId,
+                parentAgentId: runtimeAgents.parentAgentId,
+                status: runtimeAgents.status,
+                activity: runtimeAgents.activity,
+                createdAt: runtimeAgents.createdAt,
+                updatedAt: runtimeAgents.updatedAt,
+                metadataJson: runtimeAgents.metadataJson,
+            })
+            .from(runtimeAgents)
+            .orderBy(asc(runtimeAgents.createdAt), asc(runtimeAgents.agentId));
+        return rows.flatMap((row) => {
             const ref = parseAgentRef(row);
             return ref === undefined ? [] : [ref];
         });
     }
 
     async loadJobs(): Promise<readonly BackgroundJobHandle[]> {
-        const result = await this.client.execute(
-            `SELECT ${selectJobColumns} FROM async_jobs ORDER BY queued_at, job_id`,
-        );
-        return result.rows.flatMap((row) => {
+        const db = drizzleFromClient(this.client);
+        const rows = await db
+            .select({
+                jobId: asyncJobs.jobId,
+                parentSessionId: asyncJobs.parentSessionId,
+                childSessionId: asyncJobs.childSessionId,
+                agentId: asyncJobs.agentId,
+                status: asyncJobs.status,
+                queuedAt: asyncJobs.queuedAt,
+                startedAt: asyncJobs.startedAt,
+                completedAt: asyncJobs.completedAt,
+                failedAt: asyncJobs.failedAt,
+                cancelledAt: asyncJobs.cancelledAt,
+                cancellationReason: asyncJobs.cancellationReason,
+                resultJson: asyncJobs.resultJson,
+                errorJson: asyncJobs.errorJson,
+                metadataJson: asyncJobs.metadataJson,
+            })
+            .from(asyncJobs)
+            .orderBy(asc(asyncJobs.queuedAt), asc(asyncJobs.jobId));
+        return rows.flatMap((row) => {
             const job = parseJob(row);
             return job === undefined ? [] : [job];
         });
@@ -137,24 +165,49 @@ export class SqlAgentJobMirror implements RuntimeAgentPersistenceMirror, TaskToo
     }
 
     async loadPendingWaits(parentSessionId: string): Promise<readonly SessionPendingWait[]> {
-        const result = await this.client.execute({
-            sql:
-                'SELECT wait_id, reason, source_kind, source_id, job_id, child_session_id, metadata_json ' +
-                'FROM session_awaits WHERE session_id = ? AND status = ? ORDER BY created_at, wait_id',
-            args: [parentSessionId, 'pending'],
-        });
-        return result.rows.flatMap((row) => {
+        const db = drizzleFromClient(this.client);
+        const rows = await db
+            .select({
+                waitId: sessionAwaits.waitId,
+                reason: sessionAwaits.reason,
+                sourceKind: sessionAwaits.sourceKind,
+                sourceId: sessionAwaits.sourceId,
+                jobId: sessionAwaits.jobId,
+                childSessionId: sessionAwaits.childSessionId,
+                metadataJson: sessionAwaits.metadataJson,
+            })
+            .from(sessionAwaits)
+            .where(and(eq(sessionAwaits.sessionId, parentSessionId), eq(sessionAwaits.status, 'pending')))
+            .orderBy(asc(sessionAwaits.createdAt), asc(sessionAwaits.waitId));
+        return rows.flatMap((row) => {
             const wait = parsePendingWait(row);
             return wait === undefined ? [] : [wait];
         });
     }
 
     async loadBackgroundJobsForParent(parentSessionId: string): Promise<readonly SessionBackgroundJob[]> {
-        const result = await this.client.execute({
-            sql: `SELECT ${selectJobColumns} FROM async_jobs WHERE parent_session_id = ? ORDER BY queued_at, job_id`,
-            args: [parentSessionId],
-        });
-        return result.rows.flatMap((row) => {
+        const db = drizzleFromClient(this.client);
+        const rows = await db
+            .select({
+                jobId: asyncJobs.jobId,
+                parentSessionId: asyncJobs.parentSessionId,
+                childSessionId: asyncJobs.childSessionId,
+                agentId: asyncJobs.agentId,
+                status: asyncJobs.status,
+                queuedAt: asyncJobs.queuedAt,
+                startedAt: asyncJobs.startedAt,
+                completedAt: asyncJobs.completedAt,
+                failedAt: asyncJobs.failedAt,
+                cancelledAt: asyncJobs.cancelledAt,
+                cancellationReason: asyncJobs.cancellationReason,
+                resultJson: asyncJobs.resultJson,
+                errorJson: asyncJobs.errorJson,
+                metadataJson: asyncJobs.metadataJson,
+            })
+            .from(asyncJobs)
+            .where(eq(asyncJobs.parentSessionId, parentSessionId))
+            .orderBy(asc(asyncJobs.queuedAt), asc(asyncJobs.jobId));
+        return rows.flatMap((row) => {
             const handle = parseJob(row);
             return handle === undefined ? [] : [backgroundJobFrom(handle)];
         });

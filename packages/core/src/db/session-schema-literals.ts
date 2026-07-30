@@ -36,7 +36,7 @@ export type SessionRelationKind = (typeof sessionRelationKinds)[number];
 export const missionRunStatuses = ['pending', 'running', 'blocked', 'completed', 'failed', 'cancelled'] as const;
 export type MissionRunStatus = (typeof missionRunStatuses)[number];
 
-export const approvalStatuses = ['pending', 'approved', 'denied', 'cancelled'] as const;
+export const approvalStatuses = ['pending', 'approved', 'denied', 'cancelled', 'expired'] as const;
 export type ApprovalStatus = (typeof approvalStatuses)[number];
 
 export const toolCallStatuses = ['pending', 'running', 'completed', 'failed', 'cancelled'] as const;

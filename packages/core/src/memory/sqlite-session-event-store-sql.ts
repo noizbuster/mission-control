@@ -1,5 +1,8 @@
 import type { Client } from '@libsql/client';
 import type { AgentEvent, AgentEventEnvelope } from '@mission-control/protocol';
+import { and, eq, sql } from 'drizzle-orm';
+import { drizzleFromClient } from '../db/drizzle-client';
+import { sessionAwaits, sessionEventSequences, sessionEvents, sessions } from '../db/schema';
 import { nextSequenceFrom } from './sqlite-session-event-store-rows';
 
 type SessionSqlInput = {
@@ -8,62 +11,61 @@ type SessionSqlInput = {
 };
 
 export async function ensureSqliteSessionRows(input: SessionSqlInput & { readonly createdAt: string }): Promise<void> {
-    await input.client.execute({
-        sql: `
-            INSERT INTO sessions (session_id, status, created_at, updated_at, last_activity_at)
-            VALUES (?, 'running', ?, ?, ?)
-            ON CONFLICT(session_id) DO NOTHING
-        `,
-        args: [input.sessionId, input.createdAt, input.createdAt, input.createdAt],
-    });
-    await input.client.execute({
-        sql: `
-            INSERT INTO session_event_sequences (session_id, next_seq, updated_at)
-            VALUES (?, 0, ?)
-            ON CONFLICT(session_id) DO NOTHING
-        `,
-        args: [input.sessionId, input.createdAt],
-    });
+    const db = drizzleFromClient(input.client);
+    await db
+        .insert(sessions)
+        .values({
+            sessionId: input.sessionId,
+            status: 'running',
+            createdAt: input.createdAt,
+            updatedAt: input.createdAt,
+            lastActivityAt: input.createdAt,
+        })
+        .onConflictDoNothing({ target: sessions.sessionId });
+    await db
+        .insert(sessionEventSequences)
+        .values({
+            sessionId: input.sessionId,
+            nextSeq: 0,
+            updatedAt: input.createdAt,
+        })
+        .onConflictDoNothing({ target: sessionEventSequences.sessionId });
 }
 
 export async function readSqliteNextSequence(input: SessionSqlInput): Promise<number> {
-    const row = await input.client.execute({
-        sql: 'SELECT next_seq FROM session_event_sequences WHERE session_id = ?',
-        args: [input.sessionId],
-    });
-    return nextSequenceFrom(row, input.sessionId);
+    const db = drizzleFromClient(input.client);
+    const rows = await db
+        .select({ next_seq: sessionEventSequences.nextSeq })
+        .from(sessionEventSequences)
+        .where(eq(sessionEventSequences.sessionId, input.sessionId));
+    return nextSequenceFrom({ rows }, input.sessionId);
 }
 
 export async function hasSqliteEventId(input: SessionSqlInput & { readonly eventId: string }): Promise<boolean> {
-    const existing = await input.client.execute({
-        sql: 'SELECT event_id FROM session_events WHERE event_id = ?',
-        args: [input.eventId],
-    });
-    return existing.rows.length > 0;
+    const db = drizzleFromClient(input.client);
+    const existing = await db
+        .select({ eventId: sessionEvents.eventId })
+        .from(sessionEvents)
+        .where(eq(sessionEvents.eventId, input.eventId))
+        .limit(1);
+    return existing.length > 0;
 }
 
 export async function insertSqliteSessionEnvelope(
     input: SessionSqlInput & { readonly envelope: AgentEventEnvelope },
 ): Promise<void> {
-    await input.client.execute({
-        sql: `
-            INSERT INTO session_events (
-                session_id, seq, event_id, type, timestamp, run_id, turn_id,
-                causation_id, correlation_id, payload_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `,
-        args: [
-            input.sessionId,
-            input.envelope.sequence,
-            input.envelope.eventId,
-            input.envelope.event.type,
-            input.envelope.event.timestamp,
-            input.envelope.event.run?.runId ?? null,
-            null,
-            input.envelope.causationId ?? null,
-            input.envelope.correlationId ?? null,
-            JSON.stringify(input.envelope),
-        ],
+    const db = drizzleFromClient(input.client);
+    await db.insert(sessionEvents).values({
+        sessionId: input.sessionId,
+        seq: input.envelope.sequence,
+        eventId: input.envelope.eventId,
+        type: input.envelope.event.type,
+        timestamp: input.envelope.event.timestamp,
+        runId: input.envelope.event.run?.runId ?? null,
+        turnId: null,
+        causationId: input.envelope.causationId ?? null,
+        correlationId: input.envelope.correlationId ?? null,
+        payloadJson: JSON.stringify(input.envelope),
     });
 }
 
@@ -73,28 +75,20 @@ export async function touchSqliteSessionActivity(
         readonly status?: 'running';
     },
 ): Promise<void> {
-    await input.client.execute({
-        sql: `
-            UPDATE sessions
-            SET updated_at = ?,
-                last_activity_at = ?,
-                status = CASE
-                    WHEN status IN (?, ?) THEN status
-                    WHEN ? IS NOT NULL THEN ?
-                    ELSE status
-                END
-            WHERE session_id = ?
-        `,
-        args: [
-            input.activityAt,
-            input.activityAt,
-            'stopped',
-            'failed',
-            input.status ?? null,
-            input.status ?? null,
-            input.sessionId,
-        ],
-    });
+    const db = drizzleFromClient(input.client);
+    const status = input.status ?? null;
+    await db
+        .update(sessions)
+        .set({
+            updatedAt: input.activityAt,
+            lastActivityAt: input.activityAt,
+            status: sql`CASE
+                WHEN ${sessions.status} IN ('stopped', 'failed') THEN ${sessions.status}
+                WHEN ${status} IS NOT NULL THEN ${status}
+                ELSE ${sessions.status}
+            END`,
+        })
+        .where(eq(sessions.sessionId, input.sessionId));
 }
 
 export async function updateSqliteSessionAfterAppend(
@@ -106,59 +100,49 @@ export async function updateSqliteSessionAfterAppend(
         readonly activityAt: string;
     },
 ): Promise<void> {
-    await input.client.execute({
-        sql: 'UPDATE session_event_sequences SET next_seq = ?, updated_at = ? WHERE session_id = ?',
-        args: [input.sequence + 1, input.sequenceUpdatedAt, input.sessionId],
-    });
+    const db = drizzleFromClient(input.client);
+    await db
+        .update(sessionEventSequences)
+        .set({
+            nextSeq: input.sequence + 1,
+            updatedAt: input.sequenceUpdatedAt,
+        })
+        .where(eq(sessionEventSequences.sessionId, input.sessionId));
+
     const nextStatus = sessionStatusAfterEvent(input.event);
     const clearsWait = clearsPendingApprovalWait(input.event);
-    await input.client.execute({
-        sql: `
-            UPDATE sessions
-            SET status = CASE
-                    WHEN ? IS NOT NULL THEN ?
-                    ELSE status
-                END,
-                awaiting_reason = CASE
-                    WHEN ? = 'run.blocked' THEN 'approval'
-                    WHEN ? OR ? = 'session.stopped' THEN NULL
-                    ELSE awaiting_reason
-                END,
-                primary_wait_id = CASE
-                    WHEN ? = 'run.blocked' THEN ?
-                    WHEN ? OR ? = 'session.stopped' THEN NULL
-                    ELSE primary_wait_id
-                END,
-                stopped_at = CASE WHEN ? = 'session.stopped' THEN ? ELSE stopped_at END,
-                last_event_seq = ?,
-                updated_at = ?,
-                last_activity_at = ?,
-                metadata_json = ?
-            WHERE session_id = ?
-        `,
-        args: [
-            nextStatus,
-            nextStatus,
-            input.event.type,
-            clearsWait,
-            input.event.type,
-            input.event.type,
-            approvalWaitId(input.event),
-            clearsWait,
-            input.event.type,
-            input.event.type,
-            input.activityAt,
-            input.sequence,
-            input.sequenceUpdatedAt,
-            input.activityAt,
-            JSON.stringify({
+    const eventType = input.event.type;
+    const waitId = approvalWaitId(input.event);
+
+    await db
+        .update(sessions)
+        .set({
+            status: sql`CASE
+                WHEN ${nextStatus} IS NOT NULL THEN ${nextStatus}
+                ELSE ${sessions.status}
+            END`,
+            awaitingReason: sql`CASE
+                WHEN ${eventType} = 'run.blocked' THEN 'approval'
+                WHEN ${clearsWait} OR ${eventType} = 'session.stopped' THEN NULL
+                ELSE ${sessions.awaitingReason}
+            END`,
+            primaryWaitId: sql`CASE
+                WHEN ${eventType} = 'run.blocked' THEN ${waitId}
+                WHEN ${clearsWait} OR ${eventType} = 'session.stopped' THEN NULL
+                ELSE ${sessions.primaryWaitId}
+            END`,
+            stoppedAt: sql`CASE WHEN ${eventType} = 'session.stopped' THEN ${input.activityAt} ELSE ${sessions.stoppedAt} END`,
+            lastEventSeq: input.sequence,
+            updatedAt: input.sequenceUpdatedAt,
+            lastActivityAt: input.activityAt,
+            metadataJson: JSON.stringify({
                 eventCount: input.sequence + 1,
                 lastEventId: input.eventId,
                 lastEventType: input.event.type,
             }),
-            input.sessionId,
-        ],
-    });
+        })
+        .where(eq(sessions.sessionId, input.sessionId));
+
     if (isApprovalBlockedRun(input.event)) {
         await insertApprovalWait({
             client: input.client,
@@ -241,55 +225,84 @@ async function insertApprovalWait(input: SessionSqlInput & { readonly event: Age
     if (waitId === null) {
         return;
     }
-    await input.client.execute({
-        sql: `
-            INSERT INTO session_awaits (
-                wait_id, session_id, reason, source_kind, source_id, run_id, tool_call_id,
-                approval_id, status, created_at, metadata_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(wait_id) DO UPDATE SET
-                status = excluded.status,
-                resolved_at = NULL,
-                cancelled_at = NULL,
-                metadata_json = excluded.metadata_json
-        `,
-        args: [
+    const db = drizzleFromClient(input.client);
+    const metadataJson = JSON.stringify({ reason: input.event.run?.reason ?? null });
+    await db
+        .insert(sessionAwaits)
+        .values({
             waitId,
-            input.sessionId,
-            'approval',
-            input.event.run?.toolCallId === undefined ? 'run' : 'tool_call',
-            waitId,
-            input.event.run?.runId ?? null,
-            input.event.run?.toolCallId ?? null,
-            null,
-            'pending',
-            input.createdAt,
-            JSON.stringify({ reason: input.event.run?.reason ?? null }),
-        ],
-    });
+            sessionId: input.sessionId,
+            reason: 'approval',
+            sourceKind: input.event.run?.toolCallId === undefined ? 'run' : 'tool_call',
+            sourceId: waitId,
+            runId: input.event.run?.runId ?? null,
+            toolCallId: input.event.run?.toolCallId ?? null,
+            approvalId: null,
+            status: 'pending',
+            createdAt: input.createdAt,
+            metadataJson,
+        })
+        .onConflictDoUpdate({
+            target: sessionAwaits.waitId,
+            set: {
+                status: 'pending',
+                resolvedAt: null,
+                cancelledAt: null,
+                metadataJson,
+            },
+        });
 }
 
 async function resolveApprovalWaits(input: SessionSqlInput & { readonly resolvedAt: string }) {
-    await input.client.execute({
-        sql: 'UPDATE session_awaits SET status = ?, resolved_at = ? WHERE session_id = ? AND reason = ? AND status = ?',
-        args: ['resolved', input.resolvedAt, input.sessionId, 'approval', 'pending'],
-    });
+    const db = drizzleFromClient(input.client);
+    await db
+        .update(sessionAwaits)
+        .set({
+            status: 'resolved',
+            resolvedAt: input.resolvedAt,
+        })
+        .where(
+            and(
+                eq(sessionAwaits.sessionId, input.sessionId),
+                eq(sessionAwaits.reason, 'approval'),
+                eq(sessionAwaits.status, 'pending'),
+            ),
+        );
 }
 
 async function cancelApprovalWaits(input: SessionSqlInput & { readonly cancelledAt: string }) {
-    await input.client.execute({
-        sql: 'UPDATE session_awaits SET status = ?, resolved_at = NULL, cancelled_at = ? WHERE session_id = ? AND reason = ? AND status = ?',
-        args: ['cancelled', input.cancelledAt, input.sessionId, 'approval', 'pending'],
-    });
+    const db = drizzleFromClient(input.client);
+    await db
+        .update(sessionAwaits)
+        .set({
+            status: 'cancelled',
+            resolvedAt: null,
+            cancelledAt: input.cancelledAt,
+        })
+        .where(
+            and(
+                eq(sessionAwaits.sessionId, input.sessionId),
+                eq(sessionAwaits.reason, 'approval'),
+                eq(sessionAwaits.status, 'pending'),
+            ),
+        );
 }
 
 async function cancelInputWait(input: SessionSqlInput & { readonly inputId: string; readonly cancelledAt: string }) {
-    await input.client.execute({
-        sql: `
-            UPDATE session_awaits
-            SET status = ?, resolved_at = NULL, cancelled_at = ?
-            WHERE session_id = ? AND source_kind = ? AND source_id = ? AND status = ?
-        `,
-        args: ['cancelled', input.cancelledAt, input.sessionId, 'operator', input.inputId, 'pending'],
-    });
+    const db = drizzleFromClient(input.client);
+    await db
+        .update(sessionAwaits)
+        .set({
+            status: 'cancelled',
+            resolvedAt: null,
+            cancelledAt: input.cancelledAt,
+        })
+        .where(
+            and(
+                eq(sessionAwaits.sessionId, input.sessionId),
+                eq(sessionAwaits.sourceKind, 'operator'),
+                eq(sessionAwaits.sourceId, input.inputId),
+                eq(sessionAwaits.status, 'pending'),
+            ),
+        );
 }

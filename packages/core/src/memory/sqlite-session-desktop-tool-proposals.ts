@@ -1,11 +1,14 @@
 import type { Client } from '@libsql/client';
 import { type ToolCall, ToolCallSchema } from '@mission-control/protocol';
+import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import { drizzleFromClient } from '../db/drizzle-client';
+import { desktopToolProposals } from '../db/schema';
 
 const DesktopToolProposalRowSchema = z.object({
-    tool_call_id: z.string(),
-    tool_name: z.string(),
-    arguments_json: z.string(),
+    toolCallId: z.string(),
+    toolName: z.string(),
+    argumentsJson: z.string(),
 });
 
 export async function recordSqliteDesktopToolProposals(
@@ -14,17 +17,24 @@ export async function recordSqliteDesktopToolProposals(
     toolCalls: readonly ToolCall[],
     createdAt: string,
 ): Promise<void> {
+    const db = drizzleFromClient(client);
     for (const toolCall of toolCalls) {
-        await client.execute({
-            sql:
-                'INSERT INTO desktop_tool_proposals ' +
-                '(session_id,tool_call_id,tool_name,arguments_json,created_at,conflicted) VALUES (?,?,?,?,?,0) ' +
-                'ON CONFLICT(session_id,tool_call_id) DO UPDATE SET conflicted = CASE ' +
-                'WHEN desktop_tool_proposals.tool_name <> excluded.tool_name ' +
-                'OR desktop_tool_proposals.arguments_json <> excluded.arguments_json THEN 1 ' +
-                'ELSE desktop_tool_proposals.conflicted END',
-            args: [sessionId, toolCall.toolCallId, toolCall.toolName, toolCall.argumentsJson, createdAt],
-        });
+        await db
+            .insert(desktopToolProposals)
+            .values({
+                sessionId,
+                toolCallId: toolCall.toolCallId,
+                toolName: toolCall.toolName,
+                argumentsJson: toolCall.argumentsJson,
+                createdAt,
+                conflicted: 0,
+            })
+            .onConflictDoUpdate({
+                target: [desktopToolProposals.sessionId, desktopToolProposals.toolCallId],
+                set: {
+                    conflicted: sql`CASE WHEN ${desktopToolProposals.toolName} <> excluded.tool_name OR ${desktopToolProposals.argumentsJson} <> excluded.arguments_json THEN 1 ELSE ${desktopToolProposals.conflicted} END`,
+                },
+            });
     }
 }
 
@@ -33,18 +43,27 @@ export async function readSqliteDesktopToolProposal(
     sessionId: string,
     toolCallId: string,
 ): Promise<ToolCall | undefined> {
-    const result = await client.execute({
-        sql:
-            'SELECT tool_call_id,tool_name,arguments_json FROM desktop_tool_proposals ' +
-            'WHERE session_id = ? AND tool_call_id = ? AND conflicted = 0',
-        args: [sessionId, toolCallId],
-    });
-    const row = result.rows[0];
+    const db = drizzleFromClient(client);
+    const rows = await db
+        .select({
+            toolCallId: desktopToolProposals.toolCallId,
+            toolName: desktopToolProposals.toolName,
+            argumentsJson: desktopToolProposals.argumentsJson,
+        })
+        .from(desktopToolProposals)
+        .where(
+            and(
+                eq(desktopToolProposals.sessionId, sessionId),
+                eq(desktopToolProposals.toolCallId, toolCallId),
+                eq(desktopToolProposals.conflicted, 0),
+            ),
+        );
+    const row = rows[0];
     if (row === undefined) return undefined;
     const parsed = DesktopToolProposalRowSchema.parse(row);
     return ToolCallSchema.parse({
-        toolCallId: parsed.tool_call_id,
-        toolName: parsed.tool_name,
-        argumentsJson: parsed.arguments_json,
+        toolCallId: parsed.toolCallId,
+        toolName: parsed.toolName,
+        argumentsJson: parsed.argumentsJson,
     });
 }

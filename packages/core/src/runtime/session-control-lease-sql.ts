@@ -1,20 +1,10 @@
 import type { Client } from '@libsql/client';
-import { z } from 'zod';
+import { and, eq, lte } from 'drizzle-orm';
+import { drizzleFromClient } from '../db/drizzle-client';
 import { type LocalLibsqlWriteTarget, runLocalLibsqlWrite } from '../db/local-libsql-db';
 import { runLocalLibsqlClientTransaction } from '../db/local-libsql-transaction';
+import { sessionControlLeases } from '../db/schema';
 import type { SessionControlLease } from './session-control-lease';
-
-const leaseRowSchema = z.object({
-    db_identity: z.string(),
-    session_id: z.string(),
-    owner_id: z.string(),
-    epoch: z.number().int().positive(),
-    nonce_hash: z.string(),
-    pid: z.number().int().nonnegative(),
-    process_start_id: z.string(),
-    heartbeat_wall_ms: z.number().int().nonnegative(),
-    expires_wall_ms: z.number().int().nonnegative(),
-});
 
 export async function runSessionControlLeaseImmediate<T>(
     runtime: LocalLibsqlWriteTarget,
@@ -28,21 +18,28 @@ export async function selectSessionControlLease(
     dbIdentity: string,
     sessionId: string,
 ): Promise<SessionControlLease | undefined> {
-    const result = await client.execute({
-        sql: 'SELECT * FROM session_control_leases WHERE db_identity = ? AND session_id = ?',
-        args: [dbIdentity, sessionId],
-    });
-    const row = result.rows[0];
-    return row === undefined ? undefined : leaseFromRow(row);
+    const db = drizzleFromClient(client);
+    const rows = await db
+        .select()
+        .from(sessionControlLeases)
+        .where(and(eq(sessionControlLeases.dbIdentity, dbIdentity), eq(sessionControlLeases.sessionId, sessionId)))
+        .limit(1);
+    const row = rows[0];
+    return row === undefined ? undefined : leaseFromDrizzleRow(row);
 }
 
 export async function insertSessionControlLease(client: Client, lease: SessionControlLease) {
-    return client.execute({
-        sql:
-            'INSERT INTO session_control_leases ' +
-            '(db_identity, session_id, owner_id, epoch, nonce_hash, pid, process_start_id, heartbeat_wall_ms, expires_wall_ms) ' +
-            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        args: leaseArgs(lease),
+    const db = drizzleFromClient(client);
+    return db.insert(sessionControlLeases).values({
+        dbIdentity: lease.dbIdentity,
+        sessionId: lease.sessionId,
+        ownerId: lease.ownerId,
+        epoch: lease.epoch,
+        nonceHash: lease.nonceHash,
+        pid: lease.pid,
+        processStartId: lease.processStartId,
+        heartbeatWallMs: lease.heartbeatWallMs,
+        expiresWallMs: lease.expiresWallMs,
     });
 }
 
@@ -52,53 +49,39 @@ export async function replaceExpiredSessionControlLease(
     previous: SessionControlLease,
     nowWallMs: number,
 ) {
-    return client.execute({
-        sql:
-            'UPDATE session_control_leases SET owner_id = ?, epoch = ?, nonce_hash = ?, pid = ?, process_start_id = ?, ' +
-            'heartbeat_wall_ms = ?, expires_wall_ms = ? WHERE db_identity = ? AND session_id = ? ' +
-            'AND owner_id = ? AND epoch = ? AND expires_wall_ms <= ?',
-        args: [
-            lease.ownerId,
-            lease.epoch,
-            lease.nonceHash,
-            lease.pid,
-            lease.processStartId,
-            lease.heartbeatWallMs,
-            lease.expiresWallMs,
-            lease.dbIdentity,
-            lease.sessionId,
-            previous.ownerId,
-            previous.epoch,
-            nowWallMs,
-        ],
-    });
+    const db = drizzleFromClient(client);
+    return db
+        .update(sessionControlLeases)
+        .set({
+            ownerId: lease.ownerId,
+            epoch: lease.epoch,
+            nonceHash: lease.nonceHash,
+            pid: lease.pid,
+            processStartId: lease.processStartId,
+            heartbeatWallMs: lease.heartbeatWallMs,
+            expiresWallMs: lease.expiresWallMs,
+        })
+        .where(
+            and(
+                eq(sessionControlLeases.dbIdentity, lease.dbIdentity),
+                eq(sessionControlLeases.sessionId, lease.sessionId),
+                eq(sessionControlLeases.ownerId, previous.ownerId),
+                eq(sessionControlLeases.epoch, previous.epoch),
+                lte(sessionControlLeases.expiresWallMs, nowWallMs),
+            ),
+        );
 }
 
-function leaseArgs(lease: SessionControlLease): (string | number)[] {
-    return [
-        lease.dbIdentity,
-        lease.sessionId,
-        lease.ownerId,
-        lease.epoch,
-        lease.nonceHash,
-        lease.pid,
-        lease.processStartId,
-        lease.heartbeatWallMs,
-        lease.expiresWallMs,
-    ];
-}
-
-function leaseFromRow(row: unknown): SessionControlLease {
-    const parsed = leaseRowSchema.parse(row);
+function leaseFromDrizzleRow(row: typeof sessionControlLeases.$inferSelect): SessionControlLease {
     return {
-        dbIdentity: parsed.db_identity,
-        sessionId: parsed.session_id,
-        ownerId: parsed.owner_id,
-        epoch: parsed.epoch,
-        nonceHash: parsed.nonce_hash,
-        pid: parsed.pid,
-        processStartId: parsed.process_start_id,
-        heartbeatWallMs: parsed.heartbeat_wall_ms,
-        expiresWallMs: parsed.expires_wall_ms,
+        dbIdentity: row.dbIdentity,
+        sessionId: row.sessionId,
+        ownerId: row.ownerId,
+        epoch: row.epoch,
+        nonceHash: row.nonceHash,
+        pid: row.pid,
+        processStartId: row.processStartId,
+        heartbeatWallMs: row.heartbeatWallMs,
+        expiresWallMs: row.expiresWallMs,
     };
 }

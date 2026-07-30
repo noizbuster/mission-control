@@ -1,41 +1,28 @@
-import type { InStatement } from '@libsql/client';
+import { sql } from 'drizzle-orm';
+import type { MissionControlDrizzleDb } from '../db/drizzle-client';
+import { sessionAwaits, sessions } from '../db/schema';
 import type { SessionProjectionSessionRecord } from './session-projection-types';
 
-export function insertSessionStatement(record: SessionProjectionSessionRecord): InStatement {
-    return {
-        sql: `
-            INSERT INTO sessions (
-                session_id, status, created_at, updated_at, last_activity_at, stopped_at,
-                last_event_seq, awaiting_reason, primary_wait_id, workspace_path,
-                parent_session_id, legacy_jsonl_path, metadata_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(session_id) DO UPDATE SET
-                status = excluded.status,
-                updated_at = excluded.updated_at,
-                last_activity_at = excluded.last_activity_at,
-                stopped_at = excluded.stopped_at,
-                last_event_seq = excluded.last_event_seq,
-                awaiting_reason = excluded.awaiting_reason,
-                primary_wait_id = excluded.primary_wait_id,
-                workspace_path = COALESCE(excluded.workspace_path, sessions.workspace_path),
-                parent_session_id = COALESCE(excluded.parent_session_id, sessions.parent_session_id),
-                legacy_jsonl_path = COALESCE(excluded.legacy_jsonl_path, sessions.legacy_jsonl_path),
-                metadata_json = excluded.metadata_json
-        `,
-        args: [
-            record.sessionId,
-            record.status,
-            record.startedAt,
-            record.updatedAt,
-            record.updatedAt,
-            record.stoppedAt ?? null,
-            record.lastSequence ?? 0,
-            record.awaiting?.reason ?? null,
-            primaryAwaitingSource(record)?.sourceId ?? null,
-            record.cwd ?? null,
-            record.parentSessionId ?? null,
-            record.sourcePath,
-            JSON.stringify({
+export async function insertSessionRecord(
+    db: MissionControlDrizzleDb,
+    record: SessionProjectionSessionRecord,
+): Promise<void> {
+    await db
+        .insert(sessions)
+        .values({
+            sessionId: record.sessionId,
+            status: record.status,
+            createdAt: record.startedAt,
+            updatedAt: record.updatedAt,
+            lastActivityAt: record.updatedAt,
+            stoppedAt: record.stoppedAt ?? null,
+            lastEventSeq: record.lastSequence ?? 0,
+            awaitingReason: record.awaiting?.reason ?? null,
+            primaryWaitId: primaryAwaitingSource(record)?.sourceId ?? null,
+            workspacePath: record.cwd ?? null,
+            parentSessionId: record.parentSessionId ?? null,
+            legacyJsonlPath: record.sourcePath,
+            metadataJson: JSON.stringify({
                 eventCount: record.eventCount,
                 lastEventId: record.lastEventId ?? null,
                 lastEventType: record.lastEventType ?? null,
@@ -53,57 +40,69 @@ export function insertSessionStatement(record: SessionProjectionSessionRecord): 
                       }
                     : {}),
             }),
-        ],
-    };
+        })
+        .onConflictDoUpdate({
+            target: sessions.sessionId,
+            set: {
+                status: sql`excluded.status`,
+                updatedAt: sql`excluded.updated_at`,
+                lastActivityAt: sql`excluded.last_activity_at`,
+                stoppedAt: sql`excluded.stopped_at`,
+                lastEventSeq: sql`excluded.last_event_seq`,
+                awaitingReason: sql`excluded.awaiting_reason`,
+                primaryWaitId: sql`excluded.primary_wait_id`,
+                workspacePath: sql`COALESCE(excluded.workspace_path, ${sessions.workspacePath})`,
+                parentSessionId: sql`COALESCE(excluded.parent_session_id, ${sessions.parentSessionId})`,
+                legacyJsonlPath: sql`COALESCE(excluded.legacy_jsonl_path, ${sessions.legacyJsonlPath})`,
+                metadataJson: sql`excluded.metadata_json`,
+            },
+        });
 }
 
-export function insertAwaitingStatement(record: SessionProjectionSessionRecord): InStatement | undefined {
+export async function insertAwaitingRecord(
+    db: MissionControlDrizzleDb,
+    record: SessionProjectionSessionRecord,
+): Promise<void> {
     const awaiting = record.awaiting;
-    if (awaiting === undefined) {
-        return undefined;
-    }
+    if (awaiting === undefined) return;
     const primarySource = primaryAwaitingSource(record);
-    if (primarySource === undefined) {
-        return undefined;
-    }
-    return {
-        sql: `
-            INSERT INTO session_awaits (
-                wait_id, session_id, reason, source_kind, source_id, run_id, tool_call_id,
-                approval_id, job_id, child_session_id, status, created_at, metadata_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(wait_id) DO UPDATE SET
-                session_id = excluded.session_id,
-                reason = excluded.reason,
-                source_kind = excluded.source_kind,
-                source_id = excluded.source_id,
-                run_id = excluded.run_id,
-                tool_call_id = excluded.tool_call_id,
-                approval_id = excluded.approval_id,
-                job_id = excluded.job_id,
-                child_session_id = excluded.child_session_id,
-                status = excluded.status,
-                created_at = excluded.created_at,
-                resolved_at = NULL,
-                cancelled_at = NULL,
-                metadata_json = excluded.metadata_json
-        `,
-        args: [
-            primarySource.sourceId,
-            record.sessionId,
-            awaiting.reason,
-            primarySource.sourceKind,
-            primarySource.sourceId,
-            awaiting.source.runId ?? null,
-            awaiting.source.toolCallId ?? null,
-            awaiting.source.approvalId ?? null,
-            awaiting.source.jobId ?? null,
-            awaiting.source.childSessionId ?? null,
-            'pending',
-            record.updatedAt,
-            JSON.stringify({ owner: 'projection' }),
-        ],
-    };
+    if (primarySource === undefined) return;
+    await db
+        .insert(sessionAwaits)
+        .values({
+            waitId: primarySource.sourceId,
+            sessionId: record.sessionId,
+            reason: awaiting.reason,
+            sourceKind: primarySource.sourceKind,
+            sourceId: primarySource.sourceId,
+            runId: awaiting.source.runId ?? null,
+            toolCallId: awaiting.source.toolCallId ?? null,
+            approvalId: awaiting.source.approvalId ?? null,
+            jobId: awaiting.source.jobId ?? null,
+            childSessionId: awaiting.source.childSessionId ?? null,
+            status: 'pending',
+            createdAt: record.updatedAt,
+            metadataJson: JSON.stringify({ owner: 'projection' }),
+        })
+        .onConflictDoUpdate({
+            target: sessionAwaits.waitId,
+            set: {
+                sessionId: sql`excluded.session_id`,
+                reason: sql`excluded.reason`,
+                sourceKind: sql`excluded.source_kind`,
+                sourceId: sql`excluded.source_id`,
+                runId: sql`excluded.run_id`,
+                toolCallId: sql`excluded.tool_call_id`,
+                approvalId: sql`excluded.approval_id`,
+                jobId: sql`excluded.job_id`,
+                childSessionId: sql`excluded.child_session_id`,
+                status: sql`excluded.status`,
+                createdAt: sql`excluded.created_at`,
+                resolvedAt: null,
+                cancelledAt: null,
+                metadataJson: sql`excluded.metadata_json`,
+            },
+        });
 }
 
 function primaryAwaitingSource(
@@ -112,23 +111,11 @@ function primaryAwaitingSource(
     | { readonly sourceKind: 'approval' | 'run' | 'tool_call' | 'job' | 'child_session'; readonly sourceId: string }
     | undefined {
     const source = record.awaiting?.source;
-    if (source === undefined) {
-        return undefined;
-    }
-    if (source.approvalId !== undefined) {
-        return { sourceKind: 'approval', sourceId: source.approvalId };
-    }
-    if (source.runId !== undefined) {
-        return { sourceKind: 'run', sourceId: source.runId };
-    }
-    if (source.toolCallId !== undefined) {
-        return { sourceKind: 'tool_call', sourceId: source.toolCallId };
-    }
-    if (source.jobId !== undefined) {
-        return { sourceKind: 'job', sourceId: source.jobId };
-    }
-    if (source.childSessionId !== undefined) {
-        return { sourceKind: 'child_session', sourceId: source.childSessionId };
-    }
+    if (source === undefined) return undefined;
+    if (source.approvalId !== undefined) return { sourceKind: 'approval', sourceId: source.approvalId };
+    if (source.runId !== undefined) return { sourceKind: 'run', sourceId: source.runId };
+    if (source.toolCallId !== undefined) return { sourceKind: 'tool_call', sourceId: source.toolCallId };
+    if (source.jobId !== undefined) return { sourceKind: 'job', sourceId: source.jobId };
+    if (source.childSessionId !== undefined) return { sourceKind: 'child_session', sourceId: source.childSessionId };
     return undefined;
 }

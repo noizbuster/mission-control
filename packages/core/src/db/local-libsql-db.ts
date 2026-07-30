@@ -1,7 +1,7 @@
 import type { Client, InStatement } from '@libsql/client';
 import { createClient } from '@libsql/client';
-import type { LibSQLDatabase } from 'drizzle-orm/libsql';
-import { drizzle } from 'drizzle-orm/libsql';
+import type { MissionControlDrizzleDb } from './drizzle-client';
+import { drizzleFromClient } from './drizzle-client';
 import { z } from 'zod';
 import { type LocalLibsqlWriteKey, resolveLocalLibsqlIdentity } from './local-libsql-identity';
 import {
@@ -64,7 +64,7 @@ export type LocalLibsqlDb = {
     readonly url: string;
     readonly writeKey: LocalLibsqlWriteKey;
     readonly client: Client;
-    readonly db: LibSQLDatabase<Record<string, never>>;
+    readonly db: MissionControlDrizzleDb;
     readonly close: () => void;
 };
 
@@ -104,7 +104,7 @@ export async function openLocalLibsqlDb(options: OpenLocalLibsqlDbOptions): Prom
         key: identity.url,
         setupKey: initializationKeyFor(options.migrations),
         createClient: () => createClient({ url: identity.url, timeout: LOCAL_DB_BUSY_TIMEOUT_MS }),
-        createDatabase: (client) => drizzle(client),
+        createDatabase: (client) => drizzleFromClient(client),
         initialize: (client) => {
             const target = { writeKey: identity.writeKey, client } satisfies LocalLibsqlWriteTarget;
             return runWithLocalLibsqlWriteLock(target, async () => {
@@ -137,9 +137,9 @@ async function openIsolatedMemoryDb(
         throw error;
     }
 
-    let db: LibSQLDatabase<Record<string, never>>;
+    let db: MissionControlDrizzleDb;
     try {
-        db = drizzle(client);
+        db = drizzleFromClient(client);
     } catch (error: unknown) {
         client.close();
         throw error;

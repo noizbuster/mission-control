@@ -1,4 +1,3 @@
-import type { ResultSet } from '@libsql/client';
 import type { AgentEvent } from '@mission-control/protocol';
 import { type AgentEventEnvelope, AgentEventEnvelopeSchema } from '@mission-control/protocol';
 import { z } from 'zod';
@@ -8,7 +7,7 @@ import { SqliteSessionEventStoreError } from './sqlite-session-event-store-error
 const nextSequenceRowSchema = z.object({ next_seq: z.number().int().nonnegative() });
 const envelopeRowSchema = z.object({ payload_json: z.string() });
 
-export function nextSequenceFrom(result: ResultSet, sessionId: string): number {
+export function nextSequenceFrom(result: { readonly rows: readonly unknown[] }, sessionId: string): number {
     const row = result.rows[0];
     if (row === undefined) {
         throw new SqliteSessionEventStoreError({

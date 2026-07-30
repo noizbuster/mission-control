@@ -1,57 +1,68 @@
 import type { Client } from '@libsql/client';
 import { type Mission, MissionSchema, type Run, RunSchema } from '@mission-control/protocol';
+import { and, asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { drizzleFromClient } from '../../db/drizzle-client';
 import { type LocalLibsqlDb, runLocalLibsqlWrite } from '../../db/local-libsql-db';
 import { runLocalLibsqlClientTransaction } from '../../db/local-libsql-transaction';
 import { openMissionControlDb } from '../../db/mission-control-db';
+import { missionRuns, missions } from '../../db/schema';
 import { refreshSessionAwaitingFromPendingWaits } from '../../memory/session-awaiting-sql';
 
-const missionRowSchema = z.object({ payload_json: z.string() });
-const runRowSchema = z.object({ passthrough_json: z.string() });
+const missionRowSchema = z.object({ payloadJson: z.string() });
+const runRowSchema = z.object({ passthroughJson: z.string() });
 
 export async function writeMissionToDb(dataDir: string, mission: Mission): Promise<void> {
     const validated = MissionSchema.parse(mission);
     await withMissionRunRuntime(dataDir, (runtime) =>
-        runLocalLibsqlWrite(runtime, (client) =>
-            client.execute({
-                sql:
-                    'INSERT INTO missions (mission_id, status, workflow_name, created_at, updated_at, payload_json) ' +
-                    'VALUES (?, ?, ?, ?, ?, ?) ' +
-                    'ON CONFLICT(mission_id) DO UPDATE SET status = excluded.status, workflow_name = excluded.workflow_name, ' +
-                    'updated_at = excluded.updated_at, payload_json = excluded.payload_json',
-                args: [
-                    validated.id,
-                    validated.status,
-                    validated.workflowName ?? null,
-                    validated.createdAt,
-                    validated.updatedAt,
-                    JSON.stringify(validated),
-                ],
-            }),
-        ),
+        runLocalLibsqlWrite(runtime, async (client) => {
+            const db = drizzleFromClient(client);
+            await db
+                .insert(missions)
+                .values({
+                    missionId: validated.id,
+                    status: validated.status,
+                    workflowName: validated.workflowName ?? null,
+                    createdAt: validated.createdAt,
+                    updatedAt: validated.updatedAt,
+                    payloadJson: JSON.stringify(validated),
+                })
+                .onConflictDoUpdate({
+                    target: missions.missionId,
+                    set: {
+                        status: validated.status,
+                        workflowName: validated.workflowName ?? null,
+                        updatedAt: validated.updatedAt,
+                        payloadJson: JSON.stringify(validated),
+                    },
+                });
+        }),
     );
 }
 
 export async function readMissionFromDb(dataDir: string, missionId: string): Promise<Mission | undefined> {
     return withMissionRunRuntime(dataDir, async (runtime) => {
-        const result = await runtime.client.execute({
-            sql: 'SELECT payload_json FROM missions WHERE mission_id = ?',
-            args: [missionId],
-        });
-        const row = result.rows[0];
+        const db = drizzleFromClient(runtime.client);
+        const rows = await db
+            .select({ payloadJson: missions.payloadJson })
+            .from(missions)
+            .where(eq(missions.missionId, missionId));
+        const row = rows[0];
         if (row === undefined) {
             return undefined;
         }
-        return MissionSchema.parse(JSON.parse(missionRowSchema.parse(row).payload_json));
+        return MissionSchema.parse(JSON.parse(missionRowSchema.parse(row).payloadJson));
     });
 }
 
 export async function listMissionsFromDb(dataDir: string): Promise<readonly Mission[]> {
     return withMissionRunRuntime(dataDir, async (runtime) => {
-        const result = await runtime.client.execute(
-            'SELECT payload_json FROM missions ORDER BY updated_at, mission_id',
-        );
-        return result.rows.map((row) => MissionSchema.parse(JSON.parse(missionRowSchema.parse(row).payload_json)));
+        const db = drizzleFromClient(runtime.client);
+        const rows = await db
+            .select({ payloadJson: missions.payloadJson })
+            .from(missions)
+            .orderBy(asc(missions.updatedAt), asc(missions.missionId));
+        return rows.map((row) => MissionSchema.parse(JSON.parse(missionRowSchema.parse(row).payloadJson)));
     });
 }
 
@@ -112,22 +123,18 @@ export async function listRunsFromDb(
     filter: { readonly missionId?: string; readonly parentId?: string } = {},
 ): Promise<readonly Run[]> {
     return withMissionRunRuntime(dataDir, async (runtime) => {
-        const conditions: string[] = [];
-        const args: string[] = [];
+        const db = drizzleFromClient(runtime.client);
+        const conditions = [];
         if (filter.missionId !== undefined) {
-            conditions.push('mission_id = ?');
-            args.push(filter.missionId);
+            conditions.push(eq(missionRuns.missionId, filter.missionId));
         }
         if (filter.parentId !== undefined) {
-            conditions.push('parent_run_id = ?');
-            args.push(filter.parentId);
+            conditions.push(eq(missionRuns.parentRunId, filter.parentId));
         }
-        const where = conditions.length === 0 ? '' : ` WHERE ${conditions.join(' AND ')}`;
-        const result = await runtime.client.execute({
-            sql: `SELECT passthrough_json FROM mission_runs${where} ORDER BY created_at, run_id`,
-            args,
-        });
-        return result.rows.map((row) => RunSchema.parse(JSON.parse(runRowSchema.parse(row).passthrough_json)));
+        const query = db.select({ passthroughJson: missionRuns.passthroughJson }).from(missionRuns);
+        const filtered = conditions.length === 0 ? query : query.where(and(...conditions));
+        const rows = await filtered.orderBy(asc(missionRuns.createdAt), asc(missionRuns.runId));
+        return rows.map((row) => RunSchema.parse(JSON.parse(runRowSchema.parse(row).passthroughJson)));
     });
 }
 
@@ -149,12 +156,13 @@ async function withMissionRunRuntime<T>(dataDir: string, fn: (runtime: LocalLibs
 }
 
 async function selectRun(client: Client, runId: string): Promise<Run | undefined> {
-    const result = await client.execute({
-        sql: 'SELECT passthrough_json FROM mission_runs WHERE run_id = ?',
-        args: [runId],
-    });
-    const row = result.rows[0];
-    return row === undefined ? undefined : RunSchema.parse(JSON.parse(runRowSchema.parse(row).passthrough_json));
+    const db = drizzleFromClient(client);
+    const rows = await db
+        .select({ passthroughJson: missionRuns.passthroughJson })
+        .from(missionRuns)
+        .where(eq(missionRuns.runId, runId));
+    const row = rows[0];
+    return row === undefined ? undefined : RunSchema.parse(JSON.parse(runRowSchema.parse(row).passthroughJson));
 }
 
 async function writeRunRow(
@@ -163,43 +171,55 @@ async function writeRunRow(
     timestamp: string,
     conflict: 'replace' | 'ignore' = 'replace',
 ): Promise<boolean> {
-    const conflictClause =
-        conflict === 'ignore'
-            ? 'ON CONFLICT(run_id) DO NOTHING'
-            : 'ON CONFLICT(run_id) DO UPDATE SET mission_id = excluded.mission_id, parent_run_id = excluded.parent_run_id, ' +
-              'session_id = excluded.session_id, child_agent_kind = excluded.child_agent_kind, child_agent_id = excluded.child_agent_id, ' +
-              'child_session_ids_json = excluded.child_session_ids_json, retry_state_json = excluded.retry_state_json, ' +
-              'status = excluded.status, prompt = excluded.prompt, updated_at = excluded.updated_at, started_at = excluded.started_at, ' +
-              'ended_at = excluded.ended_at, completed_at = excluded.completed_at, failed_at = excluded.failed_at, ' +
-              'cancelled_at = excluded.cancelled_at, passthrough_json = excluded.passthrough_json';
-    const result = await client.execute({
-        sql:
-            'INSERT INTO mission_runs (run_id, mission_id, parent_run_id, session_id, child_agent_kind, ' +
-            'child_agent_id, child_session_ids_json, retry_state_json, status, prompt, created_at, updated_at, ' +
-            'started_at, ended_at, completed_at, failed_at, cancelled_at, passthrough_json) ' +
-            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ' +
-            conflictClause,
-        args: [
-            run.id,
-            run.missionId,
-            run.parentRunId ?? null,
-            run.sessionId ?? null,
-            run.childKind ?? null,
-            run.childAgentId ?? null,
-            JSON.stringify(run.childSessionIds ?? []),
-            JSON.stringify(run.taskRetryState ?? {}),
-            run.status,
-            run.prompt ?? null,
-            run.startedAt ?? timestamp,
-            timestamp,
-            run.startedAt ?? null,
-            run.endedAt ?? null,
-            run.status === 'completed' ? (run.endedAt ?? timestamp) : null,
-            run.status === 'failed' ? (run.endedAt ?? timestamp) : null,
-            run.status === 'cancelled' ? (run.endedAt ?? timestamp) : null,
-            JSON.stringify(run),
-        ],
-    });
+    const db = drizzleFromClient(client);
+    const values = {
+        runId: run.id,
+        missionId: run.missionId,
+        parentRunId: run.parentRunId ?? null,
+        sessionId: run.sessionId ?? null,
+        childAgentKind: run.childKind ?? null,
+        childAgentId: run.childAgentId ?? null,
+        childSessionIdsJson: JSON.stringify(run.childSessionIds ?? []),
+        retryStateJson: JSON.stringify(run.taskRetryState ?? {}),
+        status: run.status,
+        prompt: run.prompt ?? null,
+        createdAt: run.startedAt ?? timestamp,
+        updatedAt: timestamp,
+        startedAt: run.startedAt ?? null,
+        endedAt: run.endedAt ?? null,
+        completedAt: run.status === 'completed' ? (run.endedAt ?? timestamp) : null,
+        failedAt: run.status === 'failed' ? (run.endedAt ?? timestamp) : null,
+        cancelledAt: run.status === 'cancelled' ? (run.endedAt ?? timestamp) : null,
+        passthroughJson: JSON.stringify(run),
+    };
+    if (conflict === 'ignore') {
+        const result = await db.insert(missionRuns).values(values).onConflictDoNothing();
+        return result.rowsAffected > 0;
+    }
+    const result = await db
+        .insert(missionRuns)
+        .values(values)
+        .onConflictDoUpdate({
+            target: missionRuns.runId,
+            set: {
+                missionId: values.missionId,
+                parentRunId: values.parentRunId,
+                sessionId: values.sessionId,
+                childAgentKind: values.childAgentKind,
+                childAgentId: values.childAgentId,
+                childSessionIdsJson: values.childSessionIdsJson,
+                retryStateJson: values.retryStateJson,
+                status: values.status,
+                prompt: values.prompt,
+                updatedAt: values.updatedAt,
+                startedAt: values.startedAt,
+                endedAt: values.endedAt,
+                completedAt: values.completedAt,
+                failedAt: values.failedAt,
+                cancelledAt: values.cancelledAt,
+                passthroughJson: values.passthroughJson,
+            },
+        });
     return result.rowsAffected > 0;
 }
 

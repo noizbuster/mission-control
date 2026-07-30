@@ -1,8 +1,11 @@
 import type { Delivery } from '@mission-control/protocol';
+import { and, asc, count, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import { drizzleFromClient } from '../db/drizzle-client';
 import { type LocalLibsqlDb, runLocalLibsqlWrite } from '../db/local-libsql-db';
 import { runLocalLibsqlClientTransaction } from '../db/local-libsql-transaction';
 import { openMissionControlDb } from '../db/mission-control-db';
+import { sessionAwaits, sessionInputs } from '../db/schema';
 import {
     ensurePublicSessionRow,
     persistSessionAwaiting,
@@ -15,15 +18,15 @@ const inputStatusSchema = z.enum(['pending', 'admitted', 'promoted', 'cancelled'
 type SqlSessionInputStatus = z.infer<typeof inputStatusSchema>;
 
 const inputRowSchema = z.object({
-    input_id: z.string(),
+    inputId: z.string(),
     prompt: z.string(),
     delivery: z.enum(['steer', 'queue']),
     status: inputStatusSchema,
-    admitted_seq: z.number().nullable(),
+    admittedSeq: z.number().nullable(),
 });
 
 const countRowSchema = z.object({ count: z.number() });
-const seqRowSchema = z.object({ next_seq: z.number() });
+const seqRowSchema = z.object({ nextSeq: z.number() });
 export type SqlSessionInputDeliveryRecord = SessionInputRecord & {
     readonly status: SqlSessionInputStatus;
 };
@@ -54,11 +57,16 @@ export class SqlSessionInputDelivery {
             await this.ensureSession(sessionId);
             const now = new Date().toISOString();
             const seq = await this.nextAdmittedSeq(sessionId);
-            await this.runtime.client.execute({
-                sql:
-                    'INSERT INTO session_inputs (input_id, session_id, delivery, status, prompt, admitted_seq, created_at, admitted_at) ' +
-                    'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                args: [input.inputId, sessionId, delivery, 'admitted', input.prompt, seq, now, now],
+            const db = drizzleFromClient(this.runtime.client);
+            await db.insert(sessionInputs).values({
+                inputId: input.inputId,
+                sessionId,
+                delivery,
+                status: 'admitted',
+                prompt: input.prompt,
+                admittedSeq: seq,
+                createdAt: now,
+                admittedAt: now,
             });
             if (options.blocking === true) {
                 await this.recordUserInputWait(sessionId, input.inputId, now);
@@ -111,13 +119,19 @@ export class SqlSessionInputDelivery {
     }
 
     async listInputs(sessionId: string): Promise<readonly SqlSessionInputDeliveryRecord[]> {
-        const result = await this.runtime.client.execute({
-            sql:
-                'SELECT input_id, prompt, delivery, status, admitted_seq FROM session_inputs ' +
-                'WHERE session_id = ? ORDER BY admitted_seq, input_id',
-            args: [sessionId],
-        });
-        return result.rows.map(rowToInputRecord);
+        const db = drizzleFromClient(this.runtime.client);
+        const rows = await db
+            .select({
+                inputId: sessionInputs.inputId,
+                prompt: sessionInputs.prompt,
+                delivery: sessionInputs.delivery,
+                status: sessionInputs.status,
+                admittedSeq: sessionInputs.admittedSeq,
+            })
+            .from(sessionInputs)
+            .where(eq(sessionInputs.sessionId, sessionId))
+            .orderBy(asc(sessionInputs.admittedSeq), asc(sessionInputs.inputId));
+        return rows.map(rowToInputRecord);
     }
 
     async deriveLifecycle(sessionId: string) {
@@ -134,74 +148,128 @@ export class SqlSessionInputDelivery {
     }
 
     private async nextAdmittedSeq(sessionId: string): Promise<number> {
-        const result = await this.runtime.client.execute({
-            sql: 'SELECT COALESCE(MAX(admitted_seq), -1) + 1 AS next_seq FROM session_inputs WHERE session_id = ?',
-            args: [sessionId],
-        });
-        return seqRowSchema.parse(result.rows[0]).next_seq;
+        const db = drizzleFromClient(this.runtime.client);
+        const rows = await db
+            .select({
+                nextSeq: sql`COALESCE(MAX(${sessionInputs.admittedSeq}), -1) + 1`.mapWith(Number),
+            })
+            .from(sessionInputs)
+            .where(eq(sessionInputs.sessionId, sessionId));
+        return seqRowSchema.parse(rows[0]).nextSeq;
     }
 
     private async listAdmitted(
         sessionId: string,
         delivery: Delivery,
     ): Promise<readonly SqlSessionInputDeliveryRecord[]> {
-        const result = await this.runtime.client.execute({
-            sql:
-                'SELECT input_id, prompt, delivery, status, admitted_seq FROM session_inputs ' +
-                'WHERE session_id = ? AND delivery = ? AND status = ? ORDER BY admitted_seq, input_id',
-            args: [sessionId, delivery, 'admitted'],
-        });
-        return result.rows.map(rowToInputRecord);
+        const db = drizzleFromClient(this.runtime.client);
+        const rows = await db
+            .select({
+                inputId: sessionInputs.inputId,
+                prompt: sessionInputs.prompt,
+                delivery: sessionInputs.delivery,
+                status: sessionInputs.status,
+                admittedSeq: sessionInputs.admittedSeq,
+            })
+            .from(sessionInputs)
+            .where(
+                and(
+                    eq(sessionInputs.sessionId, sessionId),
+                    eq(sessionInputs.delivery, delivery),
+                    eq(sessionInputs.status, 'admitted'),
+                ),
+            )
+            .orderBy(asc(sessionInputs.admittedSeq), asc(sessionInputs.inputId));
+        return rows.map(rowToInputRecord);
     }
 
     private async markPromotedInOpenTransaction(inputId: string, sessionId: string): Promise<boolean> {
         const now = new Date().toISOString();
         const promotedSeq = await this.nextPromotedSeq(sessionId);
-        const result = await this.runtime.client.execute({
-            sql:
-                'UPDATE session_inputs SET status = ?, promoted_seq = ?, promoted_at = ? ' +
-                'WHERE input_id = ? AND session_id = ? AND status = ?',
-            args: ['promoted', promotedSeq, now, inputId, sessionId, 'admitted'],
-        });
+        const db = drizzleFromClient(this.runtime.client);
+        const result = await db
+            .update(sessionInputs)
+            .set({
+                status: 'promoted',
+                promotedSeq,
+                promotedAt: now,
+            })
+            .where(
+                and(
+                    eq(sessionInputs.inputId, inputId),
+                    eq(sessionInputs.sessionId, sessionId),
+                    eq(sessionInputs.status, 'admitted'),
+                ),
+            );
         if (result.rowsAffected !== 1) {
             return false;
         }
-        await this.runtime.client.execute({
-            sql:
-                'UPDATE session_awaits SET status = ?, resolved_at = ? ' +
-                'WHERE wait_id = ? AND session_id = ? AND status = ?',
-            args: ['resolved', now, waitIdForInput(inputId), sessionId, 'pending'],
-        });
+        await db
+            .update(sessionAwaits)
+            .set({
+                status: 'resolved',
+                resolvedAt: now,
+            })
+            .where(
+                and(
+                    eq(sessionAwaits.waitId, waitIdForInput(inputId)),
+                    eq(sessionAwaits.sessionId, sessionId),
+                    eq(sessionAwaits.status, 'pending'),
+                ),
+            );
         await refreshSessionAwaitingFromPendingWaits({ client: this.runtime.client, sessionId, now });
         return true;
     }
 
     private async nextPromotedSeq(sessionId: string): Promise<number> {
-        const result = await this.runtime.client.execute({
-            sql: 'SELECT COALESCE(MAX(promoted_seq), -1) + 1 AS next_seq FROM session_inputs WHERE session_id = ?',
-            args: [sessionId],
-        });
-        return seqRowSchema.parse(result.rows[0]).next_seq;
+        const db = drizzleFromClient(this.runtime.client);
+        const rows = await db
+            .select({
+                nextSeq: sql`COALESCE(MAX(${sessionInputs.promotedSeq}), -1) + 1`.mapWith(Number),
+            })
+            .from(sessionInputs)
+            .where(eq(sessionInputs.sessionId, sessionId));
+        return seqRowSchema.parse(rows[0]).nextSeq;
     }
 
     private async pendingCount(sessionId: string, delivery: Delivery): Promise<number> {
-        const result = await this.runtime.client.execute({
-            sql: 'SELECT COUNT(*) AS count FROM session_inputs WHERE session_id = ? AND delivery = ? AND status = ?',
-            args: [sessionId, delivery, 'admitted'],
-        });
-        return countRowSchema.parse(result.rows[0]).count;
+        const db = drizzleFromClient(this.runtime.client);
+        const rows = await db
+            .select({ count: count() })
+            .from(sessionInputs)
+            .where(
+                and(
+                    eq(sessionInputs.sessionId, sessionId),
+                    eq(sessionInputs.delivery, delivery),
+                    eq(sessionInputs.status, 'admitted'),
+                ),
+            );
+        return countRowSchema.parse(rows[0]).count;
     }
 
     private async recordUserInputWait(sessionId: string, inputId: string, now: string): Promise<void> {
         const waitId = waitIdForInput(inputId);
-        await this.runtime.client.execute({
-            sql:
-                'INSERT INTO session_awaits (wait_id, session_id, reason, source_kind, source_id, status, created_at) ' +
-                'VALUES (?, ?, ?, ?, ?, ?, ?) ' +
-                'ON CONFLICT(wait_id) DO UPDATE SET status = excluded.status, created_at = excluded.created_at, ' +
-                'resolved_at = NULL, cancelled_at = NULL',
-            args: [waitId, sessionId, 'user_input', 'operator', inputId, 'pending', now],
-        });
+        const db = drizzleFromClient(this.runtime.client);
+        await db
+            .insert(sessionAwaits)
+            .values({
+                waitId,
+                sessionId,
+                reason: 'user_input',
+                sourceKind: 'operator',
+                sourceId: inputId,
+                status: 'pending',
+                createdAt: now,
+            })
+            .onConflictDoUpdate({
+                target: sessionAwaits.waitId,
+                set: {
+                    status: 'pending',
+                    createdAt: now,
+                    resolvedAt: null,
+                    cancelledAt: null,
+                },
+            });
         await persistSessionAwaiting({
             client: this.runtime.client,
             sessionId,
@@ -215,10 +283,10 @@ export class SqlSessionInputDelivery {
 function rowToInputRecord(row: unknown): SqlSessionInputDeliveryRecord {
     const parsed = inputRowSchema.parse(row);
     return {
-        inputId: parsed.input_id,
+        inputId: parsed.inputId,
         prompt: parsed.prompt,
         delivery: parsed.delivery,
-        admittedAt: parsed.admitted_seq ?? -1,
+        admittedAt: parsed.admittedSeq ?? -1,
         status: parsed.status,
     };
 }

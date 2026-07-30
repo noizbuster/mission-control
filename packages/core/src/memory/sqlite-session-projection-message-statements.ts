@@ -1,14 +1,18 @@
-import type { InStatement } from '@libsql/client';
 import type { AgentEventEnvelope } from '@mission-control/protocol';
+import type { MissionControlDrizzleDb } from '../db/drizzle-client';
+import { sessionMessages, sessionParts } from '../db/schema';
 import { projectSessionReplay } from '../session-replay';
 import type { CodingReplayStep } from '../session-replay-types';
 
-export function messageProjectionStatements(envelopes: readonly AgentEventEnvelope[]): readonly InStatement[] {
+export async function projectMessageStatements(
+    db: MissionControlDrizzleDb,
+    envelopes: readonly AgentEventEnvelope[],
+): Promise<void> {
     const projection = projectSessionReplay({ sessionId: envelopes[0]?.sessionId ?? 'missing', envelopes });
     const sequenceByEventId = new Map(envelopes.map((envelope) => [envelope.eventId, envelope.sequence]));
-    return projection.codingSteps.flatMap((step) =>
-        messageStatementsForStep(projection.sessionId, step, sequenceByEventId),
-    );
+    for (const step of projection.codingSteps) {
+        await insertMessageForStep(db, projection.sessionId, step, sequenceByEventId);
+    }
 }
 
 export function toolNamesById(envelopes: readonly AgentEventEnvelope[]): ReadonlyMap<string, string> {
@@ -33,55 +37,36 @@ export function toolArgumentsById(envelopes: readonly AgentEventEnvelope[]): Rea
     return argumentsById;
 }
 
-function messageStatementsForStep(
+async function insertMessageForStep(
+    db: MissionControlDrizzleDb,
     sessionId: string,
     step: CodingReplayStep,
     sequenceByEventId: ReadonlyMap<string, number>,
-): readonly InStatement[] {
-    if (step.kind !== 'provider.message') {
-        return [];
-    }
+): Promise<void> {
+    if (step.kind !== 'provider.message') return;
     const sequence = sequenceByEventId.get(step.eventId);
-    if (sequence === undefined) {
-        return [];
-    }
-    return [
-        {
-            sql: `
-                INSERT INTO session_messages (
-                    message_id, session_id, seq, role, provider_message_id, created_at, metadata_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            `,
-            args: [
-                step.messageId,
-                sessionId,
-                sequence,
-                'assistant',
-                step.messageId,
-                step.timestamp,
-                JSON.stringify({
-                    eventId: step.eventId,
-                    providerTurnId: step.providerTurnId ?? null,
-                    continuation: step.continuation,
-                }),
-            ],
-        },
-        {
-            sql: `
-                INSERT INTO session_parts (
-                    part_id, message_id, session_id, part_index, kind, text, payload_json, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            `,
-            args: [
-                `${step.messageId}:text:0`,
-                step.messageId,
-                sessionId,
-                0,
-                'text',
-                step.message,
-                null,
-                step.timestamp,
-            ],
-        },
-    ];
+    if (sequence === undefined) return;
+    await db.insert(sessionMessages).values({
+        messageId: step.messageId,
+        sessionId,
+        seq: sequence,
+        role: 'assistant',
+        providerMessageId: step.messageId,
+        createdAt: step.timestamp,
+        metadataJson: JSON.stringify({
+            eventId: step.eventId,
+            providerTurnId: step.providerTurnId ?? null,
+            continuation: step.continuation,
+        }),
+    });
+    await db.insert(sessionParts).values({
+        partId: `${step.messageId}:text:0`,
+        messageId: step.messageId,
+        sessionId,
+        partIndex: 0,
+        kind: 'text',
+        text: step.message,
+        payloadJson: null,
+        createdAt: step.timestamp,
+    });
 }

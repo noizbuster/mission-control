@@ -133,7 +133,9 @@ export const toolCalls = sqliteTable(
         startedAt: text('started_at'),
         completedAt: text('completed_at'),
         failedAt: text('failed_at'),
+        lastMessage: text('last_message'),
         errorJson: text('error_json'),
+        appliedFilesJson: text('applied_files_json'),
     },
     (table) => [
         primaryKey({ columns: [table.sessionId, table.toolCallId] }),
@@ -142,6 +144,7 @@ export const toolCalls = sqliteTable(
         index('tool_calls_approval_idx').on(table.approvalId),
     ],
 );
+
 
 export const providerFailures = sqliteTable(
     'provider_failures',
@@ -183,3 +186,82 @@ export const contextEpochs = sqliteTable(
     ],
 );
 
+
+export const desktopToolProposals = sqliteTable(
+    'desktop_tool_proposals',
+    {
+        sessionId: text('session_id')
+            .notNull()
+            .references(() => sessions.sessionId, { onDelete: 'cascade' }),
+        toolCallId: text('tool_call_id').notNull(),
+        toolName: text('tool_name').notNull(),
+        argumentsJson: text('arguments_json').notNull(),
+        createdAt: text('created_at').notNull(),
+        conflicted: integer('conflicted').notNull().default(0),
+    },
+    (table) => [primaryKey({ columns: [table.sessionId, table.toolCallId] })],
+);
+
+export const desktopApprovalEffects = sqliteTable(
+    'desktop_approval_effects',
+    {
+        sessionId: text('session_id')
+            .notNull()
+            .references(() => sessions.sessionId, { onDelete: 'cascade' }),
+        approvalId: text('approval_id').notNull(),
+        runId: text('run_id').notNull(),
+        toolCallId: text('tool_call_id').notNull(),
+        toolName: text('tool_name').notNull(),
+        argumentsJson: text('arguments_json').notNull(),
+        workspaceRoot: text('workspace_root').notNull(),
+        state: text('state').notNull(),
+        executionToken: text('execution_token'),
+        leaseExpiresAt: text('lease_expires_at'),
+        outcome: text('outcome'),
+        requestedAt: text('requested_at').notNull(),
+        executingAt: text('executing_at'),
+        settledAt: text('settled_at'),
+        unknownAt: text('unknown_at'),
+        resolvedAt: text('resolved_at'),
+    },
+    (table) => [
+        primaryKey({ columns: [table.sessionId, table.approvalId] }),
+        index('desktop_approval_effects_state_idx').on(table.state),
+    ],
+);
+
+export const sessionProjectionRuns = sqliteTable(
+    'session_projection_runs',
+    {
+        sessionId: text('session_id')
+            .notNull()
+            .references(() => sessions.sessionId, { onDelete: 'cascade' }),
+        eventId: text('event_id').notNull(),
+        sequence: integer('sequence').notNull(),
+        timestamp: text('timestamp').notNull(),
+        eventType: text('event_type').notNull(),
+        command: text('command'),
+        state: text('state'),
+        runId: text('run_id'),
+        inputId: text('input_id'),
+        providerTurnId: text('provider_turn_id'),
+        reason: text('reason'),
+        errorCode: text('error_code'),
+    },
+    (table) => [
+        primaryKey({ columns: [table.sessionId, table.eventId] }),
+        index('session_projection_runs_by_sequence').on(table.sessionId, table.sequence),
+    ],
+);
+
+export const sessionProjectionDiagnostics = sqliteTable(
+    'session_projection_diagnostics',
+    {
+        sessionId: text('session_id').notNull(),
+        filePath: text('file_path').notNull(),
+        code: text('code').notNull(),
+        message: text('message').notNull(),
+        lineNumber: integer('line_number'),
+    },
+    (table) => [primaryKey({ columns: [table.sessionId, table.filePath, table.code, table.message] })],
+);

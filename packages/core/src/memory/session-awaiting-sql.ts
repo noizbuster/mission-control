@@ -1,4 +1,7 @@
 import type { Client } from '@libsql/client';
+import { and, eq, notInArray, sql } from 'drizzle-orm';
+import { drizzleFromClient } from '../db/drizzle-client';
+import { sessions } from '../db/schema';
 import { deriveSessionLifecycleFromSql } from './session-lifecycle-sql-authorities';
 
 export { loadSessionActiveRuns, loadSessionTerminalEvent } from './session-lifecycle-sql-authorities';
@@ -18,22 +21,32 @@ export async function ensurePublicSessionRow(input: {
     readonly sessionId: string;
     readonly now: string;
 }): Promise<void> {
-    await input.client.execute({
-        sql:
-            'INSERT INTO sessions (session_id, status, created_at, updated_at, last_activity_at) ' +
-            'VALUES (?, ?, ?, ?, ?) ON CONFLICT(session_id) DO NOTHING',
-        args: [input.sessionId, 'idle', input.now, input.now, input.now],
-    });
+    const db = drizzleFromClient(input.client);
+    await db
+        .insert(sessions)
+        .values({
+            sessionId: input.sessionId,
+            status: 'idle',
+            createdAt: input.now,
+            updatedAt: input.now,
+            lastActivityAt: input.now,
+        })
+        .onConflictDoNothing({ target: sessions.sessionId });
 }
 
 export async function persistSessionAwaiting(input: PersistSessionAwaitingInput): Promise<void> {
     await ensurePublicSessionRow(input);
-    await input.client.execute({
-        sql:
-            'UPDATE sessions SET status = ?, awaiting_reason = ?, primary_wait_id = ?, updated_at = ?, ' +
-            'last_activity_at = ? WHERE session_id = ? AND status NOT IN (?, ?)',
-        args: ['awaiting', input.reason, input.waitId, input.now, input.now, input.sessionId, 'stopped', 'failed'],
-    });
+    const db = drizzleFromClient(input.client);
+    await db
+        .update(sessions)
+        .set({
+            status: 'awaiting',
+            awaitingReason: input.reason,
+            primaryWaitId: input.waitId,
+            updatedAt: input.now,
+            lastActivityAt: input.now,
+        })
+        .where(and(eq(sessions.sessionId, input.sessionId), notInArray(sessions.status, ['stopped', 'failed'])));
 }
 
 export async function refreshSessionAwaitingFromPendingWaits(input: {
@@ -46,35 +59,26 @@ export async function refreshSessionAwaitingFromPendingWaits(input: {
     const awaitingReason = lifecycle.status === 'awaiting' ? lifecycle.awaitingReason : null;
     const primaryWaitId = lifecycle.status === 'awaiting' ? lifecycle.primaryWaitId : null;
     const lifecycleReason = lifecycle.status === 'idle' && lifecycle.displayReason === 'aborted' ? 'aborted' : null;
-    await input.client.execute({
-        sql: `
-            UPDATE sessions
-            SET status = CASE WHEN status IN (?, ?) THEN status ELSE ? END,
-                awaiting_reason = ?, primary_wait_id = ?,
-                updated_at = ?, last_activity_at = ?,
-                metadata_json = CASE
-                    WHEN ? IS NULL THEN json_remove(
-                        CASE WHEN json_valid(metadata_json) THEN metadata_json ELSE '{}' END,
-                        '$.lifecycleReason'
-                    )
-                    ELSE json_set(
-                        CASE WHEN json_valid(metadata_json) THEN metadata_json ELSE '{}' END,
-                        '$.lifecycleReason', ?
-                    )
-                END
-            WHERE session_id = ?
-        `,
-        args: [
-            'stopped',
-            'failed',
-            lifecycle.status,
+    const db = drizzleFromClient(input.client);
+    await db
+        .update(sessions)
+        .set({
+            status: sql`CASE WHEN ${sessions.status} IN ('stopped', 'failed') THEN ${sessions.status} ELSE ${lifecycle.status} END`,
             awaitingReason,
             primaryWaitId,
-            input.now,
-            input.now,
-            lifecycleReason,
-            lifecycleReason,
-            input.sessionId,
-        ],
-    });
+            updatedAt: input.now,
+            lastActivityAt: input.now,
+            metadataJson: sql`CASE
+                WHEN ${lifecycleReason} IS NULL THEN json_remove(
+                    CASE WHEN json_valid(${sessions.metadataJson}) THEN ${sessions.metadataJson} ELSE '{}' END,
+                    '$.lifecycleReason'
+                )
+                ELSE json_set(
+                    CASE WHEN json_valid(${sessions.metadataJson}) THEN ${sessions.metadataJson} ELSE '{}' END,
+                    '$.lifecycleReason',
+                    ${lifecycleReason}
+                )
+            END`,
+        })
+        .where(eq(sessions.sessionId, input.sessionId));
 }

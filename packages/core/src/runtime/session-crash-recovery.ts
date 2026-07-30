@@ -21,7 +21,10 @@
  */
 import type { Client } from '@libsql/client';
 import type { AgentEvent } from '@mission-control/protocol';
+import { and, eq, inArray, lt } from 'drizzle-orm';
+import { drizzleFromClient } from '../db/drizzle-client';
 import { openMissionControlDb } from '../db/mission-control-db';
+import { sessionControlLeases, sessions } from '../db/schema';
 import { probeSessionControlProcess } from './session-control-process';
 import { appendFencedSessionStopEvent } from './session-stop-event-writer';
 import { applyStopMutation, readSessionTerminalStatus } from './session-stop-mutation';
@@ -81,33 +84,23 @@ async function reconcileWithClient(input: {
 }): Promise<ReconcileCrashedSessionsResult> {
     const now = input.nowMs();
     const expiryThreshold = now - input.graceMs;
-    const candidates = await input.client.execute({
-        sql:
-            'SELECT s.session_id AS session_id, l.pid AS pid, l.process_start_id AS process_start_id ' +
-            'FROM sessions s ' +
-            'JOIN session_control_leases l ON l.session_id = s.session_id ' +
-            "WHERE s.status IN ('running','awaiting') AND l.expires_wall_ms < ?",
-        args: [expiryThreshold],
-    });
+    const db = drizzleFromClient(input.client);
+    const candidates = await db
+        .select({
+            sessionId: sessions.sessionId,
+            pid: sessionControlLeases.pid,
+            processStartId: sessionControlLeases.processStartId,
+        })
+        .from(sessions)
+        .innerJoin(sessionControlLeases, eq(sessionControlLeases.sessionId, sessions.sessionId))
+        .where(and(inArray(sessions.status, ['running', 'awaiting']), lt(sessionControlLeases.expiresWallMs, expiryThreshold)));
 
     const reconciled: string[] = [];
     const skipped: string[] = [];
-    for (const row of candidates.rows) {
-        const {
-            session_id: rowSessionId,
-            pid: rowPid,
-            process_start_id: rowProcessStartId,
-        } = row as {
-            readonly session_id?: string;
-            readonly pid?: number;
-            readonly process_start_id?: string;
-        };
-        const sessionId = typeof rowSessionId === 'string' ? rowSessionId : undefined;
-        const pid = typeof rowPid === 'number' ? rowPid : undefined;
-        const processStartId = typeof rowProcessStartId === 'string' ? rowProcessStartId : undefined;
-        if (sessionId === undefined || pid === undefined || processStartId === undefined) {
-            continue;
-        }
+    for (const row of candidates) {
+        const sessionId = row.sessionId;
+        const pid = row.pid;
+        const processStartId = row.processStartId;
         // Second proof: the owner process must be provably gone. A live (matching) or
         // indeterminate (unknown) owner is never touched.
         const state = await input.probe(pid, processStartId);

@@ -8,9 +8,6 @@ import {
 
 export const activeJobStatuses: ReadonlySet<BackgroundJobHandle['status']> = new Set(['queued', 'running']);
 
-export const selectJobColumns =
-    'job_id, parent_session_id, child_session_id, agent_id, status, queued_at, started_at, completed_at, failed_at, cancelled_at, cancellation_reason, result_json, error_json, metadata_json';
-
 export function cancelRecoveredJob(job: BackgroundJobHandle): DurableBackgroundJobHandle {
     return durableSnapshotJobHandle({
         ...job,

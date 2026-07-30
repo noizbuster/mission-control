@@ -1,5 +1,8 @@
 import type { Client } from '@libsql/client';
+import { and, eq } from 'drizzle-orm';
 import type { TaskToolSubagentMirror } from '../agents/task-tool-runtime-types';
+import { drizzleFromClient } from '../db/drizzle-client';
+import { sessionAwaits } from '../db/schema';
 import {
     ensurePublicSessionRow,
     persistSessionAwaiting,
@@ -39,16 +42,31 @@ export async function startAskUserInputWait(input: AskUserInputWaitSqlInput): Pr
     const now = input.now ?? new Date().toISOString();
     const waitId = waitIdForAskUserToolCall(input.toolCallId);
     await ensurePublicSessionRow({ client: input.client, sessionId: input.sessionId, now });
-    await input.client.execute({
-        sql:
-            'INSERT INTO session_awaits ' +
-            '(wait_id, session_id, reason, source_kind, source_id, tool_call_id, status, created_at) ' +
-            'VALUES (?, ?, ?, ?, ?, ?, ?, ?) ' +
-            'ON CONFLICT(wait_id) DO UPDATE SET status = excluded.status, created_at = excluded.created_at, ' +
-            'resolved_at = NULL, cancelled_at = NULL, tool_call_id = excluded.tool_call_id, ' +
-            'source_kind = excluded.source_kind, source_id = excluded.source_id',
-        args: [waitId, input.sessionId, 'user_input', 'tool_call', input.toolCallId, input.toolCallId, 'pending', now],
-    });
+    const db = drizzleFromClient(input.client);
+    await db
+        .insert(sessionAwaits)
+        .values({
+            waitId,
+            sessionId: input.sessionId,
+            reason: 'user_input',
+            sourceKind: 'tool_call',
+            sourceId: input.toolCallId,
+            toolCallId: input.toolCallId,
+            status: 'pending',
+            createdAt: now,
+        })
+        .onConflictDoUpdate({
+            target: sessionAwaits.waitId,
+            set: {
+                status: 'pending',
+                createdAt: now,
+                resolvedAt: null,
+                cancelledAt: null,
+                toolCallId: input.toolCallId,
+                sourceKind: 'tool_call',
+                sourceId: input.toolCallId,
+            },
+        });
     await persistSessionAwaiting({
         client: input.client,
         sessionId: input.sessionId,
@@ -62,10 +80,20 @@ export async function resolveAskUserInputWait(input: AskUserInputWaitSqlInput): 
     const now = input.now ?? new Date().toISOString();
     const waitId = waitIdForAskUserToolCall(input.toolCallId);
     await ensurePublicSessionRow({ client: input.client, sessionId: input.sessionId, now });
-    await input.client.execute({
-        sql: 'UPDATE session_awaits SET status = ?, resolved_at = ? WHERE wait_id = ? AND session_id = ? AND status = ?',
-        args: ['resolved', now, waitId, input.sessionId, 'pending'],
-    });
+    const db = drizzleFromClient(input.client);
+    await db
+        .update(sessionAwaits)
+        .set({
+            status: 'resolved',
+            resolvedAt: now,
+        })
+        .where(
+            and(
+                eq(sessionAwaits.waitId, waitId),
+                eq(sessionAwaits.sessionId, input.sessionId),
+                eq(sessionAwaits.status, 'pending'),
+            ),
+        );
     await refreshSessionAwaitingFromPendingWaits({
         client: input.client,
         sessionId: input.sessionId,
@@ -78,7 +106,8 @@ export function createSqlAskUserUserInputWaitMirror(input: {
     readonly sessionId: string;
 }): AskUserUserInputWaitMirror {
     return {
-        start: ({ toolCallId }) => startAskUserInputWait({ client: input.client, sessionId: input.sessionId, toolCallId }),
+        start: ({ toolCallId }) =>
+            startAskUserInputWait({ client: input.client, sessionId: input.sessionId, toolCallId }),
         resolve: ({ toolCallId }) =>
             resolveAskUserInputWait({ client: input.client, sessionId: input.sessionId, toolCallId }),
     };

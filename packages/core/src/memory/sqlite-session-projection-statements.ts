@@ -1,5 +1,16 @@
-import type { InStatement } from '@libsql/client';
 import type { AgentEventEnvelope } from '@mission-control/protocol';
+import { and, eq, inArray, or, sql } from 'drizzle-orm';
+import type { MissionControlDrizzleDb } from '../db/drizzle-client';
+import {
+    approvals,
+    providerFailures,
+    sessionAwaits,
+    sessionMessages,
+    sessionParts,
+    sessionProjectionDiagnostics,
+    sessionProjectionRuns,
+    toolCalls,
+} from '../db/schema';
 import type {
     SessionProjectionApprovalRecord,
     SessionProjectionDiagnostic,
@@ -9,91 +20,105 @@ import type {
     SessionProjectionSessionRecord,
     SessionProjectionToolRecord,
 } from './session-projection-types';
-import { inputProjectionStatements } from './sqlite-session-projection-input-statements';
+import { projectInputStatements } from './sqlite-session-projection-input-statements';
 import {
-    messageProjectionStatements,
+    projectMessageStatements,
     toolArgumentsById,
     toolNamesById,
 } from './sqlite-session-projection-message-statements';
 import {
-    insertApprovalStatement,
-    insertDiagnosticStatement,
-    insertProviderFailureStatement,
-    insertRunStatement,
-    insertToolStatement,
+    insertApprovalRecord,
+    insertDiagnosticRecord,
+    insertProviderFailureRecord,
+    insertRunRecord,
+    insertToolRecord,
 } from './sqlite-session-projection-record-statements';
-import { insertAwaitingStatement, insertSessionStatement } from './sqlite-session-projection-session-statements';
-import { cancelledWaitProjectionStatements } from './sqlite-session-projection-wait-statements';
+import { insertAwaitingRecord, insertSessionRecord } from './sqlite-session-projection-session-statements';
+import { projectCancelledWaitStatements } from './sqlite-session-projection-wait-statements';
 
-export function replaceStatements(input: {
-    readonly sessionId: string;
-    readonly records: readonly SessionProjectionRecord[];
-    readonly diagnostics: readonly SessionProjectionDiagnostic[];
-    readonly envelopes: readonly AgentEventEnvelope[];
-}): readonly InStatement[] {
+export async function replaceSessionProjectionRecords(
+    db: MissionControlDrizzleDb,
+    input: {
+        readonly sessionId: string;
+        readonly records: readonly SessionProjectionRecord[];
+        readonly diagnostics: readonly SessionProjectionDiagnostic[];
+        readonly envelopes: readonly AgentEventEnvelope[];
+    },
+): Promise<void> {
     const records = splitRecords(input.records);
-    return [
-        ...deleteStatements(input.sessionId),
-        ...records.sessions.map(insertSessionStatement),
-        ...records.sessions.flatMap((record) => {
-            const statement = insertAwaitingStatement(record);
-            return statement === undefined ? [] : [statement];
-        }),
-        ...inputProjectionStatements(input.envelopes),
-        ...cancelledWaitProjectionStatements(input.envelopes),
-        ...records.runs.map(insertRunStatement),
-        ...records.approvals.map(insertApprovalStatement),
-        ...records.tools.map(insertToolStatement(toolNamesById(input.envelopes), toolArgumentsById(input.envelopes))),
-        ...records.providerFailures.map(insertProviderFailureStatement),
-        ...messageProjectionStatements(input.envelopes),
-        ...input.diagnostics.map(insertDiagnosticStatement),
-        refreshAwaitingStatement(input.sessionId),
-    ];
+    await deleteProjectionRows(db, input.sessionId);
+    for (const record of records.sessions) {
+        await insertSessionRecord(db, record);
+        await insertAwaitingRecord(db, record);
+    }
+    await projectInputStatements(db, input.envelopes);
+    await projectCancelledWaitStatements(db, input.envelopes);
+    for (const record of records.runs) {
+        await insertRunRecord(db, record);
+    }
+    for (const record of records.approvals) {
+        await insertApprovalRecord(db, record);
+    }
+    const insertTool = insertToolRecord(db, toolNamesById(input.envelopes), toolArgumentsById(input.envelopes));
+    for (const record of records.tools) {
+        await insertTool(record);
+    }
+    for (const record of records.providerFailures) {
+        await insertProviderFailureRecord(db, record);
+    }
+    await projectMessageStatements(db, input.envelopes);
+    for (const diagnostic of input.diagnostics) {
+        await insertDiagnosticRecord(db, diagnostic);
+    }
+    await refreshAwaitingStatus(db, input.sessionId);
 }
 
-function deleteStatements(sessionId: string): readonly InStatement[] {
-    const tables = [
-        'session_parts',
-        'session_messages',
-        'approvals',
-        'tool_calls',
-        'provider_failures',
-        'session_projection_runs',
-        'session_projection_diagnostics',
-    ];
-    return [
-        {
-            sql:
-                'DELETE FROM session_awaits WHERE session_id = ? AND status = ? ' +
-                "AND (source_kind IN (?, ?, ?) OR json_extract(metadata_json, '$.owner') = ?)",
-            args: [sessionId, 'pending', 'approval', 'run', 'tool_call', 'projection'],
-        },
-        ...tables.map((table) => ({ sql: `DELETE FROM ${table} WHERE session_id = ?`, args: [sessionId] })),
-    ];
+async function deleteProjectionRows(db: MissionControlDrizzleDb, sessionId: string): Promise<void> {
+    await db
+        .delete(sessionAwaits)
+        .where(
+            and(
+                eq(sessionAwaits.sessionId, sessionId),
+                eq(sessionAwaits.status, 'pending'),
+                or(
+                    inArray(sessionAwaits.sourceKind, ['approval', 'run', 'tool_call']),
+                    sql`json_extract(${sessionAwaits.metadataJson}, '$.owner') = ${'projection'}`,
+                ),
+            ),
+        );
+    await db.delete(sessionParts).where(eq(sessionParts.sessionId, sessionId));
+    await db.delete(sessionMessages).where(eq(sessionMessages.sessionId, sessionId));
+    await db.delete(approvals).where(eq(approvals.sessionId, sessionId));
+    await db.delete(toolCalls).where(eq(toolCalls.sessionId, sessionId));
+    await db.delete(providerFailures).where(eq(providerFailures.sessionId, sessionId));
+    await db.delete(sessionProjectionRuns).where(eq(sessionProjectionRuns.sessionId, sessionId));
+    await db.delete(sessionProjectionDiagnostics).where(eq(sessionProjectionDiagnostics.sessionId, sessionId));
 }
 
-function refreshAwaitingStatement(sessionId: string): InStatement {
-    return {
-        sql: `
-            WITH primary_wait AS (
-                SELECT wait_id, reason, created_at
-                FROM session_awaits
-                WHERE session_id = ? AND status = ?
-                ORDER BY CASE reason WHEN ? THEN 0 WHEN ? THEN 1 WHEN ? THEN 2 ELSE 3 END, created_at, wait_id
-                LIMIT 1
-            )
-            UPDATE sessions
-            SET status = ?,
-                awaiting_reason = (SELECT reason FROM primary_wait),
-                primary_wait_id = (SELECT wait_id FROM primary_wait),
-                updated_at = COALESCE((SELECT created_at FROM primary_wait), updated_at),
-                last_activity_at = COALESCE((SELECT created_at FROM primary_wait), last_activity_at)
-            WHERE session_id = ?
-              AND status NOT IN (?, ?)
-              AND EXISTS (SELECT 1 FROM primary_wait)
-        `,
-        args: [sessionId, 'pending', 'approval', 'user_input', 'subagent', 'awaiting', sessionId, 'stopped', 'failed'],
-    };
+async function refreshAwaitingStatus(db: MissionControlDrizzleDb, sessionId: string): Promise<void> {
+    await db.run(sql`
+        WITH primary_wait AS (
+            SELECT wait_id, reason, created_at
+            FROM session_awaits
+            WHERE session_id = ${sessionId} AND status = ${'pending'}
+            ORDER BY CASE reason
+                WHEN ${'approval'} THEN 0
+                WHEN ${'user_input'} THEN 1
+                WHEN ${'subagent'} THEN 2
+                ELSE 3
+            END, created_at, wait_id
+            LIMIT 1
+        )
+        UPDATE sessions
+        SET status = ${'awaiting'},
+            awaiting_reason = (SELECT reason FROM primary_wait),
+            primary_wait_id = (SELECT wait_id FROM primary_wait),
+            updated_at = COALESCE((SELECT created_at FROM primary_wait), updated_at),
+            last_activity_at = COALESCE((SELECT created_at FROM primary_wait), last_activity_at)
+        WHERE session_id = ${sessionId}
+          AND status NOT IN (${'stopped'}, ${'failed'})
+          AND EXISTS (SELECT 1 FROM primary_wait)
+    `);
 }
 
 type SplitRecords = {

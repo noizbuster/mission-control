@@ -1,6 +1,8 @@
-import { z } from 'zod';
+import { asc, eq } from 'drizzle-orm';
+import { drizzleFromClient } from '../db/drizzle-client';
 import { type LocalLibsqlDb, runLocalLibsqlWrite } from '../db/local-libsql-db';
 import { openMissionControlDb } from '../db/mission-control-db';
+import { contextEpochs, sessions } from '../db/schema';
 
 export type ContextEpochRecordInput = {
     readonly sessionId: string;
@@ -22,23 +24,11 @@ export type ContextEpochRecord = {
     readonly metadataJson?: string;
 };
 
-const epochRowSchema = z.object({
-    context_epoch_id: z.string(),
-    session_id: z.string(),
-    epoch: z.number(),
-    source_id: z.string(),
-    baseline_text: z.string().nullable(),
-    update_text: z.string().nullable(),
-    created_at: z.string(),
-    metadata_json: z.string().nullable(),
-});
-
 export class SqlContextEpochStore {
     private constructor(private readonly runtime: LocalLibsqlDb) {}
 
     static async open(input: { readonly dataDir: string }): Promise<SqlContextEpochStore> {
-        const runtime = await openMissionControlDb({ dataDir: input.dataDir });
-        return SqlContextEpochStore.fromRuntime(runtime);
+        return new SqlContextEpochStore(await openMissionControlDb(input));
     }
 
     static fromRuntime(runtime: LocalLibsqlDb): SqlContextEpochStore {
@@ -59,35 +49,49 @@ export class SqlContextEpochStore {
                 createdAt: now,
                 ...(input.metadataJson !== undefined ? { metadataJson: input.metadataJson } : {}),
             };
-            await this.runtime.client.execute({
-                sql:
-                    'INSERT INTO context_epochs (context_epoch_id, session_id, epoch, source_id, baseline_text, update_text, created_at, metadata_json) ' +
-                    'VALUES (?, ?, ?, ?, ?, ?, ?, ?) ' +
-                    'ON CONFLICT(session_id, epoch, source_id) DO UPDATE SET baseline_text = excluded.baseline_text, ' +
-                    'update_text = excluded.update_text, created_at = excluded.created_at, metadata_json = excluded.metadata_json',
-                args: [
-                    record.contextEpochId,
-                    record.sessionId,
-                    record.epoch,
-                    record.sourceId,
-                    record.baselineText ?? null,
-                    record.updateText ?? null,
-                    record.createdAt,
-                    record.metadataJson ?? null,
-                ],
-            });
+            const db = drizzleFromClient(this.runtime.client);
+            await db
+                .insert(contextEpochs)
+                .values({
+                    contextEpochId: record.contextEpochId,
+                    sessionId: record.sessionId,
+                    epoch: record.epoch,
+                    sourceId: record.sourceId,
+                    baselineText: record.baselineText ?? null,
+                    updateText: record.updateText ?? null,
+                    createdAt: record.createdAt,
+                    metadataJson: record.metadataJson ?? null,
+                })
+                .onConflictDoUpdate({
+                    target: [contextEpochs.sessionId, contextEpochs.epoch, contextEpochs.sourceId],
+                    set: {
+                        baselineText: record.baselineText ?? null,
+                        updateText: record.updateText ?? null,
+                        createdAt: record.createdAt,
+                        metadataJson: record.metadataJson ?? null,
+                    },
+                });
             return record;
         });
     }
 
     async listEpochs(sessionId: string): Promise<readonly ContextEpochRecord[]> {
-        const result = await this.runtime.client.execute({
-            sql:
-                'SELECT context_epoch_id, session_id, epoch, source_id, baseline_text, update_text, created_at, metadata_json ' +
-                'FROM context_epochs WHERE session_id = ? ORDER BY epoch, source_id',
-            args: [sessionId],
-        });
-        return result.rows.map(rowToContextEpochRecord);
+        const db = drizzleFromClient(this.runtime.client);
+        const rows = await db
+            .select()
+            .from(contextEpochs)
+            .where(eq(contextEpochs.sessionId, sessionId))
+            .orderBy(asc(contextEpochs.epoch), asc(contextEpochs.sourceId));
+        return rows.map((row) => ({
+            contextEpochId: row.contextEpochId,
+            sessionId: row.sessionId,
+            epoch: row.epoch,
+            sourceId: row.sourceId,
+            ...(row.baselineText !== null ? { baselineText: row.baselineText } : {}),
+            ...(row.updateText !== null ? { updateText: row.updateText } : {}),
+            createdAt: row.createdAt,
+            ...(row.metadataJson !== null ? { metadataJson: row.metadataJson } : {}),
+        }));
     }
 
     close(): void {
@@ -96,27 +100,18 @@ export class SqlContextEpochStore {
 
     private async ensureSession(sessionId: string): Promise<void> {
         const now = new Date().toISOString();
-        await this.runtime.client.execute({
-            sql:
-                'INSERT INTO sessions (session_id, status, created_at, updated_at, last_activity_at) VALUES (?, ?, ?, ?, ?) ' +
-                'ON CONFLICT(session_id) DO NOTHING',
-            args: [sessionId, 'idle', now, now, now],
-        });
+        const db = drizzleFromClient(this.runtime.client);
+        await db
+            .insert(sessions)
+            .values({
+                sessionId,
+                status: 'idle',
+                createdAt: now,
+                updatedAt: now,
+                lastActivityAt: now,
+            })
+            .onConflictDoNothing({ target: sessions.sessionId });
     }
-}
-
-function rowToContextEpochRecord(row: unknown): ContextEpochRecord {
-    const parsed = epochRowSchema.parse(row);
-    return {
-        contextEpochId: parsed.context_epoch_id,
-        sessionId: parsed.session_id,
-        epoch: parsed.epoch,
-        sourceId: parsed.source_id,
-        ...(parsed.baseline_text !== null ? { baselineText: parsed.baseline_text } : {}),
-        ...(parsed.update_text !== null ? { updateText: parsed.update_text } : {}),
-        createdAt: parsed.created_at,
-        ...(parsed.metadata_json !== null ? { metadataJson: parsed.metadata_json } : {}),
-    };
 }
 
 function contextEpochId(input: Pick<ContextEpochRecordInput, 'sessionId' | 'epoch' | 'sourceId'>): string {

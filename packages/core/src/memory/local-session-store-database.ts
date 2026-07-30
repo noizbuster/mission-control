@@ -1,7 +1,30 @@
-import { type InStatement } from '@libsql/client';
+import { and, count, eq, gt, inArray, or } from 'drizzle-orm';
 import { z } from 'zod';
+import { drizzleFromClient, type MissionControlDrizzleDb } from '../db/drizzle-client';
 import { runLocalLibsqlWrite } from '../db/local-libsql-db';
 import { runLocalLibsqlClientTransaction } from '../db/local-libsql-transaction';
+import {
+    approvals,
+    asyncJobs,
+    contextEpochs,
+    desktopApprovalEffects,
+    desktopToolProposals,
+    missionRuns,
+    providerFailures,
+    runtimeAgents,
+    sessionAwaits,
+    sessionControlLeases,
+    sessionEventSequences,
+    sessionEvents,
+    sessionInputs,
+    sessionMessages,
+    sessionParts,
+    sessionProjectionDiagnostics,
+    sessionProjectionRuns,
+    sessionRelations,
+    sessions,
+    toolCalls,
+} from '../db/schema';
 import type { ObservabilityRedactor } from '../providers/observability-redactor';
 import { openCanonicalRuntimeDb } from '../runtime/local-runtime-db';
 import { readCanonicalSessionTree } from '../runtime/session-stop-tree-resolver';
@@ -38,7 +61,9 @@ export async function deleteLocalSessionRows(input: {
     });
     try {
         for (const sessionId of input.sessionIds) {
-            await runLocalLibsqlWrite(runtime, (client) => client.batch(sessionDeleteStatements(sessionId), 'write'));
+            await runLocalLibsqlWrite(runtime, async (client) => {
+                await deleteSessionRows(drizzleFromClient(client), sessionId);
+            });
         }
     } finally {
         runtime.close();
@@ -67,8 +92,8 @@ export class LocalSessionTreeDeleteError extends Error {
 }
 
 const eventCountRowSchema = z.object({
-    session_id: z.string(),
-    event_count: z.number().int().nonnegative(),
+    sessionId: z.string(),
+    eventCount: z.number().int().nonnegative(),
 });
 
 export async function deleteLocalSessionTreeRows(input: {
@@ -93,29 +118,36 @@ export async function deleteLocalSessionTreeRows(input: {
                 }
 
                 const sessionIds = nodes.map(({ sessionId }) => sessionId);
-                const placeholders = sessionIds.map(() => '?').join(', ');
-                const liveLease = await client.execute({
-                    sql:
-                        `SELECT 1 FROM session_control_leases WHERE db_identity = ? AND session_id IN (${placeholders}) ` +
-                        'AND expires_wall_ms > ? LIMIT 1',
-                    args: [identity.dbIdentity, ...sessionIds, input.nowWallMs ?? Date.now()],
-                });
-                if (liveLease.rows[0] !== undefined) throw new LocalSessionTreeDeleteError('session_live_locked');
+                const db = drizzleFromClient(client);
+                const liveLease = await db
+                    .select({ sessionId: sessionControlLeases.sessionId })
+                    .from(sessionControlLeases)
+                    .where(
+                        and(
+                            eq(sessionControlLeases.dbIdentity, identity.dbIdentity),
+                            inArray(sessionControlLeases.sessionId, [...sessionIds]),
+                            gt(sessionControlLeases.expiresWallMs, input.nowWallMs ?? Date.now()),
+                        ),
+                    )
+                    .limit(1);
+                if (liveLease[0] !== undefined) throw new LocalSessionTreeDeleteError('session_live_locked');
 
-                const counts = await client.execute({
-                    sql:
-                        `SELECT session_id, COUNT(*) AS event_count FROM session_events WHERE session_id IN (${placeholders}) ` +
-                        'GROUP BY session_id',
-                    args: sessionIds,
-                });
+                const counts = await db
+                    .select({
+                        sessionId: sessionEvents.sessionId,
+                        eventCount: count(),
+                    })
+                    .from(sessionEvents)
+                    .where(inArray(sessionEvents.sessionId, [...sessionIds]))
+                    .groupBy(sessionEvents.sessionId);
                 const eventCounts = new Map(
-                    counts.rows.map((row) => {
+                    counts.map((row) => {
                         const parsed = eventCountRowSchema.parse(row);
-                        return [parsed.session_id, parsed.event_count] as const;
+                        return [parsed.sessionId, parsed.eventCount] as const;
                     }),
                 );
                 for (const sessionId of sessionIds) {
-                    for (const statement of sessionDeleteStatements(sessionId)) await client.execute(statement);
+                    await deleteSessionRows(db, sessionId);
                 }
                 return sessionIds.map((sessionId) => ({ sessionId, eventCount: eventCounts.get(sessionId) ?? 0 }));
             }),
@@ -125,35 +157,31 @@ export async function deleteLocalSessionTreeRows(input: {
     }
 }
 
-function sessionDeleteStatements(sessionId: string): InStatement[] {
-    return [
-        { sql: 'DELETE FROM session_parts WHERE session_id = ?', args: [sessionId] },
-        { sql: 'DELETE FROM session_messages WHERE session_id = ?', args: [sessionId] },
-        { sql: 'DELETE FROM session_events WHERE session_id = ?', args: [sessionId] },
-        { sql: 'DELETE FROM session_event_sequences WHERE session_id = ?', args: [sessionId] },
-        { sql: 'DELETE FROM session_projection_runs WHERE session_id = ?', args: [sessionId] },
-        { sql: 'DELETE FROM session_projection_diagnostics WHERE session_id = ?', args: [sessionId] },
-        { sql: 'DELETE FROM approvals WHERE session_id = ?', args: [sessionId] },
-        { sql: 'DELETE FROM tool_calls WHERE session_id = ?', args: [sessionId] },
-        { sql: 'DELETE FROM desktop_tool_proposals WHERE session_id = ?', args: [sessionId] },
-        { sql: 'DELETE FROM desktop_approval_effects WHERE session_id = ?', args: [sessionId] },
-        { sql: 'DELETE FROM provider_failures WHERE session_id = ?', args: [sessionId] },
-        { sql: 'DELETE FROM session_inputs WHERE session_id = ?', args: [sessionId] },
-        {
-            sql: 'DELETE FROM session_awaits WHERE session_id = ? OR child_session_id = ?',
-            args: [sessionId, sessionId],
-        },
-        { sql: 'DELETE FROM context_epochs WHERE session_id = ?', args: [sessionId] },
-        {
-            sql: 'DELETE FROM session_relations WHERE parent_session_id = ? OR child_session_id = ?',
-            args: [sessionId, sessionId],
-        },
-        { sql: 'UPDATE mission_runs SET session_id = NULL WHERE session_id = ?', args: [sessionId] },
-        { sql: 'UPDATE runtime_agents SET session_id = NULL WHERE session_id = ?', args: [sessionId] },
-        { sql: 'UPDATE async_jobs SET parent_session_id = NULL WHERE parent_session_id = ?', args: [sessionId] },
-        { sql: 'UPDATE async_jobs SET child_session_id = NULL WHERE child_session_id = ?', args: [sessionId] },
-        { sql: 'DELETE FROM sessions WHERE session_id = ?', args: [sessionId] },
-    ];
+async function deleteSessionRows(db: MissionControlDrizzleDb, sessionId: string): Promise<void> {
+    await db.delete(sessionParts).where(eq(sessionParts.sessionId, sessionId));
+    await db.delete(sessionMessages).where(eq(sessionMessages.sessionId, sessionId));
+    await db.delete(sessionEvents).where(eq(sessionEvents.sessionId, sessionId));
+    await db.delete(sessionEventSequences).where(eq(sessionEventSequences.sessionId, sessionId));
+    await db.delete(sessionProjectionRuns).where(eq(sessionProjectionRuns.sessionId, sessionId));
+    await db.delete(sessionProjectionDiagnostics).where(eq(sessionProjectionDiagnostics.sessionId, sessionId));
+    await db.delete(approvals).where(eq(approvals.sessionId, sessionId));
+    await db.delete(toolCalls).where(eq(toolCalls.sessionId, sessionId));
+    await db.delete(desktopToolProposals).where(eq(desktopToolProposals.sessionId, sessionId));
+    await db.delete(desktopApprovalEffects).where(eq(desktopApprovalEffects.sessionId, sessionId));
+    await db.delete(providerFailures).where(eq(providerFailures.sessionId, sessionId));
+    await db.delete(sessionInputs).where(eq(sessionInputs.sessionId, sessionId));
+    await db
+        .delete(sessionAwaits)
+        .where(or(eq(sessionAwaits.sessionId, sessionId), eq(sessionAwaits.childSessionId, sessionId)));
+    await db.delete(contextEpochs).where(eq(contextEpochs.sessionId, sessionId));
+    await db
+        .delete(sessionRelations)
+        .where(or(eq(sessionRelations.parentSessionId, sessionId), eq(sessionRelations.childSessionId, sessionId)));
+    await db.update(missionRuns).set({ sessionId: null }).where(eq(missionRuns.sessionId, sessionId));
+    await db.update(runtimeAgents).set({ sessionId: null }).where(eq(runtimeAgents.sessionId, sessionId));
+    await db.update(asyncJobs).set({ parentSessionId: null }).where(eq(asyncJobs.parentSessionId, sessionId));
+    await db.update(asyncJobs).set({ childSessionId: null }).where(eq(asyncJobs.childSessionId, sessionId));
+    await db.delete(sessions).where(eq(sessions.sessionId, sessionId));
 }
 
 export async function ensureLocalSessionDatabase(input: {

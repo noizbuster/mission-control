@@ -1,11 +1,19 @@
+import type { Client } from '@libsql/client';
+import { and, eq } from 'drizzle-orm';
+import { drizzleFromClient } from '../db/drizzle-client';
 import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db';
+import { sessionControlOperations } from '../db/schema';
 import type { SessionControlLease } from './session-control-lease';
 import {
     isLiveOperationLease,
     runSessionControlOperationImmediate,
     selectSessionControlOperation,
 } from './session-control-operation-sql';
-import { assertOperationWallTime, SESSION_CONTROL_SETTLED_RETENTION_MS } from './session-control-operation-types';
+import {
+    assertOperationWallTime,
+    SESSION_CONTROL_SETTLED_RETENTION_MS,
+    type SessionControlOperation,
+} from './session-control-operation-types';
 
 export async function failSessionControlOperation(input: {
     readonly runtime: LocalLibsqlWriteTarget;
@@ -67,25 +75,28 @@ export async function failSessionControlOperationAfterFenceLoss(input: {
 }
 
 async function writeFailedOperation(
-    client: Parameters<typeof selectSessionControlOperation>[0],
-    operation: NonNullable<Awaited<ReturnType<typeof selectSessionControlOperation>>>,
+    client: Client,
+    operation: SessionControlOperation,
     input: { readonly receipt: unknown; readonly barrierReleasedAt: number; readonly nowWallMs: number },
 ): Promise<void> {
-    await client.execute({
-        sql:
-            "UPDATE session_control_operations SET status = 'failed', receipt_json = ?, barrier_released_at = ?, " +
-            'terminal_at = ?, retention_until = ? WHERE db_identity = ? AND session_id = ? AND operation_id = ? ' +
-            "AND owner_id = ? AND owner_epoch = ? AND status = 'active'",
-        args: [
-            JSON.stringify(input.receipt),
-            input.barrierReleasedAt,
-            input.nowWallMs,
-            input.nowWallMs + SESSION_CONTROL_SETTLED_RETENTION_MS,
-            operation.dbIdentity,
-            operation.sessionId,
-            operation.operationId,
-            operation.ownerId,
-            operation.ownerEpoch,
-        ],
-    });
+    const db = drizzleFromClient(client);
+    await db
+        .update(sessionControlOperations)
+        .set({
+            status: 'failed',
+            receiptJson: JSON.stringify(input.receipt),
+            barrierReleasedAt: input.barrierReleasedAt,
+            terminalAt: input.nowWallMs,
+            retentionUntil: input.nowWallMs + SESSION_CONTROL_SETTLED_RETENTION_MS,
+        })
+        .where(
+            and(
+                eq(sessionControlOperations.dbIdentity, operation.dbIdentity),
+                eq(sessionControlOperations.sessionId, operation.sessionId),
+                eq(sessionControlOperations.operationId, operation.operationId),
+                eq(sessionControlOperations.ownerId, operation.ownerId),
+                eq(sessionControlOperations.ownerEpoch, operation.ownerEpoch),
+                eq(sessionControlOperations.status, 'active'),
+            ),
+        );
 }

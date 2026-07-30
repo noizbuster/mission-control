@@ -1,5 +1,8 @@
 import type { Client } from '@libsql/client';
+import { and, eq, gt, inArray } from 'drizzle-orm';
+import { drizzleFromClient } from '../db/drizzle-client';
 import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db';
+import { sessionControlLeases, sessionControlOperations } from '../db/schema';
 import {
     insertSessionControlLease,
     replaceExpiredSessionControlLease,
@@ -97,33 +100,28 @@ export async function renewSessionControlLease(input: LeaseActionInput): Promise
     assertWallTime(input.nowWallMs);
     return runSessionControlLeaseImmediate(input.runtime, async (client) => {
         const expiresWallMs = input.nowWallMs + (input.ttlMs ?? SESSION_CONTROL_LEASE_TTL_MS);
-        const result = await client.execute({
-            sql:
-                'UPDATE session_control_leases SET heartbeat_wall_ms = ?, expires_wall_ms = ? ' +
-                'WHERE db_identity = ? AND session_id = ? AND owner_id = ? AND epoch = ? AND expires_wall_ms > ?',
-            args: [
-                input.nowWallMs,
+        const db = drizzleFromClient(client);
+        const result = await db
+            .update(sessionControlLeases)
+            .set({
+                heartbeatWallMs: input.nowWallMs,
                 expiresWallMs,
-                input.lease.dbIdentity,
-                input.lease.sessionId,
-                input.lease.ownerId,
-                input.lease.epoch,
-                input.nowWallMs,
-            ],
-        });
+            })
+            .where(
+                and(
+                    eq(sessionControlLeases.dbIdentity, input.lease.dbIdentity),
+                    eq(sessionControlLeases.sessionId, input.lease.sessionId),
+                    eq(sessionControlLeases.ownerId, input.lease.ownerId),
+                    eq(sessionControlLeases.epoch, input.lease.epoch),
+                    gt(sessionControlLeases.expiresWallMs, input.nowWallMs),
+                ),
+            );
         if (result.rowsAffected === 1) {
-            await client.execute({
-                sql:
-                    'UPDATE session_control_operations SET retention_until = ? ' +
-                    "WHERE db_identity = ? AND session_id = ? AND owner_id = ? AND owner_epoch = ? AND status IN ('active','timed_out')",
-                args: [
-                    expiresWallMs + SESSION_CONTROL_DEAD_LEASE_RETENTION_MS,
-                    input.lease.dbIdentity,
-                    input.lease.sessionId,
-                    input.lease.ownerId,
-                    input.lease.epoch,
-                ],
-            });
+            await extendActiveOperationRetention(
+                db,
+                input.lease,
+                expiresWallMs + SESSION_CONTROL_DEAD_LEASE_RETENTION_MS,
+            );
         }
         return result.rowsAffected === 1
             ? { ...input.lease, heartbeatWallMs: input.nowWallMs, expiresWallMs }
@@ -152,32 +150,27 @@ export async function reclaimSessionControlLease(input: LeaseActionInput): Promi
     assertWallTime(input.nowWallMs);
     return runSessionControlLeaseImmediate(input.runtime, async (client) => {
         const expiresWallMs = input.nowWallMs + (input.ttlMs ?? SESSION_CONTROL_LEASE_TTL_MS);
-        const result = await client.execute({
-            sql:
-                'UPDATE session_control_leases SET heartbeat_wall_ms = ?, expires_wall_ms = ? ' +
-                'WHERE db_identity = ? AND session_id = ? AND owner_id = ? AND epoch = ?',
-            args: [
-                input.nowWallMs,
+        const db = drizzleFromClient(client);
+        const result = await db
+            .update(sessionControlLeases)
+            .set({
+                heartbeatWallMs: input.nowWallMs,
                 expiresWallMs,
-                input.lease.dbIdentity,
-                input.lease.sessionId,
-                input.lease.ownerId,
-                input.lease.epoch,
-            ],
-        });
+            })
+            .where(
+                and(
+                    eq(sessionControlLeases.dbIdentity, input.lease.dbIdentity),
+                    eq(sessionControlLeases.sessionId, input.lease.sessionId),
+                    eq(sessionControlLeases.ownerId, input.lease.ownerId),
+                    eq(sessionControlLeases.epoch, input.lease.epoch),
+                ),
+            );
         if (result.rowsAffected !== 1) return undefined;
-        await client.execute({
-            sql:
-                'UPDATE session_control_operations SET retention_until = ? ' +
-                "WHERE db_identity = ? AND session_id = ? AND owner_id = ? AND owner_epoch = ? AND status IN ('active','timed_out')",
-            args: [
-                expiresWallMs + SESSION_CONTROL_DEAD_LEASE_RETENTION_MS,
-                input.lease.dbIdentity,
-                input.lease.sessionId,
-                input.lease.ownerId,
-                input.lease.epoch,
-            ],
-        });
+        await extendActiveOperationRetention(
+            db,
+            input.lease,
+            expiresWallMs + SESSION_CONTROL_DEAD_LEASE_RETENTION_MS,
+        );
         return { ...input.lease, heartbeatWallMs: input.nowWallMs, expiresWallMs };
     });
 }
@@ -186,31 +179,24 @@ export async function expireSessionControlLease(input: LeaseActionInput): Promis
     validateLease(input.lease);
     assertWallTime(input.nowWallMs);
     return runSessionControlLeaseImmediate(input.runtime, async (client) => {
-        const result = await client.execute({
-            sql:
-                'UPDATE session_control_leases SET expires_wall_ms = ? ' +
-                'WHERE db_identity = ? AND session_id = ? AND owner_id = ? AND epoch = ?',
-            args: [
-                input.nowWallMs,
-                input.lease.dbIdentity,
-                input.lease.sessionId,
-                input.lease.ownerId,
-                input.lease.epoch,
-            ],
-        });
+        const db = drizzleFromClient(client);
+        const result = await db
+            .update(sessionControlLeases)
+            .set({ expiresWallMs: input.nowWallMs })
+            .where(
+                and(
+                    eq(sessionControlLeases.dbIdentity, input.lease.dbIdentity),
+                    eq(sessionControlLeases.sessionId, input.lease.sessionId),
+                    eq(sessionControlLeases.ownerId, input.lease.ownerId),
+                    eq(sessionControlLeases.epoch, input.lease.epoch),
+                ),
+            );
         if (result.rowsAffected === 1) {
-            await client.execute({
-                sql:
-                    'UPDATE session_control_operations SET retention_until = ? ' +
-                    "WHERE db_identity = ? AND session_id = ? AND owner_id = ? AND owner_epoch = ? AND status IN ('active','timed_out')",
-                args: [
-                    input.nowWallMs + SESSION_CONTROL_DEAD_LEASE_RETENTION_MS,
-                    input.lease.dbIdentity,
-                    input.lease.sessionId,
-                    input.lease.ownerId,
-                    input.lease.epoch,
-                ],
-            });
+            await extendActiveOperationRetention(
+                db,
+                input.lease,
+                input.nowWallMs + SESSION_CONTROL_DEAD_LEASE_RETENTION_MS,
+            );
         }
         return result.rowsAffected === 1;
     });
@@ -244,6 +230,25 @@ export async function readSessionControlLease(
     sessionId: string,
 ): Promise<SessionControlLease | undefined> {
     return selectSessionControlLease(runtime.client, dbIdentity, sessionId);
+}
+
+async function extendActiveOperationRetention(
+    db: ReturnType<typeof drizzleFromClient>,
+    lease: SessionControlLease,
+    retentionUntil: number,
+): Promise<void> {
+    await db
+        .update(sessionControlOperations)
+        .set({ retentionUntil })
+        .where(
+            and(
+                eq(sessionControlOperations.dbIdentity, lease.dbIdentity),
+                eq(sessionControlOperations.sessionId, lease.sessionId),
+                eq(sessionControlOperations.ownerId, lease.ownerId),
+                eq(sessionControlOperations.ownerEpoch, lease.epoch),
+                inArray(sessionControlOperations.status, ['active', 'timed_out']),
+            ),
+        );
 }
 
 function validateAcquireInput(input: AcquireSessionControlLeaseInput): void {

@@ -1,10 +1,13 @@
 import type { Client } from '@libsql/client';
+import { eq } from 'drizzle-orm';
 import {
     createObservabilityRedactor,
     type ObservabilityRedactor,
     redactAgentEventEnvelopeForObservability,
 } from '../providers/observability-redactor';
 import { type JsonlSessionReplayPrefixProjection, projectSessionReplay } from '../session-replay';
+import { drizzleFromClient } from '../db/drizzle-client';
+import { sessions } from '../db/schema';
 import { resolveMissionControlDataDir } from './data-dir';
 import { openEnsuredLocalSessionDatabase } from './local-session-store-database';
 import { readCanonicalSessionEnvelopes } from './session-import-event-read';
@@ -49,9 +52,11 @@ export async function readLocalSessionReplay(input: {
 }
 
 async function hasSqliteSession(client: Client, sessionId: string): Promise<boolean> {
-    const result = await client.execute({
-        sql: 'SELECT session_id FROM sessions WHERE session_id = ? LIMIT 1',
-        args: [sessionId],
-    });
-    return result.rows.length > 0;
+    const db = drizzleFromClient(client);
+    const rows = await db
+        .select({ sessionId: sessions.sessionId })
+        .from(sessions)
+        .where(eq(sessions.sessionId, sessionId))
+        .limit(1);
+    return rows.length > 0;
 }

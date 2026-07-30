@@ -1,5 +1,5 @@
 import type { Client } from '@libsql/client';
-import type { LibSQLDatabase } from 'drizzle-orm/libsql';
+import type { MissionControlDrizzleDb } from './drizzle-client';
 import {
     bindLocalLibsqlWriteLane,
     createLocalLibsqlWriteLane,
@@ -9,7 +9,7 @@ import {
 
 export type LocalLibsqlRegistryResource = {
     readonly client: Client;
-    readonly db: LibSQLDatabase<Record<string, never>>;
+    readonly db: MissionControlDrizzleDb;
 };
 
 export type LocalLibsqlRegistryLease = LocalLibsqlRegistryResource & {
@@ -20,7 +20,7 @@ export type AcquireLocalLibsqlFileLeaseOptions = {
     readonly key: string;
     readonly setupKey: string;
     readonly createClient: () => Client;
-    readonly createDatabase: (client: Client) => LibSQLDatabase<Record<string, never>>;
+    readonly createDatabase: (client: Client) => MissionControlDrizzleDb;
     readonly initialize: (client: Client) => Promise<void>;
 };
 

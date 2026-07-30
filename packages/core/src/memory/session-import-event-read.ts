@@ -1,13 +1,16 @@
 import type { Client } from '@libsql/client';
 import { type AgentEventEnvelope, AgentEventEnvelopeSchema } from '@mission-control/protocol';
+import { asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { drizzleFromClient } from '../db/drizzle-client';
+import { sessionEvents } from '../db/schema';
 
 export const storedEventRowSchema = z.object({
-    session_id: z.string(),
-    event_id: z.string(),
+    sessionId: z.string(),
+    eventId: z.string(),
     seq: z.coerce.number().int().nonnegative(),
     timestamp: z.string(),
-    payload_json: z.string(),
+    payloadJson: z.string(),
 });
 
 export type StoredEventRow = z.infer<typeof storedEventRowSchema>;
@@ -16,25 +19,30 @@ export async function readCanonicalSessionEnvelopes(input: {
     readonly client: Client;
     readonly sessionId: string;
 }): Promise<readonly AgentEventEnvelope[]> {
-    const result = await input.client.execute({
-        sql: `
-            SELECT session_id, event_id, seq, timestamp, payload_json
-            FROM session_events WHERE session_id = ? ORDER BY seq
-        `,
-        args: [input.sessionId],
-    });
-    return result.rows.map((row) => storedEnvelope(storedEventRowSchema.parse(row)));
+    const db = drizzleFromClient(input.client);
+    const rows = await db
+        .select({
+            sessionId: sessionEvents.sessionId,
+            eventId: sessionEvents.eventId,
+            seq: sessionEvents.seq,
+            timestamp: sessionEvents.timestamp,
+            payloadJson: sessionEvents.payloadJson,
+        })
+        .from(sessionEvents)
+        .where(eq(sessionEvents.sessionId, input.sessionId))
+        .orderBy(asc(sessionEvents.seq));
+    return rows.map((row) => storedEnvelope(storedEventRowSchema.parse(row)));
 }
 
 export function storedEnvelope(row: StoredEventRow): AgentEventEnvelope {
-    const value: unknown = JSON.parse(row.payload_json);
+    const value: unknown = JSON.parse(row.payloadJson);
     const parsed = AgentEventEnvelopeSchema.safeParse(value);
     if (parsed.success) return parsed.data;
     return AgentEventEnvelopeSchema.parse({
-        eventId: row.event_id,
+        eventId: row.eventId,
         sequence: row.seq,
         createdAt: row.timestamp,
-        sessionId: row.session_id,
+        sessionId: row.sessionId,
         durability: 'durable',
         event: value,
     });

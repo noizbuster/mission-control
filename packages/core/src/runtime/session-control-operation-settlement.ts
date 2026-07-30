@@ -1,5 +1,8 @@
 import type { Client } from '@libsql/client';
+import { and, eq } from 'drizzle-orm';
+import { drizzleFromClient } from '../db/drizzle-client';
 import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db';
+import { sessionControlLateSettlements, sessionControlOperations } from '../db/schema';
 import type { SessionControlCallbackFence } from './session-control-cancellation';
 import type { SessionControlLease } from './session-control-lease';
 import {
@@ -56,12 +59,18 @@ export async function settleSessionControlOperationHandle(
         }
         await input.write?.(client);
         const settledHandleIds = [...operation.settledHandleIds, input.handleId];
-        await client.execute({
-            sql:
-                'UPDATE session_control_operations SET settled_handle_ids_json = ? ' +
-                "WHERE db_identity = ? AND session_id = ? AND operation_id = ? AND status = 'active'",
-            args: [JSON.stringify(settledHandleIds), operation.dbIdentity, operation.sessionId, operation.operationId],
-        });
+        const db = drizzleFromClient(client);
+        await db
+            .update(sessionControlOperations)
+            .set({ settledHandleIdsJson: JSON.stringify(settledHandleIds) })
+            .where(
+                and(
+                    eq(sessionControlOperations.dbIdentity, operation.dbIdentity),
+                    eq(sessionControlOperations.sessionId, operation.sessionId),
+                    eq(sessionControlOperations.operationId, operation.operationId),
+                    eq(sessionControlOperations.status, 'active'),
+                ),
+            );
         return { accepted: true, allSettled: operation.capturedHandleIds.every((id) => settledHandleIds.includes(id)) };
     });
 }
@@ -105,23 +114,18 @@ async function acceptsSettlement(
 }
 
 async function quarantineSettlement(client: Client, input: HandleSettlementInput): Promise<void> {
-    await client.execute({
-        sql:
-            'INSERT INTO session_control_late_settlements ' +
-            '(late_id,db_identity,session_id,operation_id,owner_epoch,handle_kind,handle_id,attempted_event_type,observed_at,metadata_json) ' +
-            'VALUES (?,?,?,?,?,?,?,?,?,?)',
-        args: [
-            input.lateId ?? randomUUID(),
-            input.lease.dbIdentity,
-            input.lease.sessionId,
-            input.operationId,
-            input.lease.epoch,
-            input.handleKind,
-            input.handleId,
-            input.attemptedEventType,
-            input.nowWallMs,
-            JSON.stringify(redactLateSettlementMetadata(input.metadata)),
-        ],
+    const db = drizzleFromClient(client);
+    await db.insert(sessionControlLateSettlements).values({
+        lateId: input.lateId ?? randomUUID(),
+        dbIdentity: input.lease.dbIdentity,
+        sessionId: input.lease.sessionId,
+        operationId: input.operationId,
+        ownerEpoch: input.lease.epoch,
+        handleKind: input.handleKind,
+        handleId: input.handleId,
+        attemptedEventType: input.attemptedEventType,
+        observedAt: input.nowWallMs,
+        metadataJson: JSON.stringify(redactLateSettlementMetadata(input.metadata)),
     });
 }
 
@@ -144,18 +148,23 @@ async function settleTimedOutOperation(
         ? operation.settledHandleIds
         : [...operation.settledHandleIds, input.handleId];
     const allSettled = operation.capturedHandleIds.every((id) => settledHandleIds.includes(id));
-    await client.execute({
-        sql:
-            'UPDATE session_control_operations SET settled_handle_ids_json = ?, retention_until = ? ' +
-            "WHERE db_identity = ? AND session_id = ? AND operation_id = ? AND status = 'timed_out'",
-        args: [
-            JSON.stringify(settledHandleIds),
-            allSettled ? input.nowWallMs + SESSION_CONTROL_SETTLED_RETENTION_MS : operation.retentionUntil,
-            operation.dbIdentity,
-            operation.sessionId,
-            operation.operationId,
-        ],
-    });
+    const db = drizzleFromClient(client);
+    await db
+        .update(sessionControlOperations)
+        .set({
+            settledHandleIdsJson: JSON.stringify(settledHandleIds),
+            retentionUntil: allSettled
+                ? input.nowWallMs + SESSION_CONTROL_SETTLED_RETENTION_MS
+                : operation.retentionUntil,
+        })
+        .where(
+            and(
+                eq(sessionControlOperations.dbIdentity, operation.dbIdentity),
+                eq(sessionControlOperations.sessionId, operation.sessionId),
+                eq(sessionControlOperations.operationId, operation.operationId),
+                eq(sessionControlOperations.status, 'timed_out'),
+            ),
+        );
     return { accepted: false, allSettled };
 }
 

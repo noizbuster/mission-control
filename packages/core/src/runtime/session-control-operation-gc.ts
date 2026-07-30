@@ -1,4 +1,7 @@
+import { and, eq, gt, inArray, lte, notExists, or, sql } from 'drizzle-orm';
+import { drizzleFromClient } from '../db/drizzle-client';
 import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db';
+import { sessionControlLateSettlements, sessionControlLeases, sessionControlOperations } from '../db/schema';
 import { runSessionControlOperationImmediate } from './session-control-operation-sql';
 import {
     SESSION_CONTROL_GC_INTERVAL_MS,
@@ -17,20 +20,39 @@ export async function gcSessionControlOperations(input: {
     readonly nowWallMs: number;
 }): Promise<{ readonly operations: number; readonly lateSettlements: number }> {
     return runSessionControlOperationImmediate(input.runtime, async (client) => {
-        const operations = await client.execute({
-            sql:
-                'DELETE FROM session_control_operations AS operation WHERE operation.retention_until <= ? AND (' +
-                "operation.status IN ('completed','failed','timed_out') OR NOT EXISTS (" +
-                'SELECT 1 FROM session_control_leases AS lease WHERE lease.db_identity = operation.db_identity ' +
-                'AND lease.session_id = operation.session_id AND lease.owner_id = operation.owner_id ' +
-                'AND lease.epoch = operation.owner_epoch AND lease.expires_wall_ms > ?))',
-            args: [input.nowWallMs, input.nowWallMs],
-        });
-        const lateSettlements = await client.execute({
-            sql: 'DELETE FROM session_control_late_settlements WHERE observed_at <= ?',
-            args: [input.nowWallMs - SESSION_CONTROL_LATE_SETTLEMENT_RETENTION_MS],
-        });
-        return { operations: operations.rowsAffected, lateSettlements: lateSettlements.rowsAffected };
+        const db = drizzleFromClient(client);
+        const operationAlias = sessionControlOperations;
+        const leaseAlias = sessionControlLeases;
+        const deletedOperations = await db
+            .delete(operationAlias)
+            .where(
+                and(
+                    lte(operationAlias.retentionUntil, input.nowWallMs),
+                    or(
+                        inArray(operationAlias.status, ['completed', 'failed', 'timed_out']),
+                        notExists(
+                            db
+                                .select({ one: sql`1` })
+                                .from(leaseAlias)
+                                .where(
+                                    and(
+                                        eq(leaseAlias.dbIdentity, operationAlias.dbIdentity),
+                                        eq(leaseAlias.sessionId, operationAlias.sessionId),
+                                        eq(leaseAlias.ownerId, operationAlias.ownerId),
+                                        eq(leaseAlias.epoch, operationAlias.ownerEpoch),
+                                        gt(leaseAlias.expiresWallMs, input.nowWallMs),
+                                    ),
+                                ),
+                        ),
+                    ),
+                ),
+            )
+            .returning({ operationId: operationAlias.operationId });
+        const deletedLate = await db
+            .delete(sessionControlLateSettlements)
+            .where(lte(sessionControlLateSettlements.observedAt, input.nowWallMs - SESSION_CONTROL_LATE_SETTLEMENT_RETENTION_MS))
+            .returning({ lateId: sessionControlLateSettlements.lateId });
+        return { operations: deletedOperations.length, lateSettlements: deletedLate.length };
     });
 }
 

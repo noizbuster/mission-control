@@ -25,26 +25,26 @@ import {
 } from './sqlite-session-projection-row-schemas';
 
 export function sessionRecordFromRow(row: z.infer<typeof sessionRowSchema>): SessionProjectionSessionRecord {
-    const metadata = sessionMetadata(row.metadata_json);
+    const metadata = sessionMetadata(row.metadataJson);
     const awaiting = awaitingDetailsFromRow(row);
-    const cwd = row.workspace_path ?? metadata.cwd;
+    const cwd = row.workspacePath ?? metadata.cwd;
     return {
         kind: 'session',
-        sessionId: row.session_id,
+        sessionId: row.sessionId,
         status: row.status,
         ...(awaiting !== undefined ? { awaiting } : {}),
-        startedAt: row.created_at,
-        ...(row.stopped_at !== null ? { stoppedAt: row.stopped_at } : {}),
+        startedAt: row.createdAt,
+        ...(row.stoppedAt !== null ? { stoppedAt: row.stoppedAt } : {}),
         eventCount: metadata.eventCount,
-        ...(row.last_event_seq !== null ? { lastSequence: row.last_event_seq } : {}),
+        ...(row.lastEventSeq !== null ? { lastSequence: row.lastEventSeq } : {}),
         ...(metadata.lastEventId !== undefined ? { lastEventId: metadata.lastEventId } : {}),
         ...(metadata.lastEventType !== undefined ? { lastEventType: metadata.lastEventType } : {}),
-        updatedAt: row.updated_at,
-        sourcePath: row.legacy_jsonl_path ?? '',
-        ...(row.parent_session_id !== null ? { parentSessionId: row.parent_session_id } : {}),
+        updatedAt: row.updatedAt,
+        sourcePath: row.legacyJsonlPath ?? '',
+        ...(row.parentSessionId !== null ? { parentSessionId: row.parentSessionId } : {}),
         ...(row.title !== null && row.title !== undefined ? { title: row.title } : {}),
         ...(row.category !== null && row.category !== undefined ? { category: row.category } : {}),
-        ...(row.agent_name !== null && row.agent_name !== undefined ? { agentName: row.agent_name } : {}),
+        ...(row.agentName !== null && row.agentName !== undefined ? { agentName: row.agentName } : {}),
         ...(cwd !== undefined && cwd !== null ? { cwd } : {}),
         ...(metadata.trustedRoot !== undefined ? { trustedRoot: metadata.trustedRoot } : {}),
         ...(metadata.workspaceTrust !== undefined ? { workspaceTrust: metadata.workspaceTrust } : {}),
@@ -57,49 +57,49 @@ export function sessionRecordFromRow(row: z.infer<typeof sessionRowSchema>): Ses
 export function runRecordFromRow(row: z.infer<typeof runRowSchema>): SessionProjectionRunRecord {
     return {
         kind: 'run',
-        sessionId: row.session_id,
-        eventId: row.event_id,
+        sessionId: row.sessionId,
+        eventId: row.eventId,
         sequence: row.sequence,
         timestamp: row.timestamp,
-        eventType: row.event_type,
+        eventType: row.eventType,
         ...(row.command !== null ? { command: row.command } : {}),
         ...(row.state !== null ? { state: row.state } : {}),
-        ...(row.run_id !== null ? { runId: row.run_id } : {}),
-        ...(row.input_id !== null ? { inputId: row.input_id } : {}),
-        ...(row.provider_turn_id !== null ? { providerTurnId: row.provider_turn_id } : {}),
+        ...(row.runId !== null ? { runId: row.runId } : {}),
+        ...(row.inputId !== null ? { inputId: row.inputId } : {}),
+        ...(row.providerTurnId !== null ? { providerTurnId: row.providerTurnId } : {}),
         ...(row.reason !== null ? { reason: row.reason } : {}),
-        ...(row.error_code !== null ? { errorCode: row.error_code } : {}),
+        ...(row.errorCode !== null ? { errorCode: row.errorCode } : {}),
     };
 }
 
 export function approvalRecordFromRow(row: z.infer<typeof approvalRowSchema>): SessionProjectionApprovalRecord {
-    const metadata = metadataForApproval(row.metadata_json);
+    const metadata = metadataForApproval(row.metadataJson);
     return {
         kind: 'approval',
-        sessionId: row.session_id,
-        approvalId: row.approval_id,
+        sessionId: row.sessionId,
+        approvalId: row.approvalId,
         eventId: metadata.eventId,
         state: row.status,
-        subject: { kind: row.subject_kind, id: row.subject_id },
-        requestedAt: row.requested_at,
-        ...(row.decided_at !== null ? { decidedAt: row.decided_at } : {}),
+        subject: { kind: row.subjectKind, id: row.subjectId },
+        requestedAt: row.requestedAt,
+        ...(row.decidedAt !== null ? { decidedAt: row.decidedAt } : {}),
         updatedAt: metadata.updatedAt,
     };
 }
 
 export function toolRecordFromRow(row: z.infer<typeof toolRowSchema>): SessionProjectionToolRecord {
-    const result = row.result_json !== null ? parseJson(row.result_json, ToolResultSchema) : undefined;
+    const result = row.resultJson !== null ? parseJson(row.resultJson, ToolResultSchema) : undefined;
     const appliedFiles =
-        row.applied_files_json !== null ? parseJson(row.applied_files_json, z.array(z.string())) : undefined;
+        row.appliedFilesJson !== null ? parseJson(row.appliedFilesJson, z.array(z.string())) : undefined;
     return {
         kind: 'tool',
-        sessionId: row.session_id,
-        toolId: row.tool_call_id,
+        sessionId: row.sessionId,
+        toolId: row.toolCallId,
         status: toolStatusFromSqlite(row.status),
-        ...(row.started_at !== null ? { startedAt: row.started_at } : {}),
-        ...(row.completed_at !== null ? { completedAt: row.completed_at } : {}),
-        ...(row.failed_at !== null ? { failedAt: row.failed_at } : {}),
-        ...(row.last_message !== null ? { lastMessage: row.last_message } : {}),
+        ...(row.startedAt !== null ? { startedAt: row.startedAt } : {}),
+        ...(row.completedAt !== null ? { completedAt: row.completedAt } : {}),
+        ...(row.failedAt !== null ? { failedAt: row.failedAt } : {}),
+        ...(row.lastMessage !== null ? { lastMessage: row.lastMessage } : {}),
         ...(result !== undefined ? { result } : {}),
         ...(appliedFiles !== undefined ? { appliedFiles } : {}),
     };
@@ -110,71 +110,71 @@ export function providerFailureRecordFromRow(
 ): SessionProjectionProviderFailureRecord {
     return {
         kind: 'provider_failure',
-        sessionId: row.session_id,
-        eventId: row.event_id,
+        sessionId: row.sessionId,
+        eventId: row.eventId,
         timestamp: row.timestamp,
-        requestId: row.request_id,
-        ...(row.provider_turn_id !== null ? { providerTurnId: row.provider_turn_id } : {}),
-        error: parseJson(row.error_json, ProtocolErrorSchema),
+        requestId: row.requestId,
+        ...(row.providerTurnId !== null ? { providerTurnId: row.providerTurnId } : {}),
+        error: parseJson(row.errorJson, ProtocolErrorSchema),
     };
 }
 
 export function diagnosticFromRow(row: z.infer<typeof diagnosticRowSchema>): SessionProjectionDiagnostic {
     return {
         kind: 'corrupt_jsonl',
-        sessionId: row.session_id,
-        filePath: row.file_path,
+        sessionId: row.sessionId,
+        filePath: row.filePath,
         code: row.code,
         message: row.message,
-        ...(row.line_number !== null ? { lineNumber: row.line_number } : {}),
+        ...(row.lineNumber !== null ? { lineNumber: row.lineNumber } : {}),
     };
 }
 
 function awaitingDetailsFromRow(row: z.infer<typeof sessionRowSchema>): SessionAwaitingDetails | undefined {
-    if (row.status !== 'awaiting' || row.awaiting_reason === null) {
+    if (row.status !== 'awaiting' || row.awaitingReason === null) {
         return undefined;
     }
-    switch (row.awaiting_reason) {
+    switch (row.awaitingReason) {
         case 'approval': {
-            const approvalId = row.wait_approval_id ?? row.primary_wait_id ?? row.wait_source_id;
+            const approvalId = row.waitApprovalId ?? row.primaryWaitId ?? row.waitSourceId;
             return approvalId === null
                 ? undefined
                 : parseAwaitingDetails({
-                      reason: row.awaiting_reason,
+                      reason: row.awaitingReason,
                       source: {
                           approvalId,
-                          ...(row.wait_run_id !== null ? { runId: row.wait_run_id } : {}),
-                          ...(row.wait_tool_call_id !== null ? { toolCallId: row.wait_tool_call_id } : {}),
+                          ...(row.waitRunId !== null ? { runId: row.waitRunId } : {}),
+                          ...(row.waitToolCallId !== null ? { toolCallId: row.waitToolCallId } : {}),
                       },
                   });
         }
         case 'user_input':
             return parseAwaitingDetails({
-                reason: row.awaiting_reason,
+                reason: row.awaitingReason,
                 source: {
-                    ...(row.wait_source_kind === 'operator' && row.wait_source_id !== null
-                        ? { inputId: row.wait_source_id }
+                    ...(row.waitSourceKind === 'operator' && row.waitSourceId !== null
+                        ? { inputId: row.waitSourceId }
                         : {}),
-                    ...(row.wait_run_id !== null ? { runId: row.wait_run_id } : {}),
-                    ...(row.wait_tool_call_id !== null ? { toolCallId: row.wait_tool_call_id } : {}),
+                    ...(row.waitRunId !== null ? { runId: row.waitRunId } : {}),
+                    ...(row.waitToolCallId !== null ? { toolCallId: row.waitToolCallId } : {}),
                 },
             });
         case 'subagent': {
-            const jobId = row.wait_job_id ?? row.primary_wait_id ?? row.wait_source_id;
+            const jobId = row.waitJobId ?? row.primaryWaitId ?? row.waitSourceId;
             return jobId === null
                 ? undefined
                 : parseAwaitingDetails({
-                      reason: row.awaiting_reason,
+                      reason: row.awaitingReason,
                       source: {
                           jobId,
-                          ...(row.wait_child_session_id !== null ? { childSessionId: row.wait_child_session_id } : {}),
-                          ...(row.wait_run_id !== null ? { runId: row.wait_run_id } : {}),
-                          ...(row.wait_tool_call_id !== null ? { toolCallId: row.wait_tool_call_id } : {}),
+                          ...(row.waitChildSessionId !== null ? { childSessionId: row.waitChildSessionId } : {}),
+                          ...(row.waitRunId !== null ? { runId: row.waitRunId } : {}),
+                          ...(row.waitToolCallId !== null ? { toolCallId: row.waitToolCallId } : {}),
                       },
                   });
         }
         default:
-            return assertNever(row.awaiting_reason);
+            return assertNever(row.awaitingReason);
     }
 }
 
