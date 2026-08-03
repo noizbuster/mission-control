@@ -258,7 +258,8 @@ mod tests {
 
     fn fixture_dir() -> PathBuf {
         let seq = FIXTURE_SEQ.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!("mc-natives-glob-{}-{}", std::process::id(), seq));
+        let dir =
+            std::env::temp_dir().join(format!("mc-natives-glob-{}-{}", std::process::id(), seq));
         fs::create_dir_all(&dir).ok();
         dir
     }
@@ -295,7 +296,10 @@ mod tests {
 
     #[test]
     fn build_matcher_uses_regex_for_brace_patterns() {
-        assert!(matches!(build_matcher("*.{ts,js}"), Ok(GlobMatcher::Regex(_))));
+        assert!(matches!(
+            build_matcher("*.{ts,js}"),
+            Ok(GlobMatcher::Regex(_))
+        ));
         assert!(matches!(build_matcher("*.ts"), Ok(GlobMatcher::GlobSet(_))));
     }
 
@@ -303,9 +307,18 @@ mod tests {
     fn glob_inner_returns_empty_for_empty_pattern() {
         let dir = fixture_dir();
         write_fixture_in(&dir, "a.ts", "x");
-        assert!(glob_inner("", &dir, &GlobConfig { max_results: 100, denylist: vec![] })
+        assert!(
+            glob_inner(
+                "",
+                &dir,
+                &GlobConfig {
+                    max_results: 100,
+                    denylist: vec![]
+                }
+            )
             .unwrap()
-            .is_empty());
+            .is_empty()
+        );
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -389,7 +402,14 @@ mod tests {
     #[test]
     fn glob_inner_invalid_pattern_returns_error() {
         let dir = fixture_dir();
-        let result = glob_inner("[", &dir, &GlobConfig { max_results: 100, denylist: vec![] });
+        let result = glob_inner(
+            "[",
+            &dir,
+            &GlobConfig {
+                max_results: 100,
+                denylist: vec![],
+            },
+        );
         assert!(result.is_err());
         let _ = fs::remove_dir_all(&dir);
     }

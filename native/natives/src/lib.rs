@@ -17,5 +17,6 @@ mod glob;
 mod grep;
 mod highlight;
 mod html;
+mod session_debug;
 mod summary;
 mod tokens;

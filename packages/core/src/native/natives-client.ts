@@ -38,6 +38,7 @@ export type NativesAddon = {
      * the fs_cache module landed) does not expose it, and the client treats
      * its absence as a silent no-op. */
     readonly invalidateFsScanCache?: () => void;
+    readonly openSessionDebug?: (options: NativeSessionDebugOpenOptions) => NativeSessionDebugHandle;
 };
 
 /** One matched line returned by the native `search`. Paths are returned
@@ -185,6 +186,26 @@ export type NativeHighlightColors = {
     readonly deleted?: string;
 };
 
+export type NativeSessionDebugOpenOptions = {
+    readonly root: string;
+    readonly sessionKeyDigest: string;
+    readonly captureEpoch: string;
+    readonly maxBytes: number;
+};
+
+export type NativeSessionDebugStatus = {
+    readonly enabled: boolean;
+    readonly sequence: number;
+    readonly traceCapacityBytes: number;
+};
+
+export type NativeSessionDebugHandle = {
+    tryEnqueue(payload: Uint8Array): boolean;
+    writeFatal(payload: Uint8Array): boolean;
+    readonly status: NativeSessionDebugStatus;
+    close(): void;
+};
+
 /** Sink invoked once when the addon cannot be loaded. */
 export type NativesWarningSink = (message: string) => void;
 
@@ -268,6 +289,12 @@ export interface NativesClient {
      * never a hard dependency).
      */
     invalidateFsScanCache(): void;
+    /**
+     * Opens a descriptor-owning native diagnostic store. `null` means the
+     * optional native feature is unavailable or rejected the filesystem; callers
+     * must stay debug-inert and preserve normal execution.
+     */
+    openSessionDebug(options: NativeSessionDebugOpenOptions): NativeSessionDebugHandle | null;
 }
 
 export interface CreateNativesClientOptions {
@@ -541,6 +568,22 @@ export function createNativesClient(options: CreateNativesClientOptions = {}): N
                     punctuation: colors.punctuation,
                     ...(colors.inserted !== undefined ? { inserted: colors.inserted } : {}),
                     ...(colors.deleted !== undefined ? { deleted: colors.deleted } : {}),
+                });
+            } catch {
+                return null;
+            }
+        },
+        openSessionDebug(options: NativeSessionDebugOpenOptions): NativeSessionDebugHandle | null {
+            const outcome = loadOnce();
+            if (!outcome.ok || outcome.addon.openSessionDebug === undefined) {
+                return null;
+            }
+            try {
+                return outcome.addon.openSessionDebug({
+                    root: options.root,
+                    sessionKeyDigest: options.sessionKeyDigest,
+                    captureEpoch: options.captureEpoch,
+                    maxBytes: options.maxBytes,
                 });
             } catch {
                 return null;

@@ -1,5 +1,6 @@
 import {
     type AgentRuntimeOptions,
+    type AgentRuntimeSessionDebugOptions,
     type CommandExecutionRequest,
     type CommandExecutionResult,
     type LspClient,
@@ -22,6 +23,7 @@ type CliRuntimeOptionsInput = {
     readonly persistentStore?: PersistentMemoryStore;
     readonly profileName?: string;
     readonly observabilityRedactor?: ObservabilityRedactor;
+    readonly sessionDebug?: AgentRuntimeSessionDebugOptions;
 };
 
 export function createCliRuntimeOptions(input: CliRuntimeOptionsInput): AgentRuntimeOptions {
@@ -42,6 +44,7 @@ export function createCliRuntimeOptions(input: CliRuntimeOptionsInput): AgentRun
         pendingApprovalBehavior: 'block',
         ...(input.observabilityRedactor !== undefined ? { observabilityRedactor: input.observabilityRedactor } : {}),
         ...(input.persistentStore !== undefined ? { persistentStore: input.persistentStore } : {}),
+        ...(input.sessionDebug !== undefined ? { sessionDebug: input.sessionDebug } : {}),
     };
 }
 export type { NonInteractiveAutomationPolicy };

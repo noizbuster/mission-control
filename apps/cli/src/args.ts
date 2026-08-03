@@ -6,6 +6,11 @@ import { parseSessionArgs } from './session-args';
 
 export type CliMode = 'tui' | 'plain' | 'json' | 'jsonl';
 
+export type CliSessionDebugIntent = {
+    readonly enabledOverride: boolean | undefined;
+    readonly argv: readonly string[];
+};
+
 export type CliCommand =
     | 'run'
     | 'auth-login'
@@ -110,6 +115,8 @@ export const supportedCliFlags = [
     '--session',
     '--workspace',
     '--profile',
+    '--session-debug',
+    '--no-session-debug',
     '--api-key',
     '--credential',
     '--method',
@@ -163,34 +170,61 @@ export function readFlagValue(argv: readonly string[], index: number, flag: stri
     return value;
 }
 
+/**
+ * Removes CLI-owned diagnostic flags before command parsing. Only a flag before
+ * the semantic `--` separator has control meaning; the tail is prompt data.
+ */
+export function extractSessionDebugFlags(argv: readonly string[]): CliSessionDebugIntent {
+    const remaining: string[] = [];
+    let enabledOverride: boolean | undefined;
+    let index = 0;
+    while (index < argv.length) {
+        const current = argv[index];
+        if (current === '--') {
+            remaining.push(...argv.slice(index));
+            break;
+        }
+        if (current === '--session-debug' || current === '--no-session-debug') {
+            const nextOverride = current === '--session-debug';
+            if (enabledOverride !== undefined) {
+                if (enabledOverride !== nextOverride) {
+                    throw new Error('--session-debug and --no-session-debug cannot be combined');
+                }
+                throw new Error(`${current} may only be specified once`);
+            }
+            enabledOverride = nextOverride;
+        } else if (current !== undefined) {
+            remaining.push(current);
+        }
+        index += 1;
+    }
+    return { enabledOverride, argv: remaining };
+}
+
 export function parseArgs(argv: readonly string[]): CliArgs {
-    // `pnpm dev:cli -- --no-tui` and `node dist/index.js -- --no-tui` forward a leading `--`
-    // separator into argv. Strip it so command dispatch and flag parsing work as documented.
-    // A mid-stream `--` is handled as POSIX end-of-options inside parseRunArgs.
-    const args = argv[0] === '--' ? argv.slice(1) : argv;
-    const command = args[0];
+    const command = argv[0];
     if (command === 'auth') {
-        return parseAuthArgs(args.slice(1));
+        return parseAuthArgs(argv.slice(1));
     }
     if (command === 'models') {
-        return parseModelsArgs(args.slice(1));
+        return parseModelsArgs(argv.slice(1));
     }
     if (command === 'session') {
-        return parseSessionArgs(args.slice(1));
+        return parseSessionArgs(argv.slice(1));
     }
     if (command === 'mcp') {
-        return parseMcpArgs(args.slice(1));
+        return parseMcpArgs(argv.slice(1));
     }
     if (command === 'agents') {
-        return { ...createBaseArgs('agents'), agentsArgv: args.slice(1) };
+        return { ...createBaseArgs('agents'), agentsArgv: argv.slice(1) };
     }
     if (command === 'graph') {
-        return parseGraphArgs(args.slice(1));
+        return parseGraphArgs(argv.slice(1));
     }
     if (command === 'run') {
-        return parseRunArgs(args.slice(1), {});
+        return parseRunArgs(argv.slice(1), {});
     }
-    return parseRunArgs(args, {});
+    return parseRunArgs(argv, {});
 }
 
 function parseModelsArgs(argv: readonly string[]): CliArgs {

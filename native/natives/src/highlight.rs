@@ -258,7 +258,19 @@ pub struct HighlightColors {
 /// `(aliases, target syntax name)` pairs for languages whose name/extension is
 /// not directly in syntect's default set. Mirrors oh-my-pi's table.
 const LANG_ALIASES: &[(&[&str], &str)] = &[
-    (&["ts", "tsx", "typescript", "js", "jsx", "javascript", "mjs", "cjs"], "JavaScript"),
+    (
+        &[
+            "ts",
+            "tsx",
+            "typescript",
+            "js",
+            "jsx",
+            "javascript",
+            "mjs",
+            "cjs",
+        ],
+        "JavaScript",
+    ),
     (&["py", "python"], "Python"),
     (&["rb", "ruby"], "Ruby"),
     (&["rs", "rust"], "Rust"),
@@ -321,7 +333,8 @@ fn find_syntax<'a>(ss: &'a SyntaxSet, lang: &str) -> Option<&'a SyntaxReference>
         return Some(syn);
     }
     let alias = find_alias(lang)?;
-    ss.find_syntax_by_name(alias).or_else(|| ss.find_syntax_by_token(alias))
+    ss.find_syntax_by_name(alias)
+        .or_else(|| ss.find_syntax_by_token(alias))
 }
 
 #[inline]
@@ -341,13 +354,19 @@ fn compute_scope_color(s: Scope) -> usize {
     if m.meta_diff_header.is_prefix_of(s) || m.meta_diff_range.is_prefix_of(s) {
         return 1;
     }
-    if m.string.is_prefix_of(s) || m.constant_character.is_prefix_of(s) || m.meta_string.is_prefix_of(s) {
+    if m.string.is_prefix_of(s)
+        || m.constant_character.is_prefix_of(s)
+        || m.meta_string.is_prefix_of(s)
+    {
         return 4;
     }
     if m.constant_numeric.is_prefix_of(s) || m.constant_integer.is_prefix_of(s) {
         return 5;
     }
-    if m.keyword.is_prefix_of(s) || m.storage_type.is_prefix_of(s) || m.storage_modifier.is_prefix_of(s) {
+    if m.keyword.is_prefix_of(s)
+        || m.storage_type.is_prefix_of(s)
+        || m.storage_modifier.is_prefix_of(s)
+    {
         return 1;
     }
     if m.entity_name_function.is_prefix_of(s)
@@ -528,7 +547,10 @@ mod tests {
     #[test]
     fn highlights_typescript_snippet_with_ansi() {
         let out = highlight_code_inner("const x = 1;", "typescript", &palette());
-        assert!(out.contains("\x1b["), "expected ANSI codes for a highlighted TS snippet");
+        assert!(
+            out.contains("\x1b["),
+            "expected ANSI codes for a highlighted TS snippet"
+        );
         assert!(out.contains("const"));
     }
 
@@ -536,7 +558,10 @@ mod tests {
     fn alias_ts_maps_to_javascript_grammar() {
         let ts_out = highlight_code_inner("const x = 1;", "ts", &palette());
         let js_out = highlight_code_inner("const x = 1;", "js", &palette());
-        assert_eq!(ts_out, js_out, "ts and js should resolve to the same grammar");
+        assert_eq!(
+            ts_out, js_out,
+            "ts and js should resolve to the same grammar"
+        );
     }
 
     #[test]

@@ -124,11 +124,7 @@ fn score_fuzzy_path(
                 } else {
                     fuzzy_subsequence_score(query_chars, &normalized_path)
                 };
-                if path_fuzzy > 0 {
-                    30 + path_fuzzy
-                } else {
-                    0
-                }
+                if path_fuzzy > 0 { 30 + path_fuzzy } else { 0 }
             }
         }
     }
@@ -215,16 +211,27 @@ fn fuzzy_find_inner(
         }
         let score = score_fuzzy_path(&relative, &query_lower, &normalized_query, &query_chars);
         if score > 0 {
-            scored.push(ScoredMatch { path: relative, score });
+            scored.push(ScoredMatch {
+                path: relative,
+                score,
+            });
         }
     }
     scored.sort_by(|a, b| b.score.cmp(&a.score).then_with(|| a.path.cmp(&b.path)));
-    let matches: Vec<String> = scored.into_iter().take(config.max_results).map(|m| m.path).collect();
+    let matches: Vec<String> = scored
+        .into_iter()
+        .take(config.max_results)
+        .map(|m| m.path)
+        .collect();
     Ok(matches)
 }
 
 #[napi(js_name = "fuzzyFind")]
-pub fn fuzzy_find(query: String, root: String, opts: NativeFuzzyFindOptions) -> Result<Vec<String>> {
+pub fn fuzzy_find(
+    query: String,
+    root: String,
+    opts: NativeFuzzyFindOptions,
+) -> Result<Vec<String>> {
     let config = FuzzyConfig {
         max_results: opts.max_results.map(|v| v as usize).unwrap_or(100),
         denylist: opts.denylist.unwrap_or_default(),
@@ -243,7 +250,8 @@ mod tests {
 
     fn fixture_dir() -> PathBuf {
         let seq = FIXTURE_SEQ.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!("mc-natives-fd-{}-{}", std::process::id(), seq));
+        let dir =
+            std::env::temp_dir().join(format!("mc-natives-fd-{}-{}", std::process::id(), seq));
         fs::create_dir_all(&dir).ok();
         dir
     }
@@ -297,7 +305,10 @@ mod tests {
         let result = fuzzy_find_inner(
             "test",
             &dir,
-            &FuzzyConfig { max_results: 5, denylist: vec![] },
+            &FuzzyConfig {
+                max_results: 5,
+                denylist: vec![],
+            },
         )
         .unwrap();
         assert_eq!(result.len(), 5);

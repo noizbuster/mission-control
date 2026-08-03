@@ -79,8 +79,12 @@ mod tests {
 
     #[test]
     fn converts_simple_html_to_markdown() {
-        let md = html_to_markdown_inner("<h1>Title</h1><p>Hello <strong>world</strong></p>", false, false)
-            .expect("simple html converts");
+        let md = html_to_markdown_inner(
+            "<h1>Title</h1><p>Hello <strong>world</strong></p>",
+            false,
+            false,
+        )
+        .expect("simple html converts");
         assert!(md.contains("Title"));
         assert!(md.contains("world"));
     }

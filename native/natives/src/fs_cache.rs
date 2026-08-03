@@ -59,14 +59,18 @@ pub(crate) struct FsCache {
 
 impl FsCache {
     pub(crate) fn new() -> Self {
-        Self { map: DashMap::new() }
+        Self {
+            map: DashMap::new(),
+        }
     }
 
     /// Lookup cached content for `(resolved path, mtime)`. `None` means a
     /// miss or a stale mtime — the caller must read fresh.
     pub(crate) fn get(&self, path: &Path, mtime: SystemTime) -> Option<Arc<Vec<u8>>> {
         let key_path = resolve_key_path(path);
-        self.map.get(&(key_path, mtime)).map(|entry| Arc::clone(entry.value()))
+        self.map
+            .get(&(key_path, mtime))
+            .map(|entry| Arc::clone(entry.value()))
     }
 
     /// Store `content` under `(resolved path, mtime)`. Enforces the soft
@@ -303,7 +307,9 @@ mod tests {
         write_file(&file, "alpha\n");
         let mtime = current_mtime(&file);
         cache.put(&file, mtime, Arc::new(b"alpha\n".to_vec()));
-        let got = cache.get(&file, mtime).unwrap_or_else(|| Arc::new(Vec::new()));
+        let got = cache
+            .get(&file, mtime)
+            .unwrap_or_else(|| Arc::new(Vec::new()));
         assert_eq!(&*got, b"alpha\n");
         let _ = fs::remove_dir_all(&dir);
     }
@@ -338,8 +344,14 @@ mod tests {
         assert!(cache.get(&b, b_mtime).is_some());
         cache.invalidate_all();
         assert_eq!(cache.len(), 0);
-        assert!(cache.get(&a, a_mtime).is_none(), "invalidate must drop entries");
-        assert!(cache.get(&b, b_mtime).is_none(), "invalidate must drop entries");
+        assert!(
+            cache.get(&a, a_mtime).is_none(),
+            "invalidate must drop entries"
+        );
+        assert!(
+            cache.get(&b, b_mtime).is_none(),
+            "invalidate must drop entries"
+        );
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -395,9 +407,15 @@ mod tests {
         write_file(&file, "payload\n");
         let _ = into_bytes(cache.read_file_bytes_cached(&file, 4 * 1024 * 1024));
         let mtime = current_mtime(&file);
-        assert!(cache.get(&file, mtime).is_some(), "read must populate the cache");
+        assert!(
+            cache.get(&file, mtime).is_some(),
+            "read must populate the cache"
+        );
         cache.invalidate_all();
-        assert!(cache.get(&file, mtime).is_none(), "invalidate must drop the entry");
+        assert!(
+            cache.get(&file, mtime).is_none(),
+            "invalidate must drop the entry"
+        );
         let again = cache.read_file_bytes_cached(&file, 4 * 1024 * 1024);
         assert!(!again.is_hit(), "post-invalidate read must miss");
         let _ = fs::remove_dir_all(&dir);
@@ -410,7 +428,10 @@ mod tests {
         let file = dir.join("big.txt");
         write_file(&file, &"a".repeat(32));
         let outcome = cache.read_file_bytes_cached(&file, 8);
-        assert!(matches!(outcome, CachedRead::Oversized), "must be oversized");
+        assert!(
+            matches!(outcome, CachedRead::Oversized),
+            "must be oversized"
+        );
         assert!(
             cache.get(&file, current_mtime(&file)).is_none(),
             "oversized files must not populate the cache"
@@ -449,7 +470,11 @@ mod tests {
         write_file(&extra, "y");
         let extra_mtime = current_mtime(&extra);
         cache.put(&extra, extra_mtime, Arc::new(b"y".to_vec()));
-        assert_eq!(cache.len(), 1, "overflow must clear then insert the new entry");
+        assert_eq!(
+            cache.len(),
+            1,
+            "overflow must clear then insert the new entry"
+        );
         if let Some((first_path, first_mtime)) = first_key {
             assert!(
                 cache.get(&first_path, first_mtime).is_none(),

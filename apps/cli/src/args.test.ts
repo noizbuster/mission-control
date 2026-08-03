@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseArgs, parseProfileName } from './args';
+import { extractSessionDebugFlags, parseArgs, parseProfileName } from './args';
 
 describe('parseArgs', () => {
     it('parses all supported mctrl flags', () => {
@@ -47,18 +47,28 @@ describe('parseArgs', () => {
         expect(() => parseArgs(['--bad-flag'])).toThrow('Unsupported argument: --bad-flag');
     });
 
-    it('strips a leading `--` separator forwarded by pnpm/npm scripts', () => {
+    it('leaves a leading `--` for POSIX prompt semantics', () => {
         expect(parseArgs(['--', '--no-tui', 'hi'])).toMatchObject({
-            mode: 'plain',
-            prompt: 'hi',
-        });
-        expect(parseArgs(['--', '--no-tui'])).toMatchObject({
-            mode: 'plain',
-        });
-        expect(parseArgs(['--'])).toMatchObject({
             mode: 'tui',
-            command: 'run',
+            prompt: '--no-tui hi',
         });
+    });
+
+    it('extracts session-debug flags only before the semantic separator', () => {
+        expect(extractSessionDebugFlags(['--session-debug', '--no-tui', 'hi'])).toEqual({
+            enabledOverride: true,
+            argv: ['--no-tui', 'hi'],
+        });
+        expect(extractSessionDebugFlags(['--no-session-debug', '--', '--session-debug'])).toEqual({
+            enabledOverride: false,
+            argv: ['--', '--session-debug'],
+        });
+        expect(() => extractSessionDebugFlags(['--session-debug', '--no-session-debug'])).toThrow(
+            '--session-debug and --no-session-debug cannot be combined',
+        );
+        expect(() => extractSessionDebugFlags(['--session-debug', '--session-debug'])).toThrow(
+            '--session-debug may only be specified once',
+        );
     });
 
     it('treats a mid-stream `--` as POSIX end-of-options', () => {

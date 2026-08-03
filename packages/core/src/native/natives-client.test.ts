@@ -50,6 +50,22 @@ describe('NativesClient', () => {
         expect(warnings[0]).toContain('addon');
     });
 
+    it('returns null for debug storage when the optional addon is unavailable', () => {
+        const client = createNativesClient({
+            addonPath: '/nonexistent/mission-control-natives.node',
+            onWarning: () => {},
+        });
+
+        expect(
+            client.openSessionDebug({
+                root: '/tmp',
+                sessionKeyDigest: 'a'.repeat(64),
+                captureEpoch: 'b'.repeat(32),
+                maxBytes: 32 * 1024 * 1024,
+            }),
+        ).toBeNull();
+    });
+
     it('returns null and warns when the addon file exists but cannot be loaded', () => {
         const garbageDir = join(tmpdir(), 'mc-natives-test');
         const garbagePath = join(garbageDir, 'corrupt.node');

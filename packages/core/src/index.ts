@@ -1,6 +1,6 @@
 // allow: SIZE_OK -- HEAD 581 -> current 598 pure LOC; explicit public API export barrel retained for compatibility review.
 export * from './abg-overlay/index';
-export type { AgentRuntimeOptions, RunGraphOptions } from './agent-runtime';
+export type { AgentRuntimeOptions, AgentRuntimeSessionDebugOptions, RunGraphOptions } from './agent-runtime';
 export { AgentRuntime } from './agent-runtime';
 export * from './agents/index';
 export { SubAgentRegistry } from './agents/registry';
@@ -182,6 +182,9 @@ export * from './memory/index';
 export {
     type CreateNativesClientOptions,
     createNativesClient,
+    type NativeSessionDebugHandle,
+    type NativeSessionDebugOpenOptions,
+    type NativeSessionDebugStatus,
     type NativesClient,
 } from './native/natives-client';
 export {

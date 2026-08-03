@@ -1153,3 +1153,43 @@ describe('T6 guardrail: .mcp.<profile>.json[c] project files are never read', ()
         expect(names).not.toContain('jsoncLeak');
     });
 });
+
+describe('session_debug config isolation', () => {
+    let dirs: TempDirs;
+
+    beforeEach(async () => {
+        dirs = await makeTempDirs();
+    });
+
+    afterEach(async () => {
+        await rm(dirs.root, { recursive: true, force: true });
+    });
+
+    it('keeps diagnostic configuration isolated and preserves raw members during MCP edits', async () => {
+        const userConfigPath = dirs.userConfigPath.replace(/\.json$/, '.jsonc');
+        await writeRaw(
+            userConfigPath,
+            `{
+  /* preserve */ "session_debug": { "enabled": true },
+  "session_debug": { "enabled": false },
+  "mcp": {}
+}`,
+        );
+
+        await writeUserMcpServer('added', { type: 'local', command: ['added-bin'] }, { userConfigPath });
+
+        const written = await readFile(userConfigPath, 'utf8');
+        expect(written).toContain('/* preserve */');
+        expect(written.match(/"session_debug"/g)).toHaveLength(2);
+
+        const resolved = await loadResolvedMcpConfig({
+            userConfigPath,
+            projectConfigPath: dirs.projectConfigPath,
+            env: {},
+        });
+        expect(resolved.errors).toEqual([]);
+        expect(resolved.sessionDebugConfig.enabled).toBe(false);
+        expect(resolved.sessionDebugError).toContain('duplicate');
+        expect(resolved.servers.map((server) => server.name)).toContain('added');
+    });
+});

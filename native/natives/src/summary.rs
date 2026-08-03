@@ -286,7 +286,9 @@ fn map_result(value: SummaryResultInner) -> SummaryResult {
 /// Pure summarization core. Returns the inner result or a `String` error
 /// (language load failure). Kept free of napi types so unit tests can
 /// exercise it without linking Node N-API symbols.
-fn summarize_code_inner(opts: &SummaryOptionsInner) -> std::result::Result<SummaryResultInner, String> {
+fn summarize_code_inner(
+    opts: &SummaryOptionsInner,
+) -> std::result::Result<SummaryResultInner, String> {
     let source = &opts.code;
     let total_lines = count_lines(source);
     if source.is_empty() {
@@ -310,13 +312,23 @@ fn summarize_code_inner(opts: &SummaryOptionsInner) -> std::result::Result<Summa
     }
 
     let min_body_lines = opts.min_body_lines.unwrap_or(DEFAULT_MIN_BODY_LINES).max(2);
-    let min_comment_lines = opts.min_comment_lines.unwrap_or(DEFAULT_MIN_COMMENT_LINES).max(4);
+    let min_comment_lines = opts
+        .min_comment_lines
+        .unwrap_or(DEFAULT_MIN_COMMENT_LINES)
+        .max(4);
     let unfold_until = opts.unfold_until_lines.unwrap_or(0);
     let unfold_limit = opts
         .unfold_limit_lines
         .unwrap_or_else(|| unfold_until.saturating_mul(2));
     let mut forest = ElidableForest::default();
-    collect_elidable_tree(root, None, language, min_body_lines, min_comment_lines, &mut forest);
+    collect_elidable_tree(
+        root,
+        None,
+        language,
+        min_body_lines,
+        min_comment_lines,
+        &mut forest,
+    );
     let spans = select_folded_spans(&forest, total_lines, unfold_until, unfold_limit);
     let spans = normalize_spans(spans, total_lines);
     let segments = build_segments(source, total_lines, &spans);
@@ -386,7 +398,13 @@ fn collect_elidable_tree(
             let start_line = node_start_line(node) + 2;
             let end_line = node_end_line(node).saturating_sub(1);
             if start_line <= end_line {
-                forest.push(elidable_parent, LineSpan { start: start_line, end: end_line });
+                forest.push(
+                    elidable_parent,
+                    LineSpan {
+                        start: start_line,
+                        end: end_line,
+                    },
+                );
             }
         }
         return;
@@ -399,8 +417,13 @@ fn collect_elidable_tree(
         if start_line <= end_line {
             // Recurse into the elided node so nested elisions are recorded as
             // children; the BFS unfold pass decides which level fires.
-            current_parent =
-                Some(forest.push(elidable_parent, LineSpan { start: start_line, end: end_line }));
+            current_parent = Some(forest.push(
+                elidable_parent,
+                LineSpan {
+                    start: start_line,
+                    end: end_line,
+                },
+            ));
         }
     }
 
@@ -413,7 +436,9 @@ fn collect_elidable_tree(
     let mut run_last: Option<Node<'_>> = None;
     let mut run_count: u32 = 0;
     for index in 0..child_count {
-        let Some(child) = node.child(index) else { continue };
+        let Some(child) = node.child(index) else {
+            continue;
+        };
         if is_groupable_kind(language, child.kind()) {
             if run_first.is_none() {
                 run_first = Some(child);
@@ -421,17 +446,38 @@ fn collect_elidable_tree(
             run_last = Some(child);
             run_count += 1;
         } else {
-            flush_groupable_run(run_first, run_last, run_count, min_body_lines, forest, current_parent);
+            flush_groupable_run(
+                run_first,
+                run_last,
+                run_count,
+                min_body_lines,
+                forest,
+                current_parent,
+            );
             run_first = None;
             run_last = None;
             run_count = 0;
         }
     }
-    flush_groupable_run(run_first, run_last, run_count, min_body_lines, forest, current_parent);
+    flush_groupable_run(
+        run_first,
+        run_last,
+        run_count,
+        min_body_lines,
+        forest,
+        current_parent,
+    );
 
     for index in 0..child_count {
         if let Some(child) = node.child(index) {
-            collect_elidable_tree(child, current_parent, language, min_body_lines, min_comment_lines, forest);
+            collect_elidable_tree(
+                child,
+                current_parent,
+                language,
+                min_body_lines,
+                min_comment_lines,
+                forest,
+            );
         }
     }
 }
@@ -469,11 +515,17 @@ fn flush_groupable_run(
 }
 
 fn node_start_line(node: Node<'_>) -> u32 {
-    node.start_position().row.saturating_add(1).min(u32::MAX as usize) as u32
+    node.start_position()
+        .row
+        .saturating_add(1)
+        .min(u32::MAX as usize) as u32
 }
 
 fn node_end_line(node: Node<'_>) -> u32 {
-    node.end_position().row.saturating_add(1).min(u32::MAX as usize) as u32
+    node.end_position()
+        .row
+        .saturating_add(1)
+        .min(u32::MAX as usize) as u32
 }
 
 /// Last source line containing a content byte from `node`. Tree-sitter
@@ -583,7 +635,10 @@ fn is_groupable_kind(language: SupportLang, kind: &str) -> bool {
         }
         SupportLang::Rust => matches!(kind, "use_declaration" | "extern_crate_declaration"),
         SupportLang::Python => {
-            matches!(kind, "import_statement" | "import_from_statement" | "future_import_statement")
+            matches!(
+                kind,
+                "import_statement" | "import_from_statement" | "future_import_statement"
+            )
         }
         SupportLang::Go => kind == "import_declaration",
     }
@@ -684,7 +739,13 @@ fn build_segments(source: &str, total_lines: u32, spans: &[LineSpan]) -> Vec<Sum
         if let Some(existing) = current_kind
             && existing != kind
         {
-            push_segment(&mut segments, existing, current_start, line_number - 1, &current_lines);
+            push_segment(
+                &mut segments,
+                existing,
+                current_start,
+                line_number - 1,
+                &current_lines,
+            );
             current_start = line_number;
             current_lines.clear();
         }
@@ -696,7 +757,13 @@ fn build_segments(source: &str, total_lines: u32, spans: &[LineSpan]) -> Vec<Sum
     }
 
     if let Some(kind) = current_kind {
-        push_segment(&mut segments, kind, current_start, total_lines, &current_lines);
+        push_segment(
+            &mut segments,
+            kind,
+            current_start,
+            total_lines,
+            &current_lines,
+        );
     }
     segments
 }
@@ -752,7 +819,10 @@ mod tests {
         assert!(!result.parsed);
         assert!(!result.elided);
         assert_eq!(result.segments.len(), 1);
-        assert_eq!(result.segments[0].text.as_deref(), Some("plain text\nwith lines\n"));
+        assert_eq!(
+            result.segments[0].text.as_deref(),
+            Some("plain text\nwith lines\n")
+        );
     }
 
     #[test]

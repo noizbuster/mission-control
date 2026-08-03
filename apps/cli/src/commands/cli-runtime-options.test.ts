@@ -29,6 +29,16 @@ describe('createCliRuntimeOptions', () => {
         expect(jsonLines).toContain('"state":"cancelled"');
         expect(jsonLines).toContain('"subject":{"kind":"tool","id":"command.run"}');
     });
+
+    it('forwards enabled session-debug capture dependencies to the runtime', () => {
+        const sessionDebug = {
+            config: { enabled: true, maxBytes: 32 * 1024 * 1024, retentionDays: 7 },
+            dataDir: '/safe/data',
+            natives: { openSessionDebug: () => null },
+        };
+
+        expect(createCliRuntimeOptions({ provider: unusedProvider, sessionDebug }).sessionDebug).toBe(sessionDebug);
+    });
 });
 
 const unusedProvider: ProviderAdapter = {

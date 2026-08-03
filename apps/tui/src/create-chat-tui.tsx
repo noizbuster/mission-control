@@ -3,6 +3,7 @@ import type { ModelProviderSelection } from '@mission-control/protocol';
 import type { ChatTuiHandle, ChatTuiRuntimeOptions } from './state/chat-tui-types';
 import type { ModelsOverlayRoleRow } from './state/index';
 import { type ChatStore, createChatStore } from './state/index';
+import { retainTuiProcessLiveness } from './tui-process-liveness';
 
 export type ChatTuiOptions = ChatTuiRuntimeOptions;
 
@@ -134,8 +135,10 @@ export async function createChatTui(options: ChatTuiOptions): Promise<ChatTuiHan
             },
         }),
     );
+    const releaseTuiProcessLiveness = retainTuiProcessLiveness();
 
     return createChatTuiHandle(store, () => {
+        releaseTuiProcessLiveness();
         mountResult.unmount();
         destroySharedSyntaxStyle();
         void closeTreeSitterClient();

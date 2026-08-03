@@ -1,13 +1,14 @@
 import { defaultModelProviderSelection } from '@mission-control/config';
 import {
     AgentRuntime,
+    createNativesClient,
     createPersistentStore,
     createProviderAuthStoreObservabilityRedactor,
     loadResolvedMcpConfig,
     reconcileCrashedSessions,
     resolveMissionControlDataDir,
 } from '@mission-control/core';
-import type { CliArgs } from '../args';
+import type { CliArgs, CliSessionDebugIntent } from '../args';
 import { createProviderAuthStore } from '../auth-store';
 import { createCliRuntimeOptions } from './cli-runtime-options';
 import { createCliProviderForSelection } from './provider-factory';
@@ -16,6 +17,7 @@ import { shouldRunInteractiveChat } from './run-agent-mode';
 import { buildAgentModelLookup, resolveModelProviderSelection } from './run-agent-model-selection';
 import { runNoninteractiveAgent } from './run-agent-noninteractive';
 import type { RunAgentOptions } from './run-agent-options';
+import { resolveRunSessionDebugConfig } from './run-agent-session-debug';
 import { resolveWorkspaceRoot } from './run-agent-workspace';
 
 export { createCliProviderForSelection } from './provider-factory';
@@ -27,7 +29,11 @@ export {
 } from './run-agent-workflow';
 export { detectWorkspaceRoot, resolveWorkspaceRoot } from './run-agent-workspace';
 
-export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Promise<string> {
+export async function runAgent(
+    args: CliArgs,
+    options: RunAgentOptions = {},
+    _sessionDebugIntent: CliSessionDebugIntent | undefined = undefined,
+): Promise<string> {
     const authStore = options.authStore ?? createProviderAuthStore();
     const modelProviderSelection = validateModelProviderSelection(await resolveModelProviderSelection(args, authStore));
     const graph = args.graphPath !== undefined ? await readGraphFile(args.graphPath) : undefined;
@@ -40,12 +46,12 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
         options.createProvider ?? ((selection) => createCliProviderForSelection(selection, authStore));
     const provider = options.provider ?? createProvider(selectedModelProvider);
     const workspaceRoot = options.workspaceRoot ?? resolveWorkspaceRoot(args.workspacePath);
-    const config = (
-        await loadResolvedMcpConfig({
-            workspaceRoot,
-            ...(args.profileName !== undefined ? { profileName: args.profileName } : {}),
-        })
-    ).config;
+    const resolvedMcpConfig = await loadResolvedMcpConfig({
+        workspaceRoot,
+        ...(args.profileName !== undefined ? { profileName: args.profileName } : {}),
+    });
+    const config = resolvedMcpConfig.config;
+    const sessionDebugConfig = resolveRunSessionDebugConfig(resolvedMcpConfig.sessionDebugConfig, _sessionDebugIntent);
     const agentModelLookup = await buildAgentModelLookup(workspaceRoot);
     const dataDir = resolveMissionControlDataDir();
     const persistentStore = await createPersistentStore(dataDir);
@@ -66,6 +72,15 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
             ...(persistentStore !== undefined ? { persistentStore } : {}),
             ...(args.profileName !== undefined ? { profileName: args.profileName } : {}),
             observabilityRedactor,
+            ...(sessionDebugConfig.enabled
+                ? {
+                      sessionDebug: {
+                          config: sessionDebugConfig,
+                          dataDir,
+                          natives: createNativesClient({ onWarning: () => {} }),
+                      },
+                  }
+                : {}),
         }),
     );
     if (shouldRunChat) {

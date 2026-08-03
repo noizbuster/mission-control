@@ -5,6 +5,7 @@ import { createMissionControlLibConfig } from '../../tooling/vite/create-mission
 const entry = {
     index: fileURLToPath(new URL('./src/index.tsx', import.meta.url)),
     args: fileURLToPath(new URL('./src/args.ts', import.meta.url)),
+    'package-script-launcher': fileURLToPath(new URL('./src/package-script-launcher.ts', import.meta.url)),
     'commands/run-agent': fileURLToPath(new URL('./src/commands/run-agent.ts', import.meta.url)),
     'commands/session': fileURLToPath(new URL('./src/commands/session.ts', import.meta.url)),
     'commands/mission-control-services': fileURLToPath(

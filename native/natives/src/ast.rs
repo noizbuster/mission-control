@@ -168,7 +168,9 @@ enum SupportLang {
 impl SupportLang {
     fn sg_language(self) -> SgLanguage {
         match self {
-            SupportLang::TypeScript => SgLanguage::from(tree_sitter_typescript::LANGUAGE_TYPESCRIPT),
+            SupportLang::TypeScript => {
+                SgLanguage::from(tree_sitter_typescript::LANGUAGE_TYPESCRIPT)
+            }
             SupportLang::Tsx => SgLanguage::from(tree_sitter_typescript::LANGUAGE_TSX),
             SupportLang::JavaScript => SgLanguage::from(tree_sitter_javascript::LANGUAGE),
             SupportLang::Python => SgLanguage::from(tree_sitter_python::LANGUAGE),
@@ -257,7 +259,11 @@ fn compile_pattern(
 }
 
 #[napi]
-pub fn ast_grep(pattern: String, paths: Vec<String>, opts: AstGrepOptions) -> Result<AstGrepResult> {
+pub fn ast_grep(
+    pattern: String,
+    paths: Vec<String>,
+    opts: AstGrepOptions,
+) -> Result<AstGrepResult> {
     let inner_opts = AstGrepOptionsInner {
         lang: opts.lang,
         selector: opts.selector,
@@ -277,7 +283,11 @@ pub fn ast_rewrite(
 ) -> Result<Vec<AstReplaceChange>> {
     let strictness = parse_strictness(opts.strictness.as_deref()).map_err(Error::from_reason)?;
     let max_replacements = opts.max_replacements.unwrap_or(u32::MAX).max(1) as usize;
-    let lang_override = opts.lang.as_deref().map(str::trim).filter(|l| !l.is_empty());
+    let lang_override = opts
+        .lang
+        .as_deref()
+        .map(str::trim)
+        .filter(|l| !l.is_empty());
     let changes = ast_rewrite_inner(
         &pattern,
         &opts.replacement,
@@ -358,7 +368,11 @@ fn ast_grep_inner(
     opts: &AstGrepOptionsInner,
 ) -> std::result::Result<AstGrepResultInner, String> {
     let strictness = parse_strictness(opts.strictness.as_deref())?;
-    let lang_override = opts.lang.as_deref().map(str::trim).filter(|l| !l.is_empty());
+    let lang_override = opts
+        .lang
+        .as_deref()
+        .map(str::trim)
+        .filter(|l| !l.is_empty());
     if let Some(lang_str) = lang_override {
         if alias_to_lang(lang_str).is_none() {
             return Err(format!("Unsupported language '{lang_str}'"));
@@ -538,7 +552,8 @@ mod tests {
 
     fn fixture_dir() -> PathBuf {
         let seq = FIXTURE_SEQ.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!("mc-natives-ast-{}-{}", std::process::id(), seq));
+        let dir =
+            std::env::temp_dir().join(format!("mc-natives-ast-{}-{}", std::process::id(), seq));
         stdfs::create_dir_all(&dir).ok();
         dir
     }
@@ -566,13 +581,20 @@ mod tests {
         // A lone `(` compiles (ast-grep treats it as a malformed expression that
         // matches nothing) and must NOT panic; it returns Ok with zero matches.
         let ok_result = ast_grep_inner("(", &[file.clone()], &opts(false));
-        assert!(ok_result.is_ok(), "lone paren must not panic: {ok_result:?}");
+        assert!(
+            ok_result.is_ok(),
+            "lone paren must not panic: {ok_result:?}"
+        );
         // A multi-statement pattern fails Pattern::try_new (MultipleNode). The
         // compile failure is collected as a non-fatal parse_error (matching sg's
         // stderr behavior) rather than a hard error, and must not panic.
-        let err_result = ast_grep_inner("a(1); b(2);", &[file], &opts(false)).expect("no hard error");
+        let err_result =
+            ast_grep_inner("a(1); b(2);", &[file], &opts(false)).expect("no hard error");
         assert!(
-            err_result.parse_errors.iter().any(|e| e.contains("compile failed")),
+            err_result
+                .parse_errors
+                .iter()
+                .any(|e| e.contains("compile failed")),
             "multi-statement pattern must report a compile failure in parse_errors: {err_result:?}"
         );
         assert!(err_result.matches.is_empty());
@@ -582,9 +604,13 @@ mod tests {
     #[test]
     fn finds_console_log_in_typescript() {
         let dir = fixture_dir();
-        let file = write_fixture(&dir, "a.ts", "console.log('hi');\nconst x = 1;\nconsole.log(x);\n");
-        let result =
-            ast_grep_inner("console.log($X)", &[file.clone()], &opts(false)).expect("match succeeds");
+        let file = write_fixture(
+            &dir,
+            "a.ts",
+            "console.log('hi');\nconst x = 1;\nconsole.log(x);\n",
+        );
+        let result = ast_grep_inner("console.log($X)", &[file.clone()], &opts(false))
+            .expect("match succeeds");
         assert_eq!(result.matches.len(), 2, "expected two console.log matches");
         assert_eq!(result.files_with_matches, 1);
         assert_eq!(result.files_searched, 1);
@@ -601,9 +627,13 @@ mod tests {
     fn includes_meta_variables_when_requested() {
         let dir = fixture_dir();
         let file = write_fixture(&dir, "a.ts", "console.log('hi');\n");
-        let result = ast_grep_inner("console.log($X)", &[file], &opts(true)).expect("match succeeds");
+        let result =
+            ast_grep_inner("console.log($X)", &[file], &opts(true)).expect("match succeeds");
         assert_eq!(result.matches.len(), 1);
-        let meta = result.matches[0].meta_variables.as_ref().expect("meta present");
+        let meta = result.matches[0]
+            .meta_variables
+            .as_ref()
+            .expect("meta present");
         assert!(meta.contains_key("X"));
         assert_eq!(meta.get("X").map(String::as_str), Some("'hi'"));
     }
@@ -616,7 +646,10 @@ mod tests {
         let result =
             ast_grep_inner("console.log($X)", &[unknown, ts_file], &opts(false)).expect("ok");
         assert_eq!(result.matches.len(), 1);
-        assert_eq!(result.files_searched, 1, "unsupported extension must not count as searched");
+        assert_eq!(
+            result.files_searched, 1,
+            "unsupported extension must not count as searched"
+        );
         let _ = stdfs::remove_dir_all(&dir);
     }
 
@@ -639,7 +672,10 @@ mod tests {
         o.limit = 2;
         let result = ast_grep_inner("a($X)", &[file], &o).expect("ok");
         assert_eq!(result.matches.len(), 2);
-        assert!(result.limit_reached, "limit_reached must be true when truncated");
+        assert!(
+            result.limit_reached,
+            "limit_reached must be true when truncated"
+        );
         let _ = stdfs::remove_dir_all(&dir);
     }
 
@@ -670,7 +706,10 @@ mod tests {
     fn alias_and_extension_resolution() {
         assert_eq!(alias_to_lang("TypeScript"), Some(SupportLang::TypeScript));
         assert_eq!(alias_to_lang("RUST"), Some(SupportLang::Rust));
-        assert_eq!(extension_to_lang(Path::new("a.tsx")), Some(SupportLang::Tsx));
+        assert_eq!(
+            extension_to_lang(Path::new("a.tsx")),
+            Some(SupportLang::Tsx)
+        );
         assert_eq!(extension_to_lang(Path::new("a.md")), None);
     }
 }

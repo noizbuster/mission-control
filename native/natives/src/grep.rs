@@ -333,7 +333,9 @@ enum ReadFile {
 /// behave exactly like the uncached path.
 fn read_file_bytes(path: &Path) -> ReadFile {
     match fs_cache::read_file_bytes_cached(path, MAX_FILE_BYTES) {
-        fs_cache::CachedRead::Hit(bytes) | fs_cache::CachedRead::Miss(bytes) => ReadFile::Bytes(bytes),
+        fs_cache::CachedRead::Hit(bytes) | fs_cache::CachedRead::Miss(bytes) => {
+            ReadFile::Bytes(bytes)
+        }
         fs_cache::CachedRead::Oversized => ReadFile::Oversized,
         fs_cache::CachedRead::Skipped => ReadFile::Skipped,
     }
@@ -408,10 +410,12 @@ fn has_match_inner(pattern: &str, paths: &[String]) -> std::result::Result<bool,
         return Ok(false);
     }
     let matcher = build_matcher_inner(pattern)?;
-    let hit = paths.par_iter().any(|path_str| match read_file_bytes(Path::new(path_str)) {
-        ReadFile::Bytes(bytes) => matcher.is_match(&bytes[..]).unwrap_or(false),
-        ReadFile::Oversized | ReadFile::Skipped => false,
-    });
+    let hit = paths
+        .par_iter()
+        .any(|path_str| match read_file_bytes(Path::new(path_str)) {
+            ReadFile::Bytes(bytes) => matcher.is_match(&bytes[..]).unwrap_or(false),
+            ReadFile::Oversized | ReadFile::Skipped => false,
+        });
     Ok(hit)
 }
 
@@ -423,14 +427,8 @@ fn has_match_inner(pattern: &str, paths: &[String]) -> std::result::Result<bool,
 pub fn search(pattern: String, paths: Vec<String>, opts: GrepOptions) -> Result<Vec<GrepMatch>> {
     let mode = parse_output_mode(opts.output_mode.as_deref());
     let head_limit = opts.head_limit.map(u64::from);
-    let (rows, _total) = search_inner(
-        &pattern,
-        &paths,
-        opts.include.as_deref(),
-        mode,
-        head_limit,
-    )
-    .map_err(Error::from_reason)?;
+    let (rows, _total) = search_inner(&pattern, &paths, opts.include.as_deref(), mode, head_limit)
+        .map_err(Error::from_reason)?;
     Ok(rows
         .into_iter()
         .map(|(path, line_number, line_content)| GrepMatch {
@@ -459,7 +457,10 @@ fn search_file(
         OutputMode::Content => {
             let mut searcher = build_searcher();
             let mut collector = LineCollector::new(limit);
-            if searcher.search_slice(matcher, bytes, &mut collector).is_err() {
+            if searcher
+                .search_slice(matcher, bytes, &mut collector)
+                .is_err()
+            {
                 return None;
             }
             if collector.count == 0 {
@@ -482,7 +483,10 @@ fn search_file(
             }
             let mut searcher = build_searcher();
             let mut collector = LineCollector::new(None);
-            if searcher.search_slice(matcher, bytes, &mut collector).is_err() {
+            if searcher
+                .search_slice(matcher, bytes, &mut collector)
+                .is_err()
+            {
                 return None;
             }
             if collector.count == 0 {
@@ -546,7 +550,8 @@ mod tests {
     // each other's fixtures.
     fn fixture_dir() -> PathBuf {
         let seq = FIXTURE_SEQ.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!("mc-natives-grep-{}-{}", std::process::id(), seq));
+        let dir =
+            std::env::temp_dir().join(format!("mc-natives-grep-{}-{}", std::process::id(), seq));
         fs::create_dir_all(&dir).ok();
         dir
     }
@@ -625,7 +630,10 @@ mod tests {
         let big = write_fixture_in(&dir, "big.txt", &"a".repeat((MAX_FILE_BYTES + 1) as usize));
         let bin = write_fixture_in(&dir, "bin.dat", "needle\x00rest\n");
         let (rows, _) = run_search("needle", &[big, bin]);
-        assert!(rows.is_empty(), "oversized and binary files must be skipped");
+        assert!(
+            rows.is_empty(),
+            "oversized and binary files must be skipped"
+        );
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -634,7 +642,11 @@ mod tests {
         let dir = fixture_dir();
         let mut paths = Vec::new();
         for i in 0..40 {
-            paths.push(write_fixture_in(&dir, &format!("f{:03}.txt", i), &format!("hit line {}\n", i)));
+            paths.push(write_fixture_in(
+                &dir,
+                &format!("f{:03}.txt", i),
+                &format!("hit line {}\n", i),
+            ));
         }
         paths.sort();
         let (rows, total) = run_search("hit", &paths);

@@ -1,5 +1,5 @@
 import { resolveMissionControlDataDir } from '@mission-control/core';
-import { parseArgs } from './args';
+import { extractSessionDebugFlags, type CliSessionDebugIntent, parseArgs } from './args';
 import { assertUnreachable } from './assert-unreachable';
 import type { CliCommandResult } from './cli-command-result';
 import { getVersion } from './cli-version';
@@ -37,6 +37,8 @@ export function createHelpText(): string {
         '  --session <id>   Reuse or create a replayable session id',
         '  --method <id>    Select auth login method',
         '  --profile <name>  Select a user-scope config profile (replaces config.json; long-only)',
+        '  --session-debug   Enable isolated redacted session diagnostics for this CLI run',
+        '  --no-session-debug  Disable isolated session diagnostics for this CLI run',
         '  --thinking     Show reasoning/thinking blocks in non-interactive output',
         '  --version      Print version',
         '  --help         Print help',
@@ -117,8 +119,11 @@ export function createHelpText(): string {
     ].join('\n');
 }
 
-export async function main(argv: readonly string[] = process.argv.slice(2)): Promise<CliCommandResult | undefined> {
-    const args = parseArgs(argv);
+export async function main(
+    argv: readonly string[] = process.argv.slice(2),
+    sessionDebugIntent: CliSessionDebugIntent = extractSessionDebugFlags(argv),
+): Promise<CliCommandResult | undefined> {
+    const args = parseArgs(sessionDebugIntent.argv);
     if (args.showVersion) {
         process.stdout.write(`${getVersion()}\n`);
         return;
@@ -153,7 +158,7 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
             process.stdout.write(await runMcpCommand(args));
             return;
         case 'run':
-            process.stdout.write(await runAgent(args));
+            process.stdout.write(await runAgent(args, {}, sessionDebugIntent));
             return;
         case 'agents':
             process.stdout.write(await runAgentsCommand(args));
@@ -163,10 +168,16 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
     }
 }
 
-export async function runCli(argv: readonly string[] = process.argv.slice(2)): Promise<void> {
+export async function runCli(
+    argv: readonly string[] = process.argv.slice(2),
+    packageTransportSeparator = false,
+): Promise<void> {
     installCrashGuard({ dataDir: resolveMissionControlDataDir() });
+    const parsedArgv =
+        packageTransportSeparator && argv[0] === '--' ? argv.slice(1) : argv;
+    const sessionDebugIntent = extractSessionDebugFlags(parsedArgv);
     try {
-        const result = await main(argv);
+        const result = await main(sessionDebugIntent.argv, sessionDebugIntent);
         if (result !== undefined) writeCliCommandResult(result);
     } catch (error: unknown) {
         if (error instanceof SessionCliUsageError) {
@@ -196,5 +207,5 @@ function isCliEntrypoint(): boolean {
 }
 
 if (isCliEntrypoint()) {
-    await runCli();
+    await runCli(process.argv.slice(2), false);
 }

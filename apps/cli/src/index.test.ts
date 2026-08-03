@@ -29,7 +29,8 @@ describe('CLI entrypoint', () => {
         expect(help).toContain('provider/model#variant');
         expect(help).toContain('--graph <path>');
         expect(help).toContain('--session <id>');
-        expect(help).toContain('--method <id>');
+        expect(help).toContain('--session-debug');
+        expect(help).toContain('--no-session-debug');
         expect(help).toContain('mc auth login --provider local --api-key <key>');
         expect(help).toContain('mc auth login --provider anthropic --api-key <key>');
         expect(help).toContain('mc auth login --provider openai --method oauth-headless');
@@ -113,5 +114,15 @@ describe('CLI entrypoint', () => {
         );
         expect(stderr).not.toHaveBeenCalled();
         expect(process.exitCode).toBeUndefined();
+    });
+
+    it('removes a package-script transport separator only when explicitly marked', async () => {
+        const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+        const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+        await runCli(['--', '--help'], true);
+
+        expect(stdout).toHaveBeenCalledExactlyOnceWith(`${createHelpText()}\n`);
+        expect(stderr).not.toHaveBeenCalled();
     });
 });

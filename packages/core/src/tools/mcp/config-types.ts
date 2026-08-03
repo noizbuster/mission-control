@@ -1,4 +1,4 @@
-import type { McpConfigEntry, MissionControlConfig } from '@mission-control/protocol';
+import type { McpConfigEntry, MissionControlConfig, SessionDebugConfig } from '@mission-control/protocol';
 
 export type McpConfigScope = 'user' | 'project';
 
@@ -29,9 +29,11 @@ export type McpConfigParseError = {
 
 export type ResolvedMcpConfig = {
     readonly config: MissionControlConfig;
+    readonly sessionDebugConfig: SessionDebugConfig;
     readonly servers: readonly ResolvedMcpServer[];
     readonly expandedSecrets: readonly string[];
     readonly errors: readonly McpConfigParseError[];
+    readonly sessionDebugError?: string;
 };
 
 export type LoadMcpConfigOptions = {

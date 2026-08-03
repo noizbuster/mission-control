@@ -3,6 +3,7 @@ import { McpConfigSchema, McpProjectConfigSchema, MissionControlConfigSchema } f
 import { resolveProjectConfigPath, resolveUserConfigPathForWrite } from './config-paths';
 import { readProjectConfig, readUserConfig } from './config-readers';
 import type { LoadMcpConfigOptions } from './config-types';
+import { serializeConfigPreservingSessionDebug } from './session-debug-config-document';
 import { atomicWriteFile, atomicWriteJsonFile } from '../../persistence/atomic-write';
 
 export async function writeUserMcpServer(
@@ -18,7 +19,11 @@ export async function writeUserMcpServer(
         ...(existing.config ?? {}),
         mcp: nextMcp,
     });
-    await atomicWriteFile(userConfigPath, `${JSON.stringify(nextConfig, null, 2)}\n`, { mode: 0o600 });
+    await atomicWriteFile(
+        userConfigPath,
+        serializeConfigPreservingSessionDebug(nextConfig, existing.sessionDebugSourceMembers),
+        { mode: 0o600 },
+    );
 }
 
 export async function writeProjectMcpServer(
@@ -44,7 +49,11 @@ export async function removeUserMcpServer(name: string, options: LoadMcpConfigOp
         ...(existing.config ?? {}),
         mcp: McpConfigSchema.parse(remaining),
     });
-    await atomicWriteFile(userConfigPath, `${JSON.stringify(nextConfig, null, 2)}\n`, { mode: 0o600 });
+    await atomicWriteFile(
+        userConfigPath,
+        serializeConfigPreservingSessionDebug(nextConfig, existing.sessionDebugSourceMembers),
+        { mode: 0o600 },
+    );
     return true;
 }
 

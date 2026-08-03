@@ -1,19 +1,55 @@
-import type { McpProjectConfig, MissionControlConfig } from '@mission-control/protocol';
-import { McpProjectConfigSchema, MissionControlConfigSchema } from '@mission-control/protocol';
+import type {
+    McpProjectConfig,
+    MissionControlConfig,
+    SessionDebugConfig,
+} from '@mission-control/protocol';
+import { McpProjectConfigSchema, MissionControlConfigSchema, SessionDebugConfigSchema } from '@mission-control/protocol';
 import { stripJsoncComments } from '../../workflows/jsonc-parser';
 import { readFile } from 'node:fs/promises';
+import {
+    detachSessionDebugConfig,
+    parseSessionDebugConfigDocument,
+    type SessionDebugConfigSourceMember,
+} from './session-debug-config-document';
 
-export type ReadUserResult = { readonly config: MissionControlConfig | undefined; readonly error?: string };
+export type ReadUserResult = {
+    readonly config: MissionControlConfig | undefined;
+    readonly sessionDebugConfig: SessionDebugConfig;
+    readonly sessionDebugSourceMembers: readonly SessionDebugConfigSourceMember[];
+    readonly error?: string;
+    readonly sessionDebugError?: string;
+};
 export type ReadProjectResult = { readonly config: McpProjectConfig | undefined; readonly error?: string };
 
 export async function readUserConfig(userConfigPath: string): Promise<ReadUserResult> {
     const contents = await readConfigText(userConfigPath);
-    if (contents === undefined) return { config: undefined };
+    if (contents === undefined) {
+        return {
+            config: undefined,
+            sessionDebugConfig: SessionDebugConfigSchema.parse({}),
+            sessionDebugSourceMembers: [],
+        };
+    }
+    const sessionDebug = parseSessionDebugConfigDocument(contents);
     const textToParse = userConfigPath.endsWith('.jsonc') ? stripJsoncComments(contents) : contents;
     const parsed = parseJson(userConfigPath, textToParse);
-    if (typeof parsed !== 'object') return { config: undefined, error: parsed };
-    const result = MissionControlConfigSchema.safeParse(parsed.value);
-    return result.success ? { config: result.data } : { config: undefined, error: formatZodError(result.error) };
+    if (typeof parsed !== 'object') {
+        return {
+            config: undefined,
+            sessionDebugConfig: sessionDebug.config,
+            sessionDebugSourceMembers: sessionDebug.sourceMembers,
+            ...(sessionDebug.error !== undefined ? { sessionDebugError: sessionDebug.error } : {}),
+            error: parsed,
+        };
+    }
+    const result = MissionControlConfigSchema.safeParse(detachSessionDebugConfig(parsed.value));
+    return {
+        config: result.success ? result.data : undefined,
+        sessionDebugConfig: sessionDebug.config,
+        sessionDebugSourceMembers: sessionDebug.sourceMembers,
+        ...(sessionDebug.error !== undefined ? { sessionDebugError: sessionDebug.error } : {}),
+        ...(!result.success ? { error: formatZodError(result.error) } : {}),
+    };
 }
 
 export async function readProjectConfig(projectConfigPath: string): Promise<ReadProjectResult> {

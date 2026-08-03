@@ -41,10 +41,11 @@ import {
     type ObservabilityRedactor,
     redactAgentEventForObservability,
 } from './providers/observability-redactor';
+import { createSessionDebugCapture, type SessionDebugCapture } from './session-debug';
 import { SessionEventLog } from './session-log';
 import type { ToolRegistry } from './tools/tool-registry';
 
-export type { AgentRuntimeOptions } from './agent-runtime-options';
+export type { AgentRuntimeOptions, AgentRuntimeSessionDebugOptions } from './agent-runtime-options';
 export type { SkillInvocationTaskInput };
 
 /**
@@ -88,6 +89,7 @@ export class AgentRuntime {
     private readonly approvalGate: PermissionGate;
     private readonly persistentStore: PersistentMemoryStore | undefined;
     private readonly observabilityRedactor: ObservabilityRedactor;
+    private sessionDebugCapture: SessionDebugCapture | undefined;
     private modelProviderSelection: ModelProviderSelection;
     private session: AgentSession | undefined;
     private frozenSnapshot: AgentSnapshot | undefined = undefined;
@@ -108,6 +110,15 @@ export class AgentRuntime {
         const startedAt = new Date().toISOString();
         const session = createRuntimeSession(startedAt);
         this.session = session;
+        this.sessionDebugCapture =
+            this.options.sessionDebug === undefined
+                ? undefined
+                : createSessionDebugCapture({
+                      config: this.options.sessionDebug.config,
+                      dataDir: this.options.sessionDebug.dataDir,
+                      sessionId: session.id,
+                      natives: this.options.sessionDebug.natives,
+                  });
         this.emit(sessionStartedEvent(session, startedAt, this.sidecarClient.status(), this.modelProviderSelection));
         return session;
     }
@@ -124,9 +135,14 @@ export class AgentRuntime {
                 modelProviderSelection: this.modelProviderSelection,
             }),
         );
-        await this.sidecarClient.stop();
-        this.frozenSnapshot = this.log.getSnapshot(ensureRuntimeSession(this.session));
-        this.log.clear();
+        try {
+            await this.sidecarClient.stop();
+        } finally {
+            this.sessionDebugCapture?.close();
+            this.sessionDebugCapture = undefined;
+            this.frozenSnapshot = this.log.getSnapshot(ensureRuntimeSession(this.session));
+            this.log.clear();
+        }
     }
 
     async runDemoTask(): Promise<void> {
@@ -242,6 +258,7 @@ export class AgentRuntime {
         const observableEvent = redactAgentEventForObservability(event, this.observabilityRedactor);
         this.log.append(observableEvent);
         this.bus.emit(observableEvent);
+        this.sessionDebugCapture?.capture(observableEvent);
     }
 
     private createPromptTaskId(): string {

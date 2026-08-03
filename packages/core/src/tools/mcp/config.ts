@@ -80,9 +80,13 @@ function resolveScopeResults(input: ScopeResolutionInput): ResolvedMcpConfig {
     );
     return {
         config: input.userResult.config ?? {},
+        sessionDebugConfig: input.userResult.sessionDebugConfig,
         servers,
         expandedSecrets: [...expandedSecrets],
         errors,
+        ...(input.userResult.sessionDebugError !== undefined
+            ? { sessionDebugError: input.userResult.sessionDebugError }
+            : {}),
     };
 }
 

@@ -115,6 +115,31 @@ export const DebugConfigSchema = z
     .strict();
 export type DebugConfig = z.infer<typeof DebugConfigSchema>;
 
+export const SESSION_DEBUG_MIN_BYTES = 32 * 1024 * 1024;
+export const SESSION_DEBUG_MAX_BYTES = 1024 * 1024 * 1024;
+export const SESSION_DEBUG_DEFAULT_RETENTION_DAYS = 30;
+export const SESSION_DEBUG_MAX_RETENTION_DAYS = 365;
+
+/**
+ * The isolated `session_debug` user-config domain. It is deliberately not a member
+ * of {@link MissionControlConfigSchema}: callers detach it before strict parsing
+ * the normal configuration, so diagnostic configuration can never invalidate
+ * ordinary MCP/runtime configuration.
+ */
+export const SessionDebugConfigSchema = z
+    .object({
+        enabled: z.boolean().default(false),
+        maxBytes: z.number().int().min(SESSION_DEBUG_MIN_BYTES).max(SESSION_DEBUG_MAX_BYTES).default(SESSION_DEBUG_MAX_BYTES),
+        retentionDays: z
+            .number()
+            .int()
+            .min(1)
+            .max(SESSION_DEBUG_MAX_RETENTION_DAYS)
+            .default(SESSION_DEBUG_DEFAULT_RETENTION_DAYS),
+    })
+    .strict();
+export type SessionDebugConfig = z.infer<typeof SessionDebugConfigSchema>;
+
 /**
  * The mission-control global `config.json` top-level shape. Only the global/user config defines
  * `mcp_env_allowlist` (omo security rule: walked project `.mcp.json` files cannot extend the

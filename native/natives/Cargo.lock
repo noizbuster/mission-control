@@ -591,6 +591,7 @@ dependencies = [
  "grep-searcher",
  "html-to-markdown-rs",
  "ignore",
+ "libc",
  "napi",
  "napi-build",
  "napi-derive",

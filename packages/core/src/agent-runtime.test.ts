@@ -1,6 +1,7 @@
 import type { AgentEvent, PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import { AgentRuntime } from './agent-runtime';
+import type { NativeSessionDebugHandle } from './native/natives-client';
 import { createObservabilityRedactor } from './providers/observability-redactor';
 
 describe('AgentRuntime', () => {
@@ -188,6 +189,49 @@ describe('AgentRuntime', () => {
         expect(preStopCompleted).toBeGreaterThan(0);
         expect(runtime.getTimeline()).toEqual([]);
         expect(runtime.getEvents()).toEqual([]);
+    });
+
+    it('captures redacted events through the optional native session-debug lifecycle', async () => {
+        const frames: Uint8Array[] = [];
+        let closeCount = 0;
+        let openedSessionDigest: string | undefined;
+        const handle: NativeSessionDebugHandle = {
+            tryEnqueue(payload): boolean {
+                frames.push(payload);
+                return true;
+            },
+            writeFatal(): boolean {
+                return true;
+            },
+            status: { enabled: true, sequence: 0, traceCapacityBytes: 1024 },
+            close(): void {
+                closeCount += 1;
+            },
+        };
+        const runtime = new AgentRuntime({
+            useNative: false,
+            permissionDecisionResolver: allowAllPermissions,
+            sessionDebug: {
+                config: { enabled: true, maxBytes: 32 * 1024 * 1024, retentionDays: 7 },
+                dataDir: '/safe/data',
+                natives: {
+                    openSessionDebug(options): NativeSessionDebugHandle {
+                        openedSessionDigest = options.sessionKeyDigest;
+                        return handle;
+                    },
+                },
+            },
+        });
+
+        const session = await runtime.start();
+        await runtime.runDemoTask();
+        await runtime.stop();
+
+        expect(openedSessionDigest).toMatch(/^[a-f0-9]{64}$/);
+        expect(openedSessionDigest).not.toBe(session.id);
+        expect(frames.length).toBeGreaterThan(2);
+        expect(new TextDecoder().decode(frames[0])).not.toContain(session.id);
+        expect(closeCount).toBe(1);
     });
 });
 
