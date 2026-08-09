@@ -23,6 +23,17 @@ describe('opentui renderer mount (OpenTUI Solid)', () => {
         expect(source).not.toContain('hardReset');
     });
 
+    it('arms emergency alternate-screen restoration before Solid render', () => {
+        const source = readFileSync(sourcePath, 'utf8');
+        const armAt = source.indexOf('setAltScreenActive(true)');
+        const renderAt = source.indexOf('await render(app, renderer)');
+        expect(source).toContain("screenMode: 'alternate-screen'");
+        expect(armAt).toBeGreaterThan(-1);
+        expect(armAt).toBeLessThan(renderAt);
+        expect(source).toContain('catch (error: unknown)');
+        expect(source).toContain('emergencyTerminalRestore();');
+    });
+
     it('attachResizeFullPaint sets force flag on microtask', async () => {
         const listeners = new Map<string, Set<(...args: unknown[]) => void>>();
         const renderer = {
@@ -48,5 +59,34 @@ describe('opentui renderer mount (OpenTUI Solid)', () => {
         expect(renderer.resize).not.toHaveBeenCalled();
         detach();
         expect(listeners.get('resize')?.size ?? 0).toBe(0);
+    });
+
+    it('coalesces resize bursts and cancels a queued paint after detach', async () => {
+        const listeners = new Map<string, Set<(...args: unknown[]) => void>>();
+        const renderer = {
+            on: (event: string, listener: (...args: unknown[]) => void) => {
+                const set = listeners.get(event) ?? new Set();
+                set.add(listener);
+                listeners.set(event, set);
+            },
+            off: (event: string, listener: (...args: unknown[]) => void) => {
+                listeners.get(event)?.delete(listener);
+            },
+            requestRender: vi.fn(),
+        };
+        const detach = attachResizeFullPaint(renderer as never);
+        const resize = [...(listeners.get('resize') ?? [])][0];
+        if (resize === undefined) throw new Error('resize listener was not attached');
+
+        resize(120, 40);
+        resize(121, 40);
+        resize(122, 40);
+        await Promise.resolve();
+        expect(renderer.requestRender).toHaveBeenCalledTimes(1);
+
+        resize(123, 40);
+        detach();
+        await Promise.resolve();
+        expect(renderer.requestRender).toHaveBeenCalledTimes(1);
     });
 });

@@ -100,34 +100,60 @@ export function MissionControlPromptServicesProvider(props: MissionControlPrompt
 function createTuiPromptStashService(store: TuiPromptStashStoreLike): TuiPromptStashService {
     const [entries, setEntries] = createSignal<readonly TuiPromptStashEntry[]>([]);
     let disposed = false;
-    const ready = reload();
+    // Serialize service-level reload/mutate so in-memory apply cannot clobber store pushes.
+    let opChain: Promise<void> = Promise.resolve();
+
+    function enqueue<T>(task: () => Promise<T>): Promise<T> {
+        const run = opChain.then(task, task);
+        opChain = run.then(
+            () => undefined,
+            () => undefined,
+        );
+        return run;
+    }
 
     onCleanup(() => {
         disposed = true;
     });
 
-    async function reload(): Promise<void> {
+    async function reloadFromStore(): Promise<void> {
         const storedEntries = await store.listEntries();
         const parsedEntries = storedEntries.map((entry) => TuiPromptStashEntrySchema.parse(entry));
         if (disposed) return;
         setEntries(parsedEntries);
     }
 
+    async function reload(): Promise<void> {
+        await enqueue(async () => {
+            await reloadFromStore();
+        });
+    }
+
+    const ready = reload();
+
     async function pushDraft(draft: TuiPromptStashDraft): Promise<TuiPromptStashEntry> {
-        const entry = await store.pushEntry(draft);
-        await reload();
-        return TuiPromptStashEntrySchema.parse(entry);
+        return enqueue(async () => {
+            const entry = await store.pushEntry(draft);
+            await reloadFromStore();
+            return TuiPromptStashEntrySchema.parse(entry);
+        });
     }
 
     async function popDraft(): Promise<TuiPromptStashEntry | undefined> {
-        const entry = await store.popEntry();
-        await reload();
-        return entry === undefined ? undefined : TuiPromptStashEntrySchema.parse(entry);
+        return enqueue(async () => {
+            const entry = await store.popEntry();
+            await reloadFromStore();
+            return entry === undefined ? undefined : TuiPromptStashEntrySchema.parse(entry);
+        });
     }
 
     async function removeEntry(entryId: string): Promise<void> {
-        await store.replaceEntries(entries().filter((entry) => entry.id !== entryId));
-        await reload();
+        await enqueue(async () => {
+            // Read disk-backed list inside the chain — never filter a stale signal snapshot.
+            const current = await store.listEntries();
+            await store.replaceEntries(current.filter((entry) => entry.id !== entryId));
+            await reloadFromStore();
+        });
     }
 
     return Object.freeze({
@@ -145,13 +171,22 @@ function createTuiFrecencyService(store: TuiFrecencyStoreLike, chatStore: ChatSt
     const [scored, setScored] = createSignal<readonly TuiFrecencyScoreEntry[]>([]);
     const rankedKeys = (): readonly string[] => scored().map((entry) => entry.record.key);
     let disposed = false;
-    const ready = reload();
+    let opChain: Promise<void> = Promise.resolve();
+
+    function enqueue<T>(task: () => Promise<T>): Promise<T> {
+        const run = opChain.then(task, task);
+        opChain = run.then(
+            () => undefined,
+            () => undefined,
+        );
+        return run;
+    }
 
     onCleanup(() => {
         disposed = true;
     });
 
-    async function reload(): Promise<void> {
+    async function reloadFromStore(): Promise<void> {
         const storedRecords = await store.listRecords();
         const rankedRecords = await store.listByScore();
         const parsedRecords = storedRecords.map((record) => TuiFrecencyRecordSchema.parse(record));
@@ -162,13 +197,24 @@ function createTuiFrecencyService(store: TuiFrecencyStoreLike, chatStore: ChatSt
         if (disposed) return;
         setRecords(parsedRecords);
         setScored(parsedScores);
+        if (chatStore?.isEventQueueClosed() === true) return;
         chatStore?.setFileFrecencyKeys(parsedScores.map((entry) => entry.record.key));
     }
 
+    async function reload(): Promise<void> {
+        await enqueue(async () => {
+            await reloadFromStore();
+        });
+    }
+
+    const ready = reload();
+
     async function recordAccess(key: string): Promise<TuiFrecencyRecord> {
-        const record = await store.recordAccess(key);
-        await reload();
-        return TuiFrecencyRecordSchema.parse(record);
+        return enqueue(async () => {
+            const record = await store.recordAccess(key);
+            await reloadFromStore();
+            return TuiFrecencyRecordSchema.parse(record);
+        });
     }
 
     return Object.freeze({
@@ -187,6 +233,8 @@ function createTuiPromptRefService(
 ): TuiPromptRefService {
     async function recordFileReference(path: string): Promise<void> {
         await frecency.recordAccess(path);
+        // recordAccess already reloads + mirrors keys when live; re-read only if still mounted.
+        if (chatStore?.isEventQueueClosed() === true) return;
         chatStore?.setFileFrecencyKeys(frecency.rankedKeys());
     }
 

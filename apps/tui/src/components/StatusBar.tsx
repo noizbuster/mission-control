@@ -5,6 +5,7 @@ import { TextAttributes } from '@opentui/core';
 import type { JSX } from 'solid-js';
 import type { ApprovalLevel } from '../state/approval-level';
 import { type BottomDockPolicy, type BottomDockStatusPolicy, bottomDockPolicy } from './chat-bottom-dock-policy';
+import { CHAT_ERROR, CHAT_TEXT_MUTED, CHAT_WARNING } from './chat-theme';
 import { APPROVAL_LEVEL_COLORS, STATUS_LINE_BG } from './overlay-theme';
 import { basename } from 'node:path';
 
@@ -49,6 +50,7 @@ export type BottomStatusShape = {
 
 export type TopStatusRowShape = TopStatusShape & {
     readonly variantLabel: string | undefined;
+    readonly contextGlyph: string | undefined;
     readonly leftText: string;
     readonly fillCount: number;
 };
@@ -131,6 +133,22 @@ export function contextUsagePercent(used: number, max: number): number | undefin
         return undefined;
     }
     return Math.round((used / max) * 100);
+}
+
+/** Color ramp for context fill: muted <70%, warning 70-89%, error >=90%. */
+export function contextUsageColor(used: number, max: number): string | undefined {
+    const percent = contextUsagePercent(used, max);
+    if (percent === undefined) return undefined;
+    if (percent >= 90) return CHAT_ERROR;
+    if (percent >= 70) return CHAT_WARNING;
+    return CHAT_TEXT_MUTED;
+}
+
+/** Single-cell pressure marker when the full context label is policy-hidden. */
+export function contextPressureGlyph(used: number, max: number): string | undefined {
+    const percent = contextUsagePercent(used, max);
+    if (percent === undefined || percent < 70) return undefined;
+    return percent >= 90 ? '●' : '○';
 }
 
 /** Whole-number cache-read percentage for a session's model-request input tokens. */
@@ -219,10 +237,17 @@ export function formatTopStatusRow(props: StatusBarProps): TopStatusRowShape {
     const { provider, model, variant, cacheHitLabel, contextLabel: rawContextLabel } = formatTopStatus(props);
     const variantLabel = variant?.replace(/^(reasoning|thinking)-/, '');
     const contextLabel = layout.status.showContextUsage ? rawContextLabel : undefined;
+    const used = props.contextTokensUsed ?? 0;
+    const max = props.contextTokensMax;
+    // Narrow terminals hide the full "12k / 200k (6%)" label, but still surface
+    // a single-cell pressure glyph once fill crosses the warning threshold.
+    const contextGlyph =
+        contextLabel === undefined && max !== undefined ? contextPressureGlyph(used, max) : undefined;
     const leftText = `${provider} ${model}${variantLabel !== undefined ? ` - ${variantLabel}` : ''}${
         cacheHitLabel !== undefined ? ` · ${cacheHitLabel}` : ''
     }`;
-    const rightSegments = contextLabel !== undefined ? [contextLabel] : [];
+    const rightSegments =
+        contextLabel !== undefined ? [contextLabel] : contextGlyph !== undefined ? [contextGlyph] : [];
     return {
         provider,
         model,
@@ -230,6 +255,7 @@ export function formatTopStatusRow(props: StatusBarProps): TopStatusRowShape {
         variantLabel,
         cacheHitLabel,
         contextLabel,
+        contextGlyph,
         leftText,
         fillCount: statusRowFillCount({ columns: layout.columns, leftText, rightSegments }),
     };
@@ -277,7 +303,18 @@ export function TopStatusBar(props: StatusBarProps): JSX.Element {
             <text selectable attributes={TextAttributes.DIM}>
                 {buildStatusDivider(row().fillCount)}
             </text>
-            {row().contextLabel !== undefined ? <text selectable>{` ${row().contextLabel}`}</text> : null}
+            {row().contextLabel !== undefined || row().contextGlyph !== undefined ? (
+                <text
+                    selectable
+                    {...(() => {
+                        const used = props.contextTokensUsed ?? 0;
+                        const max = props.contextTokensMax;
+                        const color =
+                            max === undefined ? undefined : contextUsageColor(used, max);
+                        return color !== undefined ? { fg: color } : {};
+                    })()}
+                >{` ${row().contextLabel ?? row().contextGlyph ?? ''}`}</text>
+            ) : null}
         </box>
     );
 }

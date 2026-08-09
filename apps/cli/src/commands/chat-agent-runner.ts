@@ -35,6 +35,7 @@ import {
 } from './chat-commands';
 import { appendInputHistoryEntry } from './input-history-store';
 import { actionResult, type ChatActionResult } from './interactive-chat-action-result';
+import { isApprovalDecisionLine } from './interactive-approval-helpers';
 import type { ChatInputEvent, ChatOutput } from './interactive-chat-io';
 import { maxChatPromptLength } from './interactive-chat-io';
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent';
@@ -225,6 +226,7 @@ export function startChatAgentRunner(options: AgentRunnerOptions): AgentRunnerHa
                     ]);
                     if (outcome === 'completed') {
                         activeTurn = undefined;
+                        store.setGenerating(false);
                         continue;
                     }
                     event = outcome;
@@ -237,6 +239,7 @@ export function startChatAgentRunner(options: AgentRunnerOptions): AgentRunnerHa
                         activeTurn.interrupt('soft');
                         await activeTurn.done;
                         activeTurn = undefined;
+                        store.setGenerating(false);
                         pendingInterrupt = false;
                         store.showTransientNotice('Press Ctrl+C twice to exit');
                     } else if (event.source === 'esc') {
@@ -255,11 +258,11 @@ export function startChatAgentRunner(options: AgentRunnerOptions): AgentRunnerHa
                 pendingInterrupt = false;
                 const prompt = event.value.trim();
 
-                // G3: approval routing before parse (double answerApproval).
-                if (activeTurn?.hasPendingApproval() === true && activeTurn.answerApproval(prompt)) {
+                // G3: approval routing before parse.
+                if (activeTurn?.answerApproval(prompt) === true) {
                     continue;
                 }
-                if (activeTurn?.answerApproval(prompt)) {
+                if (isApprovalDecisionLine(prompt)) {
                     continue;
                 }
                 if (prompt.length === 0) {
@@ -275,6 +278,7 @@ export function startChatAgentRunner(options: AgentRunnerOptions): AgentRunnerHa
                 const action = parseLine(event.value);
                 if (action.kind === 'exit') {
                     activeTurn = await stopActiveTurn(activeTurn);
+                    store.setGenerating(false);
                     chatOutput.write('Exiting mission-control chat\n');
                     exiting = true;
                     break;
@@ -290,20 +294,18 @@ export function startChatAgentRunner(options: AgentRunnerOptions): AgentRunnerHa
                 } catch (error) {
                     const message = error instanceof Error ? error.message : String(error);
                     emitTranscriptFallback(chatOutput, `Error: ${message}\n`);
-                    if (showWorking) {
-                        store.setGenerating(false);
-                    }
+                    store.setGenerating(false);
                     continue;
                 }
-                if (showWorking) {
-                    store.setGenerating(false);
-                }
-
                 applyResult(result);
+                // Keep generating=true while an active turn (incl. approval wait)
+                // lives so Ctrl+C routes to interrupt instead of draft-clear.
+                store.setGenerating(result.activeTurn !== undefined);
             }
         } finally {
             // G10: cleanup runs even on exception.
             activeTurn?.interrupt('force');
+            store.setGenerating(false);
             await Promise.allSettled([cleanup()]);
         }
     }
@@ -323,7 +325,9 @@ export function startChatAgentRunner(options: AgentRunnerOptions): AgentRunnerHa
         stop: async () => {
             exiting = true;
             activeTurn?.interrupt('force');
-            store.enqueueEvent({ type: 'interrupt', source: 'ctrl-c' });
+            // closeEventQueue resolves parked waiters with interrupt and drops
+            // any queued lines; do not enqueue-then-close (that discards the line).
+            store.closeEventQueue();
             await Promise.allSettled([loopPromise]);
         },
     };

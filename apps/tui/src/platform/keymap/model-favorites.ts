@@ -303,6 +303,8 @@ function favoriteSlotIndex(slot: number): number {
  * the frecency explicitly where a commit is intended (favorites jump).
  */
 export interface ModelShortcutsDeps {
+    /** When false, F2/favorites chords are suspended (decision overlays). */
+    readonly isEnabled?: () => boolean;
     /** The recency store powering F2 / Shift+F2. */
     readonly frecency: ModelFrecencyLike;
     /** The favorites store powering `<leader>1..9`. */
@@ -425,7 +427,7 @@ export function registerModelShortcutsLayer<TTarget extends object, TEvent exten
     }
 
     return keymap.registerLayer({
-        enabled: () => true,
+        enabled: () => deps.isEnabled?.() ?? true,
         commands,
         bindings: modelShortcutsBindings(),
     });

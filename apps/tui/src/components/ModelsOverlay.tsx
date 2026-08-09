@@ -57,7 +57,11 @@ export function ModelsOverlay({ store }: ModelsOverlayProps): JSX.Element {
         if (selection === undefined) return undefined;
         return buildModelContextPrefLines(selection, localPreferences.preferences().modelContextPrefs);
     });
+    // Key-repeat guard for dismiss vs in-flight role assign (separate latches).
+    let dismissSettled = false;
+    let assignSettled = false;
     useKeyboard((key) => {
+        if (dismissSettled) return;
         if (key.name === 'up') {
             key.preventDefault();
             store.navigateModelsOverlay(-1);
@@ -73,22 +77,38 @@ export function ModelsOverlay({ store }: ModelsOverlayProps): JSX.Element {
             if (key.shift) {
                 const selection = focusedSelection();
                 if (selection === undefined) return;
+                if (store.isEventQueueClosed() || store.getSnapshot().overlayMode !== 'models-overlay') return;
                 const catalogDefault = getModelContextLimit(selection.providerID, selection.modelID);
                 void localPreferences
                     .stepModelContextLimit(selection, key.name === 'left' ? -1 : 1, catalogDefault)
                     .then(() => {
+                        if (store.isEventQueueClosed() || store.getSnapshot().overlayMode !== 'models-overlay') {
+                            return;
+                        }
+                        const live = store.getSnapshot().currentModelSelection;
+                        if (
+                            live === undefined ||
+                            live.providerID !== selection.providerID ||
+                            live.modelID !== selection.modelID
+                        ) {
+                            return;
+                        }
                         const lines = buildModelContextPrefLines(
                             selection,
                             localPreferences.preferences().modelContextPrefs,
                         );
-                        store.setContextTokensMax(lines.effectiveContextLimit);
-                    });
+                        store.setContextTokensMaxFromStep(lines.effectiveContextLimit);
+                    })
+                    .catch(() => undefined);
                 return;
             }
             if (key.ctrl) {
                 const selection = focusedSelection();
                 if (selection === undefined) return;
-                void localPreferences.stepModelAutoCompactThreshold(selection, key.name === 'left' ? -1 : 1);
+                if (store.isEventQueueClosed() || store.getSnapshot().overlayMode !== 'models-overlay') return;
+                void localPreferences
+                    .stepModelAutoCompactThreshold(selection, key.name === 'left' ? -1 : 1)
+                    .catch(() => undefined);
                 return;
             }
             const tabs = view().providerTabs;
@@ -115,7 +135,15 @@ export function ModelsOverlay({ store }: ModelsOverlayProps): JSX.Element {
             if (slice().focusedColumn === 'left') {
                 store.selectModelForAssignment();
             } else if (slice().pendingAssignModel !== null) {
-                void store.confirmRoleAssignment();
+                // Key-repeat can double-fire async role assign.
+                if (assignSettled) return;
+                assignSettled = true;
+                void store
+                    .confirmRoleAssignment()
+                    .catch(() => undefined)
+                    .finally(() => {
+                        assignSettled = false;
+                    });
             }
             return;
         }
@@ -130,7 +158,14 @@ export function ModelsOverlay({ store }: ModelsOverlayProps): JSX.Element {
             }
             const focusedRow = slice().roleRows[slice().activeRightIndex];
             if (focusedRow !== undefined) {
-                void store.clearModelsOverlayRole(focusedRow.role);
+                if (assignSettled) return;
+                assignSettled = true;
+                void store
+                    .clearModelsOverlayRole(focusedRow.role)
+                    .catch(() => undefined)
+                    .finally(() => {
+                        assignSettled = false;
+                    });
             }
             return;
         }
@@ -143,9 +178,10 @@ export function ModelsOverlay({ store }: ModelsOverlayProps): JSX.Element {
         if (key.name === 'escape') {
             if (slice().pendingAssignModel !== null) {
                 store.cancelPendingAssignment();
-            } else {
-                store.hideModelsOverlay();
+                return;
             }
+            dismissSettled = true;
+            store.hideModelsOverlay();
         }
     });
 

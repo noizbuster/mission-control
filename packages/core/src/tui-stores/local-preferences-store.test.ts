@@ -96,6 +96,24 @@ describe('TuiLocalPreferencesStore', () => {
     });
 });
 
+describe('TuiLocalPreferencesStore concurrency', () => {
+    it('serializes concurrent setUiToggle without dropping updates', async () => {
+        const { mkdtemp } = await import('node:fs/promises');
+        const { tmpdir } = await import('node:os');
+        const { join } = await import('node:path');
+        const dir = await mkdtemp(join(tmpdir(), 'mctrl-local-prefs-'));
+        const store = new TuiLocalPreferencesStore({ dataDir: dir });
+        await Promise.all([
+            store.setUiToggle({ key: 'a', value: true }),
+            store.setUiToggle({ key: 'b', value: true }),
+            store.setUiToggle({ key: 'c', value: false }),
+        ]);
+        const prefs = await store.getPreferences();
+        const keys = prefs.uiToggles.map((toggle) => toggle.key).sort();
+        expect(keys).toEqual(['a', 'b', 'c']);
+    });
+});
+
 function requireScope(scope: TuiStoreTestScope | undefined): TuiStoreTestScope {
     if (scope !== undefined) {
         return scope;

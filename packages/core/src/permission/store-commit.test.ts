@@ -76,6 +76,10 @@ function persistedRule(): PermissionRule {
     return { permission: 'patch', pattern: 'src/app.ts', decision: 'always', workspaceRoot: '/workspace' };
 }
 
+function ruleWithPattern(pattern: string): PermissionRule {
+    return { permission: 'patch', pattern, decision: 'always', workspaceRoot: '/workspace' };
+}
+
 async function tempRoot(roots: string[]): Promise<string> {
     const root = await mkdtemp(join(tmpdir(), 'mctrl-permission-store-commit-'));
     roots.push(root);
@@ -85,3 +89,25 @@ async function tempRoot(roots: string[]): Promise<string> {
 class PermissionStoreCommitTestError extends Error {
     readonly name = 'PermissionStoreCommitTestError';
 }
+
+describe('PermissionRuleStore concurrency', () => {
+    const roots: string[] = [];
+
+    afterEach(async () => {
+        await Promise.all(roots.map((root) => rm(root, { recursive: true, force: true })));
+        roots.length = 0;
+    });
+
+    it('serializes concurrent appendRules without dropping rules', async () => {
+        const dataDir = await tempRoot(roots);
+        const store = new PermissionRuleStore({ dataDir });
+        await Promise.all([
+            store.appendRules([ruleWithPattern('a')]),
+            store.appendRules([ruleWithPattern('b')]),
+            store.appendRules([ruleWithPattern('c')]),
+        ]);
+        const rules = await store.listRules('/workspace');
+        const patterns = rules.map((rule) => rule.pattern).sort();
+        expect(patterns).toEqual(['a', 'b', 'c']);
+    });
+});

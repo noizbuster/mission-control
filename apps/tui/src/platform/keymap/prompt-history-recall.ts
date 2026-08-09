@@ -28,6 +28,8 @@ export type PromptHistoryRecallLayerDeps = {
     readonly isCursorAtBufferStart: () => boolean;
     readonly isHistoryOpen: () => boolean;
     readonly hasHistoryEntries: () => boolean;
+    /** When false, history open/nav chords are suspended (decision overlays). */
+    readonly isEnabled?: () => boolean;
     readonly openPicker: () => void;
     readonly navigatePicker: (direction: HistoryPickerDirection) => void;
 };
@@ -63,7 +65,11 @@ export function registerPromptHistoryRecallLayers(
     };
     const offNavigation = keymap.registerLayer({
         priority: PROMPT_HISTORY_RECALL_PRIORITY,
-        enabled: () => deps.isTextareaFocused() && deps.isHistoryOpen() && deps.hasHistoryEntries(),
+        enabled: () =>
+            (deps.isEnabled?.() ?? true) &&
+            deps.isTextareaFocused() &&
+            deps.isHistoryOpen() &&
+            deps.hasHistoryEntries(),
         commands: [previous, next],
         bindings: [
             { key: 'up', cmd: previous.name },
@@ -73,6 +79,7 @@ export function registerPromptHistoryRecallLayers(
     const offStart = keymap.registerLayer({
         priority: PROMPT_HISTORY_RECALL_PRIORITY,
         enabled: () =>
+            (deps.isEnabled?.() ?? true) &&
             deps.isTextareaFocused() &&
             deps.isCursorAtBufferStart() &&
             !deps.isHistoryOpen() &&

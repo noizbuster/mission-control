@@ -3,32 +3,24 @@ import {
     BoulderStoreError,
     type BoulderWork,
     boulderFilePath,
+    enqueueBoulderWrite,
     readBoulder,
-    writeBoulder,
+    writeBoulderUnchained,
 } from './boulder-store';
 import { isNodeError } from '../util/node-error';
 import { type FileHandle, mkdir, open, rm } from 'node:fs/promises';
 import { dirname } from 'node:path';
-
-const mutationQueues = new Map<string, Promise<void>>();
 
 export async function mutateBoulderWork(
     root: string,
     workId: string,
     mutation: (work: BoulderWork) => BoulderWork,
 ): Promise<BoulderState> {
-    const key = boulderFilePath(root);
-    const previous = mutationQueues.get(key) ?? Promise.resolve();
-    let release = (): void => undefined;
-    const current = new Promise<void>((resolve) => {
-        release = resolve;
-    });
-    const tail = previous.catch(() => undefined).then(() => current);
-    mutationQueues.set(key, tail);
-
-    await previous.catch(() => undefined);
-    try {
-        return await withBoulderMutationLock(root, async () => {
+    // Share the process-local root chain with updateBoulderWork so mixed callers
+    // cannot last-write-win; keep the cross-process .lock around the RMW body.
+    return enqueueBoulderWrite(root, async () =>
+        withBoulderMutationLock(root, async () => {
+            const key = boulderFilePath(root);
             const state = await readBoulder(root);
             if (state === null) {
                 throw new BoulderStoreError(
@@ -49,13 +41,10 @@ export async function mutateBoulderWork(
                 ...state,
                 works: { ...state.works, [workId]: mutation(work) },
             };
-            await writeBoulder(root, updated);
+            await writeBoulderUnchained(root, updated);
             return updated;
-        });
-    } finally {
-        release();
-        if (mutationQueues.get(key) === tail) mutationQueues.delete(key);
-    }
+        }),
+    );
 }
 
 async function withBoulderMutationLock<Result>(root: string, operation: () => Promise<Result>): Promise<Result> {
@@ -83,5 +72,3 @@ async function withBoulderMutationLock<Result>(root: string, operation: () => Pr
         await rm(lockPath, { force: true });
     }
 }
-
-

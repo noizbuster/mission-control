@@ -8,6 +8,7 @@ import {
     updateBoulderWork,
     writeBoulder,
 } from './boulder-store';
+import { mutateBoulderWork } from './boulder-work-mutation';
 import {
     appendNotepad,
     assertAppendOnly,
@@ -542,5 +543,111 @@ describe('notepad-store appendNotepad', () => {
 
         // Then
         expect(secondSize).toBeGreaterThan(firstSize);
+    });
+});
+
+describe('notepad-store concurrency', () => {
+    it('serializes concurrent appendNotepad without dropping entries', async () => {
+        const root = makeTempRoot();
+        seedMcRoot(root);
+        const planName = 'demo-plan';
+        await Promise.all([
+            appendNotepad(planName, 'learnings', 'one', { root }),
+            appendNotepad(planName, 'learnings', 'two', { root }),
+            appendNotepad(planName, 'learnings', 'three', { root }),
+        ]);
+        const text = await readNotepad(root, planName, 'learnings');
+        expect(text).toContain('one');
+        expect(text).toContain('two');
+        expect(text).toContain('three');
+    });
+});
+
+describe('boulder-store concurrency', () => {
+    function sampleWork(overrides: Partial<BoulderWork> = {}): BoulderWork {
+        return {
+            work_id: 'work-1',
+            active_plan: '/tmp/plan.md',
+            plan_name: 'demo-plan',
+            status: 'active',
+            started_at: '2026-06-21T00:00:00.000Z',
+            updated_at: '2026-06-21T00:00:00.000Z',
+            session_ids: ['ses_1'],
+            session_origins: { ses_1: 'direct' },
+            task_sessions: {},
+            ...overrides,
+        };
+    }
+
+    function sampleState(overrides: Partial<BoulderState> = {}): BoulderState {
+        const work = sampleWork();
+        return {
+            schema_version: BOULDER_SCHEMA_VERSION,
+            active_work_id: work.work_id,
+            works: { [work.work_id]: work },
+            updated_at: '2026-06-21T00:00:00.000Z',
+            ...overrides,
+        };
+    }
+
+    it('serializes concurrent updateBoulderWork without dropping patch fields', async () => {
+        const root = makeTempRoot();
+        seedMcRoot(root);
+        await writeBoulder(root, sampleState());
+        await Promise.all([
+            updateBoulderWork(root, 'work-1', { plan_name: 'plan-a' }),
+            updateBoulderWork(root, 'work-1', { agent: 'agent-b' }),
+            updateBoulderWork(root, 'work-1', { status: 'completed' }),
+        ]);
+        const state = await readBoulder(root);
+        expect(state).not.toBeNull();
+        const work = state?.works['work-1'];
+        expect(work?.plan_name).toBe('plan-a');
+        expect(work?.agent).toBe('agent-b');
+        expect(work?.status).toBe('completed');
+    });
+});
+
+describe('boulder shared-chain concurrency', () => {
+    function sampleWork(overrides: Partial<BoulderWork> = {}): BoulderWork {
+        return {
+            work_id: 'work-1',
+            active_plan: '/tmp/plan.md',
+            plan_name: 'demo-plan',
+            status: 'active',
+            started_at: '2026-06-21T00:00:00.000Z',
+            updated_at: '2026-06-21T00:00:00.000Z',
+            session_ids: ['ses_1'],
+            session_origins: { ses_1: 'direct' },
+            task_sessions: {},
+            ...overrides,
+        };
+    }
+
+    function sampleState(overrides: Partial<BoulderState> = {}): BoulderState {
+        const work = sampleWork();
+        return {
+            schema_version: BOULDER_SCHEMA_VERSION,
+            active_work_id: work.work_id,
+            works: { [work.work_id]: work },
+            updated_at: '2026-06-21T00:00:00.000Z',
+            ...overrides,
+        };
+    }
+
+    it('serializes mixed updateBoulderWork and mutateBoulderWork on one root', async () => {
+        const root = makeTempRoot();
+        seedMcRoot(root);
+        await writeBoulder(root, sampleState());
+        await Promise.all([
+            updateBoulderWork(root, 'work-1', { plan_name: 'from-update' }),
+            mutateBoulderWork(root, 'work-1', (work) => ({ ...work, agent: 'from-mutate' })),
+            updateBoulderWork(root, 'work-1', { status: 'completed' }),
+        ]);
+        const state = await readBoulder(root);
+        const work = state?.works['work-1'];
+        expect(work?.plan_name).toBe('from-update');
+        expect(work?.agent).toBe('from-mutate');
+        expect(work?.status).toBe('completed');
     });
 });

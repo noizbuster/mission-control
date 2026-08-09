@@ -66,6 +66,22 @@ export class PlanScaffoldError extends McPersistenceError {
  * Create `.mc/drafts/<slug>.md` frontmatter stub + `.mc/plans/<slug>.md` skeleton.
  * No-op when the plan already has MC scaffold markers. Rejects invalid/escaping slugs.
  */
+/** Process-local per-planPath chains so concurrent scaffolds cannot clobber. */
+const scaffoldWriteChains = new Map<string, Promise<unknown>>();
+
+function enqueueScaffoldWrite<T>(path: string, task: () => Promise<T>): Promise<T> {
+    const previous = scaffoldWriteChains.get(path) ?? Promise.resolve();
+    const run = previous.then(task, task);
+    scaffoldWriteChains.set(
+        path,
+        run.then(
+            () => undefined,
+            () => undefined,
+        ),
+    );
+    return run;
+}
+
 export async function scaffoldPlanFiles(
     workspaceRoot: string,
     slug: string,
@@ -78,17 +94,19 @@ export async function scaffoldPlanFiles(
     assertInsideMc(root, draftPath);
     assertInsideMc(root, planPath);
 
-    const existingPlan = await readOptionalUtf8(planPath);
-    if (existingPlan !== undefined && hasScaffoldMarkers(existingPlan, slug)) {
-        return { created: false, reason: 'already_scaffolded', draftPath, planPath };
-    }
+    return enqueueScaffoldWrite(planPath, async () => {
+        const existingPlan = await readOptionalUtf8(planPath);
+        if (existingPlan !== undefined && hasScaffoldMarkers(existingPlan, slug)) {
+            return { created: false, reason: 'already_scaffolded', draftPath, planPath };
+        }
 
-    await ensureMcDirs(root, ['plans', 'drafts']);
-    await atomicWrite(planPath, formatPlanSkeleton(slug));
-    if ((await readOptionalUtf8(draftPath)) === undefined) {
-        await atomicWrite(draftPath, formatDraftFrontmatterBlock(slug, options));
-    }
-    return { created: true, reason: 'created', draftPath, planPath };
+        await ensureMcDirs(root, ['plans', 'drafts']);
+        await atomicWrite(planPath, formatPlanSkeleton(slug));
+        if ((await readOptionalUtf8(draftPath)) === undefined) {
+            await atomicWrite(draftPath, formatDraftFrontmatterBlock(slug, options));
+        }
+        return { created: true, reason: 'created', draftPath, planPath };
+    });
 }
 
 /** Detect existing MC/ulw scaffold markers (headers and/or Status + counted sections). */
@@ -222,5 +240,4 @@ async function atomicWrite(filePath: string, contents: string): Promise<void> {
         await rm(tempPath, { force: true }).catch(() => undefined);
     }
 }
-
 

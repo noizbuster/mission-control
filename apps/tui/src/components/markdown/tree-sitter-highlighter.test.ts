@@ -169,6 +169,36 @@ describe('highlightTreeSitter - sync entry point', () => {
         expect(highlightOnce).toHaveBeenCalledTimes(1);
     });
 
+    it('bounds distinct streaming-prefix parses and retains the newest deferred miss', async () => {
+        type HighlightResult = { readonly highlights: SimpleHighlight[] };
+        const completions: Array<(result: HighlightResult) => void> = [];
+        const { runtime, highlightOnce } = setupMockRuntime({ chunks: [] });
+        highlightOnce.mockImplementation((): Promise<HighlightResult> => {
+            const { promise, resolve } = Promise.withResolvers<HighlightResult>();
+            completions.push(resolve);
+            return promise;
+        });
+        setHighlighterRuntime(runtime);
+
+        highlightTreeSitter('const stream = 1', 'ts');
+        highlightTreeSitter('const stream = 12', 'ts');
+        highlightTreeSitter('const stream = 123', 'ts');
+        await flushPending();
+        expect(highlightOnce).toHaveBeenCalledTimes(2);
+
+        const first = completions[0];
+        if (first === undefined) throw new Error('first parse did not start');
+        first({ highlights: [] });
+        await flushPending();
+        expect(highlightOnce).toHaveBeenCalledTimes(3);
+        expect(highlightOnce).toHaveBeenLastCalledWith('const stream = 123', 'typescript');
+
+        for (const completion of completions.slice(1)) {
+            completion({ highlights: [] });
+        }
+        await flushPending();
+    });
+
     it('returns monochrome and does not schedule for an unsupported language', async () => {
         const { runtime, highlightOnce } = setupMockRuntime({ chunks: [] });
         setHighlighterRuntime(runtime);
@@ -306,6 +336,29 @@ describe('render-cache invalidation', () => {
         await flushPending();
 
         expect(clearRenderCache).not.toHaveBeenCalled();
+    });
+    it('coalesces invalidation when concurrent parses settle together', async () => {
+        type HighlightResult = { readonly highlights: SimpleHighlight[] };
+        const completions: Array<(result: HighlightResult) => void> = [];
+        const { runtime, highlightOnce } = setupMockRuntime({ chunks: [] });
+        highlightOnce.mockImplementation((): Promise<HighlightResult> => {
+            const { promise, resolve } = Promise.withResolvers<HighlightResult>();
+            completions.push(resolve);
+            return promise;
+        });
+        setHighlighterRuntime(runtime);
+
+        highlightTreeSitter('const first = 1', 'ts');
+        highlightTreeSitter('const second = 2', 'ts');
+        await flushPending();
+        expect(completions).toHaveLength(2);
+
+        for (const completion of completions) {
+            completion({ highlights: [] });
+        }
+        await flushPending();
+
+        expect(clearRenderCache).toHaveBeenCalledTimes(1);
     });
 });
 

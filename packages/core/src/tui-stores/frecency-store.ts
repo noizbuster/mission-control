@@ -21,12 +21,23 @@ export class TuiFrecencyStore {
     readonly filePath: string;
     private readonly maxEntries: number;
     private readonly now: () => number;
+    /** Serialize list→write RMW so concurrent recordAccess cannot drop counts. */
+    private writeChain: Promise<void> = Promise.resolve();
 
     constructor(options: TuiFrecencyStoreOptions = {}) {
         const dataDir = options.dataDir ?? resolveMissionControlDataDir();
         this.filePath = options.filePath ?? join(dataDir, 'tui', 'frecency.jsonl');
         this.maxEntries = options.maxEntries ?? TUI_FRECENCY_MAX_ENTRIES;
         this.now = options.now ?? Date.now;
+    }
+
+    private enqueue<T>(task: () => Promise<T>): Promise<T> {
+        const run = this.writeChain.then(task, task);
+        this.writeChain = run.then(
+            () => undefined,
+            () => undefined,
+        );
+        return run;
     }
 
     async listRecords(): Promise<readonly TuiFrecencyRecord[]> {
@@ -44,25 +55,29 @@ export class TuiFrecencyStore {
     }
 
     async recordAccess(key: string): Promise<TuiFrecencyRecord> {
-        const now = this.now();
-        const records = await this.listRecords();
-        const existing = records.find((record) => record.key === key);
-        const next = TuiFrecencyRecordSchema.parse({
-            key,
-            accessCount: (existing?.accessCount ?? 0) + 1,
-            firstSeenAt: existing?.firstSeenAt ?? now,
-            lastAccessedAt: now,
+        return this.enqueue(async () => {
+            const now = this.now();
+            const records = await this.listRecords();
+            const existing = records.find((record) => record.key === key);
+            const next = TuiFrecencyRecordSchema.parse({
+                key,
+                accessCount: (existing?.accessCount ?? 0) + 1,
+                firstSeenAt: existing?.firstSeenAt ?? now,
+                lastAccessedAt: now,
+            });
+            await this.writeRecords(
+                [...records.filter((record) => record.key !== key), next]
+                    .sort((left, right) => right.lastAccessedAt - left.lastAccessedAt)
+                    .slice(0, this.maxEntries),
+            );
+            return next;
         });
-        await this.writeRecords(
-            [...records.filter((record) => record.key !== key), next]
-                .sort((left, right) => right.lastAccessedAt - left.lastAccessedAt)
-                .slice(0, this.maxEntries),
-        );
-        return next;
     }
 
     async replaceRecords(records: readonly TuiFrecencyRecord[]): Promise<void> {
-        await this.writeRecords(retainLatestByKey(records).slice(0, this.maxEntries));
+        await this.enqueue(async () => {
+            await this.writeRecords(retainLatestByKey(records).slice(0, this.maxEntries));
+        });
     }
 
     private async writeRecords(records: readonly TuiFrecencyRecord[]): Promise<void> {

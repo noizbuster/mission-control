@@ -72,3 +72,28 @@ describe('approval-level-store', () => {
         expect(parsed.level).toBe('safe');
     });
 });
+
+describe('approval-level-store concurrency', () => {
+    beforeEach(async () => {
+        await resetTempDir();
+        // biome-ignore lint/complexity/useLiteralKeys: process.env index access
+        process.env['MCTRL_DATA_DIR'] = TEMP_DATA_DIR;
+    });
+
+    afterEach(async () => {
+        // biome-ignore lint/complexity/useLiteralKeys: process.env index access
+        delete process.env['MCTRL_DATA_DIR'];
+        await resetTempDir();
+    });
+
+    it('serializes concurrent savePersistedApprovalLevel without throwing', async () => {
+        await mkdir(TEMP_DATA_DIR, { recursive: true });
+        await Promise.all([
+            savePersistedApprovalLevel('safe'),
+            savePersistedApprovalLevel('aggressive'),
+            savePersistedApprovalLevel('reckless'),
+        ]);
+        const loaded = await loadPersistedApprovalLevel();
+        expect(['safe', 'aggressive', 'reckless']).toContain(loaded);
+    });
+});

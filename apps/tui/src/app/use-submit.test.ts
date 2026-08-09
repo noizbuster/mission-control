@@ -159,4 +159,74 @@ describe('useSubmit', () => {
         expect(setInputMirror).toHaveBeenCalledWith('$planner ');
         expect(textarea.clearCount).toBe(0);
     });
+
+    it('does not clear textarea when queue is closed', () => {
+        const store = createChatStore();
+        const textarea = createRecordingTextarea('keep me');
+        const textareaHandle = asTextareaRef(textarea);
+        store.closeEventQueue();
+        const submit = useSubmit({
+            store,
+            textareaHandle,
+            promptMenuInteractionsEnabled: () => true,
+        });
+        submit();
+        flushSubmitTimers();
+        expect(textarea.plainText).toBe('keep me');
+        expect(store.submitLine('x')).toBe(false);
+    });
+
+    it('drops a deferred menu completion after the event queue closes', () => {
+        const store = createChatStore();
+        const textarea = createRecordingTextarea('/mo');
+        const textareaHandle = asTextareaRef(textarea);
+        const submitLine = vi.spyOn(store, 'submitLine');
+        const setInputMirror = vi.spyOn(store, 'setInputMirror');
+        const submit = useSubmit({
+            store,
+            textareaHandle,
+            promptMenuInteractionsEnabled: () => true,
+        });
+
+        submit();
+        store.closeEventQueue();
+        flushSubmitTimers();
+
+        expect(submitLine).not.toHaveBeenCalled();
+        expect(setInputMirror).not.toHaveBeenCalled();
+        expect(textarea.setTextCalls).toHaveLength(0);
+        expect(textarea.plainText).toBe('/mo');
+    });
+
+    it('does not clear on /diff when openDiffViewer fails', () => {
+        const store = createChatStore();
+        const textarea = createRecordingTextarea('/diff');
+        const textareaHandle = asTextareaRef(textarea);
+        store.closeEventQueue();
+        const submit = useSubmit({
+            store,
+            textareaHandle,
+            promptMenuInteractionsEnabled: () => true,
+        });
+        submit();
+        flushSubmitTimers();
+        expect(textarea.plainText).toBe('/diff');
+    });
+
+    it('drops deferred submit after session switch', () => {
+        const store = createChatStore();
+        const textarea = createRecordingTextarea('from-old-session');
+        const textareaHandle = asTextareaRef(textarea);
+        const submitLine = vi.spyOn(store, 'submitLine');
+        const submit = useSubmit({
+            store,
+            textareaHandle,
+            promptMenuInteractionsEnabled: () => true,
+        });
+        submit();
+        store.setSessionId('switched-session');
+        flushSubmitTimers();
+        expect(submitLine).not.toHaveBeenCalled();
+        expect(textarea.plainText).toBe('from-old-session');
+    });
 });

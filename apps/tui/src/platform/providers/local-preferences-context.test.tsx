@@ -197,4 +197,29 @@ describe('TUI local preferences provider', () => {
 
         rendered.dispose();
     });
+
+    it('serializes concurrent context limit steps without losing updates', async () => {
+        const sel = selection('openai', 'gpt-5.5');
+        const catalogDefault = 128_000;
+
+        const concurrent = renderLocalProviderValues();
+        await flushSolidMount();
+        const results = await Promise.all([
+            concurrent.local.stepModelContextLimit(sel, 1, catalogDefault),
+            concurrent.local.stepModelContextLimit(sel, 1, catalogDefault),
+            concurrent.local.stepModelContextLimit(sel, 1, catalogDefault),
+        ]);
+        const concurrentLimit = results.at(-1)?.contextLimit;
+        concurrent.dispose();
+
+        const sequential = renderLocalProviderValues();
+        await flushSolidMount();
+        await sequential.local.stepModelContextLimit(sel, 1, catalogDefault);
+        await sequential.local.stepModelContextLimit(sel, 1, catalogDefault);
+        const expected = await sequential.local.stepModelContextLimit(sel, 1, catalogDefault);
+        sequential.dispose();
+
+        expect(concurrentLimit).toBeDefined();
+        expect(concurrentLimit).toBe(expected?.contextLimit);
+    });
 });

@@ -71,6 +71,37 @@ export function resetCrashGuardForTests(): void {
     activeSessionId = undefined;
 }
 
+type GlobalRestoreHost = typeof globalThis & {
+    __mcEmergencyTerminalRestore?: () => void;
+    __mcFlushPromptDraft?: () => void;
+};
+
+/** Best-effort TUI terminal restore via optional global hook (no static tui import). */
+function invokeEmergencyTerminalRestore(): void {
+    try {
+        const host = globalThis as GlobalRestoreHost;
+        const restore = host.__mcEmergencyTerminalRestore;
+        if (typeof restore === 'function') {
+            restore();
+        }
+    } catch {
+        // Crash path must never throw.
+    }
+}
+
+/** Best-effort flush of the in-flight prompt draft before process exit. */
+function invokePromptDraftFlush(): void {
+    try {
+        const host = globalThis as GlobalRestoreHost;
+        const flush = host.__mcFlushPromptDraft;
+        if (typeof flush === 'function') {
+            flush();
+        }
+    } catch {
+        // Crash path must never throw.
+    }
+}
+
 export function installCrashGuard(options: CrashGuardOptions): void {
     if (installed) return;
     installed = true;
@@ -87,6 +118,11 @@ function installRealListeners(handler: (kind: CrashKind, reason: unknown) => voi
 function handleFatal(kind: CrashKind, reason: unknown): void {
     if (handling) return;
     handling = true;
+    // Flush any in-flight prompt draft, then restore terminal modes before
+    // diagnostics so a crashed interactive TUI does not leave the parent shell
+    // unusable and the operator does not lose the half-typed prompt.
+    invokePromptDraftFlush();
+    invokeEmergencyTerminalRestore();
     const record = buildCrashRecord(kind, reason);
     writeCrashRecord(record);
     // Best-effort stderr mirror; the TUI may swallow this but non-TUI runs benefit.

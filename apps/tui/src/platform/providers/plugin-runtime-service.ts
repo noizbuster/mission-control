@@ -30,6 +30,9 @@ type RegisteredCommand = {
     readonly dispose: () => void;
 };
 
+/** Retain enough local history for diagnostics while bounding repeated plugin failures. */
+export const MAX_PLUGIN_DIAGNOSTICS = 100;
+
 type CreateTuiPluginRuntimeServiceInput = {
     readonly registry: TuiPluginHostRegistry;
     readonly manifestStore: TuiPluginManifestStoreLike;
@@ -50,7 +53,6 @@ export function createTuiPluginRuntimeService(input: CreateTuiPluginRuntimeServi
     const registeredCommands = new Map<string, RegisteredCommand>();
     const loadedPlugins = new Set<string>();
     let disposed = false;
-
     const ready = activatePlugins();
 
     onCleanup(() => {
@@ -58,7 +60,9 @@ export function createTuiPluginRuntimeService(input: CreateTuiPluginRuntimeServi
         for (const command of registeredCommands.values()) command.dispose();
         registeredCommands.clear();
         for (const pluginName of loadedPlugins) input.registry.disposePlugin(pluginName);
-        refreshSignals();
+        setSlots([]);
+        setRoutes([]);
+        setCommands([]);
     });
 
     async function activatePlugins(): Promise<void> {
@@ -66,32 +70,48 @@ export function createTuiPluginRuntimeService(input: CreateTuiPluginRuntimeServi
             source: 'user',
             manifest,
         })) satisfies readonly TuiPluginRuntimeDefinition[];
+        if (disposed) return;
         for (const plugin of [...storedPlugins, ...input.plugins]) {
+            if (disposed) return;
             await activatePlugin(plugin);
         }
         refreshSignals();
     }
 
     async function activatePlugin(plugin: TuiPluginRuntimeDefinition): Promise<void> {
+        if (disposed) return;
         const loadResult = await input.registry.loadManifest({ source: plugin.source, manifest: plugin.manifest });
+        if (disposed) {
+            if (loadResult.status === 'loaded') input.registry.disposePlugin(loadResult.manifest.name);
+            return;
+        }
         await recordDiagnostics(loadResult.diagnostics);
-        if (loadResult.status !== 'loaded' || disposed) {
+        if (disposed) {
+            if (loadResult.status === 'loaded') input.registry.disposePlugin(loadResult.manifest.name);
+            return;
+        }
+        if (loadResult.status !== 'loaded') {
             refreshSignals();
             return;
         }
         loadedPlugins.add(loadResult.manifest.name);
         await input.manifestStore.saveManifest(loadResult.manifest);
+        if (disposed) {
+            loadedPlugins.delete(loadResult.manifest.name);
+            input.registry.disposePlugin(loadResult.manifest.name);
+            return;
+        }
         if (plugin.setup !== undefined) {
             await runSetup(plugin.setup, createRuntimeApi(loadResult.manifest, loadResult.hostApi));
         }
         refreshSignals();
     }
-
     async function runSetup(setup: TuiPluginRuntimeDefinition['setup'], api: TuiPluginRuntimeApi): Promise<void> {
-        if (setup === undefined) return;
+        if (setup === undefined || disposed) return;
         try {
             await setup(api);
         } catch (error: unknown) {
+            if (disposed) return;
             if (error instanceof Error) {
                 await reportFailure(api.pluginName, 'plugin_setup_failed', error.message);
                 return;
@@ -106,17 +126,17 @@ export function createTuiPluginRuntimeService(input: CreateTuiPluginRuntimeServi
             pluginName: manifest.name,
             capabilities: hostApi.capabilities,
             registerSlot: (descriptor: TuiPluginSlotDescriptor) => {
-                if (!requireCapability(manifest.name, hostApi.capabilities, 'ui.slot')) return;
+                if (disposed || !requireCapability(manifest.name, hostApi.capabilities, 'ui.slot')) return;
                 hostApi.registerSlot(TuiPluginSlotDescriptorSchema.parse(descriptor));
                 refreshSignals();
             },
             registerRoute: (descriptor: TuiPluginRouteDescriptor) => {
-                if (!requireCapability(manifest.name, hostApi.capabilities, 'ui.route')) return;
+                if (disposed || !requireCapability(manifest.name, hostApi.capabilities, 'ui.route')) return;
                 hostApi.registerRoute(TuiPluginRouteDescriptorSchema.parse(descriptor));
                 refreshSignals();
             },
             registerCommand: (descriptor: TuiPluginCommandDescriptor, handler?: TuiPluginCommandHandler) => {
-                if (!requireCapability(manifest.name, hostApi.capabilities, 'ui.command')) return;
+                if (disposed || !requireCapability(manifest.name, hostApi.capabilities, 'ui.command')) return;
                 const parsed = TuiPluginCommandDescriptorSchema.parse(descriptor);
                 const handle = hostApi.registerCommand(parsed);
                 if (handler !== undefined) {
@@ -126,38 +146,43 @@ export function createTuiPluginRuntimeService(input: CreateTuiPluginRuntimeServi
             },
             kv: Object.freeze({
                 getString: (key: string) =>
-                    hasCapability(hostApi.capabilities, 'ui.kv')
+                    !disposed && hasCapability(hostApi.capabilities, 'ui.kv')
                         ? input.kvStore.getString(namespace, key)
                         : Promise.resolve(undefined),
                 setString: async (key: string, value: string) => {
-                    if (!requireCapability(manifest.name, hostApi.capabilities, 'ui.kv')) return;
+                    if (disposed || !requireCapability(manifest.name, hostApi.capabilities, 'ui.kv')) return;
                     await input.kvStore.setEntry(namespace, { key, schemaKey: 'string', value });
                 },
                 delete: async (key: string) => {
-                    if (!requireCapability(manifest.name, hostApi.capabilities, 'ui.kv')) return;
+                    if (disposed || !requireCapability(manifest.name, hostApi.capabilities, 'ui.kv')) return;
                     await input.kvStore.deleteEntry(namespace, key);
                 },
             }),
             dialog: Object.freeze({
                 open: (descriptor) =>
-                    requireCapability(manifest.name, hostApi.capabilities, 'ui.dialog')
+                    !disposed && requireCapability(manifest.name, hostApi.capabilities, 'ui.dialog')
                         ? input.dialog.open(descriptor)
                         : () => {},
-                close: input.dialog.close,
-                cancel: input.dialog.cancel,
+                close: () => {
+                    if (!disposed) input.dialog.close();
+                },
+                cancel: (source) =>
+                    !disposed ? input.dialog.cancel(source) : { kind: 'already-closed' as const, source },
             }),
             route: Object.freeze({
                 current: input.route.current,
                 setRoute: (route) => {
-                    if (!requireCapability(manifest.name, hostApi.capabilities, 'ui.route')) return;
+                    if (disposed || !requireCapability(manifest.name, hostApi.capabilities, 'ui.route')) return;
                     input.route.setRoute(route);
                 },
-                resetRoute: input.route.resetRoute,
+                resetRoute: () => {
+                    if (!disposed) input.route.resetRoute();
+                },
             }),
             theme: Object.freeze({
                 preference: input.theme.preference,
                 savePreference: (preference) =>
-                    requireCapability(manifest.name, hostApi.capabilities, 'ui.theme')
+                    !disposed && requireCapability(manifest.name, hostApi.capabilities, 'ui.theme')
                         ? input.theme.savePreference(preference)
                         : Promise.resolve({ kind: 'invalid-preference' as const }),
             }),
@@ -174,14 +199,19 @@ export function createTuiPluginRuntimeService(input: CreateTuiPluginRuntimeServi
         capabilities: readonly TuiPluginCapabilityId[],
         capability: TuiPluginCapabilityId,
     ): boolean {
-        if (hasCapability(capabilities, capability)) return true;
-        recordDiagnostic(
-            diagnostic(pluginName, 'warning', 'capability_required', `Capability required: ${capability}`),
-        );
-        return false;
+        if (disposed || !hasCapability(capabilities, capability)) {
+            if (!disposed) {
+                recordDiagnostic(
+                    diagnostic(pluginName, 'warning', 'capability_required', `Capability required: ${capability}`),
+                );
+            }
+            return false;
+        }
+        return true;
     }
 
     async function dispatchCommand(commandId: string): Promise<TuiPluginDispatchResult> {
+        if (disposed) return { kind: 'missing' };
         const command = registeredCommands.get(commandId);
         if (command === undefined) return { kind: 'missing' };
         try {
@@ -201,7 +231,9 @@ export function createTuiPluginRuntimeService(input: CreateTuiPluginRuntimeServi
     }
 
     async function reportFailure(pluginName: string, code: string, message: string): Promise<void> {
+        if (disposed) return;
         await recordDiagnostics([diagnostic(pluginName, 'error', code, message)]);
+        if (disposed) return;
         input.toast.show({ message: `Plugin ${pluginName} failed`, variant: 'error' });
     }
 
@@ -222,7 +254,8 @@ export function createTuiPluginRuntimeService(input: CreateTuiPluginRuntimeServi
     }
 
     function recordDiagnostic(diagnosticValue: TuiPluginDiagnostic): void {
-        setDiagnostics((current) => [...current, diagnosticValue]);
+        if (disposed) return;
+        setDiagnostics((current) => [...current, diagnosticValue].slice(-MAX_PLUGIN_DIAGNOSTICS));
         void input.manifestStore.appendDiagnostic(diagnosticValue);
     }
 
@@ -234,6 +267,7 @@ export function createTuiPluginRuntimeService(input: CreateTuiPluginRuntimeServi
     }
 
     function refreshSignals(): void {
+        if (disposed) return;
         setSlots(input.registry.listSlots());
         setRoutes(input.registry.listRoutes());
         setCommands(input.registry.listCommands());

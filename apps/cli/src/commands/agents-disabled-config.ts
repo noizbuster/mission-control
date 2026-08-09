@@ -34,6 +34,22 @@ type DisabledDoc = {
 
 const EMPTY_DOC: DisabledDoc = { disabled: [], version: DISABLED_CONFIG_VERSION, extra: {} };
 
+/** Process-local per-path chains so concurrent toggleDisabled RMW cannot drop names. */
+const writeChains = new Map<string, Promise<void>>();
+
+function enqueuePathWrite<T>(path: string, task: () => Promise<T>): Promise<T> {
+    const previous = writeChains.get(path) ?? Promise.resolve();
+    const run = previous.then(task, task);
+    writeChains.set(
+        path,
+        run.then(
+            () => undefined,
+            () => undefined,
+        ),
+    );
+    return run;
+}
+
 export function resolveDisabledConfigPath(options: DisabledConfigOptions): string {
     return options.disabledConfigPath ?? join(options.workspaceRoot, '.mctrl', 'agents.disabled');
 }
@@ -53,17 +69,20 @@ export async function toggleDisabled(
     name: string,
     action: 'add' | 'remove',
 ): Promise<ToggleOutcome> {
-    const doc = await readDisabledDoc(options);
-    const current = new Set(doc.disabled);
-    if (action === 'add') {
-        if (current.has(name)) return { alreadyDisabled: true, alreadyEnabled: false };
-        current.add(name);
-    } else {
-        if (!current.has(name)) return { alreadyDisabled: false, alreadyEnabled: true };
-        current.delete(name);
-    }
-    await writeDisabledDoc(options, { ...doc, disabled: [...current] });
-    return { alreadyDisabled: false, alreadyEnabled: false };
+    const path = resolveDisabledConfigPath(options);
+    return enqueuePathWrite(path, async () => {
+        const doc = await readDisabledDoc(options);
+        const current = new Set(doc.disabled);
+        if (action === 'add') {
+            if (current.has(name)) return { alreadyDisabled: true, alreadyEnabled: false };
+            current.add(name);
+        } else {
+            if (!current.has(name)) return { alreadyDisabled: false, alreadyEnabled: true };
+            current.delete(name);
+        }
+        await writeDisabledDoc(options, { ...doc, disabled: [...current] });
+        return { alreadyDisabled: false, alreadyEnabled: false };
+    });
 }
 
 async function readDisabledDoc(options: DisabledConfigOptions): Promise<DisabledDoc> {

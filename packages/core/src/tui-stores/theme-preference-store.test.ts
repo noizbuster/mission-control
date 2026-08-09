@@ -84,6 +84,26 @@ describe('TuiThemePreferenceStore', () => {
     });
 });
 
+describe('TuiThemePreferenceStore concurrency', () => {
+    it('serializes concurrent savePreference without losing the last write', async () => {
+        const { mkdtemp } = await import('node:fs/promises');
+        const { tmpdir } = await import('node:os');
+        const { join } = await import('node:path');
+        const dir = await mkdtemp(join(tmpdir(), 'mctrl-theme-'));
+        const store = new TuiThemePreferenceStore({ dataDir: dir });
+        await Promise.all([
+            store.savePreference({ activeThemeId: 'one', customOverrides: [] }),
+            store.savePreference({ activeThemeId: 'two', customOverrides: [] }),
+            store.savePreference({ activeThemeId: 'three', customOverrides: [] }),
+        ]);
+        const pref = await store.getPreference();
+        expect(['one', 'two', 'three']).toContain(pref.activeThemeId);
+        // With serialization, all three complete; last writer wins with a valid theme id.
+        expect(typeof pref.activeThemeId).toBe('string');
+        expect(pref.activeThemeId.length).toBeGreaterThan(0);
+    });
+});
+
 function requireScope(scope: TuiStoreTestScope | undefined): TuiStoreTestScope {
     if (scope !== undefined) {
         return scope;

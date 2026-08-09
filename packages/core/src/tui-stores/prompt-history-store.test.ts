@@ -93,3 +93,28 @@ function requireScope(scope: TuiStoreTestScope | undefined): TuiStoreTestScope {
     }
     throw new Error('test scope missing');
 }
+
+describe('TuiPromptHistoryStore concurrency', () => {
+    it('serializes concurrent appendText without dropping entries', async () => {
+        const { mkdtemp } = await import('node:fs/promises');
+        const { tmpdir } = await import('node:os');
+        const { join } = await import('node:path');
+        const dir = await mkdtemp(join(tmpdir(), 'mctrl-history-'));
+        let n = 0;
+        const store = new TuiPromptHistoryStore({
+            dataDir: dir,
+            now: () => 1000,
+            idFactory: () => {
+                n += 1;
+                return `id-${n}`;
+            },
+        });
+        await Promise.all([
+            store.appendText('one'),
+            store.appendText('two'),
+            store.appendText('three'),
+        ]);
+        const texts = await store.listTexts();
+        expect(texts).toEqual(['one', 'two', 'three']);
+    });
+});

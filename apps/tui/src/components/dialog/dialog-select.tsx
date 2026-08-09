@@ -139,7 +139,9 @@ export function DialogSelect<T>(props: DialogSelectProps<T>): JSX.Element {
         action.onTrigger(currentOption());
     }
 
+    let settled = false;
     useKeyboard((key) => {
+        if (settled) return;
         setInputMode('keyboard');
 
         if (key.name === 'up' || (key.ctrl && key.name === 'p')) {
@@ -174,6 +176,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>): JSX.Element {
         }
         if (key.name === 'return') {
             key.preventDefault();
+            settled = true;
             confirm();
             return;
         }
@@ -199,6 +202,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>): JSX.Element {
         }
         if (key.name === 'escape') {
             key.preventDefault();
+            settled = true;
             props.onCancel?.();
             return;
         }

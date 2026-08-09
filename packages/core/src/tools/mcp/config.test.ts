@@ -1154,6 +1154,44 @@ describe('T6 guardrail: .mcp.<profile>.json[c] project files are never read', ()
     });
 });
 
+describe('mcp config-writes concurrency', () => {
+    let dirs: TempDirs;
+
+    beforeEach(async () => {
+        dirs = await makeTempDirs();
+        await writeRaw(dirs.userConfigPath, JSON.stringify({ mcp: {} }));
+        await writeRaw(dirs.projectConfigPath, JSON.stringify({ mcpServers: {} }));
+    });
+
+    afterEach(async () => {
+        await rm(dirs.root, { recursive: true, force: true });
+    });
+
+    it('serializes concurrent writeUserMcpServer without dropping servers', async () => {
+        await Promise.all([
+            writeUserMcpServer(
+                'a',
+                { type: 'local', command: ['a-bin'] },
+                { userConfigPath: dirs.userConfigPath, projectConfigPath: dirs.projectConfigPath },
+            ),
+            writeUserMcpServer(
+                'b',
+                { type: 'local', command: ['b-bin'] },
+                { userConfigPath: dirs.userConfigPath, projectConfigPath: dirs.projectConfigPath },
+            ),
+            writeUserMcpServer(
+                'c',
+                { type: 'local', command: ['c-bin'] },
+                { userConfigPath: dirs.userConfigPath, projectConfigPath: dirs.projectConfigPath },
+            ),
+        ]);
+        const raw = JSON.parse(await readFile(dirs.userConfigPath, 'utf8')) as {
+            readonly mcp?: Record<string, unknown>;
+        };
+        expect(Object.keys(raw.mcp ?? {}).sort()).toEqual(['a', 'b', 'c']);
+    });
+});
+
 describe('session_debug config isolation', () => {
     let dirs: TempDirs;
 

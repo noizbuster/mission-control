@@ -5,6 +5,7 @@ import { createSignal } from 'solid-js';
 import { AbgOverlay } from './components/AbgOverlay';
 import { mountOpenTui, type OpenTuiMountResult } from './platform/opentui-renderer';
 import { createAbgOverlayStore, projectAgentEvent } from './state/index';
+import { planReplayStep } from './state/replay-step';
 
 export type ReplayOverlayOptions = {
     readonly sessionId: string;
@@ -17,22 +18,23 @@ const boldAttrs = { bold: true };
 const magentaFg = '#ff00ff';
 
 export async function runReplayOverlay(options: ReplayOverlayOptions): Promise<void> {
-    return new Promise<void>((resolve) => {
+    return new Promise<void>((resolve, reject) => {
         const store = createAbgOverlayStore();
         let cursor = 0;
         let done = false;
         let mountHandle: OpenTuiMountResult | undefined;
 
         const stepTo = (target: number): void => {
-            const clamped = Math.max(0, Math.min(target, options.envelopes.length));
-            cursor = clamped;
+            const plan = planReplayStep({
+                cursor,
+                target,
+                envelopeCount: options.envelopes.length,
+            });
+            cursor = plan.cursor;
             store.update((draft) => {
                 const snapshot = store.getSnapshot();
-                const next = { ...snapshot };
-                if (target < cursor) {
-                    Object.assign(next, resetStateForReplay());
-                }
-                for (let i = 0; i < clamped; i += 1) {
+                const next = plan.reset ? { ...snapshot, ...resetStateForReplay() } : { ...snapshot };
+                for (let i = plan.startIndex; i < plan.cursor; i += 1) {
                     const envelope = options.envelopes[i];
                     if (envelope === undefined) continue;
                     const patch = projectAgentEvent(next, envelope.event);
@@ -128,9 +130,14 @@ export async function runReplayOverlay(options: ReplayOverlayOptions): Promise<v
             );
         };
 
-        void mountOpenTui(() => <ReplayRoot />).then((handle) => {
-            mountHandle = handle;
-        });
+        void mountOpenTui(() => <ReplayRoot />).then(
+            (handle) => {
+                mountHandle = handle;
+            },
+            (error: unknown) => {
+                reject(error);
+            },
+        );
     });
 }
 

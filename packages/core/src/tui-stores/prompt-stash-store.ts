@@ -24,6 +24,8 @@ export class TuiPromptStashStore {
     private readonly maxEntries: number;
     private readonly now: () => number;
     private readonly idFactory: () => string;
+    /** Serialize list→write RMW so concurrent push/pop cannot drop entries. */
+    private writeChain: Promise<void> = Promise.resolve();
 
     constructor(options: TuiPromptStashStoreOptions = {}) {
         const dataDir = options.dataDir ?? resolveMissionControlDataDir();
@@ -41,28 +43,43 @@ export class TuiPromptStashStore {
     }
 
     async pushEntry(input: PushPromptStashEntryInput): Promise<TuiPromptStashEntry> {
-        const entry = TuiPromptStashEntrySchema.parse({
-            id: this.idFactory(),
-            text: input.text,
-            cursorOffset: input.cursorOffset,
-            timestamp: this.now(),
+        return this.enqueue(async () => {
+            const entry = TuiPromptStashEntrySchema.parse({
+                id: this.idFactory(),
+                text: input.text,
+                cursorOffset: input.cursorOffset,
+                timestamp: this.now(),
+            });
+            await this.writeEntries([...(await this.listEntries()), entry].slice(-this.maxEntries));
+            return entry;
         });
-        await this.writeEntries([...(await this.listEntries()), entry].slice(-this.maxEntries));
-        return entry;
     }
 
     async popEntry(): Promise<TuiPromptStashEntry | undefined> {
-        const entries = await this.listEntries();
-        const entry = entries.at(-1);
-        if (entry === undefined) {
-            return undefined;
-        }
-        await this.writeEntries(entries.slice(0, -1));
-        return entry;
+        return this.enqueue(async () => {
+            const entries = await this.listEntries();
+            const entry = entries.at(-1);
+            if (entry === undefined) {
+                return undefined;
+            }
+            await this.writeEntries(entries.slice(0, -1));
+            return entry;
+        });
     }
 
     async replaceEntries(entries: readonly TuiPromptStashEntry[]): Promise<void> {
-        await this.writeEntries(entries.slice(-this.maxEntries));
+        await this.enqueue(async () => {
+            await this.writeEntries(entries.slice(-this.maxEntries));
+        });
+    }
+
+    private enqueue<T>(task: () => Promise<T>): Promise<T> {
+        const run = this.writeChain.then(task, task);
+        this.writeChain = run.then(
+            () => undefined,
+            () => undefined,
+        );
+        return run;
     }
 
     private async writeEntries(entries: readonly TuiPromptStashEntry[]): Promise<void> {

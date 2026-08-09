@@ -96,6 +96,77 @@ describe('crash guard installCrashGuard', () => {
         stderr.mockRestore();
     });
 
+    it('flushes the optional prompt draft global before emergency restore and exit', () => {
+        const dataDir = freshDataDir();
+        let handler: ((kind: CrashKind, reason: unknown) => void) | undefined;
+        const order: string[] = [];
+        const host = globalThis as typeof globalThis & {
+            __mcEmergencyTerminalRestore?: () => void;
+            __mcFlushPromptDraft?: () => void;
+        };
+        const previousRestore = host.__mcEmergencyTerminalRestore;
+        const previousFlush = host.__mcFlushPromptDraft;
+        host.__mcFlushPromptDraft = () => {
+            order.push('flush');
+        };
+        host.__mcEmergencyTerminalRestore = () => {
+            order.push('restore');
+        };
+        const exit = vi.spyOn(process, 'exit').mockImplementation(() => {
+            throw new TestExit();
+        });
+        const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        try {
+            installCrashGuard({
+                dataDir,
+                installListeners: (h) => {
+                    handler = h;
+                },
+            });
+            expect(() => handler?.('uncaughtException', new Error('draft crash'))).toThrow(TestExit);
+            expect(order).toEqual(['flush', 'restore']);
+        } finally {
+            if (previousRestore === undefined) Reflect.deleteProperty(host, '__mcEmergencyTerminalRestore');
+            else host.__mcEmergencyTerminalRestore = previousRestore;
+            if (previousFlush === undefined) Reflect.deleteProperty(host, '__mcFlushPromptDraft');
+            else host.__mcFlushPromptDraft = previousFlush;
+            exit.mockRestore();
+            stderr.mockRestore();
+        }
+    });
+
+    it('invokes the optional emergency terminal restore global before exit', () => {
+        const dataDir = freshDataDir();
+        let handler: ((kind: CrashKind, reason: unknown) => void) | undefined;
+        const restore = vi.fn();
+        const host = globalThis as typeof globalThis & { __mcEmergencyTerminalRestore?: () => void };
+        const previous = host.__mcEmergencyTerminalRestore;
+        host.__mcEmergencyTerminalRestore = restore;
+        const exit = vi.spyOn(process, 'exit').mockImplementation(() => {
+            throw new TestExit();
+        });
+        const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+        try {
+            installCrashGuard({
+                dataDir,
+                installListeners: (h) => {
+                    handler = h;
+                },
+            });
+            expect(() => handler?.('uncaughtException', new Error('tui blew up'))).toThrow(TestExit);
+            expect(restore).toHaveBeenCalledTimes(1);
+        } finally {
+            if (previous === undefined) {
+                Reflect.deleteProperty(host, '__mcEmergencyTerminalRestore');
+            } else {
+                host.__mcEmergencyTerminalRestore = previous;
+            }
+            exit.mockRestore();
+            stderr.mockRestore();
+        }
+    });
+
     it('survives an unwritable data dir without throwing from the handler', () => {
         let handler: ((kind: CrashKind, reason: unknown) => void) | undefined;
         const exit = vi.spyOn(process, 'exit').mockImplementation(() => {

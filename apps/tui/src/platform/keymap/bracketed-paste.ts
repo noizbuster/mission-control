@@ -28,6 +28,8 @@ const utf8Decoder = new TextDecoder();
 export const PASTE_LINE_THRESHOLD = 10;
 /** Characters past which a paste collapses to a marker (oh-my-pi threshold). */
 export const PASTE_CHAR_THRESHOLD = 1000;
+/** Hard ceiling for a single paste payload (omp-aligned 64 MiB safety net). */
+export const PASTE_MAX_BYTES = 64 * 1024 * 1024;
 
 /** Decode paste bytes (UTF-8). Web-standard TextDecoder (Node + Bun). */
 export function decodePasteBytes(bytes: Uint8Array): string {
@@ -42,6 +44,11 @@ export function countLines(text: string): number {
 /** A paste is "marker-sized" when it exceeds the line OR char threshold. */
 export function isMarkerSized(text: string): boolean {
     return countLines(text) > PASTE_LINE_THRESHOLD || text.length > PASTE_CHAR_THRESHOLD;
+}
+
+/** Cap paste payload length to the hard safety ceiling. */
+export function clampPasteText(text: string): string {
+    return text.length > PASTE_MAX_BYTES ? text.slice(0, PASTE_MAX_BYTES) : text;
 }
 
 /**

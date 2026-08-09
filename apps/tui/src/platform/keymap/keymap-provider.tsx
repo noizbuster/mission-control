@@ -16,9 +16,17 @@ export function ChatKeymapProvider(props: ChatKeymapProviderProps): JSX.Element 
     const renderer = props.useRenderer();
     const keymap = createMemo<OpenTuiKeymap>(() => createKeymapInstance(renderer));
     const [paletteOpen, setPaletteOpen] = createSignal(false);
+    const [paletteCanOpen, setPaletteCanOpen] = createSignal(true);
     return (
         <KeymapProvider keymap={keymap()}>
-            <PaletteOpenContext.Provider value={{ open: paletteOpen, setOpen: setPaletteOpen }}>
+            <PaletteOpenContext.Provider
+                value={{
+                    open: paletteOpen,
+                    setOpen: setPaletteOpen,
+                    canOpen: paletteCanOpen,
+                    setCanOpen: setPaletteCanOpen,
+                }}
+            >
                 <ModeStackProvider>{props.children}</ModeStackProvider>
             </PaletteOpenContext.Provider>
         </KeymapProvider>

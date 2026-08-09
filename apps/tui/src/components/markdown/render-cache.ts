@@ -18,6 +18,8 @@ import type { TerminalMarkdownTheme } from './theme';
 export const CACHE_LIMIT = 64;
 
 const RENDER_CACHE: Map<string, readonly RenderBlock[]> = new Map();
+const THEME_CACHE_IDS = new WeakMap<TerminalMarkdownTheme, number>();
+let nextThemeCacheId = 1;
 
 /** Builds rendered blocks from raw markdown (injected to avoid a cycle). */
 export type BuildBlocksFn = (
@@ -27,10 +29,16 @@ export type BuildBlocksFn = (
     theme: TerminalMarkdownTheme,
 ) => readonly RenderBlock[];
 
-/** Cache key derived from the full input tuple. Stable for identical inputs. */
+/** Cache key derived from the full input tuple, including theme object identity. */
 export function renderCacheKey(text: string, width: number, streaming: boolean, theme: TerminalMarkdownTheme): string {
+    let themeCacheId = THEME_CACHE_IDS.get(theme);
+    if (themeCacheId === undefined) {
+        themeCacheId = nextThemeCacheId;
+        nextThemeCacheId += 1;
+        THEME_CACHE_IDS.set(theme, themeCacheId);
+    }
     const tag = theme.cacheKeyTag ?? 'c';
-    return `${tag}:${streaming ? 1 : 0}:${width}:${text}`;
+    return `${tag}-${themeCacheId}:${streaming ? 1 : 0}:${width}:${text}`;
 }
 
 /** Clear the render cache. Intended for test isolation. */

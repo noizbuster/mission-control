@@ -62,11 +62,15 @@ function readCreateChatTuiSource(): string {
 
 const CHAT_TUI_HANDLE_METHODS = [
     'waitForEvent',
+    'enqueueEvent',
     'emitOutput',
     'emitTranscriptPart',
     'replaceOutputText',
+    'undoLastViewExchange',
+    'redoLastViewExchange',
     'replaceTranscript',
     'getOutput',
+    'subscribeOutput',
     'showModelPicker',
     'showSessionPicker',
     'showAgentsDashboard',
@@ -283,10 +287,27 @@ describe('create-chat-tui', () => {
         expect(source).not.toContain("await import('@mission-control/tui/keymap-provider')");
     });
 
-    it('mounts App with store-only props and no external ref or chrome fan-out', () => {
+    it('releases pre-mount subscriptions and syntax resources when renderer mount fails', () => {
+        const source = readCreateChatTuiSource();
+        const mountTry = source.indexOf('try {\n        mountResult = await mountOpenTui');
+        const mountFailureCleanup = source.indexOf('unsubscribeRemount();', mountTry);
+        const normalUnmount = source.indexOf('const handle = createChatTuiHandle', mountTry);
+
+        expect(mountTry).toBeGreaterThanOrEqual(0);
+        expect(mountFailureCleanup).toBeGreaterThan(mountTry);
+        expect(mountFailureCleanup).toBeLessThan(normalUnmount);
+        const cleanup = source.slice(mountFailureCleanup, normalUnmount);
+        expect(cleanup).toContain('destroySharedSyntaxStyle();');
+        expect(cleanup).toContain('void closeTreeSitterClient();');
+        expect(cleanup).toContain('throw error;');
+    });
+
+    it('mounts App with store + soft-remount props and no external ref or chrome fan-out', () => {
         const source = readCreateChatTuiSource();
 
-        expect(source).toContain('createComponent(App, { store })');
+        expect(source).toContain('createComponent(App,');
+        expect(source).toContain('softRemount');
+        expect(source).toContain('remountGeneration');
         expect(source).not.toContain('textareaRef:');
         expect(source).not.toContain('scrollboxRef:');
         expect(source).not.toContain('statusBarProps');

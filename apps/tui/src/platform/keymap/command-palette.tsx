@@ -183,6 +183,8 @@ export interface CommandPaletteOverlayProps {
  */
 interface PaletteController {
     readonly keymap: OpenTuiKeymap;
+    readonly open: Accessor<boolean>;
+    readonly canOpen?: Accessor<boolean>;
     readonly setOpen: Setter<boolean>;
     readonly setSelected: Setter<number>;
     readonly filtered: Accessor<readonly PaletteListItem[]>;
@@ -214,6 +216,8 @@ export function CommandPaletteOverlay(props: CommandPaletteOverlayProps): JSX.El
 
     const controller: PaletteController = {
         keymap,
+        open,
+        canOpen: () => paletteState?.canOpen() ?? true,
         setOpen,
         setSelected,
         filtered,
@@ -231,6 +235,8 @@ export function CommandPaletteOverlay(props: CommandPaletteOverlayProps): JSX.El
     }));
 
     useBindings(() => ({
+        // Above chat.submit (100) so Enter selects a palette row, not prompt submit.
+        priority: 200,
         enabled: reactiveMatcherFromSignal(open),
         commands: [
             { name: 'palette.nav.up', run: () => moveSelection(controller, -1) },
@@ -273,6 +279,10 @@ export function CommandPaletteOverlay(props: CommandPaletteOverlayProps): JSX.El
 }
 
 function toggleOpen(controller: PaletteController): boolean {
+    // Closing is always allowed; opening requires canOpen (idle prompt).
+    if (!controller.open() && controller.canOpen?.() === false) {
+        return false;
+    }
     controller.setOpen((value) => !value);
     return true;
 }
@@ -289,6 +299,11 @@ function closePalette(controller: PaletteController): boolean {
 }
 
 function submitSelection(controller: PaletteController): boolean {
+    // One-frame race: modal may open before App effect closes the palette.
+    if (controller.canOpen?.() === false) {
+        controller.setOpen(false);
+        return false;
+    }
     const item = controller.filtered()[controller.selected()];
     if (item !== undefined) {
         switch (item.kind) {

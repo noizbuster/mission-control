@@ -25,6 +25,8 @@ export class TuiPromptHistoryStore {
     private readonly maxEntries: number;
     private readonly now: () => number;
     private readonly idFactory: () => string;
+    /** Serialize list→write RMW so concurrent appends cannot drop entries. */
+    private writeChain: Promise<void> = Promise.resolve();
 
     constructor(options: TuiPromptHistoryStoreOptions = {}) {
         const dataDir = options.dataDir ?? resolveMissionControlDataDir();
@@ -32,6 +34,15 @@ export class TuiPromptHistoryStore {
         this.maxEntries = options.maxEntries ?? TUI_PROMPT_HISTORY_MAX_ENTRIES;
         this.now = options.now ?? Date.now;
         this.idFactory = options.idFactory ?? randomUUID;
+    }
+
+    private enqueue<T>(task: () => Promise<T>): Promise<T> {
+        const run = this.writeChain.then(task, task);
+        this.writeChain = run.then(
+            () => undefined,
+            () => undefined,
+        );
+        return run;
     }
 
     async listEntries(): Promise<readonly TuiPromptHistoryEntry[]> {
@@ -46,17 +57,21 @@ export class TuiPromptHistoryStore {
         if (text.length === 0) {
             return undefined;
         }
-        const entries = await this.listEntries();
-        if (entries.at(-1)?.text === text) {
-            return undefined;
-        }
-        const entry = TuiPromptHistoryEntrySchema.parse({ id: this.idFactory(), text, timestamp: this.now() });
-        await this.writeFile({ entries: [...entries, entry].slice(-this.maxEntries) });
-        return entry;
+        return this.enqueue(async () => {
+            const entries = await this.listEntries();
+            if (entries.at(-1)?.text === text) {
+                return undefined;
+            }
+            const entry = TuiPromptHistoryEntrySchema.parse({ id: this.idFactory(), text, timestamp: this.now() });
+            await this.writeFile({ entries: [...entries, entry].slice(-this.maxEntries) });
+            return entry;
+        });
     }
 
     async replaceEntries(entries: readonly TuiPromptHistoryEntry[]): Promise<void> {
-        await this.writeFile({ entries: entries.slice(-this.maxEntries) });
+        await this.enqueue(async () => {
+            await this.writeFile({ entries: entries.slice(-this.maxEntries) });
+        });
     }
 
     private async readFile(): Promise<TypedPromptHistoryFile> {

@@ -31,6 +31,12 @@ Framework-free TUI state cluster: `ChatStore`, transcript parts, display sanitiz
 | `abg-overlay-state.ts` / `abg-overlay-controller.ts` / `abg-overlay-prefs-store.ts` | ABG overlay state/controller/prefs |
 | `tool-call-aggregation.ts` | Tool-call aggregate helpers |
 | `list-windowing.ts` | List windowing math |
+| `transcript-windowing.ts` | Sticky-bottom live transcript render window (default 80 rows) |
+| `stream-silence.ts` | Generating-path silence watchdog labels (30s warn) |
+| `context-pressure.ts` | Context fill warn/critical + overflow recovery notice copy |
+| `soft-remount.ts` | ErrorBoundary soft-remount generation + optional snapshot reload |
+| `transcript-row-metrics.ts` | Estimated row heights + height-budget window expansion |
+| `transcript-height-cache.ts` | Measured OpenTUI row heights overriding heuristics |
 | `separator-state.ts` | Separator UI state |
 | `model-capability.ts` | Model capability flags for UI |
 | `mission-services-types.ts` | `MissionControlServicesLike` structural type |

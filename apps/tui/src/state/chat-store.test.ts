@@ -12,6 +12,7 @@ import {
     createChatStore,
     createSessionPickerView,
     type DashboardAgentEntry,
+    FILE_AUTOCOMPLETE_DEBOUNCE_MS,
     type MissionPanelRow,
     type MissionPanelTab,
     type SessionPickerEntry,
@@ -377,6 +378,51 @@ describe('chat-store — typed transcript boundary (RED)', () => {
         expect(store.getOutput()).toBe('You: restored prompt\n');
     });
 
+    it('undoLastViewExchange keeps typed parts aligned with outputText', () => {
+        const store = createChatStore();
+        store.emitTranscriptPart({ id: 'user-1', type: 'user', text: 'first' }, 'You: first\n');
+        store.emitTranscriptPart(
+            { id: 'assistant-1', type: 'assistant', text: 'answer one' },
+            'Assistant: answer one\n',
+        );
+        store.emitTranscriptPart({ id: 'user-2', type: 'user', text: 'second' }, 'You: second\n');
+        store.emitTranscriptPart(
+            { id: 'assistant-2', type: 'assistant', text: 'answer two' },
+            'Assistant: answer two\n',
+        );
+
+        expect(store.undoLastViewExchange()).toBe('ok');
+        const snap = store.getSnapshot();
+        expect(snap.transcriptParts.map((part) => part.id)).toEqual(['user-1', 'assistant-1']);
+        expect(snap.outputText).toContain('You: first');
+        expect(snap.outputText).not.toContain('You: second');
+        expect(store.hasViewUndoStash()).toBe(true);
+
+        expect(store.redoLastViewExchange()).toBe('ok');
+        const restored = store.getSnapshot();
+        expect(restored.transcriptParts.map((part) => part.id)).toEqual([
+            'user-1',
+            'assistant-1',
+            'user-2',
+            'assistant-2',
+        ]);
+        expect(restored.outputText).toContain('You: second');
+        expect(store.hasViewUndoStash()).toBe(false);
+    });
+
+    it('undoLastViewExchange is single-level and blocked while generating', () => {
+        const store = createChatStore();
+        store.emitTranscriptPart({ id: 'user-1', type: 'user', text: 'q' }, 'You: q\n');
+        store.emitTranscriptPart({ id: 'assistant-1', type: 'assistant', text: 'a' }, 'Assistant: a\n');
+        expect(store.undoLastViewExchange()).toBe('ok');
+        expect(store.undoLastViewExchange()).toBe('already');
+        expect(store.redoLastViewExchange()).toBe('ok');
+        store.setGenerating(true);
+        expect(store.undoLastViewExchange()).toBe('generating');
+        store.setGenerating(false);
+        expect(store.undoLastViewExchange()).toBe('ok');
+    });
+
     it('submitLine records a typed user part while preserving the current user fallback', () => {
         // Given: a fresh store and an ordinary user submission.
         const store = createChatStore();
@@ -565,30 +611,30 @@ describe('chat-store — typed streaming publication', () => {
         ]);
     });
 
-    it.each(['completed', 'failed'] as const)(
-        'publishes %s parts immediately and cancels the streaming timer',
-        (status) => {
-            const store = createChatStore();
-            const listener = vi.fn();
-            store.subscribe(listener);
-            store.emitTranscriptPart(
-                { id: 'assistant-terminal', type: 'assistant', text: 'hel', status: 'streaming' },
-                'Assistant: hel',
-            );
+    it.each([
+        'completed',
+        'failed',
+    ] as const)('publishes %s parts immediately and cancels the streaming timer', (status) => {
+        const store = createChatStore();
+        const listener = vi.fn();
+        store.subscribe(listener);
+        store.emitTranscriptPart(
+            { id: 'assistant-terminal', type: 'assistant', text: 'hel', status: 'streaming' },
+            'Assistant: hel',
+        );
 
-            store.emitTranscriptPart({ id: 'assistant-terminal', type: 'assistant', text: 'hello', status }, 'lo\n');
+        store.emitTranscriptPart({ id: 'assistant-terminal', type: 'assistant', text: 'hello', status }, 'lo\n');
 
-            expect(listener).toHaveBeenCalledTimes(1);
-            expect(vi.getTimerCount()).toBe(0);
-            expect(store.getOutput()).toBe('Assistant: hello\n');
-            expect(store.getSnapshot().transcriptParts).toEqual([
-                { id: 'assistant-terminal', type: 'assistant', text: 'hello', status },
-            ]);
+        expect(listener).toHaveBeenCalledTimes(1);
+        expect(vi.getTimerCount()).toBe(0);
+        expect(store.getOutput()).toBe('Assistant: hello\n');
+        expect(store.getSnapshot().transcriptParts).toEqual([
+            { id: 'assistant-terminal', type: 'assistant', text: 'hello', status },
+        ]);
 
-            vi.advanceTimersByTime(50);
-            expect(listener).toHaveBeenCalledTimes(1);
-        },
-    );
+        vi.advanceTimersByTime(50);
+        expect(listener).toHaveBeenCalledTimes(1);
+    });
 
     it('publishes an output replacement immediately and cancels the streaming timer', () => {
         const store = createChatStore();
@@ -1416,6 +1462,58 @@ describe('chat-store — menus', () => {
     });
 });
 
+describe('chat-store — debounced file autocomplete', () => {
+    it('coalesces path input and applies only the current prefix', () => {
+        vi.useFakeTimers();
+        try {
+            const store = createChatStore();
+            store.setInputMirror('@app');
+            expect(store.getSnapshot().fileAutocomplete.open).toBe(false);
+            vi.advanceTimersByTime(FILE_AUTOCOMPLETE_DEBOUNCE_MS - 1);
+            expect(store.getSnapshot().fileAutocomplete.open).toBe(false);
+
+            store.setInputMirror('@pack');
+            vi.advanceTimersByTime(FILE_AUTOCOMPLETE_DEBOUNCE_MS);
+
+            const autocomplete = store.getSnapshot().fileAutocomplete;
+            expect(autocomplete.prefix).toBe('pack');
+            expect(autocomplete.matches.some((match) => match.name === 'packages')).toBe(true);
+            expect(autocomplete.matches.some((match) => match.name === 'apps')).toBe(false);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('resolves the current prefix immediately for an explicit completion', () => {
+        vi.useFakeTimers();
+        try {
+            const store = createChatStore();
+            store.setInputMirror('@app');
+            store.ensureFileAutocompleteCurrent();
+
+            const autocomplete = store.getSnapshot().fileAutocomplete;
+            expect(autocomplete.open).toBe(true);
+            expect(autocomplete.prefix).toBe('app');
+            expect(autocomplete.matches.some((match) => match.name === 'apps')).toBe(true);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('cancels a pending scan when the input queue closes', () => {
+        vi.useFakeTimers();
+        try {
+            const store = createChatStore();
+            store.setInputMirror('@app');
+            store.closeEventQueue();
+            vi.runAllTimers();
+            expect(store.getSnapshot().fileAutocomplete.open).toBe(false);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+});
+
 describe('chat-store — status actions', () => {
     it('setGenerating, setAgentStatus, clearAgentStatus update state', () => {
         const store = createChatStore();
@@ -1444,6 +1542,30 @@ describe('chat-store — status actions', () => {
         store.setModelCycleChoices([makeChoice('a'), makeChoice('b'), makeChoice('c')]);
         store.setModelCycleChoices([makeChoice('only')]);
         expect(store.getSnapshot().modelCycleIndex).toBe(0);
+    });
+});
+
+describe('chat-store — live history truncation notice', () => {
+    it('sets a sticky notice when transcript parts exceed the live cap', () => {
+        const store = createChatStore();
+        for (let i = 0; i < 501; i += 1) {
+            store.emitTranscriptPart({ id: `status-${i}`, type: 'status', text: `row-${i}` }, `status-${i}\n`);
+        }
+        expect(store.getSnapshot().transcriptParts.length).toBe(500);
+        expect(store.getSnapshot().stickyNotice).toContain('Live view truncated');
+    });
+});
+
+describe('chat-store — session switch clears context usage', () => {
+    it('clears used/cache counters when the session id changes', () => {
+        const store = createChatStore();
+        store.setSessionId('session_a');
+        store.setContextTokensUsed(12345);
+        store.setContextCacheUsage({ inputTokens: 12000, cacheReadTokens: 8000 });
+        store.setSessionId('session_b');
+        expect(store.getSnapshot().contextTokensUsed).toBeUndefined();
+        expect(store.getSnapshot().contextCacheUsage).toBeUndefined();
+        expect(store.getSnapshot().sessionId).toBe('session_b');
     });
 });
 
@@ -2485,7 +2607,6 @@ describe('chat-store — history picker + timestamped entries', () => {
         expect(store.isHistoryPickerOpen()).toBe(true);
     });
 
-
     it('cancelHistoryPicker closes without changing inputMirror', () => {
         const store = createChatStore({
             initialHistoryEntries: [makeHistoryEntry('a', 'only', 1)],
@@ -2529,7 +2650,7 @@ describe('chat-store — history picker + timestamped entries', () => {
         expect(store.getSnapshot().historyPicker).toEqual(before);
     });
 
-    it('setHistoryEntries replaces the list and closes an open picker', () => {
+    it('setHistoryEntries replaces the list and preserves an open picker', () => {
         const store = createChatStore({
             initialHistoryEntries: [makeHistoryEntry('a', 'old', 1)],
         });
@@ -2537,7 +2658,7 @@ describe('chat-store — history picker + timestamped entries', () => {
         store.setHistoryEntries([makeHistoryEntry('b', 'one', 10), makeHistoryEntry('c', 'two', 20)]);
         const snapshot = store.getSnapshot();
         expect(snapshot.historyEntries.map((entry) => entry.text)).toEqual(['one', 'two']);
-        expect(snapshot.historyPicker.open).toBe(false);
+        expect(snapshot.historyPicker.open).toBe(true);
         expect(snapshot.historyPickerView.total).toBe(2);
     });
 
@@ -2843,5 +2964,1014 @@ describe('ChatStore orphaned tool preview reconciliation', () => {
         const parts = store.getSnapshot().transcriptParts;
         expect(parts).toHaveLength(2);
         expect(parts.every((part) => statusOf(part) === 'completed')).toBe(true);
+    });
+});
+
+describe('chat-store — stream silence activity clock', () => {
+    it('stamps lastStreamActivityAt when generating starts and clears when it stops', () => {
+        const store = createChatStore();
+        expect(store.getSnapshot().lastStreamActivityAt).toBeUndefined();
+        store.setGenerating(true);
+        const first = store.getSnapshot().lastStreamActivityAt;
+        expect(typeof first).toBe('number');
+        store.emitOutput('token\n');
+        const second = store.getSnapshot().lastStreamActivityAt;
+        expect(typeof second).toBe('number');
+        expect(second).toBeGreaterThanOrEqual(first ?? 0);
+        store.setGenerating(false);
+        expect(store.getSnapshot().lastStreamActivityAt).toBeUndefined();
+    });
+});
+
+describe('chat-store — context pressure notices', () => {
+    it('sets a sticky /compact notice when fill crosses the critical threshold', () => {
+        const store = createChatStore();
+        store.setContextTokensMax(100_000);
+        store.setContextTokensUsed(95_000);
+        expect(store.getSnapshot().stickyNotice).toContain('/compact');
+        expect(store.getSnapshot().stickyNotice).toContain('nearly full');
+    });
+
+    it('sets an overflow recovery notice when overflow error text is emitted', () => {
+        const store = createChatStore();
+        store.emitTranscriptFallback('Error: context length exceeded\n');
+        expect(store.getSnapshot().stickyNotice).toContain('Context overflow');
+        expect(store.getSnapshot().stickyNotice).toContain('/compact');
+    });
+});
+
+describe('chat-store — setSessionId prompt isolation', () => {
+    it('setSessionId clears the in-flight prompt buffer and menus', () => {
+        const store = createChatStore();
+        store.setInputMirror('half typed draft');
+        store.setSessionId('session_next');
+        expect(store.getSnapshot().sessionId).toBe('session_next');
+        expect(store.getSnapshot().inputMirror).toBe('');
+    });
+});
+
+describe('chat-store — undo overlay gate', () => {
+    it('undoLastViewExchange is blocked while an overlay is open', () => {
+        const store = createChatStore();
+        store.emitTranscriptPart({ id: 'u1', type: 'user', text: 'hi' }, 'You: hi\n');
+        store.emitTranscriptPart({ id: 'a1', type: 'assistant', text: 'yo' }, 'Assistant: yo\n');
+        store.toggleDiagnosticsOverlay();
+        expect(store.getSnapshot().overlayMode).toBe('diagnostics');
+        expect(store.undoLastViewExchange()).toBe('blocked');
+        store.hideDiagnosticsOverlay();
+        expect(store.undoLastViewExchange()).toBe('ok');
+    });
+
+    it('redoLastViewExchange is blocked while an overlay is open', () => {
+        const store = createChatStore();
+        store.emitTranscriptPart({ id: 'u1', type: 'user', text: 'hi' }, 'You: hi\n');
+        store.emitTranscriptPart({ id: 'a1', type: 'assistant', text: 'yo' }, 'Assistant: yo\n');
+        expect(store.undoLastViewExchange()).toBe('ok');
+        store.toggleDiagnosticsOverlay();
+        expect(store.redoLastViewExchange()).toBe('blocked');
+        store.hideDiagnosticsOverlay();
+        expect(store.redoLastViewExchange()).toBe('ok');
+    });
+
+    it('redoLastViewExchange is blocked while generating', () => {
+        const store = createChatStore();
+        store.emitTranscriptPart({ id: 'u1', type: 'user', text: 'hi' }, 'You: hi\n');
+        store.emitTranscriptPart({ id: 'a1', type: 'assistant', text: 'yo' }, 'Assistant: yo\n');
+        expect(store.undoLastViewExchange()).toBe('ok');
+        store.setGenerating(true);
+        expect(store.redoLastViewExchange()).toBe('generating');
+        store.setGenerating(false);
+        expect(store.redoLastViewExchange()).toBe('ok');
+    });
+});
+
+describe('chat-store — setSessionId clears view undo stash', () => {
+    it('drops stashed exchange so redo cannot leak across sessions', () => {
+        const store = createChatStore();
+        store.setSessionId('s1');
+        store.emitTranscriptPart({ id: 'u1', type: 'user', text: 'hi' }, 'You: hi\n');
+        store.emitTranscriptPart({ id: 'a1', type: 'assistant', text: 'yo' }, 'Assistant: yo\n');
+        expect(store.undoLastViewExchange()).toBe('ok');
+        expect(store.hasViewUndoStash()).toBe(true);
+        store.setSessionId('s2');
+        expect(store.hasViewUndoStash()).toBe(false);
+        expect(store.redoLastViewExchange()).toBe('empty');
+    });
+
+    it('same session id does not drop view undo stash', () => {
+        const store = createChatStore();
+        store.setSessionId('s1');
+        store.emitTranscriptPart({ id: 'u1', type: 'user', text: 'hi' }, 'You: hi\n');
+        store.emitTranscriptPart({ id: 'a1', type: 'assistant', text: 'yo' }, 'Assistant: yo\n');
+        expect(store.undoLastViewExchange()).toBe('ok');
+        expect(store.hasViewUndoStash()).toBe(true);
+        // CLI loop re-pushes setSessionId after actions with the same id.
+        store.setSessionId('s1');
+        expect(store.hasViewUndoStash()).toBe(true);
+        expect(store.redoLastViewExchange()).toBe('ok');
+    });
+});
+
+describe('chat-store — enqueueEvent acceptance', () => {
+    it('enqueueEvent returns false after closeEventQueue', () => {
+        const store = createChatStore();
+        store.closeEventQueue();
+        expect(store.enqueueEvent({ type: 'line', value: 'ignored' })).toBe(false);
+    });
+
+    it('enqueueEvent returns true while open', () => {
+        const store = createChatStore();
+        expect(store.enqueueEvent({ type: 'line', value: 'hello' })).toBe(true);
+    });
+});
+
+describe('chat-store — closed queue submit', () => {
+    it('submitLine is a no-op after closeEventQueue', () => {
+        const store = createChatStore();
+        store.closeEventQueue();
+        store.submitLine('hello after close');
+        expect(store.getSnapshot().outputText).not.toContain('hello after close');
+        expect(store.getSnapshot().transcriptParts.some((part) => part.type === 'user')).toBe(false);
+    });
+});
+
+describe('chat-store — approval enqueue fail-closed', () => {
+    it('confirmApproval is a no-op after closeEventQueue teardown', () => {
+        const store = createChatStore();
+        store.showApproval('bash', 'run rm');
+        expect(store.getSnapshot().overlayMode).toBe('approval');
+        // Teardown clears the approval overlay and closes the queue.
+        store.closeEventQueue();
+        expect(store.getSnapshot().overlayMode).toBe('none');
+        store.confirmApproval();
+        expect(store.getSnapshot().overlayMode).toBe('none');
+    });
+
+    it('denyApproval is a no-op after closeEventQueue teardown', () => {
+        const store = createChatStore();
+        store.showApproval('bash', 'run rm');
+        store.closeEventQueue();
+        expect(store.getSnapshot().overlayMode).toBe('none');
+        store.denyApproval();
+        expect(store.getSnapshot().overlayMode).toBe('none');
+    });
+});
+
+describe('chat-store — teardown cancels overlay promises', () => {
+    it('closeEventQueue resolves pending question promises', async () => {
+        const store = createChatStore();
+        const pending = store.showQuestion('Continue?', ['yes', 'no']);
+        expect(store.getSnapshot().overlayMode).toBe('question');
+        store.closeEventQueue();
+        await expect(pending).resolves.toBe('');
+        expect(store.getSnapshot().overlayMode).toBe('none');
+    });
+
+    it('closeEventQueue resolves pending model picker promises as undefined', async () => {
+        const store = createChatStore();
+        const pending = store.showModelPicker([{ providerID: 'openai', modelID: 'gpt', label: 'gpt' }] as never);
+        expect(store.getSnapshot().overlayMode).toBe('model-picker');
+        store.closeEventQueue();
+        await expect(pending).resolves.toBeUndefined();
+        expect(store.getSnapshot().overlayMode).toBe('none');
+    });
+
+    it('closeEventQueue resolves pending session picker promises as undefined', async () => {
+        const store = createChatStore();
+        const pending = store.showSessionPicker([{ sessionId: 's1', label: 'one' }] as never);
+        expect(store.getSnapshot().overlayMode).toBe('session-picker');
+        store.closeEventQueue();
+        await expect(pending).resolves.toBeUndefined();
+        expect(store.getSnapshot().overlayMode).toBe('none');
+    });
+
+    it('closeEventQueue resolves pending level picker promises as undefined', async () => {
+        const store = createChatStore();
+        const pending = store.showLevelPicker('default');
+        expect(store.getSnapshot().overlayMode).toBe('level-picker');
+        store.closeEventQueue();
+        await expect(pending).resolves.toBeUndefined();
+        expect(store.getSnapshot().overlayMode).toBe('none');
+    });
+
+    it('closeEventQueue clears approval overlay without hanging', () => {
+        const store = createChatStore();
+        store.showApproval('bash', 'rm -rf');
+        expect(store.getSnapshot().overlayMode).toBe('approval');
+        store.closeEventQueue();
+        expect(store.getSnapshot().overlayMode).toBe('none');
+    });
+});
+
+describe('chat-store — confirmApproval selectedIndex', () => {
+    it('confirmApproval(selectedIndex) enqueues that option before closing', async () => {
+        const store = createChatStore();
+        store.showApproval('bash', 'rm');
+        const pending = store.waitForEvent();
+        store.confirmApproval(3); // deny
+        const event = await pending;
+        expect(event).toEqual({ type: 'line', value: 'deny' });
+        expect(store.getSnapshot().overlayMode).toBe('none');
+    });
+});
+
+describe('chat-store — show* after closeEventQueue', () => {
+    it('show* after closeEventQueue does not hang or reopen overlays', async () => {
+        const store = createChatStore();
+        store.closeEventQueue();
+        await expect(store.showModelPicker([makeChoice('gpt')])).resolves.toBeUndefined();
+        await expect(
+            store.showSessionPicker([{ sessionId: 's1', label: 'one', messageCount: 0, status: 'ok' }]),
+        ).resolves.toBeUndefined();
+        await expect(store.showLevelPicker('default')).resolves.toBeUndefined();
+        await expect(store.showQuestion('Q?', ['a', 'b'])).resolves.toBe('');
+        await expect(
+            store.showQuestionBatch([{ question: 'Q?', options: [{ label: 'a' }], header: '', multiple: false }]),
+        ).resolves.toEqual(['']);
+        store.showApproval('bash', 'rm');
+        store.showRename();
+        expect(store.getSnapshot().overlayMode).toBe('none');
+    });
+});
+
+describe('chat-store — approval double submit', () => {
+    it('second confirmApproval is ignored after overlay closes', async () => {
+        const store = createChatStore();
+        store.showApproval('bash', 'rm');
+        const first = store.waitForEvent();
+        store.confirmApproval(0);
+        await expect(first).resolves.toEqual({ type: 'line', value: 'once' });
+        expect(store.getSnapshot().overlayMode).toBe('none');
+        const second = store.waitForEvent();
+        store.confirmApproval(0);
+        // Must not enqueue another decision; leave waiter parked until close.
+        store.closeEventQueue();
+        await expect(second).resolves.toEqual({ type: 'interrupt' });
+    });
+});
+
+describe('chat-store — question reject idempotent', () => {
+    it('rejectQuestion is idempotent under double cancel', async () => {
+        const store = createChatStore();
+        const pending = store.showQuestion('Continue?', ['yes', 'no']);
+        expect(store.rejectQuestion()).toBe(true);
+        await expect(pending).resolves.toBe('');
+        expect(store.rejectQuestion()).toBe(false);
+        expect(store.getSnapshot().overlayMode).toBe('none');
+    });
+});
+
+describe('chat-store — rename/custom answer idempotent', () => {
+    it('submitRename is idempotent after first submit', () => {
+        const store = createChatStore();
+        const calls: string[] = [];
+        store.onRenameSubmit = (name) => {
+            calls.push(name);
+        };
+        store.showRename();
+        store.submitRename('alpha');
+        store.submitRename('beta');
+        expect(calls).toEqual(['alpha']);
+        expect(store.getSnapshot().overlayMode).toBe('none');
+    });
+
+    it('hideApproval is a no-op when not in approval overlay', () => {
+        const store = createChatStore();
+        store.hideApproval();
+        expect(store.getSnapshot().overlayMode).toBe('none');
+        store.showApproval('bash', 'rm');
+        store.hideApproval();
+        expect(store.getSnapshot().overlayMode).toBe('none');
+        store.hideApproval();
+        expect(store.getSnapshot().overlayMode).toBe('none');
+    });
+});
+
+describe('chat-store — notices after close', () => {
+    it('showTransientNotice is a no-op after closeEventQueue', () => {
+        const store = createChatStore();
+        store.closeEventQueue();
+        store.showTransientNotice('should not show');
+        expect(store.getSnapshot().transientNotice).toBeNull();
+    });
+});
+
+describe('chat-store — question helpers outside overlay', () => {
+    it('selectQuestionByClick is a no-op outside question overlay', async () => {
+        const store = createChatStore();
+        const pending = store.showQuestion('Q?', ['a', 'b']);
+        expect(store.rejectQuestion()).toBe(true);
+        await pending;
+        store.selectQuestionByClick(0);
+        store.enterQuestionCustomMode();
+        store.toggleQuestionOption();
+        expect(store.getSnapshot().overlayMode).toBe('none');
+        expect(store.getSnapshot().questionCustomMode).toBe(false);
+    });
+});
+
+describe('chat-store competing overlay dismiss', () => {
+    it('denies approval when opening a model picker', async () => {
+        const store = createChatStore();
+        store.showApproval('bash', 'rm -rf /');
+        expect(store.getSnapshot().overlayMode).toBe('approval');
+        const wait = store.waitForEvent();
+        const pick = store.showModelPicker([makeChoice('a')]);
+        expect(store.getSnapshot().overlayMode).toBe('model-picker');
+        await expect(wait).resolves.toEqual({ type: 'line', value: 'deny' });
+        store.hideModelPicker(undefined);
+        await expect(pick).resolves.toBeUndefined();
+        store.closeEventQueue();
+    });
+
+    it('cancels rename when opening a question', async () => {
+        const store = createChatStore();
+        store.showRename();
+        expect(store.getSnapshot().overlayMode).toBe('rename');
+        const q = store.showQuestion('Q?', ['a', 'b']);
+        expect(store.getSnapshot().overlayMode).toBe('question');
+        store.rejectQuestion();
+        await expect(q).resolves.toBe('');
+        store.closeEventQueue();
+    });
+
+    it('ignores view overlays after the event queue closes', () => {
+        const store = createChatStore();
+        store.closeEventQueue();
+        store.toggleAbgOverlay();
+        store.openDiffViewer([{ title: 'a.ts', diff: '+x', lines: [] }]);
+        store.showModelsOverlay([], []);
+        expect(store.getSnapshot().overlayMode).toBe('none');
+        expect(store.getSnapshot().modelsOverlay.active).toBe(false);
+    });
+});
+
+describe('chat-store agents/mission closed gates', () => {
+    it('ignores agents dashboard and mission panel after close', () => {
+        const store = createChatStore();
+        store.closeEventQueue();
+        store.showAgentsDashboard([]);
+        store.showMissionPanel([]);
+        expect(store.getSnapshot().agentsDashboard.active).toBe(false);
+        expect(store.getSnapshot().missionPanel.active).toBe(false);
+    });
+
+    it('clears active agents/mission panels on closeEventQueue', () => {
+        const store = createChatStore();
+        store.showAgentsDashboard([]);
+        expect(store.getSnapshot().agentsDashboard.active).toBe(true);
+        store.closeEventQueue();
+        expect(store.getSnapshot().agentsDashboard.active).toBe(false);
+
+        const store2 = createChatStore();
+        store2.showMissionPanel([]);
+        expect(store2.getSnapshot().missionPanel.active).toBe(true);
+        store2.closeEventQueue();
+        expect(store2.getSnapshot().missionPanel.active).toBe(false);
+    });
+
+    it('opening mission panel deactivates agents dashboard', () => {
+        const store = createChatStore();
+        store.showAgentsDashboard([]);
+        expect(store.getSnapshot().agentsDashboard.active).toBe(true);
+        store.showMissionPanel([]);
+        expect(store.getSnapshot().overlayMode).toBe('mission-panel');
+        expect(store.getSnapshot().agentsDashboard.active).toBe(false);
+        expect(store.getSnapshot().missionPanel.active).toBe(true);
+        store.closeEventQueue();
+    });
+});
+
+describe('chat-store operator overlays dismiss approval', () => {
+    it('denies approval when opening agents dashboard', async () => {
+        const store = createChatStore();
+        store.showApproval('bash', 'ls');
+        const wait = store.waitForEvent();
+        store.showAgentsDashboard([]);
+        expect(store.getSnapshot().overlayMode).toBe('agents-dashboard');
+        await expect(wait).resolves.toEqual({ type: 'line', value: 'deny' });
+        store.closeEventQueue();
+    });
+
+    it('denies approval when toggling ABG on', async () => {
+        const store = createChatStore();
+        store.showApproval('bash', 'ls');
+        const wait = store.waitForEvent();
+        store.toggleAbgOverlay();
+        expect(store.getSnapshot().overlayMode).toBe('abg');
+        await expect(wait).resolves.toEqual({ type: 'line', value: 'deny' });
+        store.closeEventQueue();
+    });
+
+    it('does not deny when toggling ABG off', async () => {
+        const store = createChatStore();
+        store.toggleAbgOverlay();
+        expect(store.getSnapshot().overlayMode).toBe('abg');
+        store.toggleAbgOverlay();
+        expect(store.getSnapshot().overlayMode).toBe('none');
+        // no deny event queued
+        expect(store.enqueueEvent({ type: 'line', value: 'probe' })).toBe(true);
+        await expect(store.waitForEvent()).resolves.toEqual({ type: 'line', value: 'probe' });
+        store.closeEventQueue();
+    });
+});
+
+describe('chat-store showApproval clears rename', () => {
+    it('clears rename when showing approval', () => {
+        const store = createChatStore();
+        store.showRename();
+        expect(store.getSnapshot().overlayMode).toBe('rename');
+        store.showApproval('bash', 'ls');
+        expect(store.getSnapshot().overlayMode).toBe('approval');
+        expect(store.getSnapshot().renameBuffer).toBe('');
+        store.closeEventQueue();
+    });
+});
+
+describe('chat-store operator open cancels promise overlays', () => {
+    it('cancels model picker when opening agents dashboard', async () => {
+        const store = createChatStore();
+        const pending = store.showModelPicker([makeChoice('a')]);
+        expect(store.getSnapshot().overlayMode).toBe('model-picker');
+        store.showAgentsDashboard([]);
+        expect(store.getSnapshot().overlayMode).toBe('agents-dashboard');
+        await expect(pending).resolves.toBeUndefined();
+        store.closeEventQueue();
+    });
+
+    it('stale hideModelPicker does not clobber agents dashboard', async () => {
+        const store = createChatStore();
+        const pending = store.showModelPicker([makeChoice('a')]);
+        store.showAgentsDashboard([]);
+        await pending;
+        store.hideModelPicker(undefined);
+        expect(store.getSnapshot().overlayMode).toBe('agents-dashboard');
+        store.closeEventQueue();
+    });
+
+    it('refuses history picker while an overlay is open', () => {
+        const store = createChatStore();
+        store.showApproval('bash', 'ls');
+        store.openHistoryPicker('draft');
+        expect(store.getSnapshot().historyPicker.open).toBe(false);
+        store.closeEventQueue();
+    });
+
+    it('clears overlays when session id changes', async () => {
+        const store = createChatStore();
+        const pending = store.showModelPicker([makeChoice('a')]);
+        store.setSessionId('session-b');
+        expect(store.getSnapshot().overlayMode).toBe('none');
+        await expect(pending).resolves.toBeUndefined();
+        store.closeEventQueue();
+    });
+});
+
+describe('chat-store submitLine and setGenerating gates', () => {
+    it('refuses submitLine while overlay is open', async () => {
+        const store = createChatStore();
+        store.showApproval('bash', 'ls');
+        store.submitLine('hello');
+        // no line enqueued — waitForEvent would hang, so probe via deny path capacity
+        const wait = store.waitForEvent();
+        store.denyApproval();
+        await expect(wait).resolves.toEqual({ type: 'line', value: 'deny' });
+        store.closeEventQueue();
+    });
+
+    it('ignores setGenerating(true) after closeEventQueue', () => {
+        const store = createChatStore();
+        store.closeEventQueue();
+        store.setGenerating(true);
+        expect(store.getSnapshot().generating).toBe(false);
+        store.setGenerating(false);
+        expect(store.getSnapshot().generating).toBe(false);
+    });
+});
+
+describe('chat-store menu and status teardown', () => {
+    it('clears menus and agent status on closeEventQueue', () => {
+        const store = createChatStore();
+        store.setGenerating(true);
+        store.setAgentStatus('thinking');
+        store.setInputMirror('/help');
+        store.closeEventQueue();
+        const snap = store.getSnapshot();
+        expect(snap.generating).toBe(false);
+        expect(snap.agentStatusText).toBe('');
+        expect(snap.fileAutocomplete.open).toBe(false);
+        expect(snap.menuState).toEqual(expect.objectContaining({ selectedIndex: 0 }));
+    });
+
+    it('ignores setAgentStatus text after close', () => {
+        const store = createChatStore();
+        store.closeEventQueue();
+        store.setAgentStatus('late');
+        expect(store.getSnapshot().agentStatusText).toBe('');
+    });
+});
+
+describe('chat-store panel mutator mode guards', () => {
+    it('agents nav no-ops outside agents-dashboard', () => {
+        const store = createChatStore();
+        store.showAgentsDashboard([
+            {
+                name: 'a',
+                description: 'd',
+                source: 'bundled',
+                disabled: false,
+            } as never,
+        ]);
+        store.navigateAgentsDashboard(1);
+        const idx = store.getSnapshot().agentsDashboard.selectedIndex;
+        store.hideAgentsDashboard();
+        store.navigateAgentsDashboard(1);
+        expect(store.getSnapshot().agentsDashboard.selectedIndex).toBe(idx);
+        store.closeEventQueue();
+    });
+
+    it('denies approval when session switches', async () => {
+        const store = createChatStore();
+        store.showApproval('bash', 'ls');
+        const wait = store.waitForEvent();
+        store.setSessionId('other-session');
+        await expect(wait).resolves.toEqual({ type: 'line', value: 'deny' });
+        expect(store.getSnapshot().overlayMode).toBe('none');
+        store.closeEventQueue();
+    });
+});
+
+describe('chat-store decision overlays clear operator panels', () => {
+    it('showApproval clears diff viewer entries', () => {
+        const store = createChatStore();
+        store.openDiffViewer([{ title: 'a.ts', diff: '+x', lines: [] }]);
+        expect(store.getSnapshot().diffViewerEntries.length).toBe(1);
+        store.showApproval('bash', 'ls');
+        expect(store.getSnapshot().overlayMode).toBe('approval');
+        expect(store.getSnapshot().diffViewerEntries).toEqual([]);
+        store.closeEventQueue();
+    });
+
+    it('showModelPicker clears agents dashboard active flag', async () => {
+        const store = createChatStore();
+        store.showAgentsDashboard([]);
+        expect(store.getSnapshot().agentsDashboard.active).toBe(true);
+        const pending = store.showModelPicker([makeChoice('a')]);
+        expect(store.getSnapshot().overlayMode).toBe('model-picker');
+        expect(store.getSnapshot().agentsDashboard.active).toBe(false);
+        store.hideModelPicker(undefined);
+        await pending;
+        store.closeEventQueue();
+    });
+});
+
+describe('chat-store emitOutput after close', () => {
+    it('ignores emitOutput after closeEventQueue', () => {
+        const store = createChatStore();
+        store.emitOutput('before\n');
+        const before = store.getOutput();
+        expect(before.length).toBeGreaterThan(0);
+        store.closeEventQueue();
+        store.emitOutput('after\n');
+        expect(store.getOutput()).toBe(before);
+        expect(store.getOutput().includes('after')).toBe(false);
+    });
+});
+
+describe('chat-store replaceOutputText after close', () => {
+    it('ignores replaceOutputText after closeEventQueue', () => {
+        const store = createChatStore();
+        store.emitOutput('keep\n');
+        const before = store.getOutput();
+        store.closeEventQueue();
+        store.replaceOutputText('gone');
+        expect(store.getOutput()).toBe(before);
+    });
+});
+
+describe('chat-store context writers after close', () => {
+    it('ignores setContextTokensUsed after close', () => {
+        const store = createChatStore();
+        store.closeEventQueue();
+        store.setContextTokensUsed(1234);
+        expect(store.getSnapshot().contextTokensUsed).toBeUndefined();
+        store.setContextTokensUsed(undefined);
+        expect(store.getSnapshot().contextTokensUsed).toBeUndefined();
+    });
+});
+
+describe('chat-store setSessionId clears generating', () => {
+    it('clears generating and agent status on session switch', () => {
+        const store = createChatStore();
+        store.setGenerating(true);
+        store.setAgentStatus('thinking');
+        store.setSessionId('next-session');
+        expect(store.getSnapshot().generating).toBe(false);
+        expect(store.getSnapshot().agentStatusText).toBe('');
+        store.closeEventQueue();
+    });
+});
+
+describe('chat-store setSessionId clears generating', () => {
+    it('clears generating and agent status on session switch', () => {
+        const store = createChatStore();
+        store.setGenerating(true);
+        store.setAgentStatus('thinking');
+        store.setSessionId('next-session');
+        expect(store.getSnapshot().generating).toBe(false);
+        expect(store.getSnapshot().agentStatusText).toBe('');
+        store.closeEventQueue();
+    });
+});
+
+describe('chat-store prompt mutator gates', () => {
+    it('refuses setInputMirror after close', () => {
+        const store = createChatStore();
+        store.setInputMirror('draft');
+        store.closeEventQueue();
+        store.setInputMirror('late');
+        expect(store.getSnapshot().inputMirror).toBe('draft');
+    });
+
+    it('refuses workflow menu nav under overlay', () => {
+        const store = createChatStore();
+        store.setInputMirror('#ab');
+        const before = store.getSnapshot().menuState;
+        store.showApproval('bash', 'ls');
+        store.navigateWorkflowMenu('down');
+        expect(store.getSnapshot().menuState).toEqual(before);
+        store.closeEventQueue();
+    });
+
+    it('refuses history confirm under overlay', () => {
+        const store = createChatStore();
+        store.openHistoryPicker('x');
+        // force open even if empty
+        if (!store.getSnapshot().historyPicker.open) {
+            // still validate gate when closed-not-open
+            store.showApproval('bash', 'ls');
+            expect(store.confirmHistoryPicker()).toBeUndefined();
+        } else {
+            store.showApproval('bash', 'ls');
+            expect(store.confirmHistoryPicker()).toBeUndefined();
+        }
+        store.closeEventQueue();
+    });
+});
+
+describe('chat-store cycleModel gates', () => {
+    it('refuses cycleModel under overlay', () => {
+        const store = createChatStore();
+        store.showApproval('bash', 'ls');
+        const before = store.getSnapshot().modelCycleIndex;
+        store.cycleModel(1);
+        expect(store.getSnapshot().modelCycleIndex).toBe(before);
+        store.closeEventQueue();
+    });
+});
+
+describe('chat-store paste and history writers', () => {
+    it('refuses registerPaste under overlay', () => {
+        const store = createChatStore();
+        store.showApproval('bash', 'ls');
+        expect(store.registerPaste('hello')).toBe(-1);
+        store.closeEventQueue();
+    });
+
+    it('refuses setHistoryEntries after close', () => {
+        const store = createChatStore();
+        store.setHistoryEntries([{ id: '1', text: 'a', timestamp: 0 }]);
+        expect(store.getSnapshot().historyEntries.length).toBeGreaterThan(0);
+        const before = store.getSnapshot().historyEntries.length;
+        store.closeEventQueue();
+        store.setHistoryEntries([{ id: '2', text: 'b', timestamp: 1 }]);
+        expect(store.getSnapshot().historyEntries.length).toBe(before);
+    });
+});
+
+describe('chat-store paste teardown', () => {
+    it('clears pasteStore on closeEventQueue', () => {
+        const store = createChatStore();
+        const id = store.registerPaste('secret body');
+        expect(id).toBeGreaterThan(0);
+        store.closeEventQueue();
+        // new paste refused; expand of old markers should not revive bodies via submit path
+        expect(store.registerPaste('x')).toBe(-1);
+        expect(store.getSnapshot().agentRetryAt).toBeUndefined();
+    });
+
+    it('clears pasteStore on setSessionId', () => {
+        const store = createChatStore();
+        expect(store.registerPaste('body')).toBeGreaterThan(0);
+        store.setSessionId('other');
+        // paste counter may increment but store bodies cleared — register still works on new session
+        expect(store.registerPaste('next')).toBeGreaterThan(0);
+        store.closeEventQueue();
+    });
+});
+
+describe('chat-store metadata mutators after close', () => {
+    it('refuses setWorkflowNames after close', () => {
+        const store = createChatStore();
+        store.closeEventQueue();
+        store.setWorkflowNames(['wf']);
+        expect(store.getSnapshot().workflowNames).not.toContain('wf');
+    });
+
+    it('refuses toggleShowThinking after close', () => {
+        const store = createChatStore();
+        const before = store.getSnapshot().showThinking;
+        store.closeEventQueue();
+        store.toggleShowThinking();
+        expect(store.getSnapshot().showThinking).toBe(before);
+    });
+});
+
+describe('chat-store openDiffViewer empty refuse', () => {
+    it('refuses openDiffViewer with empty entries', () => {
+        const store = createChatStore();
+        expect(store.openDiffViewer([])).toBe(false);
+        expect(store.getSnapshot().overlayMode).toBe('none');
+        store.closeEventQueue();
+    });
+});
+
+describe('chat-store stuck question dismiss', () => {
+    it('dismisses stuck question overlay without waiter', () => {
+        const store = createChatStore();
+        void store.showQuestion('Q?', ['a', 'b']);
+        // Simulate lost waiter while overlay remains.
+        store.rejectQuestion();
+        // reject already clears; show again then strip waiter via resolve after reject path:
+        void store.showQuestion('Q2?', ['x', 'y']);
+        store.rejectQuestion();
+        expect(store.getSnapshot().overlayMode).toBe('none');
+        // Force stuck mode with no waiter using resolveQuestion no-op path after synthetic reopen+cancel:
+        // reopen and cancelPending via showApproval which cancels question.
+        void store.showQuestion('Q3?', ['p']);
+        store.showApproval('bash', 'ls');
+        expect(store.getSnapshot().overlayMode).toBe('approval');
+        store.hideApproval();
+        store.resolveQuestion('stale');
+        expect(store.getSnapshot().overlayMode).toBe('none');
+        store.closeEventQueue();
+    });
+});
+
+describe('chat-store rejectQuestion stuck overlay', () => {
+    it('rejectQuestion clears stuck overlay without waiter', () => {
+        const store = createChatStore();
+        void store.showQuestion('Q?', ['a']);
+        store.rejectQuestion();
+        expect(store.getSnapshot().overlayMode).toBe('none');
+        // Force stuck: open then cancel waiters via showApproval cancelPending, leaving mode?
+        void store.showQuestion('Q2?', ['b']);
+        store.showApproval('bash', 'ls');
+        // approval replaces question; hide approval
+        store.hideApproval();
+        // If somehow question mode without waiter:
+        store.rejectQuestion();
+        expect(store.getSnapshot().overlayMode).not.toBe('question');
+        store.closeEventQueue();
+    });
+});
+
+describe('chat-store remount diagnostics after close', () => {
+    it('refuses setRemountGeneration after close', () => {
+        const store = createChatStore();
+        store.closeEventQueue();
+        store.setRemountGeneration(3);
+        expect(store.getSnapshot().remountGeneration).toBe(0);
+    });
+});
+
+describe('setSessionId after close', () => {
+    it('setSessionId is a no-op after closeEventQueue', () => {
+        const store = createChatStore();
+        store.setSessionId('session-a');
+        store.setContextTokensMax(1000);
+        store.closeEventQueue();
+        store.setSessionId('session-b');
+        expect(store.getSnapshot().sessionId).toBe('session-a');
+        // max already wiped by close path or left alone — session id must not change.
+    });
+});
+
+describe('setSessionId context max wipe', () => {
+    it('clears contextTokensMax on session switch', () => {
+        const store = createChatStore();
+        store.setSessionId('session-a');
+        store.setContextTokensMax(32000);
+        store.setSessionId('session-b');
+        expect(store.getSnapshot().contextTokensMax).toBeUndefined();
+    });
+});
+
+describe('setSessionId display name wipe', () => {
+    it('clears sessionDisplayName on session switch', () => {
+        const store = createChatStore();
+        store.setSessionId('session-a');
+        store.setSessionDisplayName('Alpha');
+        store.setSessionId('session-b');
+        expect(store.getSnapshot().sessionDisplayName).toBe('');
+    });
+});
+
+describe('setAgentsDashboardAgentOverride', () => {
+    it('setAgentsDashboardAgentOverride restores without edit buffer', () => {
+        const store = createChatStore();
+        store.showAgentsDashboard([
+            {
+                name: 'explore',
+                description: 'd',
+                source: 'project',
+                disabled: false,
+                overrideModel: 'openai/gpt-4.1',
+            },
+        ]);
+        store.setAgentsDashboardAgentOverride('explore', undefined);
+        const entry = store.getSnapshot().agentsDashboard.agents.find((agent) => agent.name === 'explore');
+        expect(entry?.overrideModel).toBeUndefined();
+        store.setAgentsDashboardAgentOverride('explore', 'anthropic/claude-sonnet-4');
+        const restored = store.getSnapshot().agentsDashboard.agents.find((agent) => agent.name === 'explore');
+        expect(restored?.overrideModel).toBe('anthropic/claude-sonnet-4');
+    });
+});
+
+describe('agents durable reload generation', () => {
+    it('beginAgentsReload refuses while durable busy', () => {
+        const store = createChatStore();
+        store.showAgentsDashboard([
+            {
+                name: 'explore',
+                description: 'd',
+                source: 'project',
+                disabled: false,
+            },
+        ]);
+        store.beginAgentsDurableWrite();
+        expect(store.beginAgentsReload()).toBe(-1);
+        store.endAgentsDurableWrite();
+        const gen = store.beginAgentsReload();
+        expect(gen).toBeGreaterThan(0);
+        expect(store.shouldApplyAgentsReload(gen)).toBe(true);
+        store.beginAgentsDurableWrite();
+        expect(store.shouldApplyAgentsReload(gen)).toBe(false);
+        store.endAgentsDurableWrite();
+    });
+});
+
+describe('agents durable state teardown', () => {
+    it('resets agents durable state on closeEventQueue', () => {
+        const store = createChatStore();
+        store.showAgentsDashboard([
+            {
+                name: 'explore',
+                description: 'd',
+                source: 'project',
+                disabled: false,
+            },
+        ]);
+        store.beginAgentsDurableWrite();
+        expect(store.isAgentsDurableBusy()).toBe(true);
+        store.closeEventQueue();
+        expect(store.isAgentsDurableBusy()).toBe(false);
+        expect(store.beginAgentsReload()).toBe(-1);
+    });
+});
+
+describe('agents durable clear on overlay switch', () => {
+    it('resets agents durable when another overlay opens', () => {
+        const store = createChatStore();
+        store.showAgentsDashboard([
+            {
+                name: 'explore',
+                description: 'd',
+                source: 'project',
+                disabled: false,
+            },
+        ]);
+        store.beginAgentsDurableWrite();
+        expect(store.isAgentsDurableBusy()).toBe(true);
+        // Opening model picker clears inactive agents panel.
+        void store.showModelPicker([makeChoice('m', { providerID: 'p', modelID: 'm' })]);
+        expect(store.isAgentsDurableBusy()).toBe(false);
+    });
+});
+
+describe('reloadAgentsDashboard durable busy', () => {
+    it('reloadAgentsDashboard no-ops while durable busy', () => {
+        const store = createChatStore();
+        store.showAgentsDashboard([
+            {
+                name: 'explore',
+                description: 'd',
+                source: 'project',
+                disabled: false,
+            },
+        ]);
+        store.beginAgentsDurableWrite();
+        store.reloadAgentsDashboard([
+            {
+                name: 'other',
+                description: 'x',
+                source: 'project',
+                disabled: false,
+            },
+        ]);
+        expect(store.getSnapshot().agentsDashboard.agents.map((a) => a.name)).toEqual(['explore']);
+        store.endAgentsDurableWrite();
+    });
+});
+
+describe('missions reload generation', () => {
+    it('drops stale reload after hide and refuses when closed', () => {
+        const store = createChatStore();
+        store.showMissionPanel([{ id: 'a', label: 'A', status: 'running' }]);
+        const gen = store.beginMissionsReload();
+        expect(gen).toBeGreaterThan(0);
+        store.hideMissionPanel();
+        expect(store.shouldApplyMissionsReload(gen)).toBe(false);
+        store.showMissionPanel([{ id: 'b', label: 'B', status: 'running' }]);
+        const gen2 = store.beginMissionsReload();
+        store.closeEventQueue();
+        expect(store.shouldApplyMissionsReload(gen2)).toBe(false);
+        expect(store.beginMissionsReload()).toBe(-1);
+    });
+});
+
+describe('models mutation epoch', () => {
+    it('drops stale assign rollback after hide', async () => {
+        const selection = { providerID: 'openai', modelID: 'gpt-test' } as const;
+        let rejectAuth: ((err: Error) => void) | undefined;
+        const store = createChatStore({
+            authStore: {
+                setModelRole: () =>
+                    new Promise<void>((_resolve, reject) => {
+                        rejectAuth = reject;
+                    }),
+                clearModelRole: async () => undefined,
+            } as never,
+        });
+        store.showModelsOverlay([selection], [{ role: 'default', assignment: undefined, fallback: selection }]);
+        const pending = store.assignModelsOverlayRole('default', selection);
+        store.hideModelsOverlay();
+        rejectAuth?.(new Error('auth failed'));
+        await pending;
+        store.showModelsOverlay([selection], [{ role: 'default', assignment: selection, fallback: selection }]);
+        expect(store.getSnapshot().modelsOverlay.roleRows[0]?.assignment).toEqual(selection);
+    });
+});
+
+describe('context max epoch', () => {
+    it('drops stale disk reseed after overlay step', () => {
+        const store = createChatStore();
+        const epoch = store.beginContextMaxReseed();
+        store.setContextTokensMaxFromStep(200_000);
+        expect(store.shouldApplyContextMaxReseed(epoch)).toBe(false);
+        expect(store.getSnapshot().contextTokensMax).toBe(200_000);
+        const epoch2 = store.beginContextMaxReseed();
+        expect(store.shouldApplyContextMaxReseed(epoch2)).toBe(true);
+        store.setContextTokensMax(128_000);
+        expect(store.getSnapshot().contextTokensMax).toBe(128_000);
+    });
+});
+
+describe('abg overlay tab/scroll store ownership', () => {
+    it('persists live tab/scroll into prefs snapshot', () => {
+        const store = createChatStore();
+        store.setAbgOverlayActiveTab(3);
+        store.adjustAbgOverlayScrollOffset(2);
+        expect(store.getAbgOverlayPrefsSnapshot()).toMatchObject({
+            activeTabIndex: 3,
+            scrollOffset: 2,
+        });
+        store.setAbgOverlayActiveTab(1);
+        expect(store.getAbgOverlayPrefsSnapshot().scrollOffset).toBe(0);
+    });
+});
+
+describe('history entries reseed generation', () => {
+    it('drops stale disk reload after live append', () => {
+        const store = createChatStore();
+        const gen = store.beginHistoryEntriesReseed();
+        expect(store.submitLine('live')).toBe(true);
+        expect(store.shouldApplyHistoryEntriesReseed(gen)).toBe(false);
+        expect(store.getSnapshot().historyEntries.map((e) => e.text)).toEqual(['live']);
+    });
+
+    it('preserves open picker when hydrated list grows', () => {
+        const store = createChatStore({
+            initialHistoryEntries: [{ id: 'a', text: 'one', timestamp: 1 }],
+        });
+        store.openHistoryPicker('draft');
+        expect(store.getSnapshot().historyPicker.open).toBe(true);
+        store.setHistoryEntries([
+            { id: 'a', text: 'one', timestamp: 1 },
+            { id: 'b', text: 'two', timestamp: 2 },
+        ]);
+        const snap = store.getSnapshot();
+        expect(snap.historyPicker.open).toBe(true);
+        expect(snap.historyEntries.map((e) => e.text)).toEqual(['one', 'two']);
     });
 });

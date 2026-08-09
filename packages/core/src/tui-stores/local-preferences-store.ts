@@ -24,6 +24,8 @@ export type TuiLocalPreferencesStoreOptions = {
 export class TuiLocalPreferencesStore {
     readonly filePath: string;
     private readonly maxEntries: number;
+    /** Serialize RMW helpers (service layer also chains; defense in depth). */
+    private writeChain: Promise<void> = Promise.resolve();
 
     constructor(options: TuiLocalPreferencesStoreOptions = {}) {
         const dataDir = options.dataDir ?? resolveMissionControlDataDir();
@@ -31,27 +33,60 @@ export class TuiLocalPreferencesStore {
         this.maxEntries = options.maxEntries ?? TUI_LOCAL_PREFERENCES_MAX_ENTRIES;
     }
 
+    private enqueue<T>(task: () => Promise<T>): Promise<T> {
+        const run = this.writeChain.then(task, task);
+        this.writeChain = run.then(
+            () => undefined,
+            () => undefined,
+        );
+        return run;
+    }
+
     async getPreferences(): Promise<TuiLocalPreferences> {
         return (await this.readFile()).preferences;
     }
 
     async savePreferences(preferences: TuiLocalPreferences): Promise<void> {
-        await this.writeFile({ version: 1, preferences: trimPreferences(preferences, this.maxEntries) });
+        await this.enqueue(async () => {
+            await this.writeFile({ version: 1, preferences: trimPreferences(preferences, this.maxEntries) });
+        });
     }
 
     async addRecentModel(modelId: string): Promise<void> {
-        const preferences = await this.getPreferences();
-        await this.savePreferences({
-            ...preferences,
-            recentModels: [...preferences.recentModels.filter((candidate) => candidate !== modelId), modelId],
+        await this.enqueue(async () => {
+            const preferences = await this.getPreferences();
+            await this.writeFile({
+                version: 1,
+                preferences: trimPreferences(
+                    {
+                        ...preferences,
+                        recentModels: [
+                            ...preferences.recentModels.filter((candidate) => candidate !== modelId),
+                            modelId,
+                        ],
+                    },
+                    this.maxEntries,
+                ),
+            });
         });
     }
 
     async setUiToggle(toggle: TuiUiToggle): Promise<void> {
-        const preferences = await this.getPreferences();
-        await this.savePreferences({
-            ...preferences,
-            uiToggles: [...preferences.uiToggles.filter((candidate) => candidate.key !== toggle.key), toggle],
+        await this.enqueue(async () => {
+            const preferences = await this.getPreferences();
+            await this.writeFile({
+                version: 1,
+                preferences: trimPreferences(
+                    {
+                        ...preferences,
+                        uiToggles: [
+                            ...preferences.uiToggles.filter((candidate) => candidate.key !== toggle.key),
+                            toggle,
+                        ],
+                    },
+                    this.maxEntries,
+                ),
+            });
         });
     }
 

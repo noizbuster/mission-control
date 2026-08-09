@@ -11,6 +11,10 @@ function readChatInputAreaSource(): string {
     return readFileSync(resolve(process.cwd(), 'apps/tui/src/components/ChatInputArea.tsx'), 'utf8');
 }
 
+function readKeymapLayersSource(): string {
+    return readFileSync(resolve(process.cwd(), 'apps/tui/src/app/use-keymap-layers.ts'), 'utf8');
+}
+
 describe('ChatInputArea prompt-service helpers', () => {
     it('normalizes completed file paths before recording frecency', () => {
         expect(fileCompletionFrecencyKey('README.md')).toBe('README.md');
@@ -19,14 +23,15 @@ describe('ChatInputArea prompt-service helpers', () => {
 });
 
 describe('ChatInputArea history picker keyboard contract', () => {
-    it('wires open at buffer start, navigate, fill-only Enter/Tab, and Esc cancel', () => {
-        const source = readChatInputAreaSource();
-        expect(source).toContain('openHistoryPicker');
-        expect(source).toContain('navigateHistoryPicker');
-        expect(source).toContain('confirmHistoryPicker');
-        expect(source).toContain('cancelHistoryPicker');
-        expect(source).toContain('cursorOffset');
-        expect(source).toContain('historyPickerPromptListControls.acceptKeys.includes(\'tab\')');
+    it('opens and navigates from the keymap at buffer start, while ChatInput owns fill-only Tab and Esc', () => {
+        const keymapSource = readKeymapLayersSource();
+        const inputSource = readChatInputAreaSource();
+        expect(keymapSource).toContain('openHistoryPicker');
+        expect(keymapSource).toContain('navigateHistoryPicker');
+        expect(keymapSource).toContain('cursorOffset');
+        expect(inputSource).toContain('confirmHistoryPicker');
+        expect(inputSource).toContain('cancelHistoryPicker');
+        expect(inputSource).toContain("historyPickerPromptListControls.acceptKeys.includes('tab')");
     });
 
     it('confirm fills textarea without submitting a line event', () => {
@@ -89,8 +94,8 @@ describe('ChatInputArea prompt-list Tab acceptance contract', () => {
             acceptVerb: 'complete',
             dismissible: true,
         });
-        expect(source).toContain('historyPickerPromptListControls.acceptKeys.includes(\'tab\')');
-        expect(source).toContain('completionPromptListControls.acceptKeys.includes(\'tab\')');
+        expect(source).toContain("historyPickerPromptListControls.acceptKeys.includes('tab')");
+        expect(source).toContain("completionPromptListControls.acceptKeys.includes('tab')");
         expect(source).toContain('resolveWorkflowCommandMenuInsertText');
         expect(source).toContain('resolveSkillCommandMenuInsertText');
         expect(source).toContain('resolveSlashCommandMenuInsertText');

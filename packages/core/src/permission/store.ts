@@ -28,11 +28,22 @@ export type PermissionRuleAppendOptions = {
 };
 
 export class PermissionRuleStore {
+    private writeChain: Promise<void> = Promise.resolve();
+
     readonly filePath: string;
 
     constructor(options: PermissionRuleStoreOptions = {}) {
         const dataDir = options.dataDir ?? resolveMissionControlDataDir();
         this.filePath = options.filePath ?? join(dataDir, 'trust', 'permission-rules.json');
+    }
+
+    private enqueue<T>(task: () => Promise<T>): Promise<T> {
+        const run = this.writeChain.then(task, task);
+        this.writeChain = run.then(
+            () => undefined,
+            () => undefined,
+        );
+        return run;
     }
 
     async listRules(workspaceRoot: string): Promise<readonly PermissionRule[]> {
@@ -46,12 +57,14 @@ export class PermissionRuleStore {
         if (rules.length === 0) {
             return;
         }
-        const existing = await readRuleFile(this.filePath);
-        const mergedRules = dedupeRules([
-            ...(await normalizePermissionRules(filterPersistedRules(existing.rules))),
-            ...(await normalizePermissionRules(rules)),
-        ]);
-        await writeRuleFile(this.filePath, { version: 1, rules: [...mergedRules] }, options);
+        return this.enqueue(async () => {
+            const existing = await readRuleFile(this.filePath);
+            const mergedRules = dedupeRules([
+                ...(await normalizePermissionRules(filterPersistedRules(existing.rules))),
+                ...(await normalizePermissionRules(rules)),
+            ]);
+            await writeRuleFile(this.filePath, { version: 1, rules: [...mergedRules] }, options);
+        });
     }
 }
 

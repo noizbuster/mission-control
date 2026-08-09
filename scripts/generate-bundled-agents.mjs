@@ -14,7 +14,7 @@
  *
  * Run: `node scripts/generate-bundled-agents.mjs`
  */
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -61,13 +61,16 @@ async function main() {
 
     const entries = await readdir(SRC_DIR, { withFileTypes: true });
     const mdNames = entries
-        .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
+        .filter((entry) => entry.isFile() && entry.name.endsWith('.md') && entry.name.toLowerCase() !== 'agents.md')
         .map((entry) => entry.name)
         .sort();
 
     if (mdNames.length === 0) {
         throw new Error(`No .md files found in ${SRC_DIR}`);
     }
+    // `AGENTS.md` is scoped engineering guidance, not an agent template. Remove
+    // a stale output from older generator runs before rebuilding the barrel.
+    await rm(join(OUT_DIR, 'AGENTS.md.ts'), { force: true });
 
     const modules = [];
     for (const fileName of mdNames) {

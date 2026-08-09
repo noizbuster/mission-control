@@ -35,6 +35,18 @@ class DeferredPermissionSession extends PermissionSession {
     }
 }
 
+class QueueFailurePermissionSession extends PermissionSession {
+    private evaluations = 0;
+
+    override evaluate(request: PermissionRequest, _sessionId: string): Promise<PermissionEvaluation> {
+        this.evaluations += 1;
+        if (this.evaluations === 3) {
+            return Promise.reject(new Error('permission evaluation failed'));
+        }
+        return Promise.resolve(requiresApproval(request.id));
+    }
+}
+
 describe('interactive approval broker request lifecycle', () => {
     it.each(['once', 'yes'] as const)('rejects pre-request %s without authorizing a later request', async (answer) => {
         // Given
@@ -194,6 +206,29 @@ describe('interactive approval broker request lifecycle', () => {
 
         await expect(second).resolves.toMatchObject({ status: 'allow' });
         expect(broker.hasPending()).toBe(false);
+    });
+
+    it('denies an evaluation failure and continues draining queued approvals', async () => {
+        const session = new QueueFailurePermissionSession();
+        const { broker } = brokerHarness(session);
+        const first = broker.requestPermission(patchRequest('permission_drain_failure_first'));
+        await flushMicrotasks();
+        expect(broker.hasPending()).toBe(true);
+
+        const failed = broker.requestPermission(patchRequest('permission_drain_failure_second'));
+        await flushMicrotasks();
+        broker.answer('deny');
+        await expect(first).resolves.toMatchObject({ status: 'deny' });
+        await expect(failed).resolves.toMatchObject({
+            status: 'deny',
+            reason: 'permission_evaluate_failed',
+        });
+
+        const third = broker.requestPermission(patchRequest('permission_drain_failure_third'));
+        await flushMicrotasks();
+        expect(broker.hasPending()).toBe(true);
+        broker.answer('deny');
+        await expect(third).resolves.toMatchObject({ status: 'deny' });
     });
 
     it('denies queued requests on cancel', async () => {

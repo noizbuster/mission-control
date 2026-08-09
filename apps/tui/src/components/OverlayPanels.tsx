@@ -2,7 +2,6 @@
 // allow: SIZE_OK -- overlay collection hosts multiple modal panels; model-context pref lines added without splitting the mandated surface.
 import { getModelContextLimit } from '@mission-control/config';
 import { resolveUserConfigDir } from '@mission-control/core';
-import { padEndToDisplayWidth } from '@mission-control/tui';
 import { MouseButton, type MouseEvent, TextAttributes } from '@opentui/core';
 import { useKeyboard } from '@opentui/solid';
 import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
@@ -11,8 +10,6 @@ import { useSolidStoreSelector } from '../platform/use-solid-store-selector';
 import { createProviderPromptView } from '../state/auth-provider-keypress-view';
 import type { ChatAppActions } from '../state/chat-app-actions';
 import {
-    APPROVAL_LEVEL_PICKER_ENTRIES,
-    APPROVAL_OPTIONS,
     type ChatStore,
     createAgentsDashboardView,
     createSessionPickerView,
@@ -34,70 +31,6 @@ import {
 const MODEL_PICKER_MAX_VISIBLE = 10;
 
 // ---------------------------------------------------------------------------
-// ApprovalOverlay
-// ---------------------------------------------------------------------------
-
-export type ApprovalOverlayProps = { readonly store: ChatStore };
-
-export function ApprovalOverlay({ store }: ApprovalOverlayProps): JSX.Element {
-    const snapshot = useSolidStoreSelector(store, (snapshot) => snapshot);
-
-    useKeyboard((key) => {
-        if (key.name === 'up') {
-            key.preventDefault();
-            store.navigateApproval(-1);
-            return;
-        }
-        if (key.name === 'down') {
-            key.preventDefault();
-            store.navigateApproval(1);
-            return;
-        }
-        if (key.name === 'return') {
-            store.confirmApproval();
-            return;
-        }
-        if (key.ctrl && key.name === 'c') {
-            store.denyApproval();
-            return;
-        }
-    });
-
-    return (
-        <OverlayFrame
-            variant="modal"
-            title="Approval Required"
-            accent={ACCENTS.approval}
-            footer="Up/Down to navigate, Enter to select, Ctrl+C to deny"
-        >
-            <box flexDirection="row">
-                <text attributes={TextAttributes.BOLD}>Tool:</text>
-                <text> {snapshot().approvalToolName}</text>
-            </box>
-            <text attributes={TextAttributes.DIM}>{snapshot().approvalAction}</text>
-            <box flexDirection="column" marginTop={1}>
-                <For each={APPROVAL_OPTIONS}>
-                    {(option, index) => {
-                        const isSelected = () => index() === snapshot().approvalSelectedIndex;
-                        return (
-                            <box flexDirection="row">
-                                <text {...(isSelected() ? { bg: SELECTED_BG } : {})}>
-                                    {isSelected() ? '> ' : '  '}
-                                    {option.label}{' '}
-                                </text>
-                                <text attributes={TextAttributes.DIM} {...(isSelected() ? { bg: SELECTED_BG } : {})}>
-                                    {option.description}
-                                </text>
-                            </box>
-                        );
-                    }}
-                </For>
-            </box>
-        </OverlayFrame>
-    );
-}
-
-// ---------------------------------------------------------------------------
 // QuestionOverlay
 // ---------------------------------------------------------------------------
 
@@ -105,6 +38,8 @@ export type QuestionOverlayProps = { readonly store: ChatStore };
 
 export function QuestionOverlay({ store }: QuestionOverlayProps): JSX.Element {
     const snapshot = useSolidStoreSelector(store, (snapshot) => snapshot);
+    // Key-repeat guard for submit/cancel paths that settle the ask_user waiter.
+    let settled = false;
 
     const multiBatch = createMemo(
         () =>
@@ -115,7 +50,15 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): JSX.Element {
     useKeyboard((key) => {
         if (snapshot().questionCustomMode) {
             if (key.name === 'return') {
+                if (settled) return;
                 store.submitCustomAnswer(snapshot().questionCustomBuffer);
+                // Multi-batch custom only records an answer and stays open —
+                // do not permanently latch Enter until the overlay settles.
+                if (store.getSnapshot().overlayMode !== 'question') {
+                    settled = true;
+                } else {
+                    settled = false;
+                }
                 return;
             }
             if (key.name === 'escape') {
@@ -123,8 +66,11 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): JSX.Element {
                 return;
             }
             if (key.ctrl && key.name === 'c') {
-                store.rejectQuestion();
-                store.sendInterrupt('ctrl-c');
+                if (settled) return;
+                if (store.rejectQuestion()) {
+                    settled = true;
+                    store.sendInterrupt('ctrl-c');
+                }
                 return;
             }
             if (key.name === 'backspace') {
@@ -140,32 +86,41 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): JSX.Element {
 
         if (snapshot().questionConfirmActive) {
             if (key.name === 'return') {
+                if (settled) return;
+                settled = true;
                 store.confirmQuestionBatch();
                 return;
             }
             if (key.name === 'escape' || (key.ctrl && key.name === 'c')) {
-                store.rejectQuestion();
-                store.sendInterrupt(key.ctrl ? 'ctrl-c' : 'esc');
+                if (settled) return;
+                if (store.rejectQuestion()) {
+                    settled = true;
+                    store.sendInterrupt(key.ctrl ? 'ctrl-c' : 'esc');
+                }
             }
             return;
         }
 
         if (multiBatch() && (key.name === 'left' || key.name === 'h')) {
+            settled = false;
             store.navigateQuestionTab(-1);
             return;
         }
         if (multiBatch() && (key.name === 'right' || key.name === 'l' || key.name === 'tab')) {
+            settled = false;
             store.navigateQuestionTab(1);
             return;
         }
 
         if (key.name === 'up') {
             key.preventDefault();
+            settled = false;
             store.navigateQuestion(-1);
             return;
         }
         if (key.name === 'down') {
             key.preventDefault();
+            settled = false;
             store.navigateQuestion(1);
             return;
         }
@@ -178,20 +133,27 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): JSX.Element {
             // Batch: Enter picks (single → record + advance) or toggles (multi).
             if (snapshot().questionTabs.length > 0) {
                 if (snapshot().questionMultiple) {
+                    settled = false;
                     store.toggleQuestionOption();
                 } else {
+                    // Single-select batch advance: latch until user navigates again.
+                    if (settled) return;
+                    settled = true;
                     store.selectQuestionByClick(snapshot().questionSelectedIndex);
                 }
                 return;
             }
+            if (settled) return;
             if (snapshot().questionMultiple) {
                 const selected = snapshot()
                     .questionOptions.filter((_opt, i) => snapshot().questionSelectedIndices.has(i))
                     .map((opt) => opt.label);
+                settled = true;
                 store.resolveQuestion(selected.join(', '));
                 return;
             }
             const selected = snapshot().questionOptions[snapshot().questionSelectedIndex];
+            settled = true;
             store.resolveQuestion(selected?.label ?? '');
             return;
         }
@@ -203,8 +165,11 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): JSX.Element {
             // ESC/Ctrl+C cancels the question AND aborts the run. rejectQuestion
             // unblocks the ask_user await; without it sendInterrupt could not be
             // processed because the runner is blocked on that same await.
-            store.rejectQuestion();
-            store.sendInterrupt(key.ctrl ? 'ctrl-c' : 'esc');
+            if (settled) return;
+            if (store.rejectQuestion()) {
+                settled = true;
+                store.sendInterrupt(key.ctrl ? 'ctrl-c' : 'esc');
+            }
         }
     });
 
@@ -218,9 +183,21 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): JSX.Element {
                 : 'Click or hover + Up/Dn + Enter to select, Esc to cancel',
     );
 
+    let lastMousePickAt = 0;
     const onOptionClick = (index: number) => (event: MouseEvent) => {
         if (event.button !== MouseButton.LEFT) return;
+        if (settled) return;
+        const now = Date.now();
+        // Debounce double-click / trackpad multi-fire (~250ms).
+        if (now - lastMousePickAt < 250) return;
+        lastMousePickAt = now;
+        if (!snapshot().questionMultiple && snapshot().questionTabs.length === 0) {
+            settled = true;
+        }
         store.selectQuestionByClick(index);
+        if (store.getSnapshot().overlayMode !== 'question') {
+            settled = true;
+        }
     };
     const onOptionHover = (index: number) => (): void => store.hoverQuestion(index);
     const onTabHover = (index: number) => (): void => store.hoverQuestionTab(index);
@@ -455,19 +432,25 @@ export function ModelPickerOverlay({ store }: ModelPickerOverlayProps): JSX.Elem
         return buildModelContextPrefLines(selection, localPreferences.preferences().modelContextPrefs);
     });
 
+    // Key-repeat / double-fire guard for confirm/cancel.
+    let settled = false;
     useKeyboard((key) => {
         if (key.name === 'return') {
             key.preventDefault();
+            if (settled) return;
             const currentView = view();
             const selectedChoice = currentView.visibleChoices[currentView.selectedIndex - currentView.startIndex];
             if (selectedChoice !== undefined) {
                 const modelChoice = snapshot().modelPickerChoices.find((c) => c.id === selectedChoice.id);
+                settled = true;
                 store.hideModelPicker(modelChoice?.selection);
             }
             return;
         }
         if ((key.ctrl && key.name === 'c') || key.name === 'escape') {
             key.preventDefault();
+            if (settled) return;
+            settled = true;
             store.hideModelPicker(undefined);
             return;
         }
@@ -493,16 +476,32 @@ export function ModelPickerOverlay({ store }: ModelPickerOverlayProps): JSX.Elem
                 const catalogDefault = getModelContextLimit(selection.providerID, selection.modelID);
                 const direction = key.name === 'left' ? -1 : 1;
                 if (!key.ctrl) {
+                    if (store.isEventQueueClosed() || store.getSnapshot().overlayMode !== 'model-picker') return;
                     void localPreferences.stepModelContextLimit(selection, direction, catalogDefault).then(() => {
+                        if (
+                            store.isEventQueueClosed()
+                            || store.getSnapshot().overlayMode !== 'model-picker'
+                        ) {
+                            return;
+                        }
+                        const live = store.getSnapshot().currentModelSelection;
+                        if (
+                            live === undefined
+                            || live.providerID !== selection.providerID
+                            || live.modelID !== selection.modelID
+                        ) {
+                            return;
+                        }
                         const lines = buildModelContextPrefLines(
                             selection,
                             localPreferences.preferences().modelContextPrefs,
                         );
-                        store.setContextTokensMax(lines.effectiveContextLimit);
-                    });
+                        store.setContextTokensMaxFromStep(lines.effectiveContextLimit);
+                    }).catch(() => undefined);
                     return;
                 }
-                void localPreferences.stepModelAutoCompactThreshold(selection, direction);
+                if (store.isEventQueueClosed() || store.getSnapshot().overlayMode !== 'model-picker') return;
+                void localPreferences.stepModelAutoCompactThreshold(selection, direction).catch(() => undefined);
                 return;
             }
         }
@@ -551,106 +550,6 @@ export function ModelPickerOverlay({ store }: ModelPickerOverlayProps): JSX.Elem
 }
 
 // ---------------------------------------------------------------------------
-// LevelPickerOverlay
-// ---------------------------------------------------------------------------
-
-export type LevelPickerOverlayProps = { readonly store: ChatStore };
-
-export function LevelPickerOverlay({ store }: LevelPickerOverlayProps): JSX.Element {
-    const snapshot = useSolidStoreSelector(store, (snapshot) => snapshot);
-
-    useKeyboard((key) => {
-        if (key.name === 'up') {
-            key.preventDefault();
-            store.navigateLevelPicker(-1);
-            return;
-        }
-        if (key.name === 'down') {
-            key.preventDefault();
-            store.navigateLevelPicker(1);
-            return;
-        }
-        if (key.name === 'return') {
-            const selected = APPROVAL_LEVEL_PICKER_ENTRIES[snapshot().levelPickerSelectedIndex];
-            store.hideLevelPicker(selected?.id);
-            return;
-        }
-        if (key.ctrl && key.name === 'c') {
-            store.hideLevelPicker(undefined);
-            return;
-        }
-    });
-
-    return (
-        <OverlayFrame
-            variant="modal"
-            title="Select approval level"
-            footer="Up/Down to navigate, Enter to select, Ctrl+C to cancel"
-        >
-            <For each={APPROVAL_LEVEL_PICKER_ENTRIES}>
-                {(level, index) => {
-                    const isSelected = () => index() === snapshot().levelPickerSelectedIndex;
-                    return (
-                        <box flexDirection="row">
-                            <text {...(isSelected() ? { bg: SELECTED_BG } : {})}>
-                                {isSelected() ? '> ' : '  '}
-                                {padEndToDisplayWidth(level.label, 13)}
-                            </text>
-                            <text attributes={TextAttributes.DIM}>{level.desc}</text>
-                        </box>
-                    );
-                }}
-            </For>
-        </OverlayFrame>
-    );
-}
-
-// ---------------------------------------------------------------------------
-// RenameOverlay
-// ---------------------------------------------------------------------------
-
-export type RenameOverlayProps = { readonly store: ChatStore };
-
-export function RenameOverlay({ store }: RenameOverlayProps): JSX.Element {
-    const snapshot = useSolidStoreSelector(store, (snapshot) => snapshot);
-
-    useKeyboard((key) => {
-        if (key.name === 'return') {
-            store.submitRename(snapshot().renameBuffer);
-            return;
-        }
-        if (key.name === 'escape') {
-            store.cancelRename();
-            return;
-        }
-        if (key.name === 'backspace') {
-            store.deleteRenameChar();
-            return;
-        }
-        {
-            const ch = printableCharFromKey(key);
-            if (ch !== undefined) {
-                store.appendRenameChar(ch);
-                return;
-            }
-        }
-    });
-
-    return (
-        <OverlayFrame variant="modal" title="Rename Session" footer="Enter to confirm, Esc to cancel">
-            <text>Enter new session name:</text>
-            <box flexDirection="row">
-                <text fg="#00ffff">{'>'}</text>
-                <text> {snapshot().renameBuffer}</text>
-                <text bg="#ffffff" fg="#000000">
-                    {'\u2588'}
-                </text>
-            </box>
-        </OverlayFrame>
-    );
-}
-
-// ---------------------------------------------------------------------------
 // SessionPickerOverlay
 // ---------------------------------------------------------------------------
 
@@ -666,14 +565,20 @@ export function SessionPickerOverlay({ store }: SessionPickerOverlayProps): JSX.
         ),
     );
 
+    // Key-repeat / double-fire guard for confirm/cancel.
+    let settled = false;
     useKeyboard((key) => {
         if (key.name === 'return') {
             key.preventDefault();
+            if (settled) return;
+            settled = true;
             store.confirmSessionPicker();
             return;
         }
         if ((key.ctrl && key.name === 'c') || key.name === 'escape') {
             key.preventDefault();
+            if (settled) return;
+            settled = true;
             store.cancelSessionPicker();
             return;
         }
@@ -767,20 +672,62 @@ export function AgentsDashboardOverlay({ store, workspaceRoot, actions }: Agents
         return buildModelContextPrefLines(selection, localPreferences.preferences().modelContextPrefs);
     });
 
+    let settled = false;
     useKeyboard((key) => {
         if (isEditing()) {
             if (key.name === 'return') {
                 const name = dashboard().editingName;
                 if (name === null) return;
+                if (store.isAgentsDurableBusy()) return;
                 const trimmed = editBuffer().trim();
                 if (trimmed.length === 0) {
+                    const durableToken = store.beginAgentsDurableWrite();
+                    if (durableToken < 0) return;
+                    const previousOverride = inspector()?.overrideModel;
                     store.commitAgentsDashboardModelEdit(undefined);
-                    if (workspaceRoot !== undefined)
-                        void actions?.setAgentModelOverride?.(workspaceRoot, name, undefined);
+                    if (
+                        workspaceRoot !== undefined
+                        && !store.isEventQueueClosed()
+                        && store.getSnapshot().overlayMode === 'agents-dashboard'
+                    ) {
+                        void Promise.resolve(
+                            actions?.setAgentModelOverride?.(workspaceRoot, name, undefined),
+                        )
+                            .catch(() => {
+                                if (store.shouldApplyAgentsDurableWrite(durableToken)) {
+                                    store.setAgentsDashboardAgentOverride(name, previousOverride);
+                                }
+                            })
+                            .finally(() => {
+                                store.endAgentsDurableWrite(durableToken);
+                            });
+                    } else {
+                        store.endAgentsDurableWrite(durableToken);
+                    }
                 } else if (actions?.isValidModelPattern?.(trimmed) === true) {
+                    const durableToken = store.beginAgentsDurableWrite();
+                    if (durableToken < 0) return;
+                    const previousOverride = inspector()?.overrideModel;
                     store.commitAgentsDashboardModelEdit(trimmed);
-                    if (workspaceRoot !== undefined)
-                        void actions?.setAgentModelOverride?.(workspaceRoot, name, trimmed);
+                    if (
+                        workspaceRoot !== undefined
+                        && !store.isEventQueueClosed()
+                        && store.getSnapshot().overlayMode === 'agents-dashboard'
+                    ) {
+                        void Promise.resolve(
+                            actions?.setAgentModelOverride?.(workspaceRoot, name, trimmed),
+                        )
+                            .catch(() => {
+                                if (store.shouldApplyAgentsDurableWrite(durableToken)) {
+                                    store.setAgentsDashboardAgentOverride(name, previousOverride);
+                                }
+                            })
+                            .finally(() => {
+                                store.endAgentsDurableWrite(durableToken);
+                            });
+                    } else {
+                        store.endAgentsDurableWrite(durableToken);
+                    }
                 } else {
                     store.showTransientNotice('Invalid model format. Use provider/model[#variant]');
                     return;
@@ -830,13 +777,41 @@ export function AgentsDashboardOverlay({ store, workspaceRoot, actions }: Agents
         if (key.name === 'space') {
             const currentInspector = inspector();
             if (currentInspector !== null) {
-                store.toggleAgentsDashboardAgentDisabled(currentInspector.name);
-                if (workspaceRoot !== undefined) {
-                    void actions?.toggleAgentDisabled?.(
-                        workspaceRoot,
-                        currentInspector.name,
-                        currentInspector.disabled ? 'remove' : 'add',
-                    );
+                if (store.isAgentsDurableBusy()) return;
+                const durableToken = store.beginAgentsDurableWrite();
+                if (durableToken < 0) return;
+                const name = currentInspector.name;
+                const previousDisabled = currentInspector.disabled;
+                store.toggleAgentsDashboardAgentDisabled(name);
+                if (
+                    workspaceRoot !== undefined
+                    && !store.isEventQueueClosed()
+                    && store.getSnapshot().overlayMode === 'agents-dashboard'
+                ) {
+                    const disabledAction = previousDisabled ? 'remove' : 'add';
+                    void Promise.resolve(
+                        actions?.toggleAgentDisabled?.(
+                            workspaceRoot,
+                            name,
+                            disabledAction,
+                        ),
+                    )
+                        .catch(() => {
+                            // Roll back optimistic disable flip if durable write fails.
+                            if (store.shouldApplyAgentsDurableWrite(durableToken)) {
+                                const live = store
+                                    .getSnapshot()
+                                    .agentsDashboard.agents.find((agent) => agent.name === name);
+                                if (live !== undefined && live.disabled !== previousDisabled) {
+                                    store.toggleAgentsDashboardAgentDisabled(name);
+                                }
+                            }
+                        })
+                        .finally(() => {
+                            store.endAgentsDurableWrite(durableToken);
+                        });
+                } else {
+                    store.endAgentsDurableWrite(durableToken);
                 }
             }
             return;
@@ -853,9 +828,16 @@ export function AgentsDashboardOverlay({ store, workspaceRoot, actions }: Agents
             if (workspaceRoot !== undefined) {
                 const loader = actions?.loadDashboardAgentEntries;
                 if (loader !== undefined) {
+                    const generation = store.beginAgentsReload();
+                    if (generation < 0) return;
                     void (async () => {
-                        const entries = await loader(workspaceRoot, resolveUserConfigDir());
-                        store.reloadAgentsDashboard(entries);
+                        try {
+                            const entries = await loader(workspaceRoot, resolveUserConfigDir());
+                            if (!store.shouldApplyAgentsReload(generation)) return;
+                            store.reloadAgentsDashboard(entries);
+                        } catch {
+                            // Loader failures must not surface as unhandled rejections; generation gate drops stale applies.
+                        }
                     })();
                 }
             }
@@ -867,14 +849,45 @@ export function AgentsDashboardOverlay({ store, workspaceRoot, actions }: Agents
                 key.preventDefault();
                 const catalogDefault = getModelContextLimit(selection.providerID, selection.modelID);
                 if (key.name === '[' || key.name === ']') {
-                    void localPreferences.stepModelAutoCompactThreshold(selection, key.name === '[' ? -1 : 1);
+                    if (
+                        store.isEventQueueClosed()
+                        || store.getSnapshot().overlayMode !== 'agents-dashboard'
+                    ) {
+                        return;
+                    }
+                    void localPreferences.stepModelAutoCompactThreshold(selection, key.name === '[' ? -1 : 1).catch(() => undefined);
                     return;
                 }
-                void localPreferences.stepModelContextLimit(selection, key.name === '-' ? -1 : 1, catalogDefault);
+                if (store.isEventQueueClosed() || store.getSnapshot().overlayMode !== 'agents-dashboard') return;
+                void localPreferences
+                    .stepModelContextLimit(selection, key.name === '-' ? -1 : 1, catalogDefault)
+                    .then(() => {
+                        if (
+                            store.isEventQueueClosed()
+                            || store.getSnapshot().overlayMode !== 'agents-dashboard'
+                        ) {
+                            return;
+                        }
+                        const live = store.getSnapshot().currentModelSelection;
+                        if (
+                            live === undefined
+                            || live.providerID !== selection.providerID
+                            || live.modelID !== selection.modelID
+                        ) {
+                            return;
+                        }
+                        const lines = buildModelContextPrefLines(
+                            selection,
+                            localPreferences.preferences().modelContextPrefs,
+                        );
+                        store.setContextTokensMaxFromStep(lines.effectiveContextLimit);
+                    }).catch(() => undefined);
                 return;
             }
         }
         if (key.name === 'escape' || (key.ctrl && key.name === 'c')) {
+            if (settled) return;
+            settled = true;
             store.hideAgentsDashboard();
         }
     });

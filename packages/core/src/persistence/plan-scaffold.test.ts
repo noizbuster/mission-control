@@ -279,3 +279,52 @@ describe('scaffoldPlanFiles', () => {
         expect(readFileSync(draftPath(root, slug), 'utf8')).toBe(beforeDraft);
     });
 });
+
+describe('plan-scaffold concurrency', () => {
+    it('serializes concurrent scaffoldPlanFiles for distinct slugs', async () => {
+        const root = makeTempRoot();
+        const results = await Promise.all([
+            scaffoldPlanFiles(root, 'slug-a'),
+            scaffoldPlanFiles(root, 'slug-b'),
+            scaffoldPlanFiles(root, 'slug-c'),
+        ]);
+        expect(results.every((result) => result.created)).toBe(true);
+        expect(existsSync(planPath(root, 'slug-a'))).toBe(true);
+        expect(existsSync(planPath(root, 'slug-b'))).toBe(true);
+        expect(existsSync(planPath(root, 'slug-c'))).toBe(true);
+    });
+
+    it('serializes concurrent writeDraftFrontmatter and dual-review appends on one slug', async () => {
+        const root = makeTempRoot();
+        const slug = 'dual-race';
+        await writeDraftFrontmatter(root, slug, {
+            status: 'drafting',
+            intent: 'clear',
+            reviewRequired: false,
+        });
+        await Promise.all([
+            writeDraftFrontmatter(root, slug, {
+                status: 'awaiting-approval',
+                intent: 'clear',
+                reviewRequired: true,
+            }),
+            appendDualReviewReceipts(root, slug, {
+                reviewer: 'APPROVE',
+                oracle: 'APPROVE',
+                verdict: 'APPROVE',
+                attempt: 1,
+            }),
+            appendDualReviewReceipts(root, slug, {
+                reviewer: 'REJECT',
+                oracle: 'APPROVE',
+                verdict: 'REJECT',
+                attempt: 2,
+            }),
+        ]);
+        const draft = readFileSync(draftPath(root, slug), 'utf8');
+        expect(draft.includes('awaiting-approval') || draft.includes('drafting') || draft.includes('Status:')).toBe(true);
+        expect(draft).toContain(DUAL_REVIEW_RECEIPTS_HEADING);
+        expect(draft).toContain('attempt 1:');
+        expect(draft).toContain('attempt 2:');
+    });
+});

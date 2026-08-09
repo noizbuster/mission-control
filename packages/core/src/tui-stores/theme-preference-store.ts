@@ -24,6 +24,8 @@ export type TuiThemePreferenceStoreOptions = {
 export class TuiThemePreferenceStore {
     readonly filePath: string;
     private readonly maxEntries: number;
+    /** Serialize whole-document saves under concurrent theme writes. */
+    private writeChain: Promise<void> = Promise.resolve();
 
     constructor(options: TuiThemePreferenceStoreOptions = {}) {
         const dataDir = options.dataDir ?? resolveMissionControlDataDir();
@@ -31,12 +33,23 @@ export class TuiThemePreferenceStore {
         this.maxEntries = options.maxEntries ?? TUI_THEME_OVERRIDE_MAX_ENTRIES;
     }
 
+    private enqueue<T>(task: () => Promise<T>): Promise<T> {
+        const run = this.writeChain.then(task, task);
+        this.writeChain = run.then(
+            () => undefined,
+            () => undefined,
+        );
+        return run;
+    }
+
     async getPreference(): Promise<TuiThemePreference> {
         return (await this.readFile()).preference;
     }
 
     async savePreference(preference: TuiThemePreference): Promise<void> {
-        await this.writeFile({ version: 1, preference: trimPreference(preference, this.maxEntries) });
+        await this.enqueue(async () => {
+            await this.writeFile({ version: 1, preference: trimPreference(preference, this.maxEntries) });
+        });
     }
 
     private async readFile(): Promise<TuiThemePreferenceFile> {

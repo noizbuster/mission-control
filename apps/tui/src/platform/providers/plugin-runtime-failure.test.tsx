@@ -59,4 +59,37 @@ describe('TUI plugin runtime provider failures', () => {
         expect(rendered.pluginRuntime.slots()).toEqual([]);
         expect(rendered.pluginRuntime.routes()).toEqual([]);
     });
+
+    it('does not let a resumed plugin setup restore registrations after provider teardown', async () => {
+        let releaseSetup: (() => void) | undefined;
+        let markSetupStarted = (): void => {};
+        const setupStarted = new Promise<void>((resolve) => {
+            markSetupStarted = resolve;
+        });
+        const rendered = renderPluginProviderValues({
+            allowedCapabilities: ['ui.command'],
+            plugins: [
+                {
+                    source: 'user',
+                    manifest: demoManifest(['ui.command']),
+                    setup: async (api) => {
+                        await new Promise<void>((resolve) => {
+                            releaseSetup = resolve;
+                            markSetupStarted();
+                        });
+                        api.registerCommand({ id: 'demo.stale', title: 'Stale command' }, () => {});
+                    },
+                },
+            ],
+        });
+        await setupStarted;
+
+        rendered.dispose();
+        if (releaseSetup === undefined) throw new Error('plugin setup did not start');
+        releaseSetup();
+        await rendered.pluginRuntime.ready;
+
+        expect(rendered.pluginRuntime.commands()).toEqual([]);
+        await expect(rendered.pluginRuntime.dispatchCommand('demo.stale')).resolves.toEqual({ kind: 'missing' });
+    });
 });

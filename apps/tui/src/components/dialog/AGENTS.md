@@ -13,8 +13,6 @@ Reusable dialog primitives for the TUI: host, content shell, and alert/confirm/p
 |------|-------------|
 | `index.ts` | Barrel exports |
 | `dialog.tsx` | Core dialog component |
-| `dialog-host.tsx` | Host that mounts active dialog from provider state |
-| `dialog-content.tsx` | Shared content chrome |
 | `dialog-alert.tsx` | Alert (ack-only) |
 | `dialog-confirm.tsx` | Confirm yes/no |
 | `dialog-prompt.tsx` | Text prompt |

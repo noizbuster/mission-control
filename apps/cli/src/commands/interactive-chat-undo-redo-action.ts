@@ -32,6 +32,12 @@ export type RedoAction = { readonly kind: 'redo' };
 export type UndoRedoConversationController = {
     readonly readOutputText: () => string;
     readonly replaceOutputText: (next: string) => void;
+    /**
+     * Optional typed-aware view undo/redo (TUI ChatStore). When present, /undo
+     * and /redo prefer these so transcriptParts stay aligned with outputText.
+     */
+    readonly undoLastViewExchange?: () => 'ok' | 'generating' | 'empty' | 'already' | 'blocked';
+    readonly redoLastViewExchange?: () => 'ok' | 'generating' | 'empty' | 'blocked';
     readonly getStack: () => UndoRedoStack;
     readonly setStack: (next: UndoRedoStack) => void;
 };
@@ -44,6 +50,29 @@ export async function runUndoAction(
 ): Promise<ChatActionResult> {
     if (controller === undefined) {
         chatOutput.write('Undo unavailable: conversation tracking is not configured.\n');
+        return actionResult(modelProviderSelection, activeTurn);
+    }
+    // Prefer the TUI store path so typed transcriptParts stay dual-consistent.
+    if (controller.undoLastViewExchange !== undefined) {
+        const result = controller.undoLastViewExchange();
+        if (result === 'blocked') {
+            chatOutput.write('Cannot undo while an overlay is open.\n');
+            return actionResult(modelProviderSelection, activeTurn);
+        }
+        if (result === 'generating') {
+            chatOutput.write('Cannot undo while generating.\n');
+            return actionResult(modelProviderSelection, activeTurn);
+        }
+        if (result === 'already') {
+            chatOutput.write('Nothing more to undo. Use /redo to restore.\n');
+            return actionResult(modelProviderSelection, activeTurn);
+        }
+        if (result === 'empty') {
+            chatOutput.write('Nothing to undo.\n');
+            return actionResult(modelProviderSelection, activeTurn);
+        }
+        // conversationText mirror is updated inside undoLastViewExchange.
+        chatOutput.write('Reverted last exchange. Use /redo to restore.\n');
         return actionResult(modelProviderSelection, activeTurn);
     }
     const currentText = controller.readOutputText();
@@ -67,6 +96,24 @@ export async function runRedoAction(
 ): Promise<ChatActionResult> {
     if (controller === undefined) {
         chatOutput.write('Redo unavailable: conversation tracking is not configured.\n');
+        return actionResult(modelProviderSelection, activeTurn);
+    }
+    if (controller.redoLastViewExchange !== undefined) {
+        const result = controller.redoLastViewExchange();
+        if (result === 'blocked') {
+            chatOutput.write('Cannot redo while an overlay is open.\n');
+            return actionResult(modelProviderSelection, activeTurn);
+        }
+        if (result === 'generating') {
+            chatOutput.write('Cannot redo while generating.\n');
+            return actionResult(modelProviderSelection, activeTurn);
+        }
+        if (result === 'empty') {
+            chatOutput.write('Nothing to redo.\n');
+            return actionResult(modelProviderSelection, activeTurn);
+        }
+        // conversationText mirror is updated inside redoLastViewExchange.
+        chatOutput.write('Restored exchange.\n');
         return actionResult(modelProviderSelection, activeTurn);
     }
     const popped = popUndonePair(controller.getStack());

@@ -81,15 +81,30 @@ export function monochrome(code: string): readonly HighlightedLine[] {
 }
 
 let initPromise: Promise<void> | null = null;
+let initGeneration = 0;
 let syntaxStyle: SyntaxStyle | null = null;
 let parsersRegistered = false;
+let highlighterGeneration = 0;
 
 /** LRU cap for asyncResultCache. Without it, long streaming sessions accumulate one entry per unique code block ever highlighted (native TextBuffer/SyntaxStyle pressure). */
 const ASYNC_RESULT_CACHE_LIMIT = 256;
+/** Bound worker pressure; a streamed fence otherwise schedules one parse per prefix. */
+const MAX_ASYNC_HIGHLIGHT_IN_FLIGHT = 2;
 
 const asyncResultCache = new Map<string, readonly HighlightedLine[]>();
 const inFlight = new Map<string, Promise<void>>();
 
+interface HighlightRequest {
+    readonly code: string;
+    readonly filetype: string;
+    readonly key: string;
+    readonly generation: number;
+    readonly runtime: HighlighterRuntime;
+}
+
+/** At saturation only the most recent miss is retained; a future render can reschedule any older block. */
+let deferredHighlight: HighlightRequest | undefined;
+let invalidationScheduledForGeneration: number | undefined;
 let highlightVersion = 0;
 const highlightListeners = new Set<() => void>();
 
@@ -111,6 +126,19 @@ function notifyHighlightListeners(): void {
     for (const listener of highlightListeners) {
         listener();
     }
+}
+
+/** Batch cache invalidation and listener publication from concurrent worker completions. */
+function scheduleHighlightInvalidation(generation: number): void {
+    if (invalidationScheduledForGeneration === generation) return;
+    invalidationScheduledForGeneration = generation;
+    queueMicrotask(() => {
+        if (invalidationScheduledForGeneration !== generation) return;
+        invalidationScheduledForGeneration = undefined;
+        if (generation !== highlighterGeneration) return;
+        clearRenderCache();
+        notifyHighlightListeners();
+    });
 }
 
 function cacheKey(filetype: string, code: string): string {
@@ -167,26 +195,38 @@ export function setHighlighterRuntime(next: HighlighterRuntime): void {
  * shared in-flight promise deduplicates concurrent first callers; on failure
  * the state is cleared so a later call can retry.
  */
-function initHighlighter(): Promise<void> {
-    if (initPromise !== null) return initPromise;
-    initPromise = doInit().catch((error: unknown) => {
-        initPromise = null;
-        syntaxStyle = null;
+function initHighlighter(generation: number, activeRuntime: HighlighterRuntime): Promise<void> {
+    if (initPromise !== null && initGeneration === generation) return initPromise;
+    initGeneration = generation;
+    const initialized = doInit(generation, activeRuntime).catch((error: unknown) => {
+        if (generation === highlighterGeneration) {
+            initPromise = null;
+            syntaxStyle = null;
+        }
         throw error;
     });
-    return initPromise;
+    initPromise = initialized;
+    return initialized;
 }
 
-async function doInit(): Promise<void> {
-    const client = runtime.getClient();
-    await client.setDataPath(runtime.resolveDataPath());
+async function doInit(generation: number, activeRuntime: HighlighterRuntime): Promise<void> {
+    const client = activeRuntime.getClient();
+    await client.setDataPath(activeRuntime.resolveDataPath());
+    if (generation !== highlighterGeneration) return;
     if (!parsersRegistered) {
-        runtime.registerParsers(TREE_SITTER_PARSERS);
+        activeRuntime.registerParsers(TREE_SITTER_PARSERS);
+        if (generation !== highlighterGeneration) return;
         parsersRegistered = true;
     }
     try {
-        syntaxStyle = runtime.buildSyntaxStyle();
+        const style = activeRuntime.buildSyntaxStyle();
+        if (generation !== highlighterGeneration) {
+            style.destroy();
+            return;
+        }
+        syntaxStyle = style;
     } catch (error: unknown) {
+        if (generation !== highlighterGeneration) return;
         syntaxStyle = null;
         const message = errorToString(error);
         process.stderr.write(`tree-sitter SyntaxStyle unavailable: ${message}\n`);
@@ -199,38 +239,74 @@ async function doInit(): Promise<void> {
 
 /**
  * Fire-and-forget an async parse for (code, filetype). Deduplicated against the
- * cache and any in-flight parse for the same key. On success the colored lines
- * are cached, the render LRU is cleared, and listeners are notified. Never
- * throws and never rethrows; failures degrade to monochrome with a stderr log.
+ * cache and any in-flight parse for the same key. At worker capacity, preserves
+ * only the newest miss so streaming prefixes cannot create unbounded native
+ * work. Successful fills batch their render invalidation. Never throws and
+ * never rethrows; failures degrade to monochrome with a stderr log.
  */
 function scheduleAsyncHighlight(code: string, filetype: string): void {
     const key = cacheKey(filetype, code);
-    if (asyncResultCache.has(key) || inFlight.has(key)) return;
+    if (asyncResultCache.has(key) || inFlight.has(key) || deferredHighlight?.key === key) return;
+    const request: HighlightRequest = {
+        code,
+        filetype,
+        key,
+        generation: highlighterGeneration,
+        runtime,
+    };
+    if (inFlight.size >= MAX_ASYNC_HIGHLIGHT_IN_FLIGHT) {
+        deferredHighlight = request;
+        return;
+    }
+    startAsyncHighlight(request);
+}
 
+function startAsyncHighlight(request: HighlightRequest): void {
     const task = (async (): Promise<void> => {
         try {
-            await initHighlighter();
+            await initHighlighter(request.generation, request.runtime);
+            if (request.generation !== highlighterGeneration) return;
             const style = syntaxStyle;
             if (style === null) return;
-            const client = runtime.getClient();
-            const result = await client.highlightOnce(code, filetype);
-            if (result.error !== undefined) {
-                return;
-            }
+            const client = request.runtime.getClient();
+            const result = await client.highlightOnce(request.code, request.filetype);
+            if (request.generation !== highlighterGeneration || result.error !== undefined) return;
             const highlights = result.highlights;
             if (highlights === undefined) return;
-            const chunks = runtime.toTextChunks(code, highlights, style);
+            const chunks = request.runtime.toTextChunks(request.code, highlights, style);
             const lines = chunksToLines(chunks);
-            writeCachedLines(key, lines);
-            clearRenderCache();
-            notifyHighlightListeners();
-        } catch {}
+            if (request.generation !== highlighterGeneration) return;
+            writeCachedLines(request.key, lines);
+            scheduleHighlightInvalidation(request.generation);
+        } catch (error: unknown) {
+            if (request.generation !== highlighterGeneration) return;
+            process.stderr.write(`tree-sitter highlight failed: ${errorToString(error)}\n`);
+        }
     })();
 
-    inFlight.set(key, task);
+    inFlight.set(request.key, task);
     void task.finally(() => {
-        inFlight.delete(key);
+        if (inFlight.get(request.key) === task) {
+            inFlight.delete(request.key);
+        }
+        startDeferredHighlight();
     });
+}
+
+function startDeferredHighlight(): void {
+    if (inFlight.size >= MAX_ASYNC_HIGHLIGHT_IN_FLIGHT) return;
+    const request = deferredHighlight;
+    if (request === undefined) return;
+    deferredHighlight = undefined;
+    if (
+        request.generation !== highlighterGeneration ||
+        asyncResultCache.has(request.key) ||
+        inFlight.has(request.key)
+    ) {
+        startDeferredHighlight();
+        return;
+    }
+    startAsyncHighlight(request);
 }
 
 /**
@@ -298,6 +374,11 @@ export function highlightTreeSitter(code: string, lang?: string): readonly Highl
  * / SIGINT. Idempotent; never throws (logs to stderr on failure).
  */
 export async function closeTreeSitterClient(): Promise<void> {
+    highlighterGeneration += 1;
+    initPromise = null;
+    parsersRegistered = false;
+    deferredHighlight = undefined;
+    invalidationScheduledForGeneration = undefined;
     try {
         if (syntaxStyle !== null) {
             syntaxStyle.destroy();
@@ -305,8 +386,6 @@ export async function closeTreeSitterClient(): Promise<void> {
         }
         await runtime.destroyClient();
     } catch {}
-    initPromise = null;
-    parsersRegistered = false;
 }
 
 /**
@@ -315,6 +394,7 @@ export async function closeTreeSitterClient(): Promise<void> {
  * and restores the default runtime.
  */
 export function resetHighlighterForTest(): void {
+    highlighterGeneration += 1;
     if (syntaxStyle !== null) {
         try {
             syntaxStyle.destroy();
@@ -327,6 +407,8 @@ export function resetHighlighterForTest(): void {
     parsersRegistered = false;
     asyncResultCache.clear();
     inFlight.clear();
+    deferredHighlight = undefined;
+    invalidationScheduledForGeneration = undefined;
     highlightListeners.clear();
     highlightVersion = 0;
     runtime = defaultRuntime;

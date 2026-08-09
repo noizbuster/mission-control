@@ -63,6 +63,12 @@ export async function runSessionNavigationAction(
                       );
             const transcript =
                 attached ?? (await loadSessionTranscriptParts(result.sessionId, coding.observabilityRedactor));
+            // Load I/O can outlive teardown — do not commit identity into a dead UI.
+            if (coding.isUiClosed?.() === true) {
+                return actionResult(modelProviderSelection);
+            }
+            // Commit session id before usage/cache attach so outer setSessionId cannot wipe them.
+            coding.commitAttachedSession?.(result.sessionId, result.sessionStore);
             if (coding.replaceSessionTranscript !== undefined) {
                 coding.replaceSessionTranscript(transcript.parts, transcript.outputText);
             } else {

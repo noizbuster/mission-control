@@ -179,6 +179,7 @@ describe('TUI prompt services provider', () => {
         await waitForPromptServicesReady(rendered);
 
         rendered.chatStore.setInputMirror('@');
+        rendered.chatStore.ensureFileAutocompleteCurrent();
         expect(rendered.chatStore.getSnapshot().fileAutocomplete.matches.map((match) => match.name)).toEqual([
             'alpha.ts',
             'zeta.ts',
@@ -186,6 +187,7 @@ describe('TUI prompt services provider', () => {
 
         await rendered.promptRef.recordFileReference('zeta.ts');
         rendered.chatStore.setInputMirror('@');
+        rendered.chatStore.ensureFileAutocompleteCurrent();
 
         expect(rendered.frecency.rankedKeys()[0]).toBe('zeta.ts');
         expect(rendered.chatStore.getSnapshot().fileAutocomplete.matches.map((match) => match.name)).toEqual([

@@ -48,23 +48,49 @@ function createTuiPromptHistoryService(
     const [entries, setEntries] = createSignal<readonly TuiPromptHistoryEntry[]>([]);
     const texts = (): readonly string[] => entries().map((entry) => entry.text);
     let disposed = false;
-    const ready = reload();
+    let opChain: Promise<void> = Promise.resolve();
+
+    function enqueue<T>(task: () => Promise<T>): Promise<T> {
+        const run = opChain.then(task, task);
+        opChain = run.then(
+            () => undefined,
+            () => undefined,
+        );
+        return run;
+    }
 
     onCleanup(() => {
         disposed = true;
     });
 
-    async function reload(): Promise<void> {
+    async function reloadFromStore(): Promise<void> {
+        const historyGen = chatStore?.beginHistoryEntriesReseed() ?? 0;
         const storedEntries = await store.listEntries();
         const parsedEntries = storedEntries.map((entry) => TuiPromptHistoryEntrySchema.parse(entry));
         if (disposed) return;
         setEntries(parsedEntries);
-        chatStore?.setHistoryEntries(parsedEntries);
+        if (chatStore === undefined || chatStore.isEventQueueClosed()) return;
+        // Boot reload can finish after submitLine already appended live recall entries.
+        if (!chatStore.shouldApplyHistoryEntriesReseed(historyGen)) return;
+        // Never shrink/replace a longer live history with a stale disk snapshot.
+        const liveCount = chatStore.getSnapshot().historyEntries.length;
+        if (liveCount > parsedEntries.length) return;
+        chatStore.setHistoryEntries(parsedEntries);
     }
 
+    async function reload(): Promise<void> {
+        await enqueue(async () => {
+            await reloadFromStore();
+        });
+    }
+
+    const ready = reload();
+
     async function appendPrompt(text: string): Promise<void> {
-        await store.appendText(text);
-        await reload();
+        await enqueue(async () => {
+            await store.appendText(text);
+            await reloadFromStore();
+        });
     }
 
     return Object.freeze({
@@ -75,3 +101,4 @@ function createTuiPromptHistoryService(
         appendPrompt,
     });
 }
+

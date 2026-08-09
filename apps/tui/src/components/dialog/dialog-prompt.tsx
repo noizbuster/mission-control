@@ -25,15 +25,19 @@ export function DialogPrompt(props: DialogPromptProps): JSX.Element {
     const spinner = useSpinnerFrame();
     const [buffer, setBuffer] = createSignal(props.value ?? '');
 
+    let settled = false;
     useKeyboard((key) => {
         if (props.busy) return;
+        if (settled) return;
         if (key.name === 'return') {
             key.preventDefault();
+            settled = true;
             props.onConfirm?.(buffer());
             return;
         }
         if (key.name === 'escape') {
             key.preventDefault();
+            settled = true;
             dialog.clear();
             return;
         }

@@ -36,6 +36,13 @@ export function wireAbgOverlay(controller: AbgOverlayController, graphSpec?: Abg
         clearStalePerformanceEntries();
         commitToStore();
     }, readRefreshMsFromEnv());
+    // Keyboard `r` / controller.flushNow commits the CLI-side batch immediately.
+    // Optional for older controller builds that predate bindFlush.
+    if (typeof controller.bindFlush === 'function') {
+        controller.bindFlush(() => {
+            commitToStore();
+        });
+    }
 
     if (graphSpec !== undefined) {
         const nodes = new Map(pendingSnapshot.nodes);
@@ -140,6 +147,9 @@ export function wireAbgOverlay(controller: AbgOverlayController, graphSpec?: Abg
         dirty = true;
     };
     const dispose = (): void => {
+        if (typeof controller.bindFlush === 'function') {
+            controller.bindFlush(undefined);
+        }
         clearInterval(timer);
         commitToStore();
     };

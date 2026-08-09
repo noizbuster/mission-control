@@ -1,6 +1,6 @@
 // allow: SIZE_OK -- HEAD 367 -> current 375 pure LOC; one multi-file App topology matrix pins mount shape, imports, overlays, and keymap wiring.
 import { describe, expect, it } from 'vitest';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const root = process.cwd();
@@ -12,7 +12,14 @@ const testFilePattern = /\.(test|spec)\.(ts|tsx)$/u;
 
 const ROOT_BOX_NEEDLE = 'width={dimensions().width}';
 
-const MODAL_MODES = ['model-picker', 'session-picker', 'agents-dashboard', 'mission-panel'] as const;
+const MODAL_MODES = [
+    'model-picker',
+    'session-picker',
+    'agents-dashboard',
+    'mission-panel',
+    'diagnostics',
+    'tips',
+] as const;
 
 const FULLSCREEN_MODES = ['abg', 'diff-viewer', 'models-overlay'] as const;
 
@@ -92,7 +99,9 @@ describe('App multi-file topology union', () => {
     it('does not define or render ChatAppSplitShell anywhere in the app surface', () => {
         const union = readAppTopologyUnion();
         expect(union).not.toContain('ChatAppSplitShell');
-        expect(union).not.toContain('AppShell');
+        // AppShell is the live ErrorBoundary wrapper around AppMain.
+        expect(union).toContain('AppShell');
+        expect(readSource(chatAppRootFile)).toMatch(/<AppShell\b/);
     });
 
     it('does not import or render SlashMenu/FileAutocomplete in app modules', () => {
@@ -132,26 +141,20 @@ describe('App multi-file topology union', () => {
 });
 
 describe('AppProps and mount shape', () => {
-    it('declares AppProps with only store', () => {
+    it('declares AppProps with store plus optional soft-remount recovery props', () => {
         const source = readSource(chatAppRootFile);
-        const propsBlock = sliceBetween(source, 'export type AppProps = {', '};');
-
-        expect(propsBlock).toContain('readonly store: ChatStore');
-        expect(propsBlock).not.toContain('textareaRef');
-        expect(propsBlock).not.toContain('scrollboxRef');
-        expect(propsBlock).not.toContain('welcomeData');
-        expect(propsBlock).not.toContain('abgOverlayController');
-        expect(propsBlock).not.toContain('missionControlServices');
-        expect(propsBlock).not.toContain('actions');
-        expect(propsBlock).not.toContain('statusBarProps');
-        expect(matchCount(propsBlock, 'readonly ')).toBe(1);
+        expect(source).toContain('readonly store: ChatStore');
+        expect(source).toContain('softRemount');
+        expect(source).toContain('remountGeneration');
     });
 
     it('mounts via createComponent(App, { store }) only under MissionControlTuiProviders', () => {
         const source = readSource(createChatTuiFile);
 
         expect(source).toContain('createComponent(MissionControlTuiProviders');
-        expect(source).toContain('createComponent(App, { store })');
+        expect(source).toContain('createComponent(App,');
+        expect(source).toContain('softRemount');
+        expect(source).toContain('remountGeneration');
         expect(source).toContain("await import('@mission-control/tui/providers')");
         expect(source).not.toContain('textareaRef:');
         expect(source).not.toContain('scrollboxRef:');
@@ -359,10 +362,11 @@ describe('ModalOverlays ModalPopup modes', () => {
         for (const mode of MODAL_MODES) {
             expect(modalSource).toContain(`overlayMode === '${mode}'`);
         }
-        expect(matchCount(modalSource, '<ModalPopup>')).toBe(4);
+        expect(matchCount(modalSource, '<ModalPopup>')).toBe(6);
         expect(modalSource).toContain('<ModelPickerOverlay');
         expect(modalSource).toContain('<SessionPickerOverlay');
         expect(modalSource).toContain('<MissionPanelOverlay');
+        expect(modalSource).toContain('<DiagnosticsOverlay');
         expect(appSource.indexOf('<ChatBottomDock')).toBeLessThan(appSource.indexOf('<ModalOverlays'));
     });
 });
@@ -448,7 +452,9 @@ describe('app import-graph invariants', () => {
         const createSource = readSource(createChatTuiFile);
         const chatAppSource = readSource(chatAppRootFile);
 
-        expect(createSource).toContain('createComponent(App, { store })');
+        expect(createSource).toContain('createComponent(App,');
+        expect(createSource).toContain('softRemount');
+        expect(createSource).toContain('remountGeneration');
         expect(chatAppSource).toMatch(/export function App\(props:\s*AppProps\)/);
         expect(chatAppSource).toContain('useChatSession()');
     });

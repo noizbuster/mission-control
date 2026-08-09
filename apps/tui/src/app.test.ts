@@ -18,6 +18,10 @@ vi.mock('solid-js', () => ({
     Show: () => undefined,
     createMemo: () => () => [],
     createSignal: () => [() => 0, () => undefined],
+    createEffect: () => undefined,
+    createContext: () => ({ Provider: () => undefined }),
+    useContext: () => undefined,
+    onCleanup: () => undefined,
 }));
 vi.mock('./app/FullscreenOverlays', () => ({ FullscreenOverlays: () => undefined }));
 vi.mock('./app/ModalOverlays', () => ({ ModalOverlays: () => undefined }));
@@ -37,7 +41,6 @@ vi.mock('./components/dialog/dialog', () => ({
     DialogOverlay: () => undefined,
     DialogProvider: () => undefined,
 }));
-vi.mock('./components/dialog/dialog-host', () => ({ DialogHost: () => undefined }));
 vi.mock('./platform/keymap/keymap-chrome', () => ({ KeymapChrome: () => undefined }));
 vi.mock('./platform/providers/index', () => ({
     useChatSession: () => undefined,

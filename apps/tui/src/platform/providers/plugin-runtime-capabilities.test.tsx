@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MAX_PLUGIN_DIAGNOSTICS } from './plugin-runtime-service';
 import { allPluginCapabilities, demoManifest, renderPluginProviderValues } from './plugin-runtime-test-support';
 
 describe('TUI plugin runtime provider capabilities', () => {
@@ -39,6 +40,34 @@ describe('TUI plugin runtime provider capabilities', () => {
             'capability_required',
         ]);
         expect(rendered.pluginRuntime.diagnostics().every((diagnostic) => diagnostic.redacted)).toBe(true);
+
+        rendered.dispose();
+    });
+
+    it('bounds repeated capability-denial diagnostics while retaining the newest entry', async () => {
+        const rendered = renderPluginProviderValues({
+            allowedCapabilities: ['ui.command'],
+            plugins: [
+                {
+                    source: 'user',
+                    manifest: demoManifest(['ui.command']),
+                    setup: (api) => {
+                        api.registerCommand({ id: 'repeat.denied-kv', title: 'Repeat denied KV' }, async () => {
+                            await api.kv.setString('key', 'value');
+                        });
+                    },
+                },
+            ],
+        });
+        await rendered.pluginRuntime.ready;
+
+        for (let index = 0; index <= MAX_PLUGIN_DIAGNOSTICS; index += 1) {
+            await rendered.pluginRuntime.dispatchCommand('repeat.denied-kv');
+        }
+
+        const diagnostics = rendered.pluginRuntime.diagnostics();
+        expect(diagnostics).toHaveLength(MAX_PLUGIN_DIAGNOSTICS);
+        expect(diagnostics.at(-1)?.code).toBe('capability_required');
 
         rendered.dispose();
     });

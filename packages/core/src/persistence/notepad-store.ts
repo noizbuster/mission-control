@@ -6,6 +6,22 @@ import { join } from 'node:path';
 
 const NOTEPADS_DIR = 'notepads';
 
+/** Process-local per-path chains so concurrent appendNotepad cannot drop entries. */
+const writeChains = new Map<string, Promise<void>>();
+
+function enqueuePathWrite(path: string, task: () => Promise<void>): Promise<void> {
+    const previous = writeChains.get(path) ?? Promise.resolve();
+    const run = previous.then(task, task);
+    writeChains.set(
+        path,
+        run.then(
+            () => undefined,
+            () => undefined,
+        ),
+    );
+    return run;
+}
+
 export const NOTEPAD_FILES = ['learnings', 'decisions', 'issues', 'problems'] as const;
 export type NotepadFile = (typeof NOTEPAD_FILES)[number];
 
@@ -75,10 +91,12 @@ export async function appendNotepad(
     const stamp = (options.now ?? (() => new Date()))().toISOString();
     const block = buildAppendBlock(stamp, entry);
 
-    const existing = await readExistingForAppend(filePath);
-    const next = existing + block;
-    assertAppendOnly(existing, next);
-    await atomicWriteTextFile(filePath, next);
+    await enqueuePathWrite(filePath, async () => {
+        const existing = await readExistingForAppend(filePath);
+        const next = existing + block;
+        assertAppendOnly(existing, next);
+        await atomicWriteTextFile(filePath, next);
+    });
 }
 
 export function notepadFilePath(root: string, planName: string, file: NotepadFile): string {

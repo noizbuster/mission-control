@@ -103,6 +103,23 @@ describe('TuiPluginManifestStore', () => {
     });
 });
 
+describe('TuiPluginManifestStore concurrency', () => {
+    it('serializes concurrent saveManifest without dropping plugins', async () => {
+        const { mkdtemp } = await import('node:fs/promises');
+        const { tmpdir } = await import('node:os');
+        const { join } = await import('node:path');
+        const dir = await mkdtemp(join(tmpdir(), 'mctrl-plugin-'));
+        const store = new TuiPluginManifestStore({ dataDir: dir });
+        await Promise.all([
+            store.saveManifest({ name: 'a', version: '1.0.0', capabilities: ['ui.slot'] }),
+            store.saveManifest({ name: 'b', version: '1.0.0', capabilities: ['ui.kv'] }),
+            store.saveManifest({ name: 'c', version: '1.0.0', capabilities: ['ui.slot'] }),
+        ]);
+        const names = (await store.listManifests()).map((manifest) => manifest.name).sort();
+        expect(names).toEqual(['a', 'b', 'c']);
+    });
+});
+
 function requireScope(scope: TuiStoreTestScope | undefined): TuiStoreTestScope {
     if (scope !== undefined) {
         return scope;

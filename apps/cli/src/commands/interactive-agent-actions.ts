@@ -131,8 +131,10 @@ async function refreshAgentsDashboardIfOpen(
     workspaceRoot: string,
     userConfigDir: string,
 ): Promise<void> {
-    if (coding.reloadAgentsDashboard !== undefined)
-        coding.reloadAgentsDashboard(await loadDashboardAgentEntries(workspaceRoot, userConfigDir));
+    if (coding.reloadAgentsDashboard === undefined) return;
+    const entries = await loadDashboardAgentEntries(workspaceRoot, userConfigDir);
+    // Store reloadAgentsDashboard no-ops while durableBusy; still avoid wasted work.
+    coding.reloadAgentsDashboard(entries);
 }
 
 function formatDashboardModel(model: AgentDefinition['model']): string | undefined {

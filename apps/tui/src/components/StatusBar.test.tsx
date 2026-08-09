@@ -5,6 +5,8 @@ import {
     approvalLevelColor,
     buildStatusDivider,
     contextCacheHitPercent,
+    contextPressureGlyph,
+    contextUsageColor,
     contextUsagePercent,
     formatBottomStatus,
     formatBottomStatusRow,
@@ -14,6 +16,7 @@ import {
     type StatusBarProps,
     statusBarLayoutFromPolicy,
 } from './StatusBar';
+import { CHAT_ERROR, CHAT_TEXT_MUTED, CHAT_WARNING } from './chat-theme';
 
 const baseProps: StatusBarProps = { providerID: 'local', modelID: 'local-echo' };
 
@@ -62,6 +65,38 @@ describe('contextUsagePercent', () => {
         expect(contextUsagePercent(100, -1)).toBe(undefined);
         expect(contextUsagePercent(-1, 200000)).toBe(undefined);
         expect(contextUsagePercent(Number.NaN, 200000)).toBe(undefined);
+    });
+});
+
+describe('contextUsageColor', () => {
+    it('ramps muted/warning/error by fill percent onto theme tokens', () => {
+        expect(contextUsageColor(10, 100)).toBe(CHAT_TEXT_MUTED);
+        expect(contextUsageColor(69, 100)).toBe(CHAT_TEXT_MUTED);
+        expect(contextUsageColor(70, 100)).toBe(CHAT_WARNING);
+        expect(contextUsageColor(89, 100)).toBe(CHAT_WARNING);
+        expect(contextUsageColor(90, 100)).toBe(CHAT_ERROR);
+        expect(contextUsageColor(95, 100)).toBe(CHAT_ERROR);
+        expect(contextUsageColor(10, 0)).toBeUndefined();
+    });
+});
+
+describe('contextPressureGlyph', () => {
+    it('is hidden below warning and ramps open/filled by pressure', () => {
+        expect(contextPressureGlyph(10, 100)).toBeUndefined();
+        expect(contextPressureGlyph(70, 100)).toBe('○');
+        expect(contextPressureGlyph(90, 100)).toBe('●');
+    });
+
+    it('surfaces on narrow status rows when the full context label is hidden', () => {
+        const row = formatTopStatusRow({
+            providerID: 'local',
+            modelID: 'echo',
+            contextTokensUsed: 90_000,
+            contextTokensMax: 100_000,
+            statusLayout: statusLayoutForColumns(40),
+        });
+        expect(row.contextLabel).toBeUndefined();
+        expect(row.contextGlyph).toBe('●');
     });
 });
 

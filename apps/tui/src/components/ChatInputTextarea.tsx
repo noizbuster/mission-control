@@ -2,7 +2,7 @@
 
 import type { KeyEvent, PasteEvent, TextareaRenderable } from '@opentui/core';
 import { defaultTextareaKeyBindings } from '@opentui/core';
-import { createEffect, type JSX, onCleanup } from 'solid-js';
+import { createEffect, type Accessor, type JSX, onCleanup } from 'solid-js';
 import { CHAT_ELEMENT_BG, CHAT_PLACEHOLDER, CHAT_PRIMARY, CHAT_TEXT } from './chat-theme';
 import { LEFT_ACCENT_BORDER } from './overlay-theme';
 
@@ -10,6 +10,8 @@ export interface ChatTextareaHandle {
     readonly get: () => ChatTextareaSurface | undefined;
     readonly set: (renderable: TextareaRenderable) => void;
     readonly clear: () => void;
+    /** Bumps on attach/detach so Solid effects can track native ref lifecycle. */
+    readonly generation?: Accessor<number>;
 }
 
 export interface ChatTextareaSurface {

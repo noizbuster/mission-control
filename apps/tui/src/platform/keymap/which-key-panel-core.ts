@@ -133,6 +133,8 @@ export function selectReachableEntries(km: OpenTuiKeymap): readonly CommandEntry
 export interface WhichKeyHandlers {
     readonly onToggle: () => void;
     readonly onLayoutToggle: () => void;
+    /** When false, which-key toggle/layout chords are suspended. */
+    readonly isEnabled?: () => boolean;
 }
 
 type WhichKeyLayer<TTarget extends object, TEvent extends KeymapEvent> = Omit<
@@ -144,7 +146,7 @@ export function createWhichKeyLayer<TTarget extends object, TEvent extends Keyma
     handlers: WhichKeyHandlers,
 ): WhichKeyLayer<TTarget, TEvent> {
     return {
-        enabled: () => true,
+        enabled: () => handlers.isEnabled?.() ?? true,
         commands: [
             {
                 name: WHICH_KEY_TOGGLE_COMMAND,

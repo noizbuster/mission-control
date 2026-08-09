@@ -68,6 +68,7 @@ describe('TuiPluginHostRegistry', () => {
         }
         const hostApi = result.hostApi;
         registry.disposePlugin('demo');
+        hostApi.registerCommand({ id: 'demo.stale', title: 'Stale command' });
 
         // Then
         expect(hostApi).toBeDefined();

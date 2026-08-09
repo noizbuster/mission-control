@@ -2,11 +2,12 @@
 
 import type { TuiSkillMenuEntry } from '@mission-control/protocol';
 import { useTerminalDimensions } from '@opentui/solid';
-import { type JSX, Show } from 'solid-js';
+import { type JSX, Show, createEffect, createSignal, onCleanup } from 'solid-js';
 import { AgentSpinner } from '../app/AgentSpinner';
 import { useSolidStoreSelector } from '../platform/use-solid-store-selector';
 import type { ChatAppActions } from '../state/chat-app-actions';
 import type { ChatStore, ChatStoreState } from '../state/chat-store';
+import { formatAgentStatusWithSilence, streamSilenceStatus } from '../state/stream-silence';
 import type { HistoryPickerEntry, HistoryPickerState } from '../state/history-picker-state';
 import type { SlashCommandMenuState } from '../state/interactive-chat-command-menu';
 import type { FileAutocompleteState } from '../state/interactive-chat-file-autocomplete';
@@ -29,6 +30,7 @@ import {
 } from './StatusBar';
 
 export type ChatBottomDockSlice = {
+    readonly overlayMode: ChatStoreState['overlayMode'];
     readonly inputMode: 'input' | 'question';
     readonly inputMirror: string;
     readonly menuState: SlashCommandMenuState;
@@ -87,6 +89,7 @@ export function selectChatBottomDockSlice(snapshot: ChatStoreState): ChatBottomD
         fileAutocomplete: snapshot.fileAutocomplete,
         historyEntries: snapshot.historyEntries,
         historyPicker: snapshot.historyPicker,
+        overlayMode: snapshot.overlayMode,
         providerID: snapshot.currentModelSelection?.providerID,
         modelID: snapshot.currentModelSelection?.modelID,
         variantID: snapshot.currentModelVariantID,
@@ -117,6 +120,7 @@ export function chatBottomDockSliceEqual(left: ChatBottomDockSlice, right: ChatB
         left.fileAutocomplete === right.fileAutocomplete &&
         left.historyEntries === right.historyEntries &&
         left.historyPicker === right.historyPicker &&
+        left.overlayMode === right.overlayMode &&
         left.providerID === right.providerID &&
         left.modelID === right.modelID &&
         left.variantID === right.variantID &&
@@ -155,7 +159,7 @@ function renderPromptAdjacentPanels({
     promptAdjacentPanel,
     columns,
 }: PromptAdjacentPanelsInput & { readonly columns: number }): JSX.Element | null {
-    const historyPickerOpen = dockSlice.historyPicker.open;
+    const historyPickerOpen = dockSlice.historyPicker.open && dockSlice.overlayMode === 'none';
     const showHistoryPicker = historyPickerOpen && menuPolicy.rows > 0;
     const showSlashWorkflowOrSkill =
         !historyPickerOpen &&
@@ -262,10 +266,34 @@ export function ChatBottomDockBase(props: ChatBottomDockBaseProps): JSX.Element 
             dockSlice: props.dockSlice,
         });
 
+    const [now, setNow] = createSignal(Date.now());
+    createEffect(() => {
+        // Tick only while generating so silence labels advance without idle cost.
+        if (!props.dockSlice.generating) {
+            setNow(Date.now());
+            return;
+        }
+        setNow(Date.now());
+        const interval = setInterval(() => setNow(Date.now()), 1_000);
+        onCleanup(() => clearInterval(interval));
+    });
+
     const agentStatusLine = (): string | undefined => {
-        if (props.dockSlice.agentStatusText.length > 0) return props.dockSlice.agentStatusText;
-        if (props.dockSlice.generating) return 'Working…';
-        return undefined;
+        // Read activity from the live store so stream coalesced publishes do not
+        // bust the stable dock slice (which would thrash layout every 50ms).
+        const silence = streamSilenceStatus({
+            generating: props.dockSlice.generating,
+            lastActivityAt: props.store.getSnapshot().lastStreamActivityAt,
+            now: now(),
+        });
+        const base =
+            props.dockSlice.agentStatusText.length > 0
+                ? props.dockSlice.agentStatusText
+                : props.dockSlice.generating
+                  ? 'Working…'
+                  : '';
+        if (base.length === 0 && silence.label === undefined) return undefined;
+        return formatAgentStatusWithSilence(base, silence.label);
     };
 
     return (

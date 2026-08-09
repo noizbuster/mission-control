@@ -2,7 +2,10 @@
 import { padEndToDisplayWidth } from '@mission-control/tui';
 import { type KeyEvent, type Renderable, TextAttributes } from '@opentui/core';
 import { useBindings, useKeymapSelector } from '@opentui/keymap/solid';
-import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, For, type JSX, Show, useContext } from 'solid-js';
+import { useChatSession } from '../providers/chat-session-context';
+import { useSolidStoreSelector } from '../use-solid-store-selector';
+import { PaletteOpenContext } from './palette-open-context';
 import { useModeStack } from './mode-stack';
 import {
     createWhichKeyLayer,
@@ -33,14 +36,24 @@ export {
 export function WhichKeyPanel(): JSX.Element {
     const modeStack = useModeStack();
     const entries = useKeymapSelector(selectReachableEntries);
+    const chatSession = useChatSession();
+    const paletteOpenState = useContext(PaletteOpenContext);
+    const overlayMode = useSolidStoreSelector(chatSession.store, (snap) => snap.overlayMode);
+    const historyOpen = useSolidStoreSelector(chatSession.store, (snap) => snap.historyPicker.open);
     const [open, setOpen] = createSignal(false);
     const [layout, setLayout] = createSignal<WhichKeyLayout>('dock');
 
+    const blocking = () => overlayMode() !== 'none' || paletteOpenState?.open() === true || historyOpen() === true;
     const handlers: WhichKeyHandlers = {
         onToggle: () => setOpen((value) => !value),
         onLayoutToggle: () => setLayout((value) => nextLayout(value)),
+        isEnabled: () => !blocking(),
     };
     useBindings(() => createWhichKeyLayer<Renderable, KeyEvent>(handlers));
+
+    createEffect(() => {
+        if (blocking()) setOpen(false);
+    });
 
     const groups = createMemo(() => projectWhichKeyEntries(entries(), modeStack.current()));
 

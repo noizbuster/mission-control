@@ -41,10 +41,28 @@ const BackgroundJobHandleSchema = z.object({
  * written to a unique temp file and renamed into place. Concurrent calls (even
  * for the same jobId) never corrupt each other.
  */
+/** Process-local per-jobPath chains so concurrent persistJob of the same id cannot clobber. */
+const jobWriteChains = new Map<string, Promise<unknown>>();
+
+function enqueueJobWrite<T>(path: string, task: () => Promise<T>): Promise<T> {
+    const previous = jobWriteChains.get(path) ?? Promise.resolve();
+    const run = previous.then(task, task);
+    jobWriteChains.set(
+        path,
+        run.then(
+            () => undefined,
+            () => undefined,
+        ),
+    );
+    return run;
+}
+
 export async function persistJob(jobsDir: string, handle: DurableBackgroundJobHandle): Promise<void> {
     const validated = BackgroundJobHandleSchema.parse(handle);
     const filePath = join(jobsDir, `${handle.jobId}${JSON_FILE_SUFFIX}`);
-    await atomicWriteJsonFile(filePath, validated);
+    await enqueueJobWrite(filePath, async () => {
+        await atomicWriteJsonFile(filePath, validated);
+    });
 }
 
 /**

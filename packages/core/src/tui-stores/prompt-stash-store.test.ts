@@ -77,6 +77,17 @@ describe('TuiPromptStashStore', () => {
             },
         });
     }
+
+    it('serializes concurrent pushEntry without dropping entries', async () => {
+        const store = createStore();
+        await Promise.all([
+            store.pushEntry({ text: 'a', cursorOffset: 0 }),
+            store.pushEntry({ text: 'b', cursorOffset: 0 }),
+            store.pushEntry({ text: 'c', cursorOffset: 0 }),
+        ]);
+        const entries = await store.listEntries();
+        expect(entries.map((entry) => entry.text).sort()).toEqual(['a', 'b', 'c']);
+    });
 });
 
 function requireScope(scope: TuiStoreTestScope | undefined): TuiStoreTestScope {

@@ -283,3 +283,40 @@ describe('T6 inputBindingsFromKeybinds is config-driven and complete', () => {
         expect(commands.has('abg.overlay.toggle')).toBe(false);
     });
 });
+
+
+describe('diagnostics_toggle owns <leader>d exclusively', () => {
+    it('diagnostics_toggle defaults to exactly <leader>d', () => {
+        expect(defaults.diagnostics_toggle).toBe('<leader>d');
+    });
+    it('exactly one definition owns <leader>d across the entire catalog', () => {
+        const allChords = new Map<string, string[]>();
+        for (const [name, value] of Object.entries(defaults)) {
+            const chords = expandToChords(value);
+            for (const chord of chords) {
+                const owners = allChords.get(chord) ?? [];
+                owners.push(name);
+                allChords.set(chord, owners);
+            }
+        }
+        expect(allChords.get('<leader>d')).toEqual(['diagnostics_toggle']);
+    });
+});
+
+describe('tips_toggle owns <leader>h exclusively', () => {
+    it('tips_toggle defaults to exactly <leader>h', () => {
+        expect(defaults.tips_toggle).toBe('<leader>h');
+    });
+    it('exactly one definition owns <leader>h across the entire catalog', () => {
+        const allChords = new Map<string, string[]>();
+        for (const [name, value] of Object.entries(defaults)) {
+            const chords = expandToChords(value);
+            for (const chord of chords) {
+                const owners = allChords.get(chord) ?? [];
+                owners.push(name);
+                allChords.set(chord, owners);
+            }
+        }
+        expect(allChords.get('<leader>h')).toEqual(['tips_toggle']);
+    });
+});

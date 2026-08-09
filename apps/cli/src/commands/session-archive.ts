@@ -18,6 +18,7 @@ import { createProviderAuthStore } from '../auth-store';
 import { isWorkspaceTrusted } from './cli-trust';
 import { deriveSessionCatalogProjection } from './session-catalog-projection';
 import { parseCliSessionId } from './session-id';
+import { atomicTextWrite } from './atomic-text-write';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
@@ -55,7 +56,10 @@ export async function exportSessionArchiveFile(input: {
     });
     await mkdir(dirname(input.filePath), { recursive: true });
     try {
-        await writeFile(input.filePath, `${JSON.stringify(archive, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
+        // Exclusive create: refuse to clobber an existing archive path.
+        await writeFile(input.filePath, '', { encoding: 'utf8', flag: 'wx' });
+        await atomicTextWrite(input.filePath, `${JSON.stringify(archive, null, 2)}\n`);
+
     } catch (error: unknown) {
         if (isExistingFileError(error)) {
             throw new SessionArchiveCommandError({

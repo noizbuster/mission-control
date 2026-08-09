@@ -164,30 +164,36 @@ export function createInteractiveApprovalBroker(
     async function processQueuedRequest(entry: QueuedApproval): Promise<void> {
         const identity = Symbol(entry.request.id);
         evaluatingRequests.set(identity, { cancelled: false, reason: '' });
-        const evaluated = await permissionSession.evaluate(entry.request, observableOptions.sessionId);
-        const evaluatingEntry = evaluatingRequests.get(identity);
-        evaluatingRequests.delete(identity);
+        try {
+            const evaluated = await permissionSession.evaluate(entry.request, observableOptions.sessionId);
+            const evaluatingEntry = evaluatingRequests.get(identity);
+            evaluatingRequests.delete(identity);
 
-        if (evaluatingEntry?.cancelled) {
+            if (evaluatingEntry?.cancelled) {
+                entry.resolve(deniedDecision(entry.request, evaluatingEntry.reason));
+                return;
+            }
+
+            permissionSession.consumeOnceRules(observableOptions.sessionId, evaluated.consumeOnceRules);
+
+            if (evaluated.decision.status !== 'requires_approval') {
+                entry.resolve(evaluated.decision);
+                return;
+            }
+
+            try {
+                const decision = await showApprovalPrompt(entry.request, evaluated.decision, identity);
+                entry.resolve(decision);
+            } catch {
+                entry.resolve(deniedDecision(entry.request, 'approval_prompt_failed'));
+            }
+        } catch {
+            evaluatingRequests.delete(identity);
+            entry.resolve(deniedDecision(entry.request, 'permission_evaluate_failed'));
+        } finally {
             draining = false;
-            entry.resolve(deniedDecision(entry.request, evaluatingEntry.reason));
             drainQueue();
-            return;
         }
-
-        permissionSession.consumeOnceRules(observableOptions.sessionId, evaluated.consumeOnceRules);
-
-        if (evaluated.decision.status !== 'requires_approval') {
-            draining = false;
-            entry.resolve(evaluated.decision);
-            drainQueue();
-            return;
-        }
-
-        draining = false;
-        void showApprovalPrompt(entry.request, evaluated.decision, identity).then((decision) => {
-            entry.resolve(decision);
-        });
     }
 
     async function settleAttempt(

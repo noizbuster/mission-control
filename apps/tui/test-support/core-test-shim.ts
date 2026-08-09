@@ -25,6 +25,8 @@ export {
     RuntimeAgentRegistry,
 } from '../../../packages/core/src/agents/runtime-registry';
 export { resolveMissionControlDataDir } from '../../../packages/core/src/memory/data-dir';
+export { atomicWriteJsonFile, atomicWriteTextFile } from '../../../packages/core/src/persistence/atomic-write';
+export { errorToString } from '../../../packages/core/src/util/error-to-string';
 export { readBoulder } from '../../../packages/core/src/persistence/boulder-store';
 export {
     type TuiPluginHostApi,

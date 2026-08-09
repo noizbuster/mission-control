@@ -53,7 +53,7 @@ import { formatSessionFinalizeLineFromInfo, type SessionFinalizeInfo } from '../
 import { toggleDisabled } from './agents-disabled-config';
 import { parseModelPatternString, setOverride } from './agents-model-overrides-config';
 import { chatActionShowsWorkingStatus, parseChatLine } from './chat-commands';
-import { appendInputHistoryEntry, loadInputHistoryEntries } from './input-history-store';
+import { appendInputHistoryEntry, getSharedHistoryStore, loadInputHistoryEntries } from './input-history-store';
 import type { ChatActionResult } from './interactive-chat-action-result';
 import {
     type CodingActionContext,
@@ -89,6 +89,7 @@ import {
 import { formatModelProviderStatus } from './interactive-chat-status';
 import { createUndoRedoStack, type UndoRedoStack } from './interactive-chat-undo-redo-stack';
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent';
+import { isApprovalDecisionLine } from './interactive-approval-helpers';
 import { interactiveSessionCliStdout } from './interactive-session-cli-stdout';
 import { emitTranscriptFallback } from './interactive-transcript-emission';
 import {
@@ -134,6 +135,32 @@ export function toTuiSkillMenuEntries(skills: readonly Skill[]): readonly TuiSki
             description: description.length > 0 ? description : `Load the ${skill.name} skill`,
         };
     });
+}
+
+/**
+ * A usage/cache callback belongs to the session that created its turn, not the
+ * session currently selected after an async navigation completes.
+ */
+export function isSessionUsageProjectionLive(input: {
+    readonly expectedSessionId: string | undefined;
+    readonly currentSessionId: string | undefined;
+    readonly tuiSessionId: string | undefined;
+    readonly eventQueueClosed: boolean;
+}): boolean {
+    if (input.eventQueueClosed || input.currentSessionId !== input.expectedSessionId) return false;
+    return input.tuiSessionId === undefined || input.tuiSessionId === (input.expectedSessionId ?? '');
+}
+
+/** A live provider callback additionally belongs to the currently admitted turn. */
+export function isLiveTurnUsageProjection(input: {
+    readonly expectedSessionId: string | undefined;
+    readonly currentSessionId: string | undefined;
+    readonly tuiSessionId: string | undefined;
+    readonly eventQueueClosed: boolean;
+    readonly expectedTurnEpoch: number;
+    readonly currentTurnEpoch: number;
+}): boolean {
+    return input.expectedTurnEpoch === input.currentTurnEpoch && isSessionUsageProjectionLive(input);
 }
 
 type AskUserRawOption = string | { readonly label: string; readonly description?: string | undefined };
@@ -259,6 +286,7 @@ export async function runInteractiveChatSession(
               ...(gitBranch !== undefined ? { gitBranch } : {}),
               ...(gitWorktree?.isWorktree ? { isWorktree: true } : {}),
               ...(initialHistoryEntries.length > 0 ? { initialHistoryEntries } : {}),
+              promptHistoryStore: getSharedHistoryStore(),
               ...(options.initialApprovalLevel !== undefined
                   ? { initialApprovalLevel: options.initialApprovalLevel }
                   : {}),
@@ -273,17 +301,32 @@ export async function runInteractiveChatSession(
               actions: chatAppActions,
           }
         : undefined;
+    // Mirror of the conversation text for /undo and /redo. This is display-only;
+    // the durable session store is never modified by undo/redo.
+    // Declared before TUI mount so subscribeOutput can close over it safely.
+    let conversationText = '';
     let tuiHandle: ChatTuiHandle | undefined;
     if (useTui && tuiRuntimeOptions !== undefined) {
         const { createChatTui } = await import('@mission-control/tui/create-chat-tui');
         tuiHandle = await createChatTui(tuiRuntimeOptions);
     }
+    // Keep the non-TUI conversationText mirror aligned when App recovery
+    // replaceTranscript (or any store output rewrite) changes live output.
+    const unsubscribeTuiOutput =
+        tuiHandle === undefined
+            ? undefined
+            : tuiHandle.subscribeOutput((output) => {
+                  conversationText = output;
+              });
     const chatInput: ChatInput =
         options.input ??
         (tuiHandle !== undefined
             ? {
                   read: () => tuiHandle.waitForEvent(),
-                  close: () => tuiHandle.unmount(),
+                  close: () => {
+                      unsubscribeTuiOutput?.();
+                      tuiHandle.unmount();
+                  },
                   suspend: () => {},
                   resume: () => {},
                   controlsPrompt: true,
@@ -309,9 +352,6 @@ export async function runInteractiveChatSession(
                   hideApproval: () => tuiHandle.hideApproval(),
               }
             : createTerminalChatOutput());
-    // Mirror of the conversation text for /undo and /redo. This is display-only;
-    // the durable session store is never modified by undo/redo.
-    let conversationText = '';
     let undoRedoStack = createUndoRedoStack();
     const baseWriteTranscriptPart = baseChatOutput.writeTranscriptPart;
     const baseWriteTranscriptFallback = baseChatOutput.writeTranscriptFallback;
@@ -353,6 +393,18 @@ export async function runInteractiveChatSession(
             conversationText = next;
             tuiHandle?.replaceOutputText(next);
         },
+        undoLastViewExchange: () => {
+            if (tuiHandle === undefined) return 'empty' as const;
+            const result = tuiHandle.undoLastViewExchange();
+            conversationText = tuiHandle.getOutput();
+            return result;
+        },
+        redoLastViewExchange: () => {
+            if (tuiHandle === undefined) return 'empty' as const;
+            const result = tuiHandle.redoLastViewExchange();
+            conversationText = tuiHandle.getOutput();
+            return result;
+        },
         getStack: () => undoRedoStack,
         setStack: (next: UndoRedoStack) => {
             undoRedoStack = next;
@@ -374,11 +426,22 @@ export async function runInteractiveChatSession(
     let pendingInterrupt = false;
     let activeTurn: ActiveCodingAgentTurn | undefined;
     let lastContextTokensUsed: number | undefined;
+    let liveTurnUsageEpoch = 0;
     let sessionCacheUsage: ContextCacheUsage | undefined;
     const setSessionCacheUsage = (usage: ContextCacheUsage | undefined): void => {
+        if (tuiHandle?.isEventQueueClosed() === true) return;
         sessionCacheUsage = usage;
         tuiHandle?.setContextCacheUsage(usage);
     };
+
+    const isUsageSessionLive = (expectedSessionId: string | undefined): boolean =>
+        isSessionUsageProjectionLive({
+            expectedSessionId,
+            currentSessionId,
+            tuiSessionId: tuiHandle?.getSessionId(),
+            eventQueueClosed: tuiHandle?.isEventQueueClosed() === true,
+        });
+
     const addSessionCacheUsage = (usage: ContextCacheUsage): void => {
         const previous = sessionCacheUsage;
         if (previous === undefined) {
@@ -393,11 +456,31 @@ export async function runInteractiveChatSession(
                 : undefined,
         );
     };
+
     let lastCodingContext: CodingActionContext | undefined;
     let turnCounter = 0;
     const inputPump = new ChatInputPump(chatInput);
     let currentSessionId = options.sessionId;
     tuiHandle?.setSessionId(currentSessionId ?? '');
+    {
+        const sessionAtBootLimit = currentSessionId;
+        const selectionAtBootLimit = currentModelProviderSelection;
+        const contextMaxEpochAtBoot = tuiHandle?.beginContextMaxReseed() ?? 0;
+        void loadEffectiveContextLimit(selectionAtBootLimit)
+            .then((limit) => {
+                if (tuiHandle === undefined || tuiHandle.isEventQueueClosed()) return;
+                if (!tuiHandle.shouldApplyContextMaxReseed(contextMaxEpochAtBoot)) return;
+                if (currentSessionId !== sessionAtBootLimit) return;
+                if (
+                    currentModelProviderSelection.providerID !== selectionAtBootLimit.providerID ||
+                    currentModelProviderSelection.modelID !== selectionAtBootLimit.modelID
+                ) {
+                    return;
+                }
+                tuiHandle.setContextTokensMax(limit);
+            })
+            .catch(() => undefined);
+    }
     let currentProvider = options.resolveProviderForSelection?.(currentModelProviderSelection) ?? options.provider;
     let currentSessionStore = options.sessionStore;
     let currentApprovalLevel: ApprovalLevel | undefined = options.initialApprovalLevel;
@@ -445,12 +528,70 @@ export async function runInteractiveChatSession(
     const switchSessionStore = options.switchSessionStore;
     let manualRenameRevision = 0;
     const enqueueSessionTitleWrite = createSessionTitleWriteQueue();
-    const titleGenerationAbortController = new AbortController();
+    let titleGenerationAbortController = new AbortController();
     const titleGenerationTasks = new Set<Promise<void>>();
     const invalidateTitleGeneration = (): void => {
         manualRenameRevision += 1;
         titleGenerationAbortController.abort();
+        titleGenerationAbortController = new AbortController();
     };
+    const reseedContextMaxForSelection = (
+        sessionAtLimit: string | undefined,
+        selectionAtLimit: ModelProviderSelection,
+    ): void => {
+        const contextMaxEpoch = tuiHandle?.beginContextMaxReseed() ?? 0;
+        void loadEffectiveContextLimit(selectionAtLimit)
+            .then((limit) => {
+                if (tuiHandle === undefined || tuiHandle.isEventQueueClosed()) return;
+                if (!tuiHandle.shouldApplyContextMaxReseed(contextMaxEpoch)) return;
+                if (currentSessionId !== sessionAtLimit) return;
+                if (
+                    currentModelProviderSelection.providerID !== selectionAtLimit.providerID ||
+                    currentModelProviderSelection.modelID !== selectionAtLimit.modelID
+                ) {
+                    return;
+                }
+                tuiHandle.setContextTokensMax(limit);
+            })
+            .catch(() => undefined);
+    };
+
+    /**
+     * Commit a navigated/ensured session id. Wipes CLI usage mirrors and display-name
+     * controller immediately so auto-title and auto-compact cannot see the prior session.
+     * When a TUI is mounted, also syncs store session id (which wipes TUI context/display).
+     */
+
+    const commitSessionIdentity = (
+        sessionId: string,
+        sessionStore?: import('./interactive-chat-prompt-turn').PromptTurnContext['sessionStore'],
+    ): void => {
+        const cliChanged = sessionId !== currentSessionId;
+        const tuiChanged = tuiHandle !== undefined && tuiHandle.getSessionId() !== sessionId;
+        if (sessionStore !== undefined) {
+            currentSessionStore = sessionStore;
+        }
+        if (!cliChanged && !tuiChanged) return;
+        if (cliChanged) {
+            invalidateTitleGeneration();
+            currentSessionId = sessionId;
+            lastContextTokensUsed = undefined;
+            setSessionCacheUsage(undefined);
+            // Clear CLI controller immediately — do not wait for catalog sync.
+            sessionDisplayNameController.update('');
+            setTerminalTitle(formatAppTitle(getVersion()));
+        }
+        if (tuiHandle !== undefined && tuiChanged) {
+            tuiHandle.setSessionId(sessionId);
+            // setSessionId already wiped TUI display/context; keep CLI mirrors aligned.
+            lastContextTokensUsed = undefined;
+            setSessionCacheUsage(undefined);
+        }
+        if (cliChanged || tuiChanged) {
+            reseedContextMaxForSelection(sessionId, currentModelProviderSelection);
+        }
+    };
+
     const registerTitleGenerationTask = (task: Promise<void>): void => {
         const settledTask = task.then(
             () => undefined,
@@ -468,11 +609,10 @@ export async function runInteractiveChatSession(
                   getCurrentSessionId: () => (currentSessionStore === undefined ? undefined : currentSessionId),
                   getCurrentStore: () => currentSessionStore,
                   switchSessionStore: async (sessionId) => {
-                      invalidateTitleGeneration();
                       await drainSessionTitleWriteQueue(enqueueSessionTitleWrite);
                       const store = await switchSessionStore(sessionId);
-                      currentSessionId = sessionId;
-                      currentSessionStore = store;
+                      // Shared wipe/reseed for TUI and non-TUI (usage mirrors + display controller).
+                      commitSessionIdentity(sessionId, store);
                       return store;
                   },
                   ...(options.workspaceRoot !== undefined ? { workspaceRoot: options.workspaceRoot } : {}),
@@ -517,7 +657,11 @@ export async function runInteractiveChatSession(
 
     const syncSessionDisplayName = async (sessionId: string | undefined): Promise<void> => {
         const sid = sessionId ?? '';
+        const renameRevisionAtSync = manualRenameRevision;
         if (sid.length === 0) {
+            if (currentSessionId !== undefined && currentSessionId.length > 0) return;
+            if (tuiHandle?.isEventQueueClosed() === true) return;
+            if (manualRenameRevision !== renameRevisionAtSync) return;
             sessionDisplayNameController.update('');
             tuiHandle?.setSessionDisplayName(undefined);
             setTerminalTitle(formatAppTitle(getVersion()));
@@ -537,6 +681,10 @@ export async function runInteractiveChatSession(
             if (!(error instanceof Error)) throw error;
             // best-effort: leave name undefined on catalog read failure
         }
+        // Drop stale catalog results after a session switch, rename, or teardown.
+        if (currentSessionId !== sid) return;
+        if (manualRenameRevision !== renameRevisionAtSync) return;
+        if (tuiHandle?.isEventQueueClosed() === true) return;
         sessionDisplayNameController.update(name ?? '');
         tuiHandle?.setSessionDisplayName(name);
         setTerminalTitle(formatSessionTitle(sid, name));
@@ -545,8 +693,16 @@ export async function runInteractiveChatSession(
     const applySessionRenameEffects = async (name: string): Promise<void> => {
         const targetSessionId = currentSessionId;
         const targetModelProviderSelection = currentModelProviderSelection;
-        tuiHandle?.setSessionDisplayName(name);
-        setTerminalTitle(formatSessionTitle(targetSessionId, name));
+        const previousName = sessionDisplayNameController.current() ?? '';
+        const previousTitleName = previousName.length > 0 ? previousName : undefined;
+        const renameRevisionAtStart = manualRenameRevision;
+        if (targetSessionId !== undefined && currentSessionId === targetSessionId) {
+            if (tuiHandle?.isEventQueueClosed() !== true) {
+                sessionDisplayNameController.update(name);
+                tuiHandle?.setSessionDisplayName(name);
+                setTerminalTitle(formatSessionTitle(targetSessionId, name));
+            }
+        }
         if (sessionNavigation !== undefined && targetSessionId !== undefined) {
             try {
                 await enqueueSessionTitleWrite(async () => {
@@ -559,6 +715,16 @@ export async function runInteractiveChatSession(
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
                 chatOutput.write(`Could not persist session rename: ${message}\n`);
+                // Roll back optimistic title only if no newer rename/invalidation landed.
+                if (
+                    currentSessionId === targetSessionId &&
+                    manualRenameRevision === renameRevisionAtStart &&
+                    tuiHandle?.isEventQueueClosed() !== true
+                ) {
+                    sessionDisplayNameController.update(previousName);
+                    tuiHandle?.setSessionDisplayName(previousTitleName);
+                    setTerminalTitle(formatSessionTitle(targetSessionId, previousTitleName));
+                }
             }
         }
     };
@@ -595,12 +761,25 @@ export async function runInteractiveChatSession(
                     delete tuiRuntimeOptions.variantID;
                 }
             }
-            void loadEffectiveContextLimit(selection).then((limit) => {
-                tuiHandle.setContextTokensMax(limit);
-            });
+            const sessionAtContextLimit = currentSessionId;
+            const selectionAtContextLimit = selection;
+            const contextMaxEpochAtCycle = tuiHandle.beginContextMaxReseed();
+            void loadEffectiveContextLimit(selection)
+                .then((limit) => {
+                    if (tuiHandle.isEventQueueClosed() || currentSessionId !== sessionAtContextLimit) return;
+                    if (!tuiHandle.shouldApplyContextMaxReseed(contextMaxEpochAtCycle)) return;
+                    if (
+                        currentModelProviderSelection.providerID !== selectionAtContextLimit.providerID ||
+                        currentModelProviderSelection.modelID !== selectionAtContextLimit.modelID
+                    ) {
+                        return;
+                    }
+                    tuiHandle.setContextTokensMax(limit);
+                })
+                .catch(() => undefined);
         };
         tuiHandle.onRenameSubmit = (name: string) => {
-            sessionDisplayNameController.update(name);
+            // applySessionRenameEffects owns optimistic UI + durable-fail rollback.
             void applyManualSessionRename(name).then(
                 () => undefined,
                 () => undefined,
@@ -682,38 +861,49 @@ export async function runInteractiveChatSession(
         // event source for the transcript, ABG overlay, context usage, and the
         // following model turn.
         if (currentSessionId !== undefined) {
+            const bootSessionId = currentSessionId;
+            const bootSessionStore = currentSessionStore;
             const attached =
-                currentSessionStore === undefined
+                bootSessionStore === undefined
                     ? undefined
                     : await loadSessionTranscriptPartsAndEventsFromStore(
-                          currentSessionStore,
-                          currentSessionId,
+                          bootSessionStore,
+                          bootSessionId,
                           options.observabilityRedactor,
                       );
             const resumed =
-                attached ?? (await loadSessionTranscriptParts(currentSessionId, options.observabilityRedactor));
-            if (tuiHandle !== undefined) {
-                if (resumed.parts.length > 0 || resumed.outputText.length > 0) {
-                    conversationText = resumed.outputText;
-                    tuiHandle.replaceTranscript(resumed.parts, resumed.outputText);
+                attached ?? (await loadSessionTranscriptParts(bootSessionId, options.observabilityRedactor));
+            // Load I/O can outlive teardown; never apply a stale boot attach.
+            const bootAttachStale =
+                currentSessionId !== bootSessionId ||
+                currentSessionStore !== bootSessionStore ||
+                tuiHandle?.isEventQueueClosed() === true;
+            if (!bootAttachStale) {
+                if (tuiHandle !== undefined) {
+                    if (resumed.parts.length > 0 || resumed.outputText.length > 0) {
+                        conversationText = resumed.outputText;
+                        tuiHandle.replaceTranscript(resumed.parts, resumed.outputText);
+                    }
+                } else if (resumed.outputText.length > 0) {
+                    chatOutput.write(resumed.outputText);
                 }
-            } else if (resumed.outputText.length > 0) {
-                chatOutput.write(resumed.outputText);
+                const events = attached?.events ?? [];
+                applySessionAttachProjection({
+                    events,
+                    projection: projectSessionAttachFromEvents(events),
+                    abgOverlayController,
+                    chatOutput,
+                    onUsage: (inputTokens) => {
+                        if (!isUsageSessionLive(bootSessionId)) return;
+                        lastContextTokensUsed = inputTokens;
+                        tuiHandle?.setContextTokensUsed(inputTokens);
+                    },
+                    onContextCacheUsage: (usage) => {
+                        if (!isUsageSessionLive(bootSessionId)) return;
+                        setSessionCacheUsage(usage);
+                    },
+                });
             }
-            const events = attached?.events ?? [];
-            applySessionAttachProjection({
-                events,
-                projection: projectSessionAttachFromEvents(events),
-                abgOverlayController,
-                chatOutput,
-                onUsage: (inputTokens) => {
-                    lastContextTokensUsed = inputTokens;
-                    tuiHandle?.setContextTokensUsed(inputTokens);
-                },
-                onContextCacheUsage: (usage) => {
-                    setSessionCacheUsage(usage);
-                },
-            });
         }
 
         await seedTurnCounterFromStore(currentSessionStore, currentSessionId);
@@ -750,21 +940,37 @@ export async function runInteractiveChatSession(
                     }
                 }
                 if (next.outcome === 'completed') {
+                    const sessionAtAutoCompact = currentSessionId;
+                    const storeAtAutoCompact = currentSessionStore;
+                    const selectionAtAutoCompact = currentModelProviderSelection;
                     const autoCompactTurn = await maybeStartAutoCompaction({
                         usedTokens: lastContextTokensUsed,
-                        selection: currentModelProviderSelection,
-                        sessionId: currentSessionId,
-                        sessionStore: currentSessionStore,
+                        selection: selectionAtAutoCompact,
+                        sessionId: sessionAtAutoCompact,
+                        sessionStore: storeAtAutoCompact,
                         provider: currentProvider,
                         output: chatOutput,
                         ...(options.workspaceRoot !== undefined ? { workspaceRoot: options.workspaceRoot } : {}),
                         ...(options.authStore !== undefined ? { authStore: options.authStore } : {}),
+                        ...(options.observeStoredEvent !== undefined
+                            ? { observeStoredEvent: options.observeStoredEvent }
+                            : {}),
                     });
                     if (autoCompactTurn !== undefined) {
-                        workflowChainDepth = 0;
-                        pendingWorkflowTurns.length = 0;
-                        activeTurn = autoCompactTurn;
-                        continue;
+                        const staleAutoCompact =
+                            currentSessionId !== sessionAtAutoCompact ||
+                            currentSessionStore !== storeAtAutoCompact ||
+                            currentModelProviderSelection.providerID !== selectionAtAutoCompact.providerID ||
+                            currentModelProviderSelection.modelID !== selectionAtAutoCompact.modelID ||
+                            tuiHandle?.isEventQueueClosed() === true;
+                        if (staleAutoCompact) {
+                            autoCompactTurn.interrupt('soft');
+                        } else {
+                            workflowChainDepth = 0;
+                            pendingWorkflowTurns.length = 0;
+                            activeTurn = autoCompactTurn;
+                            continue;
+                        }
                     }
                 }
                 if (tuiHandle !== undefined) {
@@ -781,6 +987,7 @@ export async function runInteractiveChatSession(
                 if (activeTurn !== undefined) {
                     const interruptedTurn = activeTurn;
                     await interruptActiveTurnBounded(interruptedTurn);
+                    liveTurnUsageEpoch += 1;
                     activeTurn = undefined;
                     if (tuiHandle !== undefined) {
                         tuiHandle.setGenerating(false);
@@ -809,20 +1016,23 @@ export async function runInteractiveChatSession(
 
             pendingInterrupt = false;
             const prompt = event.value.trim();
-            if (activeTurn?.hasPendingApproval() === true && activeTurn.answerApproval(prompt)) {
+            // Single approval gate: answerApproval is a no-op when nothing is pending.
+            if (activeTurn?.answerApproval(prompt) === true) {
                 continue;
             }
-            if (activeTurn?.answerApproval(prompt)) {
+            // Drop stale approval-vocab lines (late once/deny after settle/cancel)
+            // so they never become normal user prompts.
+            if (isApprovalDecisionLine(prompt)) {
                 continue;
             }
             if (prompt.length === 0) {
                 continue;
             }
-            await appendInputHistoryEntry(prompt);
             if (prompt.length > maxChatPromptLength) {
                 chatOutput.write(`Prompt is too long (max ${maxChatPromptLength} characters).\n`);
                 continue;
             }
+            await appendInputHistoryEntry(prompt);
 
             const action = parseChatLine(event.value, {
                 modelChoices,
@@ -830,6 +1040,7 @@ export async function runInteractiveChatSession(
                 ...(currentSessionId !== undefined ? { currentSessionId } : {}),
             });
             if (action.kind === 'exit') {
+                liveTurnUsageEpoch += 1;
                 activeTurn = await stopActiveTurn(activeTurn);
                 chatOutput.write('Exiting mission-control chat\n');
                 sessionFinalizeInfo = { status: 'complete' };
@@ -844,13 +1055,12 @@ export async function runInteractiveChatSession(
                     action.kind === 'bash')
             ) {
                 const ensured = await options.ensureSession();
-                currentSessionId = ensured.sessionId;
-                currentSessionStore = ensured.store;
-                tuiHandle?.setSessionId(currentSessionId);
+                commitSessionIdentity(ensured.sessionId, ensured.store);
                 const titleNavigation = sessionNavigation;
                 if (action.kind === 'prompt' && titleNavigation !== undefined) {
+                    const titleSessionId = ensured.sessionId;
                     await initializeInteractiveSessionTitle({
-                        sessionId: currentSessionId,
+                        sessionId: titleSessionId,
                         prompt: action.prompt,
                         state: {
                             snapshot: () => ({
@@ -859,11 +1069,15 @@ export async function runInteractiveChatSession(
                                 manualRenameRevision,
                             }),
                             displayTitle: (title) => {
+                                if (currentSessionId !== titleSessionId) return;
+                                if (tuiHandle?.isEventQueueClosed() === true) return;
                                 sessionDisplayNameController.update(title);
                                 tuiHandle?.setSessionDisplayName(title);
-                                setTerminalTitle(formatSessionTitle(currentSessionId, title));
+                                setTerminalTitle(formatSessionTitle(titleSessionId, title));
                             },
                             persistTitle: async (title) => {
+                                if (currentSessionId !== titleSessionId) return;
+                                if (tuiHandle?.isEventQueueClosed() === true) return;
                                 await titleNavigation.renameSession({
                                     name: title,
                                     modelProviderSelection: currentModelProviderSelection,
@@ -891,9 +1105,12 @@ export async function runInteractiveChatSession(
                 tuiHandle.setGenerating(true);
             }
             try {
+                const usageTurnEpoch = ++liveTurnUsageEpoch;
+                let usageSessionId = currentSessionId;
                 const codingContext: CodingActionContext = {
                     activeTurn,
                     useTui,
+                    isUiClosed: () => tuiHandle?.isEventQueueClosed() === true,
                     commandExecutor: options.commandExecutor,
                     emitEvent: options.emitEvent,
                     observeStoredEvent: options.observeStoredEvent,
@@ -917,6 +1134,46 @@ export async function runInteractiveChatSession(
                     sessionDisplayName: sessionDisplayNameController,
                     onSessionRenamed: applyManualSessionRename,
                     undoRedo: undoRedoController,
+                    commitAttachedSession: (sessionId, sessionStore) => {
+                        commitSessionIdentity(sessionId, sessionStore);
+                        usageSessionId = sessionId;
+                    },
+                    onUsage: (inputTokens: number | undefined) => {
+                        if (
+                            !isLiveTurnUsageProjection({
+                                expectedSessionId: usageSessionId,
+                                currentSessionId,
+                                tuiSessionId: tuiHandle?.getSessionId(),
+                                eventQueueClosed: tuiHandle?.isEventQueueClosed() === true,
+                                expectedTurnEpoch: usageTurnEpoch,
+                                currentTurnEpoch: liveTurnUsageEpoch,
+                            })
+                        ) {
+                            return;
+                        }
+                        lastContextTokensUsed = inputTokens;
+                        tuiHandle?.setContextTokensUsed(inputTokens);
+                    },
+                    // Absolute cache snapshot (attach projection).
+                    onSessionCacheUsage: (usage) => {
+                        if (!isUsageSessionLive(usageSessionId)) return;
+                        setSessionCacheUsage(usage);
+                    },
+                    onContextCacheUsage: (usage) => {
+                        if (
+                            !isLiveTurnUsageProjection({
+                                expectedSessionId: usageSessionId,
+                                currentSessionId,
+                                tuiSessionId: tuiHandle?.getSessionId(),
+                                eventQueueClosed: tuiHandle?.isEventQueueClosed() === true,
+                                expectedTurnEpoch: usageTurnEpoch,
+                                currentTurnEpoch: liveTurnUsageEpoch,
+                            })
+                        ) {
+                            return;
+                        }
+                        addSessionCacheUsage(usage);
+                    },
                     ...(sessionNavigation !== undefined ? { sessionNavigation } : {}),
                     ...(tuiHandle !== undefined
                         ? {
@@ -935,20 +1192,6 @@ export async function runInteractiveChatSession(
                     ...(options.profileName !== undefined ? { profileName: options.profileName } : {}),
                     ...(missionControlServices !== undefined
                         ? { taskRuntimeServices: missionControlServices.getTaskRuntimeServices() }
-                        : {}),
-                    ...(tuiHandle !== undefined
-                        ? {
-                              onUsage: (inputTokens: number | undefined) => {
-                                  lastContextTokensUsed = inputTokens;
-                                  tuiHandle.setContextTokensUsed(inputTokens);
-                              },
-                              onContextCacheUsage: (usage) => {
-                                  addSessionCacheUsage(usage);
-                              },
-                              onSessionCacheUsage: (usage) => {
-                                  setSessionCacheUsage(usage);
-                              },
-                          }
                         : {}),
                     listWorkspaceSessions: async () => {
                         if (options.workspaceRoot === undefined) return [];
@@ -985,11 +1228,6 @@ export async function runInteractiveChatSession(
                     ...(tuiHandle !== undefined
                         ? {
                               openMissionPanel: (rows: readonly MissionPanelRow[]) => tuiHandle.showMissionPanel(rows),
-                          }
-                        : {}),
-                    ...(tuiHandle !== undefined
-                        ? {
-                              reloadMissionPanel: (rows: readonly MissionPanelRow[]) => tuiHandle.reloadMissions(rows),
                           }
                         : {}),
                     ...(tuiHandle !== undefined
@@ -1071,9 +1309,13 @@ export async function runInteractiveChatSession(
                 }
                 continue;
             }
-            if (tuiHandle !== undefined && result.activeTurn === undefined) {
-                tuiHandle.setGenerating(false);
-                tuiHandle.clearAgentStatus();
+            if (tuiHandle !== undefined) {
+                // Keep generating while an active turn (incl. approval wait) lives
+                // so Ctrl+C routes to interrupt instead of draft-clear.
+                tuiHandle.setGenerating(result.activeTurn !== undefined);
+                if (result.activeTurn === undefined) {
+                    tuiHandle.clearAgentStatus();
+                }
             }
             if (!areModelProviderSelectionsEqual(currentModelProviderSelection, result.modelProviderSelection)) {
                 currentProvider =
@@ -1083,9 +1325,23 @@ export async function runInteractiveChatSession(
                 }
                 // Sync store so Ctrl+V variant cycling targets the new base.
                 tuiHandle?.setModelSelection(result.modelProviderSelection);
-                void loadEffectiveContextLimit(result.modelProviderSelection).then((limit) => {
-                    tuiHandle?.setContextTokensMax(limit);
-                });
+                const sessionAtTurnLimit = currentSessionId;
+                const selectionAtTurnLimit = result.modelProviderSelection;
+                const contextMaxEpochAtTurn = tuiHandle?.beginContextMaxReseed() ?? 0;
+                void loadEffectiveContextLimit(result.modelProviderSelection)
+                    .then((limit) => {
+                        if (tuiHandle === undefined || tuiHandle.isEventQueueClosed()) return;
+                        if (!tuiHandle.shouldApplyContextMaxReseed(contextMaxEpochAtTurn)) return;
+                        if (currentSessionId !== sessionAtTurnLimit) return;
+                        if (
+                            currentModelProviderSelection.providerID !== selectionAtTurnLimit.providerID ||
+                            currentModelProviderSelection.modelID !== selectionAtTurnLimit.modelID
+                        ) {
+                            return;
+                        }
+                        tuiHandle.setContextTokensMax(limit);
+                    })
+                    .catch(() => undefined);
             }
             currentModelProviderSelection = result.modelProviderSelection;
             activeTurn = result.activeTurn;
@@ -1093,8 +1349,11 @@ export async function runInteractiveChatSession(
                 invalidateTitleGeneration();
                 await drainSessionTitleWriteQueue(enqueueSessionTitleWrite);
             }
-            currentSessionId = result.sessionId ?? currentSessionId;
-            tuiHandle?.setSessionId(currentSessionId ?? '');
+            // Shared wipe/reseed when the action advanced the session id.
+            // Same-id (including after commitAttachedSession) is a no-op.
+            if (result.sessionId !== undefined) {
+                commitSessionIdentity(result.sessionId, result.sessionStore);
+            }
             if (result.sessionId !== undefined) {
                 void syncSessionDisplayName(result.sessionId);
             }

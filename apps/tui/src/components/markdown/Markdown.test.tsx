@@ -2,7 +2,7 @@ import type { FiletypeParserOptions, SimpleHighlight, SyntaxStyle, TextChunk, Tr
 import { RGBA } from '@opentui/core';
 import { marked } from 'marked';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { darkTheme } from './interactive-theme';
+import { darkTheme, noColorTheme } from './interactive-theme';
 import type { InlineRun } from './Markdown';
 import {
     buildBlocks,
@@ -323,6 +323,18 @@ describe('getCachedBlocks LRU cache', () => {
         const live = getCachedBlocks('# Hi', 40, true, darkTheme, buildBlocks);
         const full = getCachedBlocks('# Hi', 40, false, darkTheme, buildBlocks);
         expect(live).not.toBe(full);
+    });
+    it('isolates distinct untagged theme objects', () => {
+        const redTheme = { ...noColorTheme, heading: { ...noColorTheme.heading, fg: '#ff0000' } };
+        const blueTheme = { ...noColorTheme, heading: { ...noColorTheme.heading, fg: '#0000ff' } };
+        const cachedBuildBlocks = vi.fn(buildBlocks);
+
+        const redBlocks = getCachedBlocks('# Hi', 40, false, redTheme, cachedBuildBlocks);
+        const blueBlocks = getCachedBlocks('# Hi', 40, false, blueTheme, cachedBuildBlocks);
+
+        expect(blueBlocks).not.toBe(redBlocks);
+        expect(cachedBuildBlocks).toHaveBeenCalledTimes(2);
+        expect(getCachedBlocks('# Hi', 40, false, redTheme, cachedBuildBlocks)).toBe(redBlocks);
     });
 });
 

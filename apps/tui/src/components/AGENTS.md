@@ -13,7 +13,7 @@ OpenTUI Solid JSX UI components: chat input/transcript, overlays, status/tool ca
 |------|-------------|
 | `ChatInputArea.tsx` | Input region wrapper |
 | `ChatInputTextarea.tsx` | Native `<textarea>` (`TextareaRenderable`) — cursor/selection/IME |
-| `ChatTranscript.tsx` | Native `<scrollbox>` — typed `transcriptParts` first, legacy fallback |
+| `ChatTranscript.tsx` | Native `<scrollbox>` — typed `transcriptParts` first, legacy fallback; sticky-bottom render window |
 | `ChatBottomDock.tsx` | Bottom dock: input + menus + status |
 | `chat-bottom-dock-policy.ts` | Dock visibility/policy helpers |
 | `TranscriptPartRenderer.tsx` | Exhaustive `TranscriptPart` → row router |

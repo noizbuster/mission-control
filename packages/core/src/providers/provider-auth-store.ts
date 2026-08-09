@@ -69,91 +69,112 @@ const defaultAuthFile = {
 
 export function createProviderAuthStore(): ProviderAuthStore {
     const authFilePath = resolveAuthFilePath();
+    let writeChain: Promise<void> = Promise.resolve();
+    const enqueue = <T,>(task: () => Promise<T>): Promise<T> => {
+        const run = writeChain.then(task, task);
+        writeChain = run.then(
+            () => undefined,
+            () => undefined,
+        );
+        return run;
+    };
     return {
         authFilePath,
         async readAuthFile() {
             return readAuthFile(authFilePath);
         },
         async saveCredential(input) {
-            const current = await readAuthFile(authFilePath);
-            const existing = current.credentials[input.providerID];
-            const next = ProviderAuthFileSchema.parse({
-                ...current,
-                default: {
-                    providerID: input.providerID,
-                    modelID: input.modelID,
-                    ...(input.variantID !== undefined ? { variantID: input.variantID } : {}),
-                },
-                credentials: {
-                    ...current.credentials,
-                    [input.providerID]: buildStoredCredential(input, existing),
-                },
+            return enqueue(async () => {
+                const current = await readAuthFile(authFilePath);
+                const existing = current.credentials[input.providerID];
+                const next = ProviderAuthFileSchema.parse({
+                    ...current,
+                    default: {
+                        providerID: input.providerID,
+                        modelID: input.modelID,
+                        ...(input.variantID !== undefined ? { variantID: input.variantID } : {}),
+                    },
+                    credentials: {
+                        ...current.credentials,
+                        [input.providerID]: buildStoredCredential(input, existing),
+                    },
+                });
+                await writeAuthFile(authFilePath, next);
+        
             });
-            await writeAuthFile(authFilePath, next);
         },
         async updateOAuthCredential(providerID, oauth, now = new Date().toISOString()) {
-            const current = await readAuthFile(authFilePath);
-            const existing = current.credentials[providerID];
-            if (existing === undefined || existing.type !== 'oauth') {
-                throw new Error(`OAuth credential is not configured for ${providerID}`);
-            }
-            const nextCredential: ProviderCredential = {
-                providerID,
-                type: 'oauth',
-                accessToken: oauth.accessToken,
-                createdAt: existing.createdAt,
-                updatedAt: now,
-                ...(oauth.refreshToken !== undefined
-                    ? { refreshToken: oauth.refreshToken }
-                    : existing.refreshToken !== undefined
-                      ? { refreshToken: existing.refreshToken }
-                      : {}),
-                ...(oauth.expiresAt !== undefined
-                    ? { expiresAt: oauth.expiresAt }
-                    : existing.expiresAt !== undefined
-                      ? { expiresAt: existing.expiresAt }
-                      : {}),
-                ...(oauth.scopes !== undefined
-                    ? { scopes: [...oauth.scopes] }
-                    : existing.scopes !== undefined
-                      ? { scopes: [...existing.scopes] }
-                      : {}),
-                ...(oauth.accountLabel !== undefined
-                    ? { accountLabel: oauth.accountLabel }
-                    : existing.accountLabel !== undefined
-                      ? { accountLabel: existing.accountLabel }
-                      : {}),
-            };
-            const next = ProviderAuthFileSchema.parse({
-                ...current,
-                credentials: {
-                    ...current.credentials,
-                    [providerID]: nextCredential,
-                },
+            return enqueue(async () => {
+                const current = await readAuthFile(authFilePath);
+                const existing = current.credentials[providerID];
+                if (existing === undefined || existing.type !== 'oauth') {
+                    throw new Error(`OAuth credential is not configured for ${providerID}`);
+                }
+                const nextCredential: ProviderCredential = {
+                    providerID,
+                    type: 'oauth',
+                    accessToken: oauth.accessToken,
+                    createdAt: existing.createdAt,
+                    updatedAt: now,
+                    ...(oauth.refreshToken !== undefined
+                        ? { refreshToken: oauth.refreshToken }
+                        : existing.refreshToken !== undefined
+                          ? { refreshToken: existing.refreshToken }
+                          : {}),
+                    ...(oauth.expiresAt !== undefined
+                        ? { expiresAt: oauth.expiresAt }
+                        : existing.expiresAt !== undefined
+                          ? { expiresAt: existing.expiresAt }
+                          : {}),
+                    ...(oauth.scopes !== undefined
+                        ? { scopes: [...oauth.scopes] }
+                        : existing.scopes !== undefined
+                          ? { scopes: [...existing.scopes] }
+                          : {}),
+                    ...(oauth.accountLabel !== undefined
+                        ? { accountLabel: oauth.accountLabel }
+                        : existing.accountLabel !== undefined
+                          ? { accountLabel: existing.accountLabel }
+                          : {}),
+                };
+                const next = ProviderAuthFileSchema.parse({
+                    ...current,
+                    credentials: {
+                        ...current.credentials,
+                        [providerID]: nextCredential,
+                    },
+                });
+                await writeAuthFile(authFilePath, next);
+        
             });
-            await writeAuthFile(authFilePath, next);
         },
         async setDefaultSelection(selection) {
-            const current = await readAuthFile(authFilePath);
-            const next = ProviderAuthFileSchema.parse({
-                ...current,
-                default: selection,
+            return enqueue(async () => {
+                const current = await readAuthFile(authFilePath);
+                const next = ProviderAuthFileSchema.parse({
+                    ...current,
+                    default: selection,
+                });
+                await writeAuthFile(authFilePath, next);
+        
             });
-            await writeAuthFile(authFilePath, next);
         },
         async deleteCredential(providerID) {
-            const current = await readAuthFile(authFilePath);
-            const credentials = Object.fromEntries(
-                Object.entries(current.credentials).filter(
-                    ([credentialProviderID]) => credentialProviderID !== providerID,
-                ),
-            );
-            const next = ProviderAuthFileSchema.parse({
-                ...current,
-                ...(current.default?.providerID === providerID ? { default: undefined } : { default: current.default }),
-                credentials,
+            return enqueue(async () => {
+                const current = await readAuthFile(authFilePath);
+                const credentials = Object.fromEntries(
+                    Object.entries(current.credentials).filter(
+                        ([credentialProviderID]) => credentialProviderID !== providerID,
+                    ),
+                );
+                const next = ProviderAuthFileSchema.parse({
+                    ...current,
+                    ...(current.default?.providerID === providerID ? { default: undefined } : { default: current.default }),
+                    credentials,
+                });
+                await writeAuthFile(authFilePath, next);
+        
             });
-            await writeAuthFile(authFilePath, next);
         },
         async listCredentialSummaries() {
             const current = await readAuthFile(authFilePath);
@@ -168,22 +189,28 @@ export function createProviderAuthStore(): ProviderAuthStore {
             return current.modelRoles ?? {};
         },
         async setModelRole(role, selection) {
-            const current = await readAuthFile(authFilePath);
-            const next = ProviderAuthFileSchema.parse({
-                ...current,
-                modelRoles: { ...(current.modelRoles ?? {}), [role]: selection },
+            return enqueue(async () => {
+                const current = await readAuthFile(authFilePath);
+                const next = ProviderAuthFileSchema.parse({
+                    ...current,
+                    modelRoles: { ...(current.modelRoles ?? {}), [role]: selection },
+                });
+                await writeAuthFile(authFilePath, next);
+        
             });
-            await writeAuthFile(authFilePath, next);
         },
         async clearModelRole(role) {
-            const current = await readAuthFile(authFilePath);
-            const modelRoles: Record<string, ModelProviderSelection> = { ...(current.modelRoles ?? {}) };
-            delete modelRoles[role];
-            const next = ProviderAuthFileSchema.parse({
-                ...current,
-                modelRoles,
+            return enqueue(async () => {
+                const current = await readAuthFile(authFilePath);
+                const modelRoles: Record<string, ModelProviderSelection> = { ...(current.modelRoles ?? {}) };
+                delete modelRoles[role];
+                const next = ProviderAuthFileSchema.parse({
+                    ...current,
+                    modelRoles,
+                });
+                await writeAuthFile(authFilePath, next);
+        
             });
-            await writeAuthFile(authFilePath, next);
         },
     };
 }

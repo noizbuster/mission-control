@@ -67,3 +67,28 @@ describe('abg-overlay-prefs-store', () => {
         expect(prefs).toEqual(DEFAULT_ABG_OVERLAY_PREFS);
     });
 });
+
+describe('abg-overlay-prefs-store concurrency', () => {
+    beforeEach(async () => {
+        await resetTempDir();
+        // biome-ignore lint/complexity/useLiteralKeys: process.env index access
+        process.env['MCTRL_DATA_DIR'] = TEMP_DATA_DIR;
+    });
+
+    afterEach(async () => {
+        // biome-ignore lint/complexity/useLiteralKeys: process.env index access
+        delete process.env['MCTRL_DATA_DIR'];
+        await resetTempDir();
+    });
+
+    it('serializes concurrent saveAbgOverlayPrefs without throwing', async () => {
+        await mkdir(TEMP_DATA_DIR, { recursive: true });
+        await Promise.all([
+            saveAbgOverlayPrefs({ ...DEFAULT_ABG_OVERLAY_PREFS, activeTabIndex: 1 }),
+            saveAbgOverlayPrefs({ ...DEFAULT_ABG_OVERLAY_PREFS, activeTabIndex: 2 }),
+            saveAbgOverlayPrefs({ ...DEFAULT_ABG_OVERLAY_PREFS, activeTabIndex: 3 }),
+        ]);
+        const prefs = await loadAbgOverlayPrefs();
+        expect([1, 2, 3]).toContain(prefs.activeTabIndex);
+    });
+});

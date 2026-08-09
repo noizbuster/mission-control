@@ -1,10 +1,11 @@
 import { errorToString } from '@mission-control/core';
 import { useKeyboard } from '@opentui/solid';
-import type { Setter } from 'solid-js';
+import { useContext, type Setter } from 'solid-js';
 import { ABG_OVERLAY_TABS } from '../components/AbgOverlay';
 import type { ChatTextareaHandle } from '../components/ChatInputTextarea';
 import { buildDiffViewerModel, moveLine, nextFile, nextHunk, prevFile, prevHunk } from '../platform/keymap/diff-viewer';
 import type { AbgOverlayController } from '../state/abg-overlay-controller';
+import { PaletteOpenContext } from '../platform/keymap/palette-open-context';
 import type { ChatStore } from '../state/chat-store';
 
 /**
@@ -14,8 +15,6 @@ import type { ChatStore } from '../state/chat-store';
 export type GlobalKeyboardDeps = {
     readonly store: ChatStore;
     readonly textareaHandle: ChatTextareaHandle;
-    readonly setAbgActiveTab: Setter<number>;
-    readonly setAbgScrollOffset: Setter<number>;
     readonly setAbgPanX: Setter<number>;
     readonly abgOverlayController: AbgOverlayController | undefined;
 };
@@ -28,12 +27,98 @@ const ABG_GRAPH_PAN_STEP = 12;
  * ChatInputArea onKeyDown (e.g. Ctrl+G).
  */
 export function useGlobalKeyboard(deps: GlobalKeyboardDeps): void {
-    const { store, textareaHandle, setAbgActiveTab, setAbgScrollOffset, setAbgPanX, abgOverlayController } = deps;
+    const { store, textareaHandle, setAbgPanX, abgOverlayController } = deps;
+    const paletteOpenState = useContext(PaletteOpenContext);
 
+    // Key-repeat guard for overlay dismiss actions in this sink.
+    let dismissSettled = false;
     useKeyboard((key) => {
         const isCtrlC = key.ctrl && key.name === 'c';
         if (isCtrlC) {
             const snap = store.getSnapshot();
+            // Decision overlays: Ctrl+C cancels the waiter/decision first.
+            if (snap.overlayMode === 'approval') {
+                key.preventDefault();
+                store.denyApproval();
+                return;
+            }
+            if (snap.overlayMode === 'question') {
+                key.preventDefault();
+                if (store.rejectQuestion()) {
+                    store.sendInterrupt('ctrl-c');
+                }
+                return;
+            }
+            if (snap.overlayMode === 'rename') {
+                key.preventDefault();
+                store.cancelRename();
+                return;
+            }
+            if (
+                snap.overlayMode === 'model-picker'
+                || snap.overlayMode === 'session-picker'
+                || snap.overlayMode === 'level-picker'
+            ) {
+                key.preventDefault();
+                store.cancelPendingOverlayPromises();
+                return;
+            }
+            // Operator/view overlays: dismiss first so Ctrl+C never interrupt/exits underneath.
+            if (snap.overlayMode === 'agents-dashboard') {
+                key.preventDefault();
+                store.hideAgentsDashboard();
+                return;
+            }
+            if (snap.overlayMode === 'mission-panel') {
+                key.preventDefault();
+                store.hideMissionPanel();
+                return;
+            }
+            if (snap.overlayMode === 'models-overlay') {
+                key.preventDefault();
+                store.hideModelsOverlay();
+                return;
+            }
+            if (snap.overlayMode === 'diff-viewer') {
+                key.preventDefault();
+                store.hideDiffViewer();
+                return;
+            }
+            if (snap.overlayMode === 'abg') {
+                key.preventDefault();
+                if (!dismissSettled) {
+                    dismissSettled = true;
+                    store.toggleAbgOverlay();
+                }
+                return;
+            }
+            if (snap.overlayMode === 'diagnostics') {
+                key.preventDefault();
+                if (!dismissSettled) {
+                    dismissSettled = true;
+                    store.hideDiagnosticsOverlay();
+                }
+                return;
+            }
+            if (snap.overlayMode === 'tips') {
+                key.preventDefault();
+                if (!dismissSettled) {
+                    dismissSettled = true;
+                    store.hideTipsOverlay();
+                }
+                return;
+            }
+            if (paletteOpenState?.open() === true) {
+                key.preventDefault();
+                paletteOpenState.setOpen(false);
+                return;
+            }
+            if (snap.historyPicker.open) {
+                key.preventDefault();
+                // Esc-parity: dismiss history without destroying the in-progress draft.
+                store.cancelHistoryPicker();
+                return;
+            }
             // While streaming, Ctrl+C stops the agent rather than clearing the draft.
             if (snap.generating) {
                 store.sendInterrupt('ctrl-c');
@@ -54,8 +139,16 @@ export function useGlobalKeyboard(deps: GlobalKeyboardDeps): void {
             return;
         }
         const snap = store.getSnapshot();
+        if (snap.overlayMode === 'none') {
+            dismissSettled = false;
+        }
         if (key.ctrl && key.name === 'g') {
             key.preventDefault();
+            // Only toggle ABG from idle or while already in ABG.
+            // Any other overlay owns the mode and must not be stolen.
+            if (snap.overlayMode !== 'none' && snap.overlayMode !== 'abg') {
+                return;
+            }
             try {
                 store.toggleAbgOverlay();
             } catch (error: unknown) {
@@ -64,31 +157,50 @@ export function useGlobalKeyboard(deps: GlobalKeyboardDeps): void {
             }
             return;
         }
+        if (snap.overlayMode === 'diagnostics') {
+            if (key.name === 'escape') {
+                key.preventDefault();
+                if (dismissSettled) return;
+                dismissSettled = true;
+                store.hideDiagnosticsOverlay();
+                return;
+            }
+        }
+        if (snap.overlayMode === 'tips') {
+            if (key.name === 'escape') {
+                key.preventDefault();
+                if (dismissSettled) return;
+                dismissSettled = true;
+                store.hideTipsOverlay();
+                return;
+            }
+        }
         if (snap.overlayMode === 'abg') {
             if (key.name === 'escape') {
                 key.preventDefault();
+                if (dismissSettled) return;
+                dismissSettled = true;
                 store.toggleAbgOverlay();
                 return;
             }
             if (key.name >= '1' && key.name <= '8') {
                 const idx = Number.parseInt(key.name, 10) - 1;
-                setAbgActiveTab(idx);
-                setAbgScrollOffset(0);
+                store.setAbgOverlayActiveTab(idx);
                 setAbgPanX(0);
                 return;
             }
             if (key.name === 'tab') {
-                setAbgActiveTab((i) => (i + 1) % ABG_OVERLAY_TABS.length);
-                setAbgScrollOffset(0);
+                const next = (store.getSnapshot().abgOverlayActiveTab + 1) % ABG_OVERLAY_TABS.length;
+                store.setAbgOverlayActiveTab(next);
                 setAbgPanX(0);
                 return;
             }
             if (key.name === 'up') {
-                setAbgScrollOffset((o) => o + 1);
+                store.adjustAbgOverlayScrollOffset(1);
                 return;
             }
             if (key.name === 'down') {
-                setAbgScrollOffset((o) => Math.max(0, o - 1));
+                store.adjustAbgOverlayScrollOffset(-1);
                 return;
             }
             if (key.name === 'left') {
@@ -113,6 +225,8 @@ export function useGlobalKeyboard(deps: GlobalKeyboardDeps): void {
             const cursor = snap.diffViewerCursor;
             if (key.name === 'escape' || key.name === 'q') {
                 key.preventDefault();
+                if (dismissSettled) return;
+                dismissSettled = true;
                 store.hideDiffViewer();
                 return;
             }

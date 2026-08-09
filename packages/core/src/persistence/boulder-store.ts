@@ -99,6 +99,22 @@ export type BoulderState = z.infer<typeof BoulderStateSchema>;
  * merged key-by-key (new keys added, existing keys replaced). All other fields
  * shallow-merge over the stored work.
  */
+/** Process-local per-root chains so concurrent updateBoulderWork cannot drop fields. */
+const boulderWriteChains = new Map<string, Promise<unknown>>();
+
+export function enqueueBoulderWrite<T>(root: string, task: () => Promise<T>): Promise<T> {
+    const previous = boulderWriteChains.get(root) ?? Promise.resolve();
+    const run = previous.then(task, task);
+    boulderWriteChains.set(
+        root,
+        run.then(
+            () => undefined,
+            () => undefined,
+        ),
+    );
+    return run;
+}
+
 export type BoulderWorkPatch = {
     readonly status?: BoulderWorkStatus;
     readonly active_plan?: string;
@@ -171,10 +187,21 @@ export async function readBoulder(root: string): Promise<BoulderState | null> {
 
 /**
  * Validate and persist `state` to `.mc/boulder.json` atomically
- * (temp-file-then-rename). The input is parsed through `BoulderStateSchema`
- * before writing so malformed state is rejected at the boundary.
+ * (temp-file-then-rename). Every public write joins the root lane so it cannot
+ * interleave with a read-modify-write update for the same boulder.
  */
 export async function writeBoulder(root: string, state: BoulderState): Promise<void> {
+    return enqueueBoulderWrite(root, async () => {
+        await writeBoulderUnchained(root, state);
+    });
+}
+
+/**
+ * Internal replacement primitive for callers already executing inside
+ * `enqueueBoulderWrite`. Keeping it unqueued avoids self-deadlock in the
+ * read-modify-write paths.
+ */
+export async function writeBoulderUnchained(root: string, state: BoulderState): Promise<void> {
     const filePath = boulderFilePath(root);
     const validated = BoulderStateSchema.parse(state);
     await atomicWriteJsonFile(filePath, validated);
@@ -192,43 +219,45 @@ export async function updateBoulderWork(
     patch: BoulderWorkPatch,
     options: { readonly now?: () => string } = {},
 ): Promise<BoulderState> {
-    const now = options.now?.() ?? new Date().toISOString();
-    const state = await readBoulder(root);
-    if (state === null) {
-        throw new BoulderStoreError(
-            `Cannot update work ${workId}: boulder.json is missing at ${boulderFilePath(root)}`,
-            'boulder_missing',
-            boulderFilePath(root),
-        );
-    }
-    const existingWork = state.works[workId];
-    if (existingWork === undefined) {
-        throw new BoulderStoreError(
-            `Cannot update work ${workId}: not present in boulder works`,
-            'boulder_work_missing',
-            boulderFilePath(root),
-        );
-    }
+    return enqueueBoulderWrite(root, async () => {
+        const now = options.now?.() ?? new Date().toISOString();
+        const state = await readBoulder(root);
+        if (state === null) {
+            throw new BoulderStoreError(
+                `Cannot update work ${workId}: boulder.json is missing at ${boulderFilePath(root)}`,
+                'boulder_missing',
+                boulderFilePath(root),
+            );
+        }
+        const existingWork = state.works[workId];
+        if (existingWork === undefined) {
+            throw new BoulderStoreError(
+                `Cannot update work ${workId}: not present in boulder works`,
+                'boulder_work_missing',
+                boulderFilePath(root),
+            );
+        }
 
-    const mergedTaskSessions = mergeTaskSessions(existingWork.task_sessions, patch.task_sessions);
-    const nextWork: BoulderWork = {
-        ...existingWork,
-        ...(patch.status !== undefined ? { status: patch.status } : {}),
-        ...(patch.active_plan !== undefined ? { active_plan: patch.active_plan } : {}),
-        ...(patch.plan_name !== undefined ? { plan_name: patch.plan_name } : {}),
-        ...(patch.agent !== undefined ? { agent: patch.agent } : {}),
-        ...(patch.session_ids !== undefined ? { session_ids: [...patch.session_ids] } : {}),
-        ...(patch.session_origins !== undefined ? { session_origins: { ...patch.session_origins } } : {}),
-        ...(mergedTaskSessions !== undefined ? { task_sessions: mergedTaskSessions } : {}),
-        ...(patch.ended_at !== undefined ? { ended_at: patch.ended_at } : {}),
-        ...(patch.elapsed_ms !== undefined ? { elapsed_ms: patch.elapsed_ms } : {}),
-        updated_at: now,
-    };
+        const mergedTaskSessions = mergeTaskSessions(existingWork.task_sessions, patch.task_sessions);
+        const nextWork: BoulderWork = {
+            ...existingWork,
+            ...(patch.status !== undefined ? { status: patch.status } : {}),
+            ...(patch.active_plan !== undefined ? { active_plan: patch.active_plan } : {}),
+            ...(patch.plan_name !== undefined ? { plan_name: patch.plan_name } : {}),
+            ...(patch.agent !== undefined ? { agent: patch.agent } : {}),
+            ...(patch.session_ids !== undefined ? { session_ids: [...patch.session_ids] } : {}),
+            ...(patch.session_origins !== undefined ? { session_origins: { ...patch.session_origins } } : {}),
+            ...(mergedTaskSessions !== undefined ? { task_sessions: mergedTaskSessions } : {}),
+            ...(patch.ended_at !== undefined ? { ended_at: patch.ended_at } : {}),
+            ...(patch.elapsed_ms !== undefined ? { elapsed_ms: patch.elapsed_ms } : {}),
+            updated_at: now,
+        };
 
-    const nextWorks = { ...state.works, [workId]: nextWork };
-    const nextState: BoulderState = { ...state, works: nextWorks, updated_at: now };
-    await writeBoulder(root, nextState);
-    return nextState;
+        const nextWorks = { ...state.works, [workId]: nextWork };
+        const nextState: BoulderState = { ...state, works: nextWorks, updated_at: now };
+        await writeBoulderUnchained(root, nextState);
+        return nextState;
+    });
 }
 
 function mergeTaskSessions(
@@ -246,5 +275,3 @@ function mergeTaskSessions(
     }
     return { ...existing, ...incoming };
 }
-
-

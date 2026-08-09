@@ -48,6 +48,29 @@ export function parsePermissionReply(line: string): PermissionReply {
     return { approvalId: '', reply: 'deny', reason: 'interactive CLI approval' };
 }
 
+
+/** True when a line is approval-vocab only (UI once/session/always/deny + short aliases). */
+export function isApprovalDecisionLine(line: string): boolean {
+    const answer = line.trim().toLowerCase();
+    switch (answer) {
+        case 'once':
+        case 'o':
+        case 'session':
+        case 's':
+        case 'always':
+        case 'a':
+        case 'deny':
+        case 'n':
+        case 'no':
+        case 'y':
+        case 'yes':
+        case 'allow':
+            return true;
+        default:
+            return false;
+    }
+}
+
 export function renderApprovalResult(action: string, reply: PermissionReply['reply'], reason?: string): string {
     if (reply === 'always' && reason?.includes('session')) {
         return `Allowed for session: ${action}\n`;

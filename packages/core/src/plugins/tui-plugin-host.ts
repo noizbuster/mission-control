@@ -64,6 +64,7 @@ export class TuiPluginHostRegistry {
     private readonly trustLookup: (workspaceRoot: string) => Promise<ProjectTrustLookup>;
     private readonly now: () => number;
     private readonly registrations: TuiPluginRegistration[] = [];
+    private readonly activeHostTokens = new Map<string, object>();
 
     constructor(options: TuiPluginHostRegistryOptions) {
         this.workspaceRoot = options.workspaceRoot;
@@ -103,6 +104,8 @@ export class TuiPluginHostRegistry {
         }
 
         this.disposePlugin(manifest.name);
+        const hostToken = {};
+        this.activeHostTokens.set(manifest.name, hostToken);
         const diagnostics: TuiPluginDiagnostic[] = [];
         const grantedCapabilities = manifest.capabilities.filter((capability) =>
             this.allowedCapabilities.has(capability),
@@ -115,7 +118,7 @@ export class TuiPluginHostRegistry {
             }
         }
 
-        const hostApi = this.createHostApi(manifest.name, grantedCapabilities);
+        const hostApi = this.createHostApi(manifest.name, grantedCapabilities, hostToken);
         for (const slot of manifest.slots) {
             if (grantedCapabilities.includes('ui.slot')) {
                 hostApi.registerSlot(slot);
@@ -154,6 +157,7 @@ export class TuiPluginHostRegistry {
     }
 
     disposePlugin(pluginName: string): void {
+        this.activeHostTokens.delete(pluginName);
         for (let index = this.registrations.length - 1; index >= 0; index -= 1) {
             if (this.registrations[index]?.pluginName === pluginName) {
                 this.registrations.splice(index, 1);
@@ -161,24 +165,32 @@ export class TuiPluginHostRegistry {
         }
     }
 
-    private createHostApi(pluginName: string, capabilities: readonly TuiPluginCapabilityId[]): TuiPluginHostApi {
+    private createHostApi(
+        pluginName: string,
+        capabilities: readonly TuiPluginCapabilityId[],
+        hostToken: object,
+    ): TuiPluginHostApi {
         return {
             pluginName,
             capabilities,
             registerSlot: (descriptor) =>
-                this.register(pluginName, 'slot', TuiPluginSlotDescriptorSchema.parse(descriptor)),
+                this.register(pluginName, hostToken, 'slot', TuiPluginSlotDescriptorSchema.parse(descriptor)),
             registerRoute: (descriptor) =>
-                this.register(pluginName, 'route', TuiPluginRouteDescriptorSchema.parse(descriptor)),
+                this.register(pluginName, hostToken, 'route', TuiPluginRouteDescriptorSchema.parse(descriptor)),
             registerCommand: (descriptor) =>
-                this.register(pluginName, 'command', TuiPluginCommandDescriptorSchema.parse(descriptor)),
+                this.register(pluginName, hostToken, 'command', TuiPluginCommandDescriptorSchema.parse(descriptor)),
         };
     }
 
     private register(
         pluginName: string,
+        hostToken: object,
         kind: TuiPluginRegistrationKind,
         descriptor: TuiPluginRegistration['descriptor'],
     ): TuiPluginRegistrationHandle {
+        if (this.activeHostTokens.get(pluginName) !== hostToken) {
+            return { dispose: () => {} };
+        }
         const registration = { pluginName, kind, descriptor } satisfies TuiPluginRegistration;
         this.registrations.push(registration);
         return {

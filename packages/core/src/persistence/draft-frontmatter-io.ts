@@ -46,6 +46,22 @@ export class DraftFrontmatterError extends McPersistenceError {
  * Deterministically write/update YAML frontmatter on `.mc/drafts/<slug>.md`.
  * Preserves any existing body. Creates the draft when missing.
  */
+/** Process-local per-path chains so concurrent draft frontmatter writes cannot clobber. */
+const draftWriteChains = new Map<string, Promise<unknown>>();
+
+function enqueueDraftWrite<T>(path: string, task: () => Promise<T>): Promise<T> {
+    const previous = draftWriteChains.get(path) ?? Promise.resolve();
+    const run = previous.then(task, task);
+    draftWriteChains.set(
+        path,
+        run.then(
+            () => undefined,
+            () => undefined,
+        ),
+    );
+    return run;
+}
+
 export async function writeDraftFrontmatter(
     workspaceRoot: string,
     slug: string,
@@ -56,13 +72,16 @@ export async function writeDraftFrontmatter(
     const draftPath = mcFilePath(root, 'drafts', `${slug}.md`);
     assertInsideMc(root, draftPath);
 
-    const existing = await readOptionalUtf8(draftPath);
-    const body = existing === undefined ? '' : extractDraftBody(existing);
-    const created = existing === undefined;
-    await ensureMcDirs(root, ['drafts']);
-    await atomicWrite(draftPath, `${formatDraftFrontmatterBlock(slug, fields)}${body}`);
-    return { draftPath, created };
+    return enqueueDraftWrite(draftPath, async () => {
+        const existing = await readOptionalUtf8(draftPath);
+        const body = existing === undefined ? '' : extractDraftBody(existing);
+        const created = existing === undefined;
+        await ensureMcDirs(root, ['drafts']);
+        await atomicWrite(draftPath, `${formatDraftFrontmatterBlock(slug, fields)}${body}`);
+        return { draftPath, created };
+    });
 }
+
 
 /**
  * Append a dual-review receipt line under `## Dual review receipts` on the draft.
@@ -78,21 +97,24 @@ export async function appendDualReviewReceipts(
     const draftPath = mcFilePath(root, 'drafts', `${slug}.md`);
     assertInsideMc(root, draftPath);
 
-    const existing = await readOptionalUtf8(draftPath);
-    const base =
-        existing ??
-        formatDraftFrontmatterBlock(slug, {
-            status: 'drafting',
-        });
-    const line = formatDualReviewReceiptLine(receipt);
-    const next = appendReceiptSection(base, line);
-    if (next === existing) {
-        return { draftPath, appended: false };
-    }
-    await ensureMcDirs(root, ['drafts']);
-    await atomicWrite(draftPath, next);
-    return { draftPath, appended: true };
+    return enqueueDraftWrite(draftPath, async () => {
+        const existing = await readOptionalUtf8(draftPath);
+        const base =
+            existing ??
+            formatDraftFrontmatterBlock(slug, {
+                status: 'drafting',
+            });
+        const line = formatDualReviewReceiptLine(receipt);
+        const next = appendReceiptSection(base, line);
+        if (next === existing) {
+            return { draftPath, appended: false };
+        }
+        await ensureMcDirs(root, ['drafts']);
+        await atomicWrite(draftPath, next);
+        return { draftPath, appended: true };
+    });
 }
+
 
 export function formatDraftFrontmatterBlock(
     slug: string,

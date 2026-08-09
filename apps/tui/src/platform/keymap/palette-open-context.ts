@@ -14,6 +14,9 @@ import { type Accessor, createContext, type Setter } from 'solid-js';
 export interface PaletteOpenState {
     readonly open: Accessor<boolean>;
     readonly setOpen: Setter<boolean>;
+    /** When false, Alt+X toggle will not open the palette (decision overlays). */
+    readonly canOpen: Accessor<boolean>;
+    readonly setCanOpen: Setter<boolean>;
 }
 
 export const PaletteOpenContext = createContext<PaletteOpenState>();

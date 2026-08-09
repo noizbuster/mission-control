@@ -147,3 +147,47 @@ describe('selection-copy copy()', () => {
         expect(toast.messages).toEqual([]);
     });
 });
+
+    it('skips toast when isLive becomes false after the clipboard hop', async () => {
+        const copied: string[] = [];
+        const clipboardService = makeClipboardService(copied);
+        const toast = makeToast();
+        const clearSelection = vi.fn();
+        const renderer: SelectionCopyRenderer = {
+            getSelection: () => ({ getSelectedText: () => 'selected text', selectedRenderables: [] }),
+            clearSelection,
+            currentFocusedRenderable: null,
+        };
+        let live = true;
+
+        const result = copy(renderer, toast, clipboardService, { isLive: () => live });
+        live = false;
+
+        expect(result).toBe(true);
+        expect(clearSelection).toHaveBeenCalledTimes(1);
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(toast.messages).toEqual([]);
+        expect(toast.errors).toEqual([]);
+        expect(copied).toEqual(['selected text']);
+    });
+
+    it('shows a warning toast when OSC52 reports unavailable and isLive stays true', async () => {
+        const toast = makeToast();
+        const clearSelection = vi.fn();
+        const clipboardService: ClipboardService = {
+            copyToClipboard: () => Promise.resolve(false),
+            isOsc52Supported: () => true,
+        };
+        const renderer: SelectionCopyRenderer = {
+            getSelection: () => ({ getSelectedText: () => 'text', selectedRenderables: [] }),
+            clearSelection,
+        };
+
+        expect(copy(renderer, toast, clipboardService)).toBe(true);
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(toast.messages).toEqual([
+            { message: 'Clipboard unavailable in this terminal', variant: 'warning' },
+        ]);
+    });

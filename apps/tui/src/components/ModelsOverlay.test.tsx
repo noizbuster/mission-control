@@ -100,6 +100,19 @@ describe('ChatStore models-overlay wiring (headless)', () => {
         expect(authStore.setModelRoleMock).toHaveBeenCalledWith('slow', selection('p1', 'm1'));
     });
 
+    it('rolls back role assignment when setModelRole rejects', async () => {
+        const authStore = recordingAuthStore();
+        authStore.setModelRoleMock.mockRejectedValueOnce(new Error('auth write failed'));
+        const store = createChatStore({ authStore });
+        openOverlay(store);
+        await store.assignModelsOverlayRole('slow', selection('p0', 'm0'));
+        const before = store.getSnapshot().modelsOverlay.roleRows.find((row) => row.role === 'slow')?.assignment;
+        authStore.setModelRoleMock.mockRejectedValueOnce(new Error('auth write failed'));
+        await store.assignModelsOverlayRole('slow', selection('p1', 'm1'));
+        const after = store.getSnapshot().modelsOverlay.roleRows.find((row) => row.role === 'slow')?.assignment;
+        expect(after).toEqual(before);
+    });
+
     it('assignModelsOverlayRole updates state even without an authStore', async () => {
         const store = createChatStore();
         openOverlay(store);
@@ -122,6 +135,20 @@ describe('ChatStore models-overlay wiring (headless)', () => {
         expect(slowRow?.assignment).toBeUndefined();
         expect(authStore.clearModelRoleMock).toHaveBeenCalledOnce();
         expect(authStore.clearModelRoleMock).toHaveBeenCalledWith('slow');
+    });
+
+    it('rolls back role clear when clearModelRole rejects', async () => {
+        const authStore = recordingAuthStore();
+        authStore.clearModelRoleMock.mockRejectedValueOnce(new Error('auth clear failed'));
+        const assigned = selection('p1', 'm1');
+        const roleRows = createModelsOverlayRoleRows({ slow: assigned }, FALLBACK);
+        const store = createChatStore({ authStore });
+        store.showModelsOverlay(ENTRIES, roleRows);
+
+        await store.clearModelsOverlayRole('slow');
+
+        const slowRow = store.getSnapshot().modelsOverlay.roleRows.find((row) => row.role === 'slow');
+        expect(slowRow?.assignment).toEqual(assigned);
     });
 
     it('clearModelsOverlayRole does not touch other role assignments', async () => {

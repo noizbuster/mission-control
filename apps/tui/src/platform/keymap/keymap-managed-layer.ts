@@ -172,18 +172,20 @@ export function createChatSubmitCommand(submitHandler: () => void): Command<Rend
 export function registerManagedTextareaComposition(
     keymap: Keymap<Renderable, KeyEvent>,
     renderer: CliRenderer,
+    options?: { readonly isEnabled?: () => boolean },
 ): () => void {
+    const idle = (): boolean => options?.isEnabled?.() ?? true;
     const { keybinds } = resolveKeybindConfig();
     const offCommands = registerEditBufferCommands(keymap, renderer);
     const offSuspension = registerTextareaMappingSuspension(keymap, renderer);
     const offLayer = keymap.registerLayer({
-        enabled: () => hasManagedTextareaFocus(renderer),
+        enabled: () => hasManagedTextareaFocus(renderer) && idle(),
         bindings: createConfigDrivenTextareaBindings(keybinds),
     });
     // Emacs kill-ring (T5): a higher-priority layer shadowing ctrl+w/k/u to
     // capture killed text, plus the new ctrl+y/alt+y yank/yank-pop chords.
     const offKillRing = registerKillRingLayer(keymap, renderer, {
-        hasFocus: () => hasManagedTextareaFocus(renderer),
+        hasFocus: () => hasManagedTextareaFocus(renderer) && idle(),
     });
     return () => {
         offKillRing();
@@ -207,12 +209,15 @@ export function registerChatSubmitLayer(
     keymap: Keymap<Renderable, KeyEvent>,
     renderer: CliRenderer,
     submitHandler: () => void,
+    options?: { readonly isEnabled?: () => boolean },
 ): () => void {
     const offLayer = keymap.registerLayer({
         // Higher priority than the filtered bindings layer (default priority)
         // so return/kpenter resolve to chat.submit, not input.newline.
+        // Still below palette.nav (200+) so Enter selects a palette row first.
         priority: 100,
-        enabled: () => hasManagedTextareaFocus(renderer),
+        enabled: () =>
+            hasManagedTextareaFocus(renderer) && (options?.isEnabled?.() ?? true),
         commands: [createChatSubmitCommand(submitHandler)],
         bindings: [
             { key: 'return', cmd: CHAT_SUBMIT_COMMAND },

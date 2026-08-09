@@ -221,12 +221,25 @@ function createTuiThemeService(
     const overlayTheme = createMemo(() => createOverlayTheme(preference()));
     const markdownTheme = createMemo(() => (preference().activeThemeId === 'no-color' ? noColorTheme : darkTheme));
     let disposed = false;
+    // Serialize preference load/saves so concurrent plugin/theme writes cannot last-write-win
+    // and a late initial load cannot clobber a newer save.
+    let writeChain: Promise<void> = Promise.resolve();
+
+    function enqueueTask<T>(task: () => Promise<T>): Promise<T> {
+        const run = writeChain.then(task, task);
+        writeChain = run.then(
+            () => undefined,
+            () => undefined,
+        );
+        return run;
+    }
 
     onMount(() => {
-        void store.getPreference().then((storedPreference) => {
+        void enqueueTask(async () => {
+            const storedPreference = await store.getPreference();
             if (disposed) return;
             setPreference(storedPreference);
-        });
+        }).catch(() => undefined);
     });
 
     onCleanup(() => {
@@ -238,9 +251,15 @@ function createTuiThemeService(
         if (!result.success) {
             return { kind: 'invalid-preference' };
         }
-        await store.savePreference(result.data);
-        setPreference(result.data);
-        return { kind: 'saved' };
+        return enqueueTask(async () => {
+            await store.savePreference(result.data);
+            // Drop late UI apply after soft-remount / unmount.
+            if (disposed) {
+                return { kind: 'saved' as const };
+            }
+            setPreference(result.data);
+            return { kind: 'saved' as const };
+        });
     }
 
     async function savePreferenceFromUnknown(value: unknown): Promise<TuiThemeSaveResult> {

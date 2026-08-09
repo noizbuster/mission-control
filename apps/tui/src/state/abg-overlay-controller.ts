@@ -12,6 +12,11 @@ export interface AbgOverlayController {
     readonly store: AbgOverlayStore;
     setActive(value: boolean): void;
     reset(): void;
+    /**
+     * Register the live overlay batch flusher (from wireAbgOverlay).
+     * Keyboard `r` and explicit flush call this so pending graph patches commit immediately.
+     */
+    bindFlush(handler: (() => void) | undefined): void;
     flushNow(): void;
     clearTimeline(): void;
 }
@@ -22,12 +27,23 @@ export function createAbgOverlayController(
 ): AbgOverlayController {
     let refreshTimer: ReturnType<typeof setInterval> | undefined;
     let pendingPatch: Partial<AbgOverlayState> = {};
+    let flushHandler: (() => void) | undefined;
     const readPrefsSnapshot = options.readPrefsSnapshot;
+    // Serialize prefs flushes so rapid reset/teardown cannot last-write-win on disk.
+    let persistChain: Promise<void> = Promise.resolve();
 
     const persistPrefs = (): void => {
         if (readPrefsSnapshot === undefined) return;
         const snapshot = readPrefsSnapshot();
-        void saveAbgOverlayPrefs(snapshot).catch(() => {});
+        const run = persistChain.then(
+            () => saveAbgOverlayPrefs(snapshot),
+            () => saveAbgOverlayPrefs(snapshot),
+        );
+        persistChain = run.then(
+            () => undefined,
+            () => undefined,
+        );
+        void run.catch(() => {});
     };
 
     return {
@@ -42,18 +58,22 @@ export function createAbgOverlayController(
                 refreshTimer = undefined;
             }
             pendingPatch = {};
+            flushHandler = undefined;
             store.setActive(false);
             store.reset();
         },
+        bindFlush(handler) {
+            flushHandler = handler;
+        },
         flushNow() {
-            if (Object.keys(pendingPatch).length === 0) {
-                return;
+            if (Object.keys(pendingPatch).length > 0) {
+                const patch = pendingPatch;
+                pendingPatch = {};
+                store.update((draft) => {
+                    Object.assign(draft, patch);
+                });
             }
-            const patch = pendingPatch;
-            pendingPatch = {};
-            store.update((draft) => {
-                Object.assign(draft, patch);
-            });
+            flushHandler?.();
         },
         clearTimeline() {
             store.update((draft) => {

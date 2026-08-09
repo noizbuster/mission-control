@@ -14,7 +14,9 @@ vi.mock('@mission-control/core', () => ({
 }));
 
 vi.mock('../components/markdown/parsers-config', () => ({
-    TREE_SITTER_PARSERS: [{ filetype: 'python', wasm: 'https://example.test/python.wasm', queries: { highlights: [] } }],
+    TREE_SITTER_PARSERS: [
+        { filetype: 'python', wasm: 'https://example.test/python.wasm', queries: { highlights: [] } },
+    ],
 }));
 
 describe('bootstrapTreeSitter', () => {
@@ -33,10 +35,36 @@ describe('bootstrapTreeSitter', () => {
         await bootstrapTreeSitter();
 
         expect(addDefaultParsers).toHaveBeenCalledTimes(1);
-        expect(addDefaultParsers).toHaveBeenCalledWith([
-            expect.objectContaining({ filetype: 'python' }),
-        ]);
+        expect(addDefaultParsers).toHaveBeenCalledWith([expect.objectContaining({ filetype: 'python' })]);
         expect(getTreeSitterClient).toHaveBeenCalled();
         expect(setDataPath).toHaveBeenCalledWith('/tmp/mctrl-test-data');
+    });
+
+    it('shares an in-flight bootstrap so concurrent mounts wait for initialization', async () => {
+        const { bootstrapTreeSitter, resetTreeSitterBootstrapForTest } = await import('./tree-sitter-bootstrap');
+        resetTreeSitterBootstrapForTest();
+        let releaseDataPath: (() => void) | undefined;
+        setDataPath.mockImplementationOnce(
+            () =>
+                new Promise<void>((resolve) => {
+                    releaseDataPath = resolve;
+                }),
+        );
+
+        const first = bootstrapTreeSitter();
+        const second = bootstrapTreeSitter();
+        let secondSettled = false;
+        void second.then(() => {
+            secondSettled = true;
+        });
+
+        expect(addDefaultParsers).toHaveBeenCalledTimes(1);
+        await Promise.resolve();
+        expect(secondSettled).toBe(false);
+
+        releaseDataPath?.();
+        await Promise.all([first, second]);
+        expect(secondSettled).toBe(true);
+        expect(setDataPath).toHaveBeenCalledTimes(1);
     });
 });

@@ -3,7 +3,7 @@
 import { type ChatBlock, parseMessageBlocks } from '@mission-control/tui/chat';
 import { useKeymap } from '@opentui/keymap/solid';
 import { useRenderer, useTerminalDimensions } from '@opentui/solid';
-import { type Accessor, createMemo, createSignal, type JSX, Show } from 'solid-js';
+import { useContext, type Accessor, createEffect, createMemo, createSignal, type JSX, Show } from 'solid-js';
 import { deriveStatusBarProps, preserveBlockReferences, promptPanelRepaintKey } from './app/app-helpers';
 import { FullscreenOverlays } from './app/FullscreenOverlays';
 import { ModalOverlays } from './app/ModalOverlays';
@@ -15,13 +15,14 @@ import { useRepaintEffects } from './app/use-repaint-effects';
 import { useSelectionMouseUp } from './app/use-selection-mouseup';
 import { useSubmit } from './app/use-submit';
 import { useTransientToast } from './app/use-transient-toast';
+import { AppShell } from './components/AppShell';
 import { ChatBottomDock } from './components/ChatBottomDock';
 import { ChatTranscript } from './components/ChatTranscript';
 import { bottomDockPolicy } from './components/chat-bottom-dock-policy';
 import { CHAT_BG } from './components/chat-theme';
 import { DialogOverlay, DialogProvider } from './components/dialog/dialog';
-import { DialogHost } from './components/dialog/dialog-host';
 import { KeymapChrome } from './platform/keymap/keymap-chrome';
+import { PaletteOpenContext } from './platform/keymap/palette-open-context';
 import {
     useChatSession,
     useTuiClipboard,
@@ -31,6 +32,7 @@ import {
 } from './platform/providers/index';
 import { useSolidStoreSelector } from './platform/use-solid-store-selector';
 import type { ChatStore } from './state/chat-store';
+import type { SoftRemountController } from './state/soft-remount';
 
 export {
     deriveStatusBarProps,
@@ -53,10 +55,33 @@ function createStableMessageBlocks(outputText: Accessor<string>): Accessor<reado
 
 export type AppProps = {
     readonly store: ChatStore;
+    readonly softRemount?: SoftRemountController;
+    /** Bumps on soft remount so Solid rebuilds the tree under a fresh key. */
+    readonly remountGeneration?: number;
 };
 
 export function App(props: AppProps): JSX.Element {
-    return <AppMain store={props.store} />;
+    // ErrorBoundary keeps a render throw from blanking the terminal with no
+    // recovery UI. ChatStore stays alive outside the boundary so CLI can still
+    // push replaceTranscript / unmount after a fatal paint failure.
+    // createMemo re-creates AppMain when remountGeneration bumps so native
+    // scrollbox/textarea subtrees are disposed and rebuilt cleanly.
+    const main = createMemo(() => {
+        const generation = props.remountGeneration ?? 0;
+        return <AppMain store={props.store} remountGeneration={generation} />;
+    });
+    return (
+        <AppShell
+            {...(props.softRemount !== undefined ? { softRemount: props.softRemount } : {})}
+            isEventQueueClosed={() => props.store.isEventQueueClosed()}
+            onFatalRenderError={(message) => {
+                props.store.setStickyNotice(`TUI recovery stopped: ${message}`);
+                props.store.closeEventQueue();
+            }}
+        >
+            {main()}
+        </AppShell>
+    );
 }
 
 /**
@@ -64,7 +89,7 @@ export function App(props: AppProps): JSX.Element {
  * width={dimensions().width} height={dimensions().height}, flex column,
  * main flexGrow+minHeight={0}, bottom flexShrink={0}. No custom SIGWINCH.
  */
-function AppMain(props: AppProps): JSX.Element {
+function AppMain(props: { readonly store: ChatStore; readonly remountGeneration: number }): JSX.Element {
     const snapshot = useSolidStoreSelector(props.store, (state) => state);
     const runtime = useTuiRuntime();
     const session = useChatSession();
@@ -72,13 +97,27 @@ function AppMain(props: AppProps): JSX.Element {
     const abgOverlayController = session.abgOverlayController;
     const missionControlServices = session.missionControlServices;
     const actions = session.actions;
-    const statusBarProps = () => deriveStatusBarProps(runtime, snapshot());
+
+    const statusBarProps = () => {
+        const base = deriveStatusBarProps(runtime, snapshot());
+        const sessionID = base.sessionID;
+        if (sessionID === undefined || sessionID.length === 0) {
+            return base;
+        }
+        return {
+            ...base,
+            onCopySessionID: () => {
+                void clipboard.copyWithNotice(sessionID);
+            },
+        };
+    };
     const { textareaHandle, scrollboxHandle, keymapScrollboxRef } = useRenderableHandles();
 
-    const initialPrefs = props.store.getAbgOverlayPrefsSnapshot();
-    const [abgActiveTab, setAbgActiveTab] = createSignal(initialPrefs.activeTabIndex);
-    const [abgScrollOffset, setAbgScrollOffset] = createSignal(initialPrefs.scrollOffset);
+    // Tab/scroll are store-owned so soft-remount + teardown persist see live values.
+    // panX stays session-local (not in AbgOverlayPrefsSchema).
     const [abgPanX, setAbgPanX] = createSignal(0);
+    const abgActiveTab = createMemo(() => snapshot().abgOverlayActiveTab);
+    const abgScrollOffset = createMemo(() => snapshot().abgOverlayScrollOffset);
 
     const keymap = useKeymap();
     const renderer = useRenderer();
@@ -95,17 +134,19 @@ function AppMain(props: AppProps): JSX.Element {
 
     useTransientToast(props.store);
     const handleSelectionMouseUp = useSelectionMouseUp();
+    const paletteOpenState = useContext(PaletteOpenContext);
     const handleSubmit = useSubmit({
         store: props.store,
         textareaHandle,
         promptMenuInteractionsEnabled,
+        // Prompt history durability is CLI-owned (appendInputHistoryEntry).
+        // TUI must not dual-write the same submit.
+        isSubmitEnabled: () => paletteOpenState?.open() !== true,
     });
 
     useGlobalKeyboard({
         store: props.store,
         textareaHandle,
-        setAbgActiveTab,
-        setAbgScrollOffset,
         setAbgPanX,
         abgOverlayController,
     });
@@ -122,12 +163,25 @@ function AppMain(props: AppProps): JSX.Element {
         scrollboxRef: keymapScrollboxRef,
         promptMenuInteractionsEnabled: () => promptMenuInteractionsEnabled(),
         handleSubmit,
+        isChatSubmitEnabled: () => paletteOpenState?.open() !== true,
+        isInteractiveIdle: () => {
+            const snap = props.store.getSnapshot();
+            return snap.overlayMode === 'none' && paletteOpenState?.open() !== true && !snap.historyPicker.open;
+        },
     });
 
     const messageBlocks = createStableMessageBlocks(() =>
         snapshot().transcriptParts.length > 0 ? '' : snapshot().outputText,
     );
     const overlayActive = () => snapshot().overlayMode !== 'none';
+    createEffect(() => {
+        // Decision/view overlays (and history picker) own the keyboard; block palette.
+        const idle = !overlayActive() && !snapshot().historyPicker.open;
+        paletteOpenState?.setCanOpen(idle);
+        if (!idle && paletteOpenState?.open() === true) {
+            paletteOpenState.setOpen(false);
+        }
+    });
     const showWelcome = () => welcomeData !== undefined && snapshot().outputText === '' && !overlayActive();
     const promptRepaintKey = () =>
         promptPanelRepaintKey({
@@ -153,7 +207,6 @@ function AppMain(props: AppProps): JSX.Element {
 
     return (
         <DialogProvider>
-            <DialogHost store={props.store} />
             {/* biome-ignore lint/a11y/noStaticElementInteractions: opentui terminal primitive; mouse-up surfaces copy-hint toast. */}
             <box
                 width={dimensions().width}

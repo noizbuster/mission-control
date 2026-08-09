@@ -96,6 +96,7 @@ export function deriveStatusBarProps(runtime: TuiRuntimeProviderValue, snap: Cha
     const modelID = selection?.modelID ?? runtime.modelID;
     const variantID = selection?.variantID ?? snap.currentModelVariantID ?? runtime.variantID;
     const sessionID = snap.sessionId.length > 0 ? snap.sessionId : runtime.sessionID;
+    const cache = snap.contextCacheUsage;
     return {
         providerID,
         modelID,
@@ -104,5 +105,14 @@ export function deriveStatusBarProps(runtime: TuiRuntimeProviderValue, snap: Cha
         ...(runtime.workspaceRoot !== undefined ? { workspaceRoot: runtime.workspaceRoot } : {}),
         ...(runtime.gitBranch !== undefined ? { gitBranch: runtime.gitBranch } : {}),
         ...(runtime.isWorktree ? { isWorktree: true } : {}),
+        ...(snap.contextTokensUsed !== undefined ? { contextTokensUsed: snap.contextTokensUsed } : {}),
+        ...(snap.contextTokensMax !== undefined ? { contextTokensMax: snap.contextTokensMax } : {}),
+        ...(cache !== undefined
+            ? {
+                  contextCacheInputTokens: cache.inputTokens,
+                  contextCacheReadTokens: cache.cacheReadTokens,
+              }
+            : {}),
+        ...(snap.approvalLevel !== undefined ? { approvalLevel: snap.approvalLevel } : {}),
     };
 }

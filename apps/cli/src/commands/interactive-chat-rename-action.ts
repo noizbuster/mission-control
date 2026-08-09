@@ -24,10 +24,13 @@ export async function runRenameAction(
     onSessionRenamed?: (name: string) => Promise<void>,
 ): Promise<ChatActionResult> {
     if (action.name !== undefined) {
-        controller?.update(action.name);
+        // Optimistic controller/TUI update happens inside onSessionRenamed
+        // (applySessionRenameEffects) so durable-fail can roll back the prior name.
         chatOutput.write(`Session renamed to: ${action.name}\n`);
         if (onSessionRenamed !== undefined) {
             await onSessionRenamed(action.name);
+        } else {
+            controller?.update(action.name);
         }
         return actionResult(modelProviderSelection, activeTurn);
     }

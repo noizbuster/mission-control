@@ -1,11 +1,24 @@
 import { resolveMissionControlDataDir } from '@mission-control/core';
+import { atomicTextWrite } from './atomic-text-write';
 import { type ApprovalLevel, isApprovalLevel } from '@mission-control/tui/state';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const APPROVAL_LEVEL_FILENAME = 'approval-level.json';
 
 type StoredApprovalLevel = { readonly level: ApprovalLevel };
+
+/** Process-local chain so concurrent approval persists cannot interleave. */
+let writeChain: Promise<void> = Promise.resolve();
+
+function enqueueWrite(task: () => Promise<void>): Promise<void> {
+    const run = writeChain.then(task, task);
+    writeChain = run.then(
+        () => undefined,
+        () => undefined,
+    );
+    return run;
+}
 
 /**
  * Persisted global approval level. The level is loaded once at chat startup
@@ -38,13 +51,13 @@ export async function loadPersistedApprovalLevel(): Promise<ApprovalLevel | unde
 
 /**
  * Persist the given approval level so the next chat session reuses it.
- * Atomicity mirrors {@link saveAbgOverlayPrefs}: directory is created if
- * missing and the file is overwritten in place.
+ * Uses canonical temp-file-then-rename atomic write.
  */
 export async function savePersistedApprovalLevel(level: ApprovalLevel): Promise<void> {
     const dataDir = resolveMissionControlDataDir();
     const filePath = join(dataDir, APPROVAL_LEVEL_FILENAME);
-    await mkdir(dataDir, { recursive: true });
     const payload: StoredApprovalLevel = { level };
-    await writeFile(filePath, JSON.stringify(payload, null, 2), 'utf-8');
+    await enqueueWrite(async () => {
+        await atomicTextWrite(filePath, `${JSON.stringify(payload, null, 2)}\n`);
+    });
 }

@@ -65,3 +65,20 @@ function requireScope(scope: TuiStoreTestScope | undefined): TuiStoreTestScope {
     }
     throw new Error('test scope missing');
 }
+
+describe('TuiKvStore concurrency', () => {
+    it('serializes concurrent setEntry without dropping keys', async () => {
+        const { mkdtemp } = await import('node:fs/promises');
+        const { tmpdir } = await import('node:os');
+        const { join } = await import('node:path');
+        const dir = await mkdtemp(join(tmpdir(), 'mctrl-kv-'));
+        const store = new TuiKvStore({ dataDir: dir });
+        await Promise.all([
+            store.setEntry('ns', { key: 'a', schemaKey: 'string', value: '1' }),
+            store.setEntry('ns', { key: 'b', schemaKey: 'string', value: '2' }),
+            store.setEntry('ns', { key: 'c', schemaKey: 'string', value: '3' }),
+        ]);
+        const keys = (await store.listEntries('ns')).map((entry) => entry.key).sort();
+        expect(keys).toEqual(['a', 'b', 'c']);
+    });
+});

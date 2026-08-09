@@ -167,3 +167,34 @@ describe('ProviderAuthStore model-role persistence', () => {
         ]);
     });
 });
+
+describe('ProviderAuthStore concurrency', () => {
+    afterEach(() => {
+        vi.unstubAllEnvs();
+    });
+
+    it('serializes concurrent setModelRole without dropping roles', async () => {
+        const authFilePath = await createAuthFilePath();
+        vi.stubEnv(missionControlAuthFileEnvKey, authFilePath);
+        await writeFile(
+            authFilePath,
+            JSON.stringify({ $schema: SCHEMA_URL, credentials: {}, version: 1 }),
+            'utf8',
+        );
+        const store = createProviderAuthStore();
+        const selection = (providerID: string, modelID: string): ModelProviderSelection => ({
+            providerID,
+            modelID,
+        });
+        await Promise.all([
+            store.setModelRole('smol', selection('openai', 'gpt-smol')),
+            store.setModelRole('slow', selection('openai', 'gpt-slow')),
+            store.setModelRole('plan', selection('openai', 'gpt-plan')),
+        ]);
+        const roles = await store.getModelRoles();
+        expect(roles.smol?.modelID).toBe('gpt-smol');
+        expect(roles.slow?.modelID).toBe('gpt-slow');
+        expect(roles.plan?.modelID).toBe('gpt-plan');
+        await rm(authFilePath, { force: true });
+    });
+});

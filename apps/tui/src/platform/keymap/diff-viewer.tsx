@@ -61,11 +61,6 @@ export type DiffViewerModel = {
 };
 
 /** Pure open/close representation the bridge maps onto its core fields. */
-export type DiffViewerState = {
-    readonly active: boolean;
-    readonly entries: readonly DiffEntry[];
-    readonly cursor: number;
-};
 
 // ---------------------------------------------------------------------------
 // Collection: outputText -> DiffEntry[]
@@ -243,16 +238,6 @@ export function prevFile(model: DiffViewerModel, cursor: number): number {
 
 // ---------------------------------------------------------------------------
 // Open / close state
-// ---------------------------------------------------------------------------
-
-export function openDiffViewerState(outputText: string): DiffViewerState {
-    return { active: true, entries: collectDiffEntries(outputText), cursor: 0 };
-}
-
-export function closeDiffViewerState(): DiffViewerState {
-    return { active: false, entries: [], cursor: 0 };
-}
-
 // ---------------------------------------------------------------------------
 // Overlay component (reuses <DiffView> for the diff rendering)
 // ---------------------------------------------------------------------------

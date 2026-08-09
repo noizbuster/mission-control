@@ -201,8 +201,17 @@ export function registerMessagesScrollLayer<TTarget extends object, TEvent exten
                 const text = getLastAssistantText();
                 // No-op when no assistant message exists: no clipboard mutation.
                 if (text.length === 0) return false;
-                // Fire-and-forget OSC52 (mirrors selection-copy.ts pattern).
-                void clipboardService.copyToClipboard(text);
+                if (!clipboardService.isOsc52Supported()) {
+                    return false;
+                }
+                const notice = clipboardService as ClipboardService & {
+                    copyWithNotice?: (value: string) => Promise<boolean>;
+                };
+                if (notice.copyWithNotice !== undefined) {
+                    void notice.copyWithNotice(text);
+                } else {
+                    void clipboardService.copyToClipboard(text);
+                }
                 return true;
             },
         },
@@ -258,8 +267,18 @@ export function registerSelectionCopyLayer<TTarget extends object, TEvent extend
                 if (!clipboardService.isOsc52Supported()) {
                     return false;
                 }
-                void clipboardService.copyToClipboard(text).then((ok) => {
-                    if (ok) clearSelection();
+                const notice = clipboardService as ClipboardService & {
+                    copyWithNotice?: (value: string) => Promise<boolean>;
+                };
+                const copyPromise =
+                    notice.copyWithNotice !== undefined
+                        ? notice.copyWithNotice(text)
+                        : clipboardService.copyToClipboard(text);
+                void copyPromise.then((ok) => {
+                    // Drop late OSC52 completion after teardown/overlay steal.
+                    if (!ok) return;
+                    if (options.isEnabled?.() === false) return;
+                    clearSelection();
                 });
                 return true;
             },

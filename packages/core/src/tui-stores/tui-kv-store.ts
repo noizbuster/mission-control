@@ -29,11 +29,22 @@ export type TuiKvStoreOptions = {
 export class TuiKvStore {
     readonly filePath: string;
     private readonly maxEntries: number;
+    /** Serialize read-modify-write so concurrent set/delete cannot drop entries. */
+    private writeChain: Promise<void> = Promise.resolve();
 
     constructor(options: TuiKvStoreOptions = {}) {
         const dataDir = options.dataDir ?? resolveMissionControlDataDir();
         this.filePath = options.filePath ?? join(dataDir, 'tui', 'kv.json');
         this.maxEntries = options.maxEntries ?? TUI_KV_STORE_MAX_ENTRIES;
+    }
+
+    private enqueue<T>(task: () => Promise<T>): Promise<T> {
+        const run = this.writeChain.then(task, task);
+        this.writeChain = run.then(
+            () => undefined,
+            () => undefined,
+        );
+        return run;
     }
 
     async listNamespaces(): Promise<readonly TuiKvNamespace[]> {
@@ -65,30 +76,38 @@ export class TuiKvStore {
 
     async setEntry(namespace: string, entry: TuiKvEntry): Promise<void> {
         const parsedEntry = TuiKvEntrySchema.parse(entry);
-        const file = await this.readFile();
-        const existingNamespace = file.namespaces.find((candidate) => candidate.namespace === namespace);
-        const nextEntries = [
-            ...(existingNamespace?.entries ?? []).filter((candidate) => candidate.key !== entry.key),
-            parsedEntry,
-        ].slice(-this.maxEntries);
-        const nextNamespace = TuiKvNamespaceSchema.parse({ namespace, entries: nextEntries });
-        await this.writeFile({
-            version: 1,
-            namespaces: [...file.namespaces.filter((candidate) => candidate.namespace !== namespace), nextNamespace],
+        await this.enqueue(async () => {
+            const file = await this.readFile();
+            const existingNamespace = file.namespaces.find((candidate) => candidate.namespace === namespace);
+            const nextEntries = [
+                ...(existingNamespace?.entries ?? []).filter((candidate) => candidate.key !== entry.key),
+                parsedEntry,
+            ].slice(-this.maxEntries);
+            const nextNamespace = TuiKvNamespaceSchema.parse({ namespace, entries: nextEntries });
+            await this.writeFile({
+                version: 1,
+                namespaces: [
+                    ...file.namespaces.filter((candidate) => candidate.namespace !== namespace),
+                    nextNamespace,
+                ],
+            });
         });
     }
 
     async deleteEntry(namespace: string, key: string): Promise<void> {
-        const file = await this.readFile();
-        const existingNamespace = file.namespaces.find((candidate) => candidate.namespace === namespace);
-        if (existingNamespace === undefined) {
-            return;
-        }
-        const nextEntries = existingNamespace.entries.filter((entry) => entry.key !== key);
-        const namespaces = file.namespaces.filter((candidate) => candidate.namespace !== namespace);
-        await this.writeFile({
-            version: 1,
-            namespaces: nextEntries.length === 0 ? namespaces : [...namespaces, { namespace, entries: nextEntries }],
+        await this.enqueue(async () => {
+            const file = await this.readFile();
+            const existingNamespace = file.namespaces.find((candidate) => candidate.namespace === namespace);
+            if (existingNamespace === undefined) {
+                return;
+            }
+            const nextEntries = existingNamespace.entries.filter((entry) => entry.key !== key);
+            const namespaces = file.namespaces.filter((candidate) => candidate.namespace !== namespace);
+            await this.writeFile({
+                version: 1,
+                namespaces:
+                    nextEntries.length === 0 ? namespaces : [...namespaces, { namespace, entries: nextEntries }],
+            });
         });
     }
 

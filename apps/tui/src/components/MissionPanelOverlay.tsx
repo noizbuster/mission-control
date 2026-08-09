@@ -68,15 +68,27 @@ export function MissionPanelOverlay({
     const [continuationState, setContinuationState] = createSignal<ContinuationState | null>(null);
 
     const reloadContinuation = async (): Promise<void> => {
-        setContinuationState(await loadContinuationState(services));
+        try {
+            const state = await loadContinuationState(services);
+            if (store.isEventQueueClosed() || store.getSnapshot().overlayMode !== 'mission-panel') return;
+            setContinuationState(state);
+        } catch {
+            // Continuation load failures must not reject the overlay keyboard path.
+        }
     };
 
     createEffect(() => {
         if (panel().activeTab !== 'continue') return;
         let cancelled = false;
         void (async () => {
-            const state = await loadContinuationState(services);
-            if (!cancelled) setContinuationState(state);
+            try {
+                const state = await loadContinuationState(services);
+                if (cancelled) return;
+                if (store.isEventQueueClosed() || store.getSnapshot().overlayMode !== 'mission-panel') return;
+                setContinuationState(state);
+            } catch {
+                // Continuation load failures must not surface as unhandled rejections.
+            }
         })();
         onCleanup(() => {
             cancelled = true;
@@ -94,18 +106,29 @@ export function MissionPanelOverlay({
     const loadMissionPanelRows = actions?.loadMissionPanelRows;
     const reload = (): void => {
         if (workspaceRoot === undefined) return;
-        void reloadContinuation();
+        const generation = store.beginMissionsReload();
+        if (generation < 0) return;
         void (async () => {
-            const rows =
-                workspaceRoot !== undefined && loadMissionPanelRows !== undefined
-                    ? await loadMissionPanelRows(workspaceRoot)
-                    : [];
-            store.reloadMissions(rows);
+            try {
+                await reloadContinuation();
+                if (!store.shouldApplyMissionsReload(generation)) return;
+                const rows =
+                    loadMissionPanelRows !== undefined
+                        ? await loadMissionPanelRows(workspaceRoot)
+                        : [];
+                if (!store.shouldApplyMissionsReload(generation)) return;
+                store.reloadMissions(rows);
+            } catch {
+                // Loader failures must not surface as unhandled rejections; generation gate drops stale applies.
+            }
         })();
     };
 
+    let settled = false;
     useKeyboard((key) => {
         if (key.name === 'escape' || (key.ctrl && key.name === 'c')) {
+            if (settled) return;
+            settled = true;
             store.hideMissionPanel();
             return;
         }

@@ -49,6 +49,8 @@ import {
     setModelsOverlaySearchQuery as reduceModelsOverlaySearchQuery,
     selectModelForAssignment as selectModelForAssignmentReducer,
 } from './models-overlay-state';
+import { contextOverflowRecoveryNotice, contextPressureStatus, isContextOverflowMessage } from './context-pressure';
+import { extractLastExchange, reinsertExchange } from './message-exchange';
 import { sanitizeTerminalDisplayText } from './terminal-display-sanitizer';
 import { extractOccurrenceNumber, type TranscriptPart, upsertTranscriptPart } from './transcript-part';
 import { activeAssistantMessageIdFromParts, attributionKeyForAssistantPart } from './transcript-visibility';
@@ -74,7 +76,9 @@ export type ChatStoreOverlayMode =
     | 'session-picker'
     | 'agents-dashboard'
     | 'models-overlay'
-    | 'mission-panel';
+    | 'mission-panel'
+    | 'diagnostics'
+    | 'tips';
 
 export type AgentsDashboardSourceTab = 'all' | 'project' | 'user' | 'bundled';
 
@@ -192,6 +196,11 @@ export type ChatStoreState = {
     readonly generating: boolean;
     readonly agentStatusText: string;
     readonly agentRetryAt: number | undefined;
+    /**
+     * Monotonic wall-clock ms of the last generating-path transcript/status
+     * activity. Used by the stream-silence watchdog while generating=true.
+     */
+    readonly lastStreamActivityAt: number | undefined;
     readonly showThinking: boolean;
     /** Tool output expansion (Ctrl+O). */
     readonly toolOutputExpanded: boolean;
@@ -250,6 +259,12 @@ export type ChatStoreState = {
     readonly historyPickerView: HistoryPickerSnapshot;
     readonly transientNotice: { readonly id: number; readonly message: string } | null;
     readonly stickyNotice: string | null;
+    /** Soft-remount generation mirrored from SoftRemountController for diagnostics. */
+    readonly remountGeneration: number;
+    /** True while soft-remount thrash protection is blocking further bumps. */
+    readonly remountCircuitOpen: boolean;
+    /** Last soft-remount reason/message for diagnostics. */
+    readonly lastRemountMessage: string | undefined;
 };
 
 type ChatStoreMutableState = {
@@ -288,15 +303,32 @@ const CURSOR_DOWN = '\u001b[B';
 const APPROVAL_LEVEL_DEFAULT_INDEX = 1;
 
 /** Concatenate `current + text`, dropping the head when the result exceeds `maxChars`. Keeps the most recent tail so live UI stays meaningful; full text remains in the durable session DB. */
-function appendClamped(current: string, text: string, maxChars: number): string {
+function appendClamped(
+    current: string,
+    text: string,
+    maxChars: number,
+): { readonly text: string; readonly dropped: boolean } {
     const next = current + text;
-    return next.length > maxChars ? next.slice(next.length - maxChars) : next;
+    if (next.length <= maxChars) {
+        return { text: next, dropped: false };
+    }
+    return { text: next.slice(next.length - maxChars), dropped: true };
 }
 
 /** Drop the oldest transcript parts when over cap. Preserves insertion order of the tail. */
-function clampTranscriptParts(parts: readonly TranscriptPart[]): readonly TranscriptPart[] {
-    return parts.length > MAX_TRANSCRIPT_PARTS ? parts.slice(parts.length - MAX_TRANSCRIPT_PARTS) : parts;
+function clampTranscriptParts(parts: readonly TranscriptPart[]): {
+    readonly parts: readonly TranscriptPart[];
+    readonly dropped: number;
+} {
+    if (parts.length <= MAX_TRANSCRIPT_PARTS) {
+        return { parts, dropped: 0 };
+    }
+    const dropped = parts.length - MAX_TRANSCRIPT_PARTS;
+    return { parts: parts.slice(dropped), dropped };
 }
+
+const LIVE_HISTORY_TRUNCATED_NOTICE =
+    'Live view truncated older transcript rows (full history remains in the session store; use /session to reload).';
 
 function sanitizeQuestionOptionForDisplay(option: QuestionOption): QuestionOption {
     return {
@@ -348,7 +380,23 @@ function readActiveFilePrefix(buffer: string): string | undefined {
     return prefix;
 }
 
+/** Avoid re-enumerating a workspace directory for every path-input keystroke. */
+export const FILE_AUTOCOMPLETE_DEBOUNCE_MS = 100;
+
 export class ChatStore {
+    /**
+     * Single-level view undo stash. Holds both legacy outputText slice and the
+     * typed parts removed with it so leader+u/r cannot desync dual projections.
+     */
+
+    private viewUndoStash:
+        | {
+              readonly exchangeText: string;
+              readonly insertOffset: number;
+              readonly removedParts: readonly TranscriptPart[];
+          }
+        | undefined;
+
     onModelCycleSelect: ((selection: ModelProviderSelection) => void) | undefined;
     onRenameSubmit: ((name: string) => void) | undefined;
 
@@ -358,9 +406,28 @@ export class ChatStore {
     private readonly eventQueue: ChatInputEvent[] = [];
     private readonly eventWaiters: Array<(event: ChatInputEvent) => void> = [];
     private eventQueueClosed = false;
+    /** Serializes agents-dashboard durable FS writes across soft-remounts. */
+    private agentsDurableBusy = false;
+    /** Token for nested/stale endAgentsDurableWrite after hide/show/reset. */
+    private agentsDurableGeneration = 0;
+    /** Bumped on durable write start and Ctrl+R; stale reloads drop. */
+    private agentsReloadGeneration = 0;
+    /** Soft-remount-safe Ctrl+R generation for mission panel. */
+    private missionsReloadGeneration = 0;
+    /** Bumped on models overlay hide/show/session/close; stale assign/clear rollbacks drop. */
+    private modelsMutationEpoch = 0;
+    /** Serializes assign/clear auth RMW so concurrent same-role ops cannot clobber. */
+    private modelsMutationChain: Promise<void> = Promise.resolve();
+    /** Bumped when overlay steps set a fresher context max; stale disk reseeds drop. */
+    private contextMaxEpoch = 0;
+    /** Bumped on live history append; boot disk reload must not clobber. */
+    private historyEntriesGeneration = 0;
     private readonly state: ChatStoreMutableState;
     private snapshot: ChatStoreState;
     private fileFrecencyKeys: readonly string[] = [];
+    private fileAutocompleteTimeout: ReturnType<typeof setTimeout> | undefined;
+    /** Invalidates pending autocomplete work after input/session/teardown changes. */
+    private fileAutocompleteGeneration = 0;
     private modelPickerResolve: ((selection: ModelProviderSelection | undefined) => void) | undefined;
     private levelPickerResolve: ((level: string | undefined) => void) | undefined;
     private questionResolve: ((answer: string) => void) | undefined;
@@ -393,6 +460,7 @@ export class ChatStore {
             generating: false,
             agentStatusText: '',
             agentRetryAt: undefined,
+            lastStreamActivityAt: undefined,
             showThinking: true,
             // Tool output is collapsed until Ctrl+O.
             toolOutputExpanded: false,
@@ -471,6 +539,9 @@ export class ChatStore {
             contextCacheUsage: undefined,
             transientNotice: null,
             stickyNotice: null,
+            remountGeneration: 0,
+            remountCircuitOpen: false,
+            lastRemountMessage: undefined,
         };
         this.snapshot = this.buildSnapshot();
     }
@@ -487,24 +558,113 @@ export class ChatStore {
     }
 
     emitOutput(text: string): void {
-        this.state.outputText = appendClamped(this.state.outputText, text, MAX_OUTPUT_TEXT_CHARS);
+        // Teardown: drop late stream chunks so unmount cannot grow a detached buffer.
+        if (this.eventQueueClosed) return;
+        const clamped = appendClamped(this.state.outputText, text, MAX_OUTPUT_TEXT_CHARS);
+        this.state.outputText = clamped.text;
+        if (clamped.dropped) {
+            this.noteLiveHistoryTruncation();
+        }
+        this.noteContextOverflowFromText(text);
         if (this.hasTypedTranscriptParts()) {
             this.appendLegacyTranscriptPart(text);
+        }
+        if (this.state.generating) {
+            this.noteStreamActivity();
         }
         const ms = this.state.generating ? STREAMING_EMIT_COALESCE_MS : EMIT_COALESCE_MS;
         this.schedulePublish(ms);
     }
 
     replaceOutputText(text: string): void {
+        if (this.eventQueueClosed) return;
         this.state.outputText = text;
         this.state.transcriptParts = [];
         this.legacyPartCounter = 0;
+        this.viewUndoStash = undefined;
         this.publish();
     }
 
+    /**
+     * Hide the last complete user/assistant exchange from the live VIEW only
+     * (leader+u). Updates outputText and typed transcriptParts together.
+     * Durable session store is never touched.
+     */
+    undoLastViewExchange(): 'ok' | 'generating' | 'empty' | 'already' | 'blocked' {
+        if (this.eventQueueClosed) return 'blocked';
+        if (this.state.overlayMode !== 'none') return 'blocked';
+        if (this.state.generating) return 'generating';
+        if (this.viewUndoStash !== undefined) return 'already';
+
+        const extracted = extractLastExchange(this.state.outputText);
+        if (extracted === undefined) return 'empty';
+
+        let removedParts: readonly TranscriptPart[] = [];
+        if (this.state.transcriptParts.length > 0) {
+            let lastUserIndex = -1;
+            for (let index = this.state.transcriptParts.length - 1; index >= 0; index -= 1) {
+                if (this.state.transcriptParts[index]?.type === 'user') {
+                    lastUserIndex = index;
+                    break;
+                }
+            }
+            if (lastUserIndex >= 0) {
+                removedParts = this.state.transcriptParts.slice(lastUserIndex);
+                this.state.transcriptParts = this.state.transcriptParts.slice(0, lastUserIndex);
+                this.state.activeAssistantMessageId = activeAssistantMessageIdFromParts(this.state.transcriptParts);
+            }
+        }
+
+        this.viewUndoStash = {
+            exchangeText: extracted.exchangeText,
+            insertOffset: extracted.insertOffset,
+            removedParts,
+        };
+        this.state.outputText = extracted.remaining;
+        this.publish();
+        return 'ok';
+    }
+
+    /**
+     * Restore the single stashed view exchange (leader+r). Byte-exact for
+     * outputText; typed parts are re-appended in original order when present.
+     */
+    redoLastViewExchange(): 'ok' | 'generating' | 'empty' | 'blocked' {
+        if (this.eventQueueClosed) return 'blocked';
+        if (this.state.overlayMode !== 'none') return 'blocked';
+        if (this.state.generating) return 'generating';
+        const stash = this.viewUndoStash;
+        if (stash === undefined) return 'empty';
+        this.state.outputText = reinsertExchange(this.state.outputText, stash.exchangeText, stash.insertOffset);
+        if (stash.removedParts.length > 0) {
+            this.state.transcriptParts = [...this.state.transcriptParts, ...stash.removedParts];
+            this.state.activeAssistantMessageId = activeAssistantMessageIdFromParts(this.state.transcriptParts);
+        }
+        this.viewUndoStash = undefined;
+        this.publish();
+        return 'ok';
+    }
+
+    /** True when a view-level undo stash is holding a hidden exchange. */
+    hasViewUndoStash(): boolean {
+        return this.viewUndoStash !== undefined;
+    }
+
     emitTranscriptPart(part: TranscriptPart, fallbackText: string): void {
+        if (this.eventQueueClosed) return;
         this.appendTypedTranscriptPart(part);
-        this.state.outputText = appendClamped(this.state.outputText, fallbackText, MAX_OUTPUT_TEXT_CHARS);
+        const clamped = appendClamped(this.state.outputText, fallbackText, MAX_OUTPUT_TEXT_CHARS);
+        this.state.outputText = clamped.text;
+        if (clamped.dropped) {
+            this.noteLiveHistoryTruncation();
+        }
+        this.noteContextOverflowFromText(fallbackText);
+        if (part.type === 'error') {
+            this.noteContextOverflowFromText(part.text);
+        }
+        if (this.state.generating) {
+            this.noteStreamActivity();
+        }
         if ('status' in part && part.status === 'streaming') {
             this.schedulePublish(STREAMING_EMIT_COALESCE_MS);
             return;
@@ -513,12 +673,22 @@ export class ChatStore {
     }
 
     emitTranscriptFallback(text: string): void {
-        this.state.outputText = appendClamped(this.state.outputText, text, MAX_OUTPUT_TEXT_CHARS);
+        if (this.eventQueueClosed) return;
+        const clamped = appendClamped(this.state.outputText, text, MAX_OUTPUT_TEXT_CHARS);
+        this.state.outputText = clamped.text;
+        if (clamped.dropped) {
+            this.noteLiveHistoryTruncation();
+        }
+        this.noteContextOverflowFromText(text);
+        if (this.state.generating) {
+            this.noteStreamActivity();
+        }
         const ms = this.state.generating ? STREAMING_EMIT_COALESCE_MS : EMIT_COALESCE_MS;
         this.schedulePublish(ms);
     }
 
     replaceTranscript(parts: readonly TranscriptPart[], outputText: string): void {
+        if (this.eventQueueClosed) return;
         this.state.transcriptParts = parts;
         this.state.outputText = outputText;
         this.state.activeAssistantMessageId = activeAssistantMessageIdFromParts(parts);
@@ -529,6 +699,10 @@ export class ChatStore {
             return Number.isSafeInteger(occurrence) ? Math.max(highestOccurrence, occurrence) : highestOccurrence;
         }, 0);
         this.legacyPartCounter = 0;
+        if (this.state.stickyNotice === LIVE_HISTORY_TRUNCATED_NOTICE) {
+            this.state.stickyNotice = null;
+        }
+        this.viewUndoStash = undefined;
         this.publish();
     }
 
@@ -537,8 +711,17 @@ export class ChatStore {
     }
 
     showModelPicker(choices: readonly ModelChoice[]): Promise<ModelProviderSelection | undefined> {
+        if (this.eventQueueClosed) {
+            return Promise.resolve(undefined);
+        }
+        this.cancelPendingOverlayPromises();
+        this.dismissBlockingNonPromiseOverlays();
+        this.clearInactiveOperatorPanels('model-picker');
         if (choices.length === 0) {
             return Promise.resolve(undefined);
+        }
+        if (this.modelPickerResolve !== undefined) {
+            this.hideModelPicker(undefined);
         }
         this.state.modelPickerChoices = choices;
         this.state.modelPickerKeypress = createProviderPromptKeypressState();
@@ -550,16 +733,30 @@ export class ChatStore {
     }
 
     hideModelPicker(selection?: ModelProviderSelection): void {
+        if (this.state.overlayMode !== 'model-picker' && this.modelPickerResolve === undefined) {
+            return;
+        }
         const resolve = this.modelPickerResolve;
         this.modelPickerResolve = undefined;
-        this.state.overlayMode = 'none';
+        if (this.state.overlayMode === 'model-picker') {
+            this.state.overlayMode = 'none';
+        }
         this.publish();
         resolve?.(selection);
     }
 
     showSessionPicker(entries: readonly SessionPickerEntry[]): Promise<string | undefined> {
+        if (this.eventQueueClosed) {
+            return Promise.resolve(undefined);
+        }
+        this.cancelPendingOverlayPromises();
+        this.dismissBlockingNonPromiseOverlays();
+        this.clearInactiveOperatorPanels('session-picker');
         if (entries.length === 0) {
             return Promise.resolve(undefined);
+        }
+        if (this.sessionPickerResolve !== undefined) {
+            this.hideSessionPicker(undefined);
         }
         this.state.sessionPickerEntries = entries;
         this.state.sessionPickerKeypress = createProviderPromptKeypressState();
@@ -573,14 +770,28 @@ export class ChatStore {
     }
 
     hideSessionPicker(sessionId?: string): void {
+        if (this.state.overlayMode !== 'session-picker' && this.sessionPickerResolve === undefined) {
+            return;
+        }
         const resolve = this.sessionPickerResolve;
         this.sessionPickerResolve = undefined;
-        this.state.overlayMode = 'none';
+        if (this.state.overlayMode === 'session-picker') {
+            this.state.overlayMode = 'none';
+        }
         this.publish();
         resolve?.(sessionId);
     }
 
     showLevelPicker(currentLevel?: string): Promise<string | undefined> {
+        if (this.eventQueueClosed) {
+            return Promise.resolve(undefined);
+        }
+        this.cancelPendingOverlayPromises();
+        this.dismissBlockingNonPromiseOverlays();
+        this.clearInactiveOperatorPanels('level-picker');
+        if (this.levelPickerResolve !== undefined) {
+            this.hideLevelPicker(undefined);
+        }
         const currentIdx =
             currentLevel !== undefined && isApprovalLevel(currentLevel) ? APPROVAL_LEVELS.indexOf(currentLevel) : -1;
         this.state.levelPickerSelectedIndex = currentIdx >= 0 ? currentIdx : APPROVAL_LEVEL_DEFAULT_INDEX;
@@ -592,14 +803,27 @@ export class ChatStore {
     }
 
     hideLevelPicker(level?: string): void {
+        if (this.state.overlayMode !== 'level-picker' && this.levelPickerResolve === undefined) {
+            return;
+        }
         const resolve = this.levelPickerResolve;
         this.levelPickerResolve = undefined;
-        this.state.overlayMode = 'none';
+        if (this.state.overlayMode === 'level-picker') {
+            this.state.overlayMode = 'none';
+        }
         this.publish();
         resolve?.(level);
     }
 
     showApproval(toolName: string, action: string): void {
+        if (this.eventQueueClosed) return;
+        // Cancel any promise-backed overlay so waiters cannot hang under approval.
+        this.cancelPendingOverlayPromises();
+        // Drop rename if it was open — no pending promise waiter, just mode.
+        if (this.state.overlayMode === 'rename') {
+            this.state.renameBuffer = '';
+        }
+        this.clearInactiveOperatorPanels('approval');
         this.state.overlayMode = 'approval';
         this.state.approvalToolName = toolName;
         this.state.approvalAction = action;
@@ -608,6 +832,7 @@ export class ChatStore {
     }
 
     hideApproval(): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'approval') return;
         this.state.overlayMode = 'none';
         this.publish();
     }
@@ -617,6 +842,15 @@ export class ChatStore {
         options: readonly (string | QuestionOption)[],
         metadata?: { readonly header?: string; readonly multiple?: boolean },
     ): Promise<string> {
+        if (this.eventQueueClosed) {
+            return Promise.resolve('');
+        }
+        this.cancelPendingOverlayPromises();
+        this.dismissBlockingNonPromiseOverlays();
+        this.clearInactiveOperatorPanels('question');
+        if (this.questionResolve !== undefined || this.questionBatchResolve !== undefined) {
+            this.rejectQuestion();
+        }
         this.clearRawQuestionState();
         this.rawQuestionText = question;
         this.rawQuestionHeader = metadata?.header ?? '';
@@ -645,6 +879,15 @@ export class ChatStore {
      * trailing Confirm tab is added. Resolves with one answer string per
      * question (multi-select comma-joined), in order. */
     showQuestionBatch(entries: readonly QuestionBatchEntry[]): Promise<string[]> {
+        if (this.eventQueueClosed) {
+            return Promise.resolve(entries.map(() => ''));
+        }
+        this.cancelPendingOverlayPromises();
+        this.dismissBlockingNonPromiseOverlays();
+        this.clearInactiveOperatorPanels('question');
+        if (this.questionResolve !== undefined || this.questionBatchResolve !== undefined) {
+            this.rejectQuestion();
+        }
         this.clearRawQuestionState();
         this.rawQuestionTabs = entries.map((entry) => ({ ...entry, options: normalizeQuestionOptions(entry.options) }));
         this.state.overlayMode = 'question';
@@ -694,6 +937,7 @@ export class ChatStore {
     }
 
     navigateQuestionTab(direction: 1 | -1): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'question') return;
         if (this.state.questionTabs.length === 0 || !this.multiQuestionBatch()) return;
         const total = this.questionTabCount();
         this.state.questionTabIndex = (this.state.questionTabIndex + direction + total) % total;
@@ -705,6 +949,7 @@ export class ChatStore {
     }
 
     selectQuestionTab(index: number): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'question') return;
         if (this.state.questionTabs.length === 0 || !this.multiQuestionBatch()) return;
         const total = this.questionTabCount();
         if (index < 0 || index >= total) return;
@@ -723,6 +968,7 @@ export class ChatStore {
     /** Single-select pick: record the answer, then advance — or resolve at
      * once for a lone non-multiple question. */
     private pickQuestionAnswer(label: string): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'question') return;
         const idx = this.state.questionTabIndex;
         if (idx < this.rawQuestionTabs.length) {
             this.setQuestionAnswers(this.rawQuestionAnswers.map((answers, i) => (i === idx ? [label] : answers)));
@@ -736,21 +982,49 @@ export class ChatStore {
 
     /** Resolve the batch (multi-select answers comma-joined). Confirm-tab Enter. */
     confirmQuestionBatch(): void {
+        if (this.questionBatchResolve === undefined) {
+            // Dismiss stuck batch overlay with no waiter (parity with resolveQuestion).
+            this.resolveQuestionBatch([]);
+            return;
+        }
         const answers = this.rawQuestionAnswers.map((labels) => labels.join(', '));
         this.resolveQuestionBatch(answers);
     }
 
     /** Cancel: resolve single with '', or the whole batch with empty answers. */
-    rejectQuestion(): void {
+    /**
+     * @returns true when a pending question/batch waiter was cancelled.
+     * Idempotent: safe under key-repeat ESC/Ctrl+C.
+     */
+    rejectQuestion(): boolean {
+        if (this.questionResolve === undefined && this.questionBatchResolve === undefined) {
+            // No waiter — still clear a stuck question overlay.
+            if (this.state.overlayMode === 'question') {
+                this.state.overlayMode = 'none';
+                this.clearRawQuestionState();
+                this.publish();
+            }
+            return false;
+        }
         if (this.rawQuestionTabs.length > 0) {
             this.resolveQuestionBatch(this.rawQuestionTabs.map((): string => ''));
-            return;
+            return true;
         }
         this.resolveQuestion('');
+        return true;
     }
 
     private resolveQuestionBatch(answers: string[]): void {
         const resolve = this.questionBatchResolve;
+        if (resolve === undefined) {
+            // Still dismiss a stuck question overlay with no waiter.
+            if (this.state.overlayMode === 'question') {
+                this.state.overlayMode = 'none';
+                this.clearRawQuestionState();
+                this.publish();
+            }
+            return;
+        }
         this.questionBatchResolve = undefined;
         this.state.overlayMode = 'none';
         this.state.questionTabs = [];
@@ -762,23 +1036,39 @@ export class ChatStore {
     }
 
     resolveQuestion(answer: string): void {
+        if (this.questionResolve === undefined) {
+            // Still dismiss a stuck question overlay with no waiter.
+            if (this.state.overlayMode === 'question') {
+                this.state.overlayMode = 'none';
+                this.clearRawQuestionState();
+                this.publish();
+            }
+            return;
+        }
         const rawAnswer = this.rawQuestionAnswerForDisplay(answer);
         const resolve = this.questionResolve;
         this.questionResolve = undefined;
         this.state.overlayMode = 'none';
         this.clearRawQuestionState();
         this.publish();
-        resolve?.(rawAnswer);
+        resolve(rawAnswer);
     }
 
     showRename(): void {
+        if (this.eventQueueClosed) return;
+        this.cancelPendingOverlayPromises();
+        this.dismissBlockingNonPromiseOverlays();
+        this.clearInactiveOperatorPanels('rename');
         this.state.overlayMode = 'rename';
         this.state.renameBuffer =
-            this.state.sessionDisplayName.length > 0 ? this.state.sessionDisplayName : this.state.sessionId;
+            this.state.sessionDisplayName !== undefined && this.state.sessionDisplayName.length > 0
+                ? this.state.sessionDisplayName
+                : this.state.sessionId;
         this.publish();
     }
 
     submitRename(name: string): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'rename') return;
         this.state.overlayMode = 'none';
         this.state.renameBuffer = '';
         this.publish();
@@ -786,17 +1076,86 @@ export class ChatStore {
     }
 
     setApprovalLevel(level: ApprovalLevel | undefined): void {
+        if (this.eventQueueClosed) return;
         this.state.approvalLevel = level;
         this.publish();
     }
 
     setSessionId(sessionId: string): void {
+        // Same-id pushes are common from the CLI loop; do not wipe undo stash.
         if (this.state.sessionId === sessionId) return;
+        // After teardown, ignore session switches — closeEventQueue already wiped UI.
+        if (this.eventQueueClosed) return;
+        this.viewUndoStash = undefined;
+        // Session switch invalidates in-flight modal decisions for the prior session.
+        this.cancelPendingOverlayPromises();
+        if (this.state.overlayMode === 'approval') {
+            // Prefer a deny decision so the broker cannot hang across sessions.
+            this.denyApproval();
+            if (this.state.overlayMode === 'approval') {
+                this.hideApproval();
+            }
+        } else if (this.state.overlayMode === 'rename') {
+            this.state.renameBuffer = '';
+            this.state.overlayMode = 'none';
+        } else if (this.state.overlayMode !== 'none') {
+            this.state.overlayMode = 'none';
+        }
+        if (this.state.modelsOverlay.active) {
+            this.state.modelsOverlay = { ...this.state.modelsOverlay, active: false };
+        }
+        if (this.state.agentsDashboard.active) {
+            this.state.agentsDashboard = {
+                ...this.state.agentsDashboard,
+                active: false,
+                editingName: null,
+                editBuffer: '',
+            };
+        }
+        if (this.state.missionPanel.active) {
+            this.state.missionPanel = { ...this.state.missionPanel, active: false };
+        }
+        if (this.state.historyPicker.open) {
+            this.state.historyPicker = createHistoryPickerState();
+        }
+        this.state.menuState = createSlashCommandMenuState();
+        this.invalidateFileAutocompleteRefresh();
+        this.state.fileAutocomplete = createFileAutocompleteState();
+        this.state.diffViewerEntries = [];
+        this.state.diffViewerCursor = 0;
+        this.state.generating = false;
+        this.state.agentStatusText = '';
+        this.state.agentRetryAt = undefined;
+        this.state.lastStreamActivityAt = undefined;
+        this.state.pasteStore.clear();
         this.state.sessionId = sessionId;
+        // Context/cache counters are session-scoped. Clear immediately on switch so
+        // the status bar never shows the previous session's usage until CLI pushes
+        // the attached projection.
+        this.state.contextTokensUsed = undefined;
+        this.state.contextTokensMax = undefined;
+        this.state.contextCacheUsage = undefined;
+        this.resetAgentsDurableState();
+        this.resetMissionsReloadState();
+        this.resetModelsMutationEpoch();
+        this.contextMaxEpoch += 1;
+        this.historyEntriesGeneration += 1;
+        // Prompt buffer is session-scoped too: never leak the previous session's
+        // half-typed draft into the next session (or its crash-draft file).
+        this.state.inputMirror = '';
+        this.state.sessionDisplayName = '';
+        // Never leak overflow/compact/pressure stickies into the next session.
+        this.state.stickyNotice = null;
+        this.state.transientNotice = null;
+        // Session switch drops soft-remount diagnostics for the prior surface.
+        this.state.remountGeneration = 0;
+        this.state.remountCircuitOpen = false;
+        this.state.lastRemountMessage = undefined;
         this.publish();
     }
 
     setSessionDisplayName(name: string | undefined): void {
+        if (this.eventQueueClosed) return;
         const next = name ?? '';
         if (this.state.sessionDisplayName === next) return;
         this.state.sessionDisplayName = next;
@@ -804,16 +1163,43 @@ export class ChatStore {
     }
 
     setContextTokensUsed(used: number | undefined): void {
+        if (this.eventQueueClosed && used !== undefined) return;
         this.state.contextTokensUsed = used;
+        this.refreshContextPressureNotice();
         this.publish();
     }
 
     setContextTokensMax(max: number | undefined): void {
+        if (this.eventQueueClosed && max !== undefined) return;
         this.state.contextTokensMax = max;
+        this.refreshContextPressureNotice();
         this.publish();
     }
 
+    /**
+     * Overlay step path: records a fresher live max so in-flight disk reseeds cannot
+     * clobber it when they complete later.
+     */
+    setContextTokensMaxFromStep(max: number | undefined): void {
+        if (this.eventQueueClosed && max !== undefined) return;
+        this.contextMaxEpoch += 1;
+        // Do not bump historyEntriesGeneration — context steps are unrelated to recall.
+        this.state.contextTokensMax = max;
+        this.refreshContextPressureNotice();
+        this.publish();
+    }
+
+    beginContextMaxReseed(): number {
+        return this.contextMaxEpoch;
+    }
+
+    shouldApplyContextMaxReseed(epoch: number): boolean {
+        if (this.eventQueueClosed) return false;
+        return epoch === this.contextMaxEpoch;
+    }
+
     setContextCacheUsage(usage: ContextCacheUsage | undefined): void {
+        if (this.eventQueueClosed && usage !== undefined) return;
         this.state.contextCacheUsage = usage;
         this.publish();
     }
@@ -823,24 +1209,150 @@ export class ChatStore {
      * A closed queue never accepts a stale UI event and makes future waits
      * resolve immediately, so Node cannot exit with an unsettled top-level await.
      */
+    isEventQueueClosed(): boolean {
+        return this.eventQueueClosed;
+    }
+
     closeEventQueue(): void {
         if (this.eventQueueClosed) return;
         this.eventQueueClosed = true;
         this.eventQueue.length = 0;
+
+        // Drop agents durable write/reload ownership — no overlay can finish after close.
+        this.resetAgentsDurableState();
+        this.resetMissionsReloadState();
+        this.resetModelsMutationEpoch();
+        this.contextMaxEpoch += 1;
+        this.invalidateFileAutocompleteRefresh();
+        this.historyEntriesGeneration += 1;
+
+        // Fail-closed: never leave tool/picker Promises hung across unmount.
+        this.cancelPendingOverlayPromises();
+
+        // Non-promise overlays (approval/rename/view modes) also dismiss.
+        if (this.state.overlayMode !== 'none') {
+            this.state.overlayMode = 'none';
+            this.state.renameBuffer = '';
+        }
+        // Clear non-mode view flags so remount cannot revive a stale panel.
+        if (this.state.modelsOverlay.active) {
+            this.state.modelsOverlay = {
+                ...this.state.modelsOverlay,
+                active: false,
+            };
+        }
+        if (this.state.agentsDashboard.active) {
+            this.state.agentsDashboard = {
+                ...this.state.agentsDashboard,
+                active: false,
+                editingName: null,
+                editBuffer: '',
+            };
+        }
+        if (this.state.missionPanel.active) {
+            this.state.missionPanel = {
+                ...this.state.missionPanel,
+                active: false,
+            };
+        }
+        this.state.diffViewerEntries = [];
+        this.state.diffViewerCursor = 0;
+        if (this.state.historyPicker.open) {
+            this.state.historyPicker = createHistoryPickerState();
+        }
+        this.state.menuState = createSlashCommandMenuState();
+        this.state.fileAutocomplete = createFileAutocompleteState();
+        this.state.agentStatusText = '';
+        this.state.agentRetryAt = undefined;
+        this.state.generating = false;
+        this.state.lastStreamActivityAt = undefined;
+        this.state.pasteStore.clear();
+        this.state.stickyNotice = null;
+        this.state.transientNotice = null;
+
+        this.publish();
+
         const waiters = this.eventWaiters.splice(0);
         for (const resolve of waiters) {
             resolve({ type: 'interrupt' });
         }
     }
 
-    enqueueEvent(event: ChatInputEvent): void {
-        if (this.eventQueueClosed) return;
+    /**
+     * Resolve outstanding overlay Promises with cancel/empty results so agent
+     * turns and CLI awaits cannot hang after TUI teardown.
+     */
+    cancelPendingOverlayPromises(): void {
+        if (this.modelPickerResolve !== undefined) {
+            this.hideModelPicker(undefined);
+        }
+        if (this.sessionPickerResolve !== undefined) {
+            this.hideSessionPicker(undefined);
+        }
+        if (this.levelPickerResolve !== undefined) {
+            this.hideLevelPicker(undefined);
+        }
+        if (this.questionResolve !== undefined || this.questionBatchResolve !== undefined) {
+            this.rejectQuestion();
+        }
+    }
+
+    /**
+     * When opening a competing overlay, fail-closed dismiss approval/rename so a
+     * prior decision UI cannot be orphaned without a deny line.
+     */
+
+    private closePromptLocalPickers(): void {
+        if (this.state.historyPicker.open) {
+            this.state.historyPicker = createHistoryPickerState();
+        }
+    }
+
+    private clearInactiveOperatorPanels(except?: ChatStoreOverlayMode): void {
+        this.closePromptLocalPickers();
+        if (except !== 'models-overlay' && this.state.modelsOverlay.active) {
+            this.resetModelsMutationEpoch();
+            this.state.modelsOverlay = { ...this.state.modelsOverlay, active: false };
+        }
+        if (except !== 'agents-dashboard' && this.state.agentsDashboard.active) {
+            this.resetAgentsDurableState();
+            this.state.agentsDashboard = {
+                ...this.state.agentsDashboard,
+                active: false,
+                editingName: null,
+                editBuffer: '',
+            };
+        }
+        if (except !== 'mission-panel' && this.state.missionPanel.active) {
+            this.resetMissionsReloadState();
+            this.state.missionPanel = { ...this.state.missionPanel, active: false };
+        }
+        if (except !== 'diff-viewer') {
+            this.state.diffViewerEntries = [];
+            this.state.diffViewerCursor = 0;
+        }
+    }
+    private dismissBlockingNonPromiseOverlays(): void {
+        if (this.state.overlayMode === 'approval') {
+            this.denyApproval();
+            if (this.state.overlayMode === 'approval') {
+                // deny no-op'd (closed queue / race); force-hide.
+                this.hideApproval();
+            }
+        } else if (this.state.overlayMode === 'rename') {
+            this.cancelRename();
+        }
+    }
+
+    enqueueEvent(event: ChatInputEvent): boolean {
+        if (this.eventQueueClosed) return false;
         const waiter = this.eventWaiters.shift();
         if (waiter !== undefined) {
             waiter(event);
-            return;
+            return true;
         }
         this.eventQueue.push(event);
+        return true;
     }
 
     waitForEvent(): Promise<ChatInputEvent> {
@@ -857,13 +1369,15 @@ export class ChatStore {
     }
 
     setInputMirror(text: string): void {
+        if (this.eventQueueClosed) return;
         this.state.inputMirror = text;
         this.state.menuState = createSlashCommandMenuState();
-        this.refreshFileAutocomplete();
+        this.scheduleFileAutocompleteRefresh();
         this.publish();
     }
 
     navigateSlashMenu(direction: 'up' | 'down'): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'none') return;
         this.state.menuState = reduceSlashCommandMenuSelection(
             this.state.menuState,
             direction === 'up' ? CURSOR_UP : CURSOR_DOWN,
@@ -873,6 +1387,7 @@ export class ChatStore {
     }
 
     navigateWorkflowMenu(direction: 'up' | 'down'): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'none') return;
         this.state.menuState = reduceWorkflowCommandMenuSelection(
             this.state.menuState,
             direction === 'up' ? CURSOR_UP : CURSOR_DOWN,
@@ -883,6 +1398,7 @@ export class ChatStore {
     }
 
     navigateSkillMenu(direction: 'up' | 'down'): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'none') return;
         this.state.menuState = reduceSkillCommandMenuSelection(
             this.state.menuState,
             direction === 'up' ? CURSOR_UP : CURSOR_DOWN,
@@ -892,7 +1408,32 @@ export class ChatStore {
         this.publish();
     }
 
+    closeFileAutocomplete(): void {
+        if (this.eventQueueClosed) return;
+        this.invalidateFileAutocompleteRefresh();
+        if (!this.state.fileAutocomplete.open) return;
+        this.state.fileAutocomplete = createFileAutocompleteState();
+        this.publish();
+    }
+
+    /**
+     * Resolve the current `@path` synchronously for an explicit completion key.
+     * Ordinary keystrokes remain debounced; Tab must never consume stale matches.
+     */
+    ensureFileAutocompleteCurrent(): void {
+        if (this.eventQueueClosed) return;
+        const prefix = readActiveFilePrefix(this.state.inputMirror);
+        if (prefix !== undefined && this.state.fileAutocomplete.open && this.state.fileAutocomplete.prefix === prefix) {
+            this.invalidateFileAutocompleteRefresh();
+            return;
+        }
+        this.invalidateFileAutocompleteRefresh();
+        this.refreshFileAutocomplete();
+        this.publish();
+    }
+
     navigateFileAutocomplete(direction: 'up' | 'down'): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'none') return;
         this.state.fileAutocomplete =
             direction === 'up'
                 ? navigateFileAutocompleteUp(this.state.fileAutocomplete)
@@ -901,45 +1442,67 @@ export class ChatStore {
     }
 
     closeMenus(): void {
+        if (this.eventQueueClosed) return;
+        this.invalidateFileAutocompleteRefresh();
         this.state.menuState = createSlashCommandMenuState();
         this.state.fileAutocomplete = createFileAutocompleteState();
         this.publish();
     }
 
     setGenerating(value: boolean): void {
+        // After teardown, allow only clear-to-false so stale true cannot stick.
+        if (this.eventQueueClosed && value) return;
         this.state.generating = value;
+        if (value) {
+            this.noteStreamActivity();
+        } else {
+            this.state.lastStreamActivityAt = undefined;
+        }
         this.publish();
     }
 
     setAgentStatus(text: string): void {
+        // After teardown only allow clear-to-empty so unmount cannot leave a stale spinner label.
+        if (this.eventQueueClosed && text.length > 0) return;
         this.state.agentStatusText = text;
         this.state.agentRetryAt = undefined;
+        if (this.state.generating && text.length > 0) {
+            this.noteStreamActivity();
+        }
         this.publish();
     }
 
     setAgentRetryStatus(text: string, retryAt: number): void {
+        if (this.eventQueueClosed) return;
         this.state.agentStatusText = text;
         this.state.agentRetryAt = retryAt;
+        if (this.state.generating) {
+            this.noteStreamActivity();
+        }
         this.publish();
     }
 
     clearAgentStatus(): void {
+        if (this.state.agentStatusText === '' && this.state.agentRetryAt === undefined) return;
         this.state.agentStatusText = '';
         this.state.agentRetryAt = undefined;
-        this.publish();
+        if (!this.eventQueueClosed) this.publish();
     }
 
     setWorkflowNames(names: readonly string[]): void {
+        if (this.eventQueueClosed) return;
         this.state.workflowNames = names;
         this.publish();
     }
 
     setSkillEntries(entries: readonly TuiSkillMenuEntry[]): void {
+        if (this.eventQueueClosed) return;
         this.state.skillEntries = entries;
         this.publish();
     }
 
     setModelCycleChoices(choices: readonly ModelChoice[]): void {
+        if (this.eventQueueClosed) return;
         this.state.modelCycleChoices = choices;
         const liveBase = this.state.currentModelSelection;
         const matchingIndex =
@@ -959,26 +1522,107 @@ export class ChatStore {
     }
 
     toggleShowThinking(): void {
+        if (this.eventQueueClosed) return;
         this.state.showThinking = !this.state.showThinking;
         this.publish();
     }
 
     toggleToolOutputExpanded(): void {
+        if (this.eventQueueClosed) return;
         this.state.toolOutputExpanded = !this.state.toolOutputExpanded;
         this.publish();
     }
 
     toggleAbgOverlay(): void {
-        this.state.overlayMode = this.state.overlayMode === 'abg' ? 'none' : 'abg';
+        if (this.eventQueueClosed) return;
+        if (this.state.overlayMode === 'abg') {
+            this.state.overlayMode = 'none';
+            this.publish();
+            return;
+        }
+        this.cancelPendingOverlayPromises();
+        this.dismissBlockingNonPromiseOverlays();
+        this.clearInactiveOperatorPanels('abg');
+        this.state.overlayMode = 'abg';
+        this.publish();
+    }
+
+    toggleDiagnosticsOverlay(): void {
+        if (this.eventQueueClosed) return;
+        if (this.state.overlayMode === 'diagnostics') {
+            this.state.overlayMode = 'none';
+            this.publish();
+            return;
+        }
+        this.cancelPendingOverlayPromises();
+        this.dismissBlockingNonPromiseOverlays();
+        this.clearInactiveOperatorPanels('diagnostics');
+        this.state.overlayMode = 'diagnostics';
+        this.publish();
+    }
+
+    hideDiagnosticsOverlay(): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'diagnostics') return;
+        this.state.overlayMode = 'none';
+        this.publish();
+    }
+
+    toggleTipsOverlay(): void {
+        if (this.eventQueueClosed) return;
+        if (this.state.overlayMode === 'tips') {
+            this.state.overlayMode = 'none';
+            this.publish();
+            return;
+        }
+        this.cancelPendingOverlayPromises();
+        this.dismissBlockingNonPromiseOverlays();
+        this.clearInactiveOperatorPanels('tips');
+        this.state.overlayMode = 'tips';
+        this.publish();
+    }
+
+    hideTipsOverlay(): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'tips') return;
+        this.state.overlayMode = 'none';
+        this.publish();
+    }
+
+    setRemountGeneration(generation: number): void {
+        if (this.eventQueueClosed) return;
+        const next = Number.isFinite(generation) && generation > 0 ? Math.floor(generation) : 0;
+        if (this.state.remountGeneration === next) return;
+        this.state.remountGeneration = next;
+        this.publish();
+    }
+
+    setRemountDiagnostics(input: {
+        readonly generation: number;
+        readonly circuitOpen: boolean;
+        readonly message: string | undefined;
+    }): void {
+        if (this.eventQueueClosed) return;
+        const generation = Number.isFinite(input.generation) && input.generation > 0 ? Math.floor(input.generation) : 0;
+        if (
+            this.state.remountGeneration === generation &&
+            this.state.remountCircuitOpen === input.circuitOpen &&
+            this.state.lastRemountMessage === input.message
+        ) {
+            return;
+        }
+        this.state.remountGeneration = generation;
+        this.state.remountCircuitOpen = input.circuitOpen;
+        this.state.lastRemountMessage = input.message;
         this.publish();
     }
 
     toggleAbgMinimap(): void {
+        if (this.eventQueueClosed) return;
         this.state.abgMinimapVisible = !this.state.abgMinimapVisible;
         this.publish();
     }
 
     applyAbgOverlayPrefs(prefs: AbgOverlayPrefsSnapshot): void {
+        if (this.eventQueueClosed) return;
         this.state.abgOverlayActiveTab = prefs.activeTabIndex;
         this.state.abgOverlayScrollOffset = prefs.scrollOffset;
         this.state.abgOverlayLiveOutput = prefs.liveOutput;
@@ -997,6 +1641,36 @@ export class ChatStore {
         };
     }
 
+    setAbgOverlayActiveTab(index: number): void {
+        if (this.eventQueueClosed) return;
+        if (!Number.isFinite(index)) return;
+        const next = Math.max(0, Math.trunc(index));
+        if (this.state.abgOverlayActiveTab === next) {
+            // Same tab re-select still clears scroll (digit keys / cycle contract).
+            if (this.state.abgOverlayScrollOffset !== 0) {
+                this.state.abgOverlayScrollOffset = 0;
+                this.publish();
+            }
+            return;
+        }
+        this.state.abgOverlayActiveTab = next;
+        this.state.abgOverlayScrollOffset = 0;
+        this.publish();
+    }
+
+    setAbgOverlayScrollOffset(offset: number): void {
+        if (this.eventQueueClosed) return;
+        const next = Math.max(0, Math.trunc(offset));
+        if (this.state.abgOverlayScrollOffset === next) return;
+        this.state.abgOverlayScrollOffset = next;
+        this.publish();
+    }
+
+    adjustAbgOverlayScrollOffset(delta: number): void {
+        if (this.eventQueueClosed) return;
+        this.setAbgOverlayScrollOffset(this.state.abgOverlayScrollOffset + Math.trunc(delta));
+    }
+
     /**
      * Single entry point for any path that picks a model (Ctrl+P cycle,
      * F2/leader+N shortcut, `/model` picker, `/model provider/model` chat
@@ -1006,6 +1680,7 @@ export class ChatStore {
      * imperative loop's provider config tracks the same selection.
      */
     setModelSelection(selection: ModelProviderSelection): void {
+        if (this.eventQueueClosed) return;
         this.state.currentModelSelection = selection;
         this.state.currentModelVariantID = selection.variantID;
         const matchingIndex = this.state.modelCycleChoices.findIndex(
@@ -1020,6 +1695,7 @@ export class ChatStore {
     }
 
     cycleModel(direction: 1 | -1): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'none') return;
         const choices = this.state.modelCycleChoices;
         if (choices.length <= 1) return;
         const nextIndex = (this.state.modelCycleIndex + direction + choices.length) % choices.length;
@@ -1046,18 +1722,21 @@ export class ChatStore {
      * chord fired but had no effect.
      */
     showTransientNotice(message: string): void {
+        if (this.eventQueueClosed) return;
         this.transientNoticeCounter += 1;
         this.state.transientNotice = { id: this.transientNoticeCounter, message };
         this.publish();
     }
 
     setStickyNotice(message: string | null): void {
+        if (this.eventQueueClosed) return;
         if (this.state.stickyNotice === message) return;
         this.state.stickyNotice = message;
         this.publish();
     }
 
     cycleModelVariant(direction: 1 | -1): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'none') return;
         const baseSelection =
             this.state.currentModelSelection ?? this.state.modelCycleChoices[this.state.modelCycleIndex]?.selection;
         if (baseSelection === undefined) return;
@@ -1083,9 +1762,27 @@ export class ChatStore {
     }
 
     setHistoryEntries(entries: readonly HistoryPickerEntry[]): void {
+        if (this.eventQueueClosed) return;
         this.state.historyEntries = [...entries];
-        this.state.historyPicker = createHistoryPickerState();
+        // Preserve an open picker across boot hydrate; only clamp selection.
+        if (this.state.historyPicker.open) {
+            this.state.historyPicker = clampHistoryPickerSelection(
+                this.state.historyPicker,
+                this.state.historyEntries.length,
+            );
+        } else {
+            this.state.historyPicker = createHistoryPickerState();
+        }
         this.publish();
+    }
+
+    beginHistoryEntriesReseed(): number {
+        return this.historyEntriesGeneration;
+    }
+
+    shouldApplyHistoryEntriesReseed(generation: number): boolean {
+        if (this.eventQueueClosed) return false;
+        return generation === this.historyEntriesGeneration;
     }
 
     historyEntriesNewestFirst(): readonly HistoryPickerEntry[] {
@@ -1097,9 +1794,15 @@ export class ChatStore {
     }
 
     openHistoryPicker(currentBuffer: string): void {
+        if (this.eventQueueClosed) return;
+        // History is a prompt-local picker; refuse while a modal owns the UI.
+        if (this.state.overlayMode !== 'none') return;
         if (this.state.historyPicker.open) {
             return;
         }
+        // History owns Up/Down; drop slash/file menus so priority-200 menu nav cannot steal keys.
+        this.state.menuState = createSlashCommandMenuState();
+        this.state.fileAutocomplete = createFileAutocompleteState();
         this.state.historyPicker = reduceOpenHistoryPicker(
             this.state.historyPicker,
             this.historyEntriesNewestFirst(),
@@ -1109,6 +1812,7 @@ export class ChatStore {
     }
 
     navigateHistoryPicker(direction: 'up' | 'down'): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'none') return;
         if (!this.state.historyPicker.open) {
             return;
         }
@@ -1138,6 +1842,7 @@ export class ChatStore {
     }
 
     confirmHistoryPicker(): string | undefined {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'none') return undefined;
         if (!this.state.historyPicker.open) {
             return undefined;
         }
@@ -1148,6 +1853,7 @@ export class ChatStore {
     }
 
     cancelHistoryPicker(): void {
+        if (this.eventQueueClosed) return;
         if (!this.state.historyPicker.open) {
             return;
         }
@@ -1163,6 +1869,7 @@ export class ChatStore {
         if (last?.text === text) {
             return;
         }
+        this.historyEntriesGeneration += 1;
         this.historyEntryCounter += 1;
         const entry: HistoryPickerEntry = {
             id: `hist-${this.historyEntryCounter}`,
@@ -1176,37 +1883,39 @@ export class ChatStore {
             this.state.historyPicker,
             this.state.historyEntries.length,
         );
+        this.publish();
     }
 
     setFileFrecencyKeys(keys: readonly string[]): void {
+        if (this.eventQueueClosed) return;
         this.fileFrecencyKeys = keys;
-        this.refreshFileAutocomplete();
+        this.scheduleFileAutocompleteRefresh();
         this.publish();
     }
 
-    navigateApproval(direction: 1 | -1): void {
-        const count = APPROVAL_OPTIONS.length;
-        this.state.approvalSelectedIndex = (this.state.approvalSelectedIndex + direction + count) % count;
-        this.publish();
-    }
-
-    confirmApproval(): void {
-        const selected = APPROVAL_OPTIONS[this.state.approvalSelectedIndex];
+    confirmApproval(selectedIndex?: number): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'approval') return;
+        const index = selectedIndex !== undefined ? selectedIndex : this.state.approvalSelectedIndex;
+        const selected = APPROVAL_OPTIONS[index];
+        if (selected === undefined) return;
+        // Enqueue first so a closed queue cannot dismiss the overlay without
+        // delivering the decision to the imperative loop.
+        if (!this.enqueueEvent({ type: 'line', value: selected.key })) return;
+        this.state.approvalSelectedIndex = index;
         this.state.overlayMode = 'none';
         this.publish();
-        if (selected !== undefined) {
-            this.enqueueEvent({ type: 'line', value: selected.key });
-        }
     }
 
     denyApproval(): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'approval') return;
+        if (!this.enqueueEvent({ type: 'line', value: 'deny' })) return;
         this.state.approvalSelectedIndex = APPROVAL_OPTIONS.length - 1;
         this.state.overlayMode = 'none';
         this.publish();
-        this.enqueueEvent({ type: 'line', value: 'deny' });
     }
 
     navigateQuestion(direction: 1 | -1): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'question') return;
         const total = this.state.questionMultiple
             ? this.state.questionOptions.length
             : this.state.questionOptions.length + 1;
@@ -1220,7 +1929,7 @@ export class ChatStore {
      * the hovered row the active row. No-op outside a question overlay.
      */
     hoverQuestion(index: number): void {
-        if (this.state.overlayMode !== 'question') return;
+        if (this.eventQueueClosed || this.state.overlayMode !== 'question') return;
         const total = this.state.questionMultiple
             ? this.state.questionOptions.length
             : this.state.questionOptions.length + 1;
@@ -1231,6 +1940,7 @@ export class ChatStore {
     }
 
     toggleQuestionOption(): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'question') return;
         const index = this.state.questionSelectedIndex;
         if (index >= this.state.questionOptions.length) return;
         const next = new Set(this.state.questionSelectedIndices);
@@ -1265,6 +1975,7 @@ export class ChatStore {
      * pick records the answer and advances to the next tab instead of resolving.
      */
     selectQuestionByClick(index: number): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'question') return;
         if (index < 0) return;
         if (index >= this.rawQuestionOptions.length) {
             if (this.state.questionMultiple) return;
@@ -1301,6 +2012,7 @@ export class ChatStore {
      * (or resolves for a lone question); batch multi adds the text; single mode
      * resolves outright. Exits custom-input mode in every case. */
     submitCustomAnswer(text: string): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'question' || !this.state.questionCustomMode) return;
         const rawText = text === this.state.questionCustomBuffer ? this.rawQuestionCustomBuffer : text;
         this.state.questionCustomMode = false;
         this.state.questionCustomBuffer = '';
@@ -1324,6 +2036,7 @@ export class ChatStore {
     }
 
     enterQuestionCustomMode(): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'question') return;
         this.state.questionCustomMode = true;
         this.state.questionCustomBuffer = '';
         this.rawQuestionCustomBuffer = '';
@@ -1331,12 +2044,14 @@ export class ChatStore {
     }
 
     appendQuestionCustom(text: string): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'question' || !this.state.questionCustomMode) return;
         this.rawQuestionCustomBuffer += text;
         this.state.questionCustomBuffer = sanitizeTerminalDisplayText(this.rawQuestionCustomBuffer);
         this.publish();
     }
 
     deleteQuestionCustomChar(): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'question' || !this.state.questionCustomMode) return;
         if (this.rawQuestionCustomBuffer.length === 0) return;
         this.rawQuestionCustomBuffer = this.rawQuestionCustomBuffer.slice(0, -1);
         this.state.questionCustomBuffer = sanitizeTerminalDisplayText(this.rawQuestionCustomBuffer);
@@ -1344,6 +2059,7 @@ export class ChatStore {
     }
 
     exitQuestionCustomMode(): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'question') return;
         this.state.questionCustomMode = false;
         this.state.questionCustomBuffer = '';
         this.rawQuestionCustomBuffer = '';
@@ -1351,6 +2067,7 @@ export class ChatStore {
     }
 
     updateModelPickerKeypress(rawInput: string): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'model-picker') return;
         const promptChoices = this.state.modelPickerChoices.map((choice) => ({
             id: choice.id,
             name: choice.label,
@@ -1364,11 +2081,13 @@ export class ChatStore {
     }
 
     appendModelPickerSearch(character: string): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'model-picker') return;
         this.state.modelPickerKeypress = appendProviderPromptSearch(this.state.modelPickerKeypress, character);
         this.publish();
     }
 
     updateSessionPickerSearch(rawInput: string): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'session-picker') return;
         const promptChoices = this.state.sessionPickerEntries.map((entry) => ({
             id: entry.sessionId,
             name: entry.label,
@@ -1384,6 +2103,7 @@ export class ChatStore {
     }
 
     confirmSessionPicker(): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'session-picker') return;
         const view = createSessionPickerView(
             this.state.sessionPickerKeypress,
             this.state.sessionPickerEntries,
@@ -1402,6 +2122,11 @@ export class ChatStore {
     }
 
     showAgentsDashboard(entries: readonly DashboardAgentEntry[]): void {
+        if (this.eventQueueClosed) return;
+        this.resetAgentsDurableState();
+        this.cancelPendingOverlayPromises();
+        this.dismissBlockingNonPromiseOverlays();
+        this.clearInactiveOperatorPanels('agents-dashboard');
         this.state.agentsDashboard = {
             active: true,
             agents: entries,
@@ -1415,6 +2140,9 @@ export class ChatStore {
     }
 
     hideAgentsDashboard(): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'agents-dashboard') return;
+        this.resetAgentsDurableState();
+
         this.state.agentsDashboard = {
             ...this.state.agentsDashboard,
             active: false,
@@ -1426,6 +2154,7 @@ export class ChatStore {
     }
 
     navigateAgentsDashboard(delta: number): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'agents-dashboard') return;
         const filtered = this.filterAgentsBySourceTab();
         const count = filtered.length;
         if (count === 0) return;
@@ -1438,6 +2167,7 @@ export class ChatStore {
     }
 
     cycleAgentsDashboardSourceTab(delta: number): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'agents-dashboard') return;
         const tabs: readonly AgentsDashboardSourceTab[] = ['all', 'project', 'user', 'bundled'];
         const currentIdx = tabs.indexOf(this.state.agentsDashboard.sourceTab);
         const nextIdx = (currentIdx + delta + tabs.length) % tabs.length;
@@ -1450,6 +2180,7 @@ export class ChatStore {
     }
 
     toggleAgentsDashboardAgentDisabled(name: string): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'agents-dashboard') return;
         this.state.agentsDashboard = {
             ...this.state.agentsDashboard,
             agents: this.state.agentsDashboard.agents.map((entry) =>
@@ -1460,6 +2191,7 @@ export class ChatStore {
     }
 
     beginAgentsDashboardModelEdit(name: string): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'agents-dashboard') return;
         const entry = this.state.agentsDashboard.agents.find((a) => a.name === name);
         this.state.agentsDashboard = {
             ...this.state.agentsDashboard,
@@ -1470,6 +2202,7 @@ export class ChatStore {
     }
 
     commitAgentsDashboardModelEdit(value: string | undefined): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'agents-dashboard') return;
         const name = this.state.agentsDashboard.editingName;
         if (name === null) return;
         this.state.agentsDashboard = {
@@ -1481,7 +2214,18 @@ export class ChatStore {
         this.publish();
     }
 
+    /** Apply an override without requiring an active edit buffer (rollback / external sync). */
+    setAgentsDashboardAgentOverride(name: string, value: string | undefined): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'agents-dashboard') return;
+        this.state.agentsDashboard = {
+            ...this.state.agentsDashboard,
+            agents: applyAgentOverrideModel(this.state.agentsDashboard.agents, name, value),
+        };
+        this.publish();
+    }
+
     cancelAgentsDashboardModelEdit(): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'agents-dashboard') return;
         this.state.agentsDashboard = {
             ...this.state.agentsDashboard,
             editingName: null,
@@ -1490,8 +2234,81 @@ export class ChatStore {
         this.publish();
     }
 
+    isAgentsDurableBusy(): boolean {
+        return this.agentsDurableBusy;
+    }
+
+    private resetAgentsDurableState(): void {
+        this.agentsDurableBusy = false;
+        this.agentsDurableGeneration += 1;
+        this.agentsReloadGeneration = 0;
+    }
+
+    beginAgentsDurableWrite(): number {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'agents-dashboard') return -1;
+        this.agentsDurableBusy = true;
+        this.agentsDurableGeneration += 1;
+        this.agentsReloadGeneration += 1;
+        return this.agentsDurableGeneration;
+    }
+
+    endAgentsDurableWrite(token?: number): void {
+        if (token !== undefined && token !== this.agentsDurableGeneration) return;
+        this.agentsDurableBusy = false;
+    }
+
+    shouldApplyAgentsDurableWrite(token: number): boolean {
+        if (token < 0) return false;
+        if (this.eventQueueClosed || this.state.overlayMode !== 'agents-dashboard') return false;
+        return token === this.agentsDurableGeneration;
+    }
+
+    beginAgentsReload(): number {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'agents-dashboard') {
+            return -1;
+        }
+        if (this.agentsDurableBusy) return -1;
+        this.agentsReloadGeneration += 1;
+        return this.agentsReloadGeneration;
+    }
+
+    shouldApplyAgentsReload(generation: number): boolean {
+        if (generation < 0) return false;
+        if (this.eventQueueClosed || this.state.overlayMode !== 'agents-dashboard') return false;
+        if (this.agentsDurableBusy) return false;
+        return generation === this.agentsReloadGeneration;
+    }
+
+    beginMissionsReload(): number {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'mission-panel') return -1;
+        this.missionsReloadGeneration += 1;
+        return this.missionsReloadGeneration;
+    }
+
+    shouldApplyMissionsReload(generation: number): boolean {
+        if (generation < 0) return false;
+        if (this.eventQueueClosed || this.state.overlayMode !== 'mission-panel') return false;
+        return generation === this.missionsReloadGeneration;
+    }
+
+    private resetMissionsReloadState(): void {
+        this.missionsReloadGeneration += 1;
+    }
+
+    private resetModelsMutationEpoch(): void {
+        this.modelsMutationEpoch += 1;
+    }
+
+    private isModelsMutationLive(epoch: number): boolean {
+        return (
+            !this.eventQueueClosed && this.state.overlayMode === 'models-overlay' && epoch === this.modelsMutationEpoch
+        );
+    }
+
     reloadAgentsDashboard(entries: readonly DashboardAgentEntry[]): void {
-        if (this.state.overlayMode !== 'agents-dashboard') return;
+        if (this.eventQueueClosed || this.state.overlayMode !== 'agents-dashboard') return;
+        // External reloaders (/agents, CLI refresh) must not clobber in-flight durable writes.
+        if (this.agentsDurableBusy) return;
         const selectedName = this.state.agentsDashboard.agents[this.state.agentsDashboard.selectedIndex]?.name;
         const newSelectedIndex =
             selectedName !== undefined
@@ -1509,6 +2326,12 @@ export class ChatStore {
     }
 
     showMissionPanel(rows?: readonly MissionPanelRow[]): void {
+        if (this.eventQueueClosed) return;
+        this.cancelPendingOverlayPromises();
+        this.dismissBlockingNonPromiseOverlays();
+        this.clearInactiveOperatorPanels('mission-panel');
+        // Drop in-flight Ctrl+R results from a prior open.
+        this.resetMissionsReloadState();
         const initialRows = rows ?? [];
         this.state.missionPanel = {
             active: true,
@@ -1523,12 +2346,15 @@ export class ChatStore {
     }
 
     hideMissionPanel(): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'mission-panel') return;
+        this.resetMissionsReloadState();
         this.state.missionPanel = { ...this.state.missionPanel, active: false };
         this.state.overlayMode = 'none';
         this.publish();
     }
 
     navigateMissionPanel(direction: number, maxCount?: number): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'mission-panel') return;
         const count = maxCount ?? this.state.missionPanel.rows.length;
         if (count === 0) return;
         const next = this.state.missionPanel.selectedIndex + direction;
@@ -1540,6 +2366,7 @@ export class ChatStore {
     }
 
     setMissionPanelTab(tab: MissionPanelTab): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'mission-panel') return;
         if (this.state.missionPanel.activeTab === tab) return;
         const count = this.state.missionPanel.rows.length;
         const safeIndex = count === 0 ? 0 : Math.min(this.state.missionPanel.selectedIndex, count - 1);
@@ -1552,7 +2379,7 @@ export class ChatStore {
     }
 
     reloadMissions(rows: readonly MissionPanelRow[]): void {
-        if (this.state.overlayMode !== 'mission-panel') return;
+        if (this.eventQueueClosed || this.state.overlayMode !== 'mission-panel') return;
         const selectedId = this.state.missionPanel.rows[this.state.missionPanel.selectedIndex]?.id;
         const newSelectedIndex =
             selectedId !== undefined
@@ -1572,6 +2399,11 @@ export class ChatStore {
     }
 
     showModelsOverlay(entries: readonly ModelProviderSelection[], roleRows: readonly ModelsOverlayRoleRow[]): void {
+        if (this.eventQueueClosed) return;
+        this.cancelPendingOverlayPromises();
+        this.dismissBlockingNonPromiseOverlays();
+        this.clearInactiveOperatorPanels('models-overlay');
+        this.resetModelsMutationEpoch();
         this.state.modelsOverlay = {
             active: true,
             entries,
@@ -1588,12 +2420,15 @@ export class ChatStore {
     }
 
     hideModelsOverlay(): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'models-overlay') return;
+        this.resetModelsMutationEpoch();
         this.state.modelsOverlay = { ...this.state.modelsOverlay, active: false };
         this.state.overlayMode = 'none';
         this.publish();
     }
 
     navigateModelsOverlay(direction: 1 | -1): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'models-overlay') return;
         const state = this.buildModelsOverlayState();
         if (state === null) return;
         const next = direction < 0 ? navigateModelsOverlayUp(state) : navigateModelsOverlayDown(state);
@@ -1606,6 +2441,7 @@ export class ChatStore {
     }
 
     switchModelsOverlayColumn(): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'models-overlay') return;
         const state = this.buildModelsOverlayState();
         if (state === null) return;
         const next = reduceModelsOverlayColumn(state);
@@ -1617,32 +2453,79 @@ export class ChatStore {
     }
 
     async assignModelsOverlayRole(role: ModelRole, selection: ModelProviderSelection): Promise<void> {
-        this.state.modelsOverlay = {
-            ...this.state.modelsOverlay,
-            roleRows: this.state.modelsOverlay.roleRows.map((row) =>
-                row.role === role ? { ...row, assignment: selection } : row,
-            ),
-        };
-        this.publish();
-        if (this.authStore !== undefined) {
-            await this.authStore.setModelRole(role, selection);
-        }
+        if (this.eventQueueClosed || this.state.overlayMode !== 'models-overlay') return;
+        const mutationEpoch = this.modelsMutationEpoch;
+        const run = this.modelsMutationChain.then(async () => {
+            if (!this.isModelsMutationLive(mutationEpoch)) return;
+            const previous = this.state.modelsOverlay.roleRows.find((row) => row.role === role)?.assignment;
+            this.state.modelsOverlay = {
+                ...this.state.modelsOverlay,
+                roleRows: this.state.modelsOverlay.roleRows.map((row) =>
+                    row.role === role ? { ...row, assignment: selection } : row,
+                ),
+            };
+            this.publish();
+            if (this.authStore === undefined) return;
+            // Skip durable auth write if the overlay was torn down before we yield.
+            if (!this.isModelsMutationLive(mutationEpoch)) return;
+            try {
+                await this.authStore.setModelRole(role, selection);
+            } catch {
+                // Roll back optimistic UI only for the same overlay generation.
+                if (!this.isModelsMutationLive(mutationEpoch)) return;
+                this.state.modelsOverlay = {
+                    ...this.state.modelsOverlay,
+                    roleRows: this.state.modelsOverlay.roleRows.map((row) =>
+                        row.role === role ? { ...row, assignment: previous } : row,
+                    ),
+                };
+                this.publish();
+            }
+        });
+        this.modelsMutationChain = run.then(
+            () => undefined,
+            () => undefined,
+        );
+        await run;
     }
 
     async clearModelsOverlayRole(role: ModelRole): Promise<void> {
-        this.state.modelsOverlay = {
-            ...this.state.modelsOverlay,
-            roleRows: this.state.modelsOverlay.roleRows.map((row) =>
-                row.role === role ? { ...row, assignment: undefined } : row,
-            ),
-        };
-        this.publish();
-        if (this.authStore !== undefined) {
-            await this.authStore.clearModelRole(role);
-        }
+        if (this.eventQueueClosed || this.state.overlayMode !== 'models-overlay') return;
+        const mutationEpoch = this.modelsMutationEpoch;
+        const run = this.modelsMutationChain.then(async () => {
+            if (!this.isModelsMutationLive(mutationEpoch)) return;
+            const previous = this.state.modelsOverlay.roleRows.find((row) => row.role === role)?.assignment;
+            this.state.modelsOverlay = {
+                ...this.state.modelsOverlay,
+                roleRows: this.state.modelsOverlay.roleRows.map((row) =>
+                    row.role === role ? { ...row, assignment: undefined } : row,
+                ),
+            };
+            this.publish();
+            if (this.authStore === undefined) return;
+            if (!this.isModelsMutationLive(mutationEpoch)) return;
+            try {
+                await this.authStore.clearModelRole(role);
+            } catch {
+                if (!this.isModelsMutationLive(mutationEpoch)) return;
+                this.state.modelsOverlay = {
+                    ...this.state.modelsOverlay,
+                    roleRows: this.state.modelsOverlay.roleRows.map((row) =>
+                        row.role === role ? { ...row, assignment: previous } : row,
+                    ),
+                };
+                this.publish();
+            }
+        });
+        this.modelsMutationChain = run.then(
+            () => undefined,
+            () => undefined,
+        );
+        await run;
     }
 
     selectModelForAssignment(): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'models-overlay') return;
         const state = this.buildModelsOverlayState();
         if (state === null) return;
         const next = selectModelForAssignmentReducer(state);
@@ -1655,23 +2538,30 @@ export class ChatStore {
     }
 
     async confirmRoleAssignment(): Promise<void> {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'models-overlay') return;
+
         const slice = this.state.modelsOverlay;
         if (slice.pendingAssignModel === null) return;
         const roleRow = slice.roleRows[slice.activeRightIndex];
         if (roleRow === undefined) return;
         const pendingModel = slice.pendingAssignModel;
+        const role = roleRow.role;
         this.state.modelsOverlay = { ...this.state.modelsOverlay, pendingAssignModel: null };
         this.publish();
-        await this.assignModelsOverlayRole(roleRow.role, pendingModel);
+        // Drop late assigns if the overlay/session was torn down mid-await setup.
+        if (this.eventQueueClosed || this.state.overlayMode !== 'models-overlay') return;
+        await this.assignModelsOverlayRole(role, pendingModel);
     }
 
     cancelPendingAssignment(): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'models-overlay') return;
         if (this.state.modelsOverlay.pendingAssignModel === null) return;
         this.state.modelsOverlay = { ...this.state.modelsOverlay, pendingAssignModel: null };
         this.publish();
     }
 
     setModelsOverlaySearchQuery(query: string): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'models-overlay') return;
         const state = this.buildModelsOverlayState();
         if (state === null) return;
         const next = reduceModelsOverlaySearchQuery(state, query);
@@ -1684,6 +2574,7 @@ export class ChatStore {
     }
 
     setModelsOverlayProviderTab(tabId: string): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'models-overlay') return;
         const state = this.buildModelsOverlayState();
         if (state === null) return;
         const next = reduceModelsOverlayProviderTab(state, tabId);
@@ -1717,31 +2608,17 @@ export class ChatStore {
             : this.state.agentsDashboard.agents.filter((a) => a.source === tab);
     }
 
-    navigateLevelPicker(direction: 1 | -1): void {
-        const count = APPROVAL_LEVELS.length;
-        this.state.levelPickerSelectedIndex = (this.state.levelPickerSelectedIndex + direction + count) % count;
-        this.publish();
-    }
-
-    appendRenameChar(text: string): void {
-        this.state.renameBuffer += text;
-        this.publish();
-    }
-
-    deleteRenameChar(): void {
-        if (this.state.renameBuffer.length === 0) return;
-        this.state.renameBuffer = this.state.renameBuffer.slice(0, -1);
-        this.publish();
-    }
-
     cancelRename(): void {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'rename') return;
         this.state.overlayMode = 'none';
         this.state.renameBuffer = '';
         this.publish();
     }
 
-    submitLine(value: string): void {
-        this.enqueueEvent({ type: 'line', value });
+    submitLine(value: string): boolean {
+        // Prompt submit never steals focus from a decision/view overlay.
+        if (this.state.overlayMode !== 'none') return false;
+        if (!this.enqueueEvent({ type: 'line', value })) return false;
         this.appendHistoryEntry(value);
         if (this.state.historyPicker.open) {
             this.state.historyPicker = closeHistoryPicker(this.state.historyPicker);
@@ -1757,25 +2634,33 @@ export class ChatStore {
         this.state.pasteStore.clear();
         this.state.inputMirror = '';
         this.state.menuState = createSlashCommandMenuState();
+        this.invalidateFileAutocompleteRefresh();
         this.state.fileAutocomplete = createFileAutocompleteState();
         this.publish();
+        return true;
     }
 
-    openDiffViewer(entries: readonly DiffEntry[]): void {
+    openDiffViewer(entries: readonly DiffEntry[]): boolean {
+        if (this.eventQueueClosed) return false;
+        if (entries.length === 0) return false;
+        this.cancelPendingOverlayPromises();
+        this.dismissBlockingNonPromiseOverlays();
+        this.clearInactiveOperatorPanels('diff-viewer');
         this.state.diffViewerEntries = entries;
         this.state.diffViewerCursor = 0;
         this.state.overlayMode = 'diff-viewer';
         this.publish();
+        return true;
     }
 
     setDiffViewerCursor(cursor: number): void {
-        if (this.state.overlayMode !== 'diff-viewer') return;
+        if (this.eventQueueClosed || this.state.overlayMode !== 'diff-viewer') return;
         this.state.diffViewerCursor = cursor;
         this.publish();
     }
 
     hideDiffViewer(): void {
-        if (this.state.overlayMode !== 'diff-viewer') return;
+        if (this.eventQueueClosed || this.state.overlayMode !== 'diff-viewer') return;
         this.state.diffViewerEntries = [];
         this.state.diffViewerCursor = 0;
         this.state.overlayMode = 'none';
@@ -1783,16 +2668,23 @@ export class ChatStore {
     }
 
     sendInterrupt(source: 'esc' | 'ctrl-c'): void {
-        this.enqueueEvent({ type: 'interrupt', interruptedPartialInput: false, source });
+        if (!this.enqueueEvent({ type: 'interrupt', interruptedPartialInput: false, source })) {
+            return;
+        }
         this.publish();
     }
 
     sendSlashCommand(command: string): void {
-        this.enqueueEvent({ type: 'line', value: command });
+        if (this.eventQueueClosed || this.state.overlayMode !== 'none') return;
+        if (this.state.historyPicker.open) return;
+        if (!this.enqueueEvent({ type: 'line', value: command })) return;
         this.publish();
     }
 
     registerPaste(text: string): number {
+        if (this.eventQueueClosed || this.state.overlayMode !== 'none' || this.state.historyPicker.open) {
+            return -1;
+        }
         this.state.pasteCounter += 1;
         const id = this.state.pasteCounter;
         this.state.pasteStore.store(id, text);
@@ -1890,7 +2782,11 @@ export class ChatStore {
         if (part.type === 'assistant') {
             this.state.activeAssistantMessageId = attributionKeyForAssistantPart(part);
         }
-        this.state.transcriptParts = clampTranscriptParts(this.state.transcriptParts);
+        const clampedParts = clampTranscriptParts(this.state.transcriptParts);
+        this.state.transcriptParts = clampedParts.parts;
+        if (clampedParts.dropped > 0) {
+            this.noteLiveHistoryTruncation();
+        }
     }
 
     private appendLegacyTranscriptPart(text: string): void {
@@ -1903,10 +2799,14 @@ export class ChatStore {
             ];
             return;
         }
-        this.state.transcriptParts = clampTranscriptParts([
+        const clampedLegacy = clampTranscriptParts([
             ...this.state.transcriptParts,
             { id: this.nextLegacyPartId(), type: 'legacy', text },
         ]);
+        this.state.transcriptParts = clampedLegacy.parts;
+        if (clampedLegacy.dropped > 0) {
+            this.noteLiveHistoryTruncation();
+        }
     }
 
     private nextLegacyPartId(): string {
@@ -1978,6 +2878,32 @@ export class ChatStore {
         this.rawQuestionAnswers = [];
     }
 
+    private scheduleFileAutocompleteRefresh(): void {
+        this.invalidateFileAutocompleteRefresh();
+        const prefix = readActiveFilePrefix(this.state.inputMirror);
+        if (prefix === undefined) {
+            this.state.fileAutocomplete = createFileAutocompleteState();
+            return;
+        }
+        const generation = this.fileAutocompleteGeneration;
+        this.state.fileAutocomplete = createFileAutocompleteState();
+        this.fileAutocompleteTimeout = setTimeout(() => {
+            this.fileAutocompleteTimeout = undefined;
+            if (this.eventQueueClosed || generation !== this.fileAutocompleteGeneration) return;
+            if (readActiveFilePrefix(this.state.inputMirror) !== prefix) return;
+            this.refreshFileAutocomplete();
+            this.publish();
+        }, FILE_AUTOCOMPLETE_DEBOUNCE_MS);
+    }
+
+    private invalidateFileAutocompleteRefresh(): void {
+        this.fileAutocompleteGeneration += 1;
+        const timeout = this.fileAutocompleteTimeout;
+        if (timeout === undefined) return;
+        this.fileAutocompleteTimeout = undefined;
+        clearTimeout(timeout);
+    }
+
     private refreshFileAutocomplete(): void {
         const prefix = readActiveFilePrefix(this.state.inputMirror);
         if (prefix === undefined) {
@@ -1987,6 +2913,41 @@ export class ChatStore {
         this.state.fileAutocomplete = updateFileAutocomplete(this.state.fileAutocomplete, prefix, this.workspaceRoot, {
             frecencyKeys: this.fileFrecencyKeys,
         });
+    }
+
+    /** Sticky cue when the live in-memory view drops older rows/text under cap. */
+    private noteLiveHistoryTruncation(): void {
+        if (this.eventQueueClosed) return;
+        if (this.state.stickyNotice === LIVE_HISTORY_TRUNCATED_NOTICE) return;
+        this.state.stickyNotice = LIVE_HISTORY_TRUNCATED_NOTICE;
+    }
+
+    /** Touch the stream-silence activity clock (wall time; display-only). */
+    private noteStreamActivity(): void {
+        this.state.lastStreamActivityAt = Date.now();
+    }
+
+    /** Escalate sticky notice when context fill crosses warn/critical thresholds. */
+    private refreshContextPressureNotice(): void {
+        if (this.eventQueueClosed) return;
+        const pressure = contextPressureStatus(this.state.contextTokensUsed, this.state.contextTokensMax);
+        if (pressure.notice === undefined) return;
+        // Do not clobber an active overflow recovery notice with a softer fill warning.
+        if (this.state.stickyNotice !== null && this.state.stickyNotice.includes('Context overflow')) {
+            return;
+        }
+        if (this.state.stickyNotice === pressure.notice) return;
+        this.state.stickyNotice = pressure.notice;
+    }
+
+    /** Sticky recovery cue when overflow error text is emitted into the transcript. */
+    private noteContextOverflowFromText(text: string): void {
+        if (this.eventQueueClosed) return;
+        if (!isContextOverflowMessage(text)) return;
+        const notice = contextOverflowRecoveryNotice(text);
+        if (this.state.stickyNotice === notice) return;
+        this.state.stickyNotice = notice;
+        this.publish();
     }
 }
 

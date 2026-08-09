@@ -95,3 +95,20 @@ function requireScope(scope: TuiStoreTestScope | undefined): TuiStoreTestScope {
     }
     throw new Error('test scope missing');
 }
+
+describe('TuiFrecencyStore concurrency', () => {
+    it('serializes concurrent recordAccess without dropping counts', async () => {
+        const { mkdtemp } = await import('node:fs/promises');
+        const { tmpdir } = await import('node:os');
+        const { join } = await import('node:path');
+        const dir = await mkdtemp(join(tmpdir(), 'mctrl-frecency-'));
+        const store = new TuiFrecencyStore({ dataDir: dir, now: () => 1000 });
+        await Promise.all([
+            store.recordAccess('a'),
+            store.recordAccess('a'),
+            store.recordAccess('a'),
+        ]);
+        const records = await store.listRecords();
+        expect(records.find((record) => record.key === 'a')?.accessCount).toBe(3);
+    });
+});

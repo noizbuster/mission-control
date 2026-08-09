@@ -1,6 +1,8 @@
 /** @jsxImportSource @opentui/solid */
 
 import type { JSX } from 'solid-js';
+import { DiagnosticsOverlay } from '../components/DiagnosticsOverlay';
+import { TipsOverlay } from '../components/TipsOverlay';
 import { MissionPanelOverlay } from '../components/MissionPanelOverlay';
 import { AgentsDashboardOverlay, ModelPickerOverlay, SessionPickerOverlay } from '../components/OverlayPanels';
 import type { ChatAppActions } from '../state/chat-app-actions';
@@ -48,6 +50,16 @@ export function ModalOverlays(props: ModalOverlaysProps): JSX.Element {
                             ? { services: props.missionControlServices }
                             : {})}
                     />
+                </ModalPopup>
+            ) : null}
+            {props.overlayMode === 'diagnostics' ? (
+                <ModalPopup>
+                    <DiagnosticsOverlay store={props.store} />
+                </ModalPopup>
+            ) : null}
+            {props.overlayMode === 'tips' ? (
+                <ModalPopup>
+                    <TipsOverlay />
                 </ModalPopup>
             ) : null}
         </>

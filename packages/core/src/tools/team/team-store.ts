@@ -95,10 +95,30 @@ async function ensureTeamDir(root: string, teamRunId: string): Promise<void> {
 
 // --- State + config persistence ------------------------------------------
 
-export async function writeState(root: string, state: TeamState): Promise<void> {
+/** Process-local per-teamRunId chains so concurrent lifecycle RMW cannot clobber. */
+const teamStateWriteChains = new Map<string, Promise<unknown>>();
+
+function enqueueTeamStateWrite<T>(teamRunId: string, task: () => Promise<T>): Promise<T> {
+    const previous = teamStateWriteChains.get(teamRunId) ?? Promise.resolve();
+    const run = previous.then(task, task);
+    teamStateWriteChains.set(
+        teamRunId,
+        run.then(
+            () => undefined,
+            () => undefined,
+        ),
+    );
+    return run;
+}
+
+async function writeStateUnchained(root: string, state: TeamState): Promise<void> {
     const validated = teamStateSchema.parse(state);
     await ensureTeamDir(root, state.teamRunId);
     await atomicWriteJsonFile(statePath(root, state.teamRunId), validated);
+}
+
+export async function writeState(root: string, state: TeamState): Promise<void> {
+    return enqueueTeamStateWrite(state.teamRunId, async () => writeStateUnchained(root, state));
 }
 
 export async function readState(root: string, teamRunId: string): Promise<TeamState> {
@@ -120,9 +140,13 @@ export async function readState(root: string, teamRunId: string): Promise<TeamSt
     return result.data;
 }
 
-export async function writeConfig(root: string, teamRunId: string, spec: TeamSpec): Promise<void> {
+async function writeConfigUnchained(root: string, teamRunId: string, spec: TeamSpec): Promise<void> {
     await ensureTeamDir(root, teamRunId);
     await atomicWriteJsonFile(configPath(root, teamRunId), spec);
+}
+
+export async function writeConfig(root: string, teamRunId: string, spec: TeamSpec): Promise<void> {
+    return enqueueTeamStateWrite(teamRunId, async () => writeConfigUnchained(root, teamRunId, spec));
 }
 
 /** Read-modify-write a single team state. Refreshes `updatedAt`. */
@@ -132,14 +156,17 @@ export async function updateState(
     mutator: (state: TeamState) => TeamState,
     now: () => string = () => new Date().toISOString(),
 ): Promise<TeamState> {
-    const current = await readState(root, teamRunId);
-    if (current.status === 'deleted') {
-        throw new TeamStoreError(`team ${teamRunId} is deleted`, 'team_deleted');
-    }
-    const next = mutator({ ...current, updatedAt: now() });
-    await writeState(root, next);
-    return next;
+    return enqueueTeamStateWrite(teamRunId, async () => {
+        const current = await readState(root, teamRunId);
+        if (current.status === 'deleted') {
+            throw new TeamStoreError(`team ${teamRunId} is deleted`, 'team_deleted');
+        }
+        const next = mutator({ ...current, updatedAt: now() });
+        await writeStateUnchained(root, next);
+        return next;
+    });
 }
+
 
 // --- Member lifecycle helpers --------------------------------------------
 
@@ -506,23 +533,25 @@ export async function deleteTeam(
     root: string,
     teamRunId: string,
 ): Promise<{ removedWorktrees: string[]; worktreeErrors: string[] }> {
-    const state = await readState(root, teamRunId);
-    const removedWorktrees: string[] = [];
-    const worktreeErrors: string[] = [];
-    for (const member of state.members) {
-        if (member.worktreePath !== undefined && member.worktreePath.length > 0) {
-            try {
-                await rm(member.worktreePath, { recursive: true, force: true });
-                removedWorktrees.push(member.worktreePath);
-            } catch (error: unknown) {
-                worktreeErrors.push(error instanceof Error ? error.message : String(error));
+    return enqueueTeamStateWrite(teamRunId, async () => {
+        const state = await readState(root, teamRunId);
+        const removedWorktrees: string[] = [];
+        const worktreeErrors: string[] = [];
+        for (const member of state.members) {
+            if (member.worktreePath !== undefined && member.worktreePath.length > 0) {
+                try {
+                    await rm(member.worktreePath, { recursive: true, force: true });
+                    removedWorktrees.push(member.worktreePath);
+                } catch (error: unknown) {
+                    worktreeErrors.push(error instanceof Error ? error.message : String(error));
+                }
             }
         }
-    }
-    const deleted: TeamState = { ...state, status: 'deleted', updatedAt: new Date().toISOString() };
-    await writeState(root, deleted);
-    await rm(teamDir(root, teamRunId), { recursive: true, force: true });
-    return { removedWorktrees, worktreeErrors };
+        const deleted: TeamState = { ...state, status: 'deleted', updatedAt: new Date().toISOString() };
+        await writeStateUnchained(root, deleted);
+        await rm(teamDir(root, teamRunId), { recursive: true, force: true });
+        return { removedWorktrees, worktreeErrors };
+    });
 }
 
 // --- Misc helpers --------------------------------------------------------

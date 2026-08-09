@@ -33,11 +33,22 @@ export type TuiPluginManifestStoreOptions = {
 export class TuiPluginManifestStore {
     readonly filePath: string;
     private readonly maxEntries: number;
+    /** Serialize read-modify-write so concurrent save/remove/append cannot drop rows. */
+    private writeChain: Promise<void> = Promise.resolve();
 
     constructor(options: TuiPluginManifestStoreOptions = {}) {
         const dataDir = options.dataDir ?? resolveMissionControlDataDir();
         this.filePath = options.filePath ?? join(dataDir, 'tui', 'plugin-manifests.json');
         this.maxEntries = options.maxEntries ?? TUI_PLUGIN_MANIFEST_MAX_ENTRIES;
+    }
+
+    private enqueue<T>(task: () => Promise<T>): Promise<T> {
+        const run = this.writeChain.then(task, task);
+        this.writeChain = run.then(
+            () => undefined,
+            () => undefined,
+        );
+        return run;
     }
 
     async listManifests(): Promise<readonly TuiPluginManifest[]> {
@@ -46,19 +57,26 @@ export class TuiPluginManifestStore {
 
     async saveManifest(manifest: TuiPluginManifestInput): Promise<void> {
         const parsedManifest = TuiPluginManifestSchema.parse(manifest);
-        const file = await this.readFile();
-        await this.writeFile({
-            ...file,
-            manifests: [
-                ...file.manifests.filter((candidate) => candidate.name !== parsedManifest.name),
-                parsedManifest,
-            ].slice(-this.maxEntries),
+        await this.enqueue(async () => {
+            const file = await this.readFile();
+            await this.writeFile({
+                ...file,
+                manifests: [
+                    ...file.manifests.filter((candidate) => candidate.name !== parsedManifest.name),
+                    parsedManifest,
+                ].slice(-this.maxEntries),
+            });
         });
     }
 
     async removeManifest(name: string): Promise<void> {
-        const file = await this.readFile();
-        await this.writeFile({ ...file, manifests: file.manifests.filter((manifest) => manifest.name !== name) });
+        await this.enqueue(async () => {
+            const file = await this.readFile();
+            await this.writeFile({
+                ...file,
+                manifests: file.manifests.filter((manifest) => manifest.name !== name),
+            });
+        });
     }
 
     async listCapabilities(): Promise<readonly TuiPluginCapability[]> {
@@ -74,10 +92,13 @@ export class TuiPluginManifestStore {
     }
 
     async appendDiagnostic(diagnostic: TuiPluginDiagnostic): Promise<void> {
-        const file = await this.readFile();
-        await this.writeFile({
-            ...file,
-            diagnostics: [...file.diagnostics, TuiPluginDiagnosticSchema.parse(diagnostic)].slice(-this.maxEntries),
+        const parsed = TuiPluginDiagnosticSchema.parse(diagnostic);
+        await this.enqueue(async () => {
+            const file = await this.readFile();
+            await this.writeFile({
+                ...file,
+                diagnostics: [...file.diagnostics, parsed].slice(-this.maxEntries),
+            });
         });
     }
 

@@ -68,6 +68,12 @@ function createTuiToastService(): TuiToastService {
     const [current, setCurrent] = createSignal<TuiToastMessage | null>(null);
     let nextToastId = 0;
     let dismissTimer: ReturnType<typeof setTimeout> | undefined;
+    let disposed = false;
+
+    onCleanup(() => {
+        disposed = true;
+        clearTimer();
+    });
 
     function clearTimer(): void {
         if (dismissTimer !== undefined) {
@@ -82,11 +88,15 @@ function createTuiToastService(): TuiToastService {
     }
 
     function show(input: TuiToastInput): void {
+        if (disposed) return;
         const duration = input.duration ?? defaultToastDurationMs;
         nextToastId += 1;
         setCurrent(Object.freeze({ id: nextToastId, message: input.message, variant: input.variant, duration, ...input.title !== undefined ? { title: input.title } : {} }));
         clearTimer();
-        dismissTimer = setTimeout(clear, duration);
+        dismissTimer = setTimeout(() => {
+            if (disposed) return;
+            clear();
+        }, duration);
     }
 
     function error(errorValue: unknown): void {

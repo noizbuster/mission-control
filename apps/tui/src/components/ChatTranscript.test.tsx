@@ -71,7 +71,6 @@ describe('ChatTranscript component exports', () => {
     });
 });
 
-
 describe('ChatTranscript stream-stability topology', () => {
     it('lists blocks with Index (position) not For (identity) to avoid remount flicker', () => {
         const source = readFileSync(resolve(process.cwd(), 'apps/tui/src/components/ChatTranscript.tsx'), 'utf8');
@@ -79,9 +78,10 @@ describe('ChatTranscript stream-stability topology', () => {
             resolve(process.cwd(), 'apps/tui/src/components/LegacyTranscriptRenderer.tsx'),
             'utf8',
         );
-        expect(source).toContain('<Index each={props.blocks}>');
+        expect(source).toContain('<Index each={props.blocks}>'); // legacy window still Index-positioned
         expect(source).not.toContain('<For each={props.blocks}>');
-        expect(source).toContain('isStreaming={props.generating && index === props.blocks.length - 1}');
+        expect(source).toContain('isStreaming={props.generating && absoluteIndex() === props.totalBlockCount - 1}');
+        expect(source).toContain('selectTranscriptWindowByHeight');
         expect(legacySource).toContain('const joined = () => joinBlockText(lines(), prefix())');
         expect(legacySource).toContain('streaming={streaming()}');
     });
@@ -91,7 +91,11 @@ describe('ChatTranscript stream-stability topology', () => {
         const transcriptFn = source.slice(source.indexOf('export function ChatTranscript'));
 
         expect(transcriptFn).toContain('props.transcriptParts.length > 0');
-        expect(transcriptFn).toContain('<Index each={props.transcriptParts}>');
+        expect(transcriptFn).toContain('selectTranscriptWindowByHeight');
+        expect(transcriptFn).toContain('heightCache');
+        expect(transcriptFn).toContain('bindMeasuredRow');
+        expect(transcriptFn).toContain('anchorIndexForTranscriptOffset');
+        expect(transcriptFn).toContain('<Index each={typedWindow().visibleParts}>');
         expect(transcriptFn).toContain('<TranscriptPartRenderer');
         expect(transcriptFn).toContain('fallback={');
         expect(transcriptFn).toContain('<LegacyTranscriptBlocks');
@@ -99,6 +103,12 @@ describe('ChatTranscript stream-stability topology', () => {
         expect(transcriptFn).toContain('transcriptParts={props.transcriptParts}');
         expect(transcriptFn).toContain('toolOutputExpanded={props.toolOutputExpanded}');
         expect(transcriptFn).toContain('activeAssistantMessageId');
+        expect(transcriptFn).toContain('formatHiddenTranscriptBanner');
+        expect(transcriptFn).toContain('transcriptWindowSpacerHeights');
+        expect(transcriptFn).toContain('typedSpacers().beforeRows');
+        expect(transcriptFn).toContain('typedSpacers().afterRows');
+        expect(transcriptFn).toContain('legacySpacers().beforeRows');
+        expect(transcriptFn).toContain('legacySpacers().afterRows');
     });
 
     it('passes final-row position reactively to typed transcript rows', () => {
@@ -119,7 +129,7 @@ describe('ChatTranscript stream-stability topology', () => {
         // When: the source topology is checked without native FFI rendering.
 
         // Then: only the current final legacy part receives streaming ownership.
-        expect(transcriptSource).toContain('isLast={index === props.transcriptParts.length - 1}');
+        expect(transcriptSource).toContain('isLast={absoluteIndex() === typedWindow().totalCount - 1}');
         expect(rendererSource).toContain('isLast={props.isLast}');
         expect(rowsSource).toContain('isFinalLegacyPartStreaming(props.generating, props.isLast)');
     });

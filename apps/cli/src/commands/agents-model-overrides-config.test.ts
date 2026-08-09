@@ -325,3 +325,20 @@ async function writeGarbage(path: string, contents: string): Promise<void> {
     await mkdir(join(path, '..'), { recursive: true });
     writeFileSync(path, contents, 'utf8');
 }
+
+describe('agents-model-overrides concurrent RMW', () => {
+    it('serializes concurrent setOverride without dropping keys', async () => {
+        const { mkdtemp } = await import('node:fs/promises');
+        const { tmpdir } = await import('node:os');
+        const { join } = await import('node:path');
+        const dir = await mkdtemp(join(tmpdir(), 'mctrl-overrides-'));
+        const options = { workspaceRoot: dir, overridesConfigPath: join(dir, 'overrides.json') };
+        await Promise.all([
+            setOverride(options, 'a', 'openai/a'),
+            setOverride(options, 'b', 'openai/b'),
+            setOverride(options, 'c', 'openai/c'),
+        ]);
+        const map = await readOverridesMap(options);
+        expect([...map.keys()].sort()).toEqual(['a', 'b', 'c']);
+    });
+});

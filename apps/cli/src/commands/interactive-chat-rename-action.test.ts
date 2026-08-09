@@ -192,4 +192,24 @@ describe('rename action handler', () => {
 
         expect(persisted).toEqual([]);
     });
+
+    it('does not pre-update controller when onSessionRenamed is provided', async () => {
+        const output = createCapturingOutput();
+        const { controller, name } = createController();
+        controller.update('prior-name');
+        let sawDuringPersist: string | undefined;
+        await runRenameAction(
+            output,
+            { providerID: 'local', modelID: 'local-echo' },
+            { kind: 'rename', name: 'next-name' },
+            controller,
+            undefined,
+            async () => {
+                sawDuringPersist = name();
+            },
+        );
+        // runRenameAction must not optimistically update before/during onSessionRenamed;
+        // applySessionRenameEffects owns optimism so durable-fail can roll back.
+        expect(sawDuringPersist).toBe('prior-name');
+    });
 });

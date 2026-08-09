@@ -141,6 +141,8 @@ export interface SessionShortcutsDeps {
     readonly clearInput: () => void;
     /** Restore a stashed draft EXACTLY (text + cursor). */
     readonly restoreInput: (entry: PromptStashEntry) => void;
+    /** When false after an async stash hop, skip clear/restore (teardown/overlay/history). */
+    readonly isLive?: () => boolean;
     /** Surface a one-line notice (bridge.emitOutput). */
     readonly emitNotice: (text: string) => void;
     /**
@@ -226,6 +228,7 @@ export function registerSessionShortcutsLayer<TTarget extends object, TEvent ext
     const stashCount = (): number => options.promptStashService?.count() ?? stash.size;
     const stashCountNotice = (): string => `Prompt stash: ${stashCount()} stashed draft(s)\n`;
     const emitPromptStashError = (error: unknown): void => {
+        if (deps.isLive?.() === false) return;
         deps.emitNotice(`Prompt stash: ${error instanceof Error ? error.message : 'operation failed'}\n`);
     };
 
@@ -290,6 +293,7 @@ export function registerSessionShortcutsLayer<TTarget extends object, TEvent ext
                 void service
                     .pushDraft(entry)
                     .then(() => {
+                        if (deps.isLive?.() === false) return;
                         deps.clearInput();
                         deps.emitNotice(stashCountNotice());
                     })
@@ -306,6 +310,7 @@ export function registerSessionShortcutsLayer<TTarget extends object, TEvent ext
                     void service
                         .popDraft()
                         .then((entry) => {
+                            if (deps.isLive?.() === false) return;
                             if (entry === undefined) {
                                 deps.emitNotice('Prompt stash: empty\n');
                                 return;

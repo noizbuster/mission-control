@@ -21,15 +21,27 @@ import type { WelcomeData } from './welcome-data-types';
 /** Public surface consumed by the imperative chat loop. */
 export type ChatTuiHandle = {
     readonly waitForEvent: () => Promise<ChatInputEvent>;
+    /** Inject a UI input event into the imperative loop (compact auto-heal, etc.). */
+    readonly enqueueEvent: (event: ChatInputEvent) => boolean;
     readonly emitOutput: (text: string) => void;
     readonly emitTranscriptPart: (part: TranscriptPart, fallbackText: string) => void;
     readonly emitTranscriptFallback: (text: string) => void;
     readonly replaceOutputText: (text: string) => void;
+    /**
+     * Hide the last complete user/assistant exchange from the live VIEW only.
+     * Keeps typed transcriptParts aligned with outputText. Durable store untouched.
+     */
+    readonly undoLastViewExchange: () => 'ok' | 'generating' | 'empty' | 'already' | 'blocked';
+    /** Restore the single stashed view exchange (leader+r / /redo). */
+    readonly redoLastViewExchange: () => 'ok' | 'generating' | 'empty' | 'blocked';
     readonly replaceTranscript: (parts: readonly TranscriptPart[], outputText: string) => void;
     readonly getOutput: () => string;
+    /** Fires after replaceTranscript/replaceOutputText change the live output. */
+    readonly subscribeOutput: (listener: (output: string) => void) => () => void;
     readonly showModelPicker: (choices: readonly ModelChoice[]) => Promise<ModelProviderSelection | undefined>;
     readonly showSessionPicker: (entries: readonly SessionPickerEntry[]) => Promise<string | undefined>;
     readonly showAgentsDashboard: (entries: readonly DashboardAgentEntry[]) => void;
+    readonly isAgentsDurableBusy: () => boolean;
     readonly reloadAgentsDashboard: (entries: readonly DashboardAgentEntry[]) => void;
     readonly hideAgentsDashboard: () => void;
     readonly showMissionPanel: (rows?: readonly MissionPanelRow[]) => void;
@@ -42,8 +54,15 @@ export type ChatTuiHandle = {
     readonly showLevelPicker: (currentLevel?: string) => Promise<string | undefined>;
     readonly setApprovalLevel: (level: ApprovalLevel | undefined) => void;
     readonly setSessionId: (sessionId: string) => void;
+    /** Current store session id (for post-await staleness checks). */
+    readonly getSessionId: () => string;
+    /** True after closeEventQueue; late UI applies must no-op. */
+    readonly isEventQueueClosed: () => boolean;
     readonly setSessionDisplayName: (name: string | undefined) => void;
     readonly setContextTokensUsed: (used: number | undefined) => void;
+    readonly setContextTokensMaxFromStep: (max: number | undefined) => void;
+    readonly beginContextMaxReseed: () => number;
+    readonly shouldApplyContextMaxReseed: (epoch: number) => boolean;
     readonly setContextTokensMax: (max: number | undefined) => void;
     readonly setContextCacheUsage: (usage: ContextCacheUsage | undefined) => void;
     readonly setModelCycleChoices: (choices: readonly ModelChoice[]) => void;
@@ -101,6 +120,15 @@ export type ChatTuiRuntimeOptions = {
     readonly gitBranch?: string;
     readonly isWorktree?: boolean;
     readonly initialHistoryEntries?: readonly HistoryPickerEntry[];
+    /**
+     * Optional durable history store shared with CLI (same writeChain instance).
+     * When omitted, the provider constructs its own store for hydrate/tests only.
+     */
+    readonly promptHistoryStore?: {
+        readonly listEntries: () => Promise<readonly HistoryPickerEntry[]>;
+        readonly listTexts: () => Promise<readonly string[]>;
+        readonly appendText: (text: string) => Promise<HistoryPickerEntry | undefined>;
+    };
     readonly initialApprovalLevel?: ApprovalLevel;
     readonly authStore?: ProviderAuthStore;
     readonly abgOverlayController?: AbgOverlayController;

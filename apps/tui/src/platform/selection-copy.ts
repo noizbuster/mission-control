@@ -52,7 +52,17 @@ export interface Toast {
  * synchronously. Returns `false` when there is no selection or the selected
  * text is empty, without touching the clipboard.
  */
-export function copy(renderer: SelectionCopyRenderer, toast: Toast, clipboardService: ClipboardService): boolean {
+export type SelectionCopyOptions = {
+    /** When false after the async clipboard hop, skip toast (teardown/unmount). */
+    readonly isLive?: () => boolean;
+};
+
+export function copy(
+    renderer: SelectionCopyRenderer,
+    toast: Toast,
+    clipboardService: ClipboardService,
+    options?: SelectionCopyOptions,
+): boolean {
     const selection = renderer.getSelection();
     if (!selection) return false;
 
@@ -65,8 +75,18 @@ export function copy(renderer: SelectionCopyRenderer, toast: Toast, clipboardSer
 
     clipboardService
         .copyToClipboard(clipboardText)
-        .then(() => toast.show({ message: 'Copied to clipboard', variant: 'info' }))
-        .catch(toast.error);
+        .then((ok) => {
+            if (options?.isLive?.() === false) return;
+            if (!ok) {
+                toast.show({ message: 'Clipboard unavailable in this terminal', variant: 'warning' });
+                return;
+            }
+            toast.show({ message: 'Copied to clipboard', variant: 'info' });
+        })
+        .catch((error: unknown) => {
+            if (options?.isLive?.() === false) return;
+            toast.error(error);
+        });
 
     renderer.clearSelection();
     return true;

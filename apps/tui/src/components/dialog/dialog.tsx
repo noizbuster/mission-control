@@ -240,10 +240,22 @@ function DialogFrame(props: ParentProps): JSX.Element {
 
 type ListRow = { readonly label: string; readonly description?: string };
 
-function useListNavigation(count: () => number, onSelect: (index: number) => void, onCancel: () => void) {
-    const [selected, setSelected] = createSignal(0);
+function useListNavigation(
+    count: () => number,
+    onSelect: (index: number) => void,
+    onCancel: () => void,
+    initialSelected: () => number = () => 0,
+) {
+    const seed = initialSelected();
+    const len0 = count();
+    const [selected, setSelected] = createSignal(
+        len0 <= 0 ? 0 : Math.min(Math.max(0, seed), len0 - 1),
+    );
+    // Key-repeat / double-fire guard: one select or cancel per mount.
+    let settled = false;
 
     useKeyboard((key) => {
+        if (settled) return;
         const len = count();
         if (len === 0) return;
         if (key.name === 'up' || (key.ctrl && key.name === 'p')) {
@@ -258,11 +270,13 @@ function useListNavigation(count: () => number, onSelect: (index: number) => voi
         }
         if (key.name === 'return') {
             key.preventDefault();
+            settled = true;
             onSelect(selected());
             return;
         }
         if (key.name === 'escape') {
             key.preventDefault();
+            settled = true;
             onCancel();
             return;
         }
@@ -270,6 +284,7 @@ function useListNavigation(count: () => number, onSelect: (index: number) => voi
 
     return selected;
 }
+
 
 function ListView(props: {
     readonly title: string;
@@ -302,14 +317,18 @@ function RenameDialogBox(props: { store: ChatStore }): JSX.Element {
     const snapshot = useSolidStoreSelector(props.store, (s) => s);
     const [buffer, setBuffer] = createSignal(snapshot().renameBuffer);
 
+    let settled = false;
     useKeyboard((key) => {
+        if (settled) return;
         if (key.name === 'return') {
             key.preventDefault();
+            settled = true;
             props.store.submitRename(buffer());
             return;
         }
         if (key.name === 'escape') {
             key.preventDefault();
+            settled = true;
             props.store.cancelRename();
             return;
         }
@@ -351,10 +370,11 @@ function ApprovalDialogBox(props: { store: ChatStore }): JSX.Element {
     const selected = useListNavigation(
         () => rows.length,
         (index) => {
-            props.store.hideApproval();
-            props.store.enqueueEvent({ type: 'line', value: APPROVAL_OPTIONS[index]!.key });
+            props.store.confirmApproval(index);
         },
-        () => props.store.hideApproval(),
+        () => {
+            props.store.denyApproval();
+        },
     );
 
     const toolName = () => snapshot().approvalToolName;
@@ -396,6 +416,7 @@ function LevelPickerDialogBox(props: { store: ChatStore }): JSX.Element {
         () => rows.length,
         (index) => props.store.hideLevelPicker(APPROVAL_LEVEL_PICKER_ENTRIES[index]!.id),
         () => props.store.hideLevelPicker(undefined),
+        () => props.store.getSnapshot().levelPickerSelectedIndex,
     );
 
     return (

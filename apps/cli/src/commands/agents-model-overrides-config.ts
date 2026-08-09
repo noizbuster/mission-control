@@ -46,6 +46,22 @@ const EMPTY_DOC: OverridesDoc = {
     extra: {},
 };
 
+/** Process-local per-path chains so concurrent setOverride RMW cannot drop keys. */
+const writeChains = new Map<string, Promise<void>>();
+
+function enqueuePathWrite<T>(path: string, task: () => Promise<T>): Promise<T> {
+    const previous = writeChains.get(path) ?? Promise.resolve();
+    const run = previous.then(task, task);
+    writeChains.set(
+        path,
+        run.then(
+            () => undefined,
+            () => undefined,
+        ),
+    );
+    return run;
+}
+
 export function resolveOverridesConfigPath(options: OverridesConfigOptions): string {
     return options.overridesConfigPath ?? join(options.workspaceRoot, '.mctrl', 'agents.model-overrides.json');
 }
@@ -66,16 +82,19 @@ export async function setOverride(
     name: string,
     value: string | undefined,
 ): Promise<SetOverrideOutcome> {
-    const doc = await readOverridesDoc(options);
-    const current = new Map(doc.overrides);
-    const alreadySet = current.get(name) === value;
-    if (value === undefined) {
-        current.delete(name);
-    } else {
-        current.set(name, value);
-    }
-    await writeOverridesDoc(options, { ...doc, overrides: current });
-    return { alreadySet };
+    const path = resolveOverridesConfigPath(options);
+    return enqueuePathWrite(path, async () => {
+        const doc = await readOverridesDoc(options);
+        const current = new Map(doc.overrides);
+        const alreadySet = current.get(name) === value;
+        if (value === undefined) {
+            current.delete(name);
+        } else {
+            current.set(name, value);
+        }
+        await writeOverridesDoc(options, { ...doc, overrides: current });
+        return { alreadySet };
+    });
 }
 
 /** Remove the override for `name` (no-op when absent). */

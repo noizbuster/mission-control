@@ -11,7 +11,9 @@ OpenTUI platform layer: renderer mount/unmount, terminal viewport normalize, OSC
 
 | File | Description |
 |------|-------------|
-| `opentui-renderer.ts` | `mountOpenTui` / unmount; dynamic-imports createCliRenderer + Solid root/render; idempotent unmount; resize full-paint attach |
+| `opentui-renderer.ts` | `mountOpenTui` / unmount; dynamic-imports createCliRenderer + Solid root/render; idempotent unmount; resize full-paint attach; arms LoopWatchdog + emergency restore |
+| `loop-watchdog.ts` | Event-loop lag probe (omp-aligned); rising-edge stall log; unref'd timer |
+| `emergency-terminal-restore.ts` | Crash-safe terminal mode restore; alt-screen gated DECRST 1049; global hook for CLI crash-guard |
 | `opentui-renderer.test.ts` | Mount lifecycle tests |
 | `terminal-viewport.ts` | Pure `TerminalViewport {columns,rows}` normalize helper |
 | `clipboard-service.ts` | OSC52 clipboard service; `isOsc52Supported()` |

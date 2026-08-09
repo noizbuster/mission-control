@@ -3,11 +3,10 @@
 import { errorToString } from '@mission-control/core';
 import type { KeyEvent, PasteEvent } from '@opentui/core';
 import { decodePasteBytes } from '@opentui/core';
-import type { JSX } from 'solid-js';
-import { evaluatePaste, makeMarker } from '../platform/keymap/bracketed-paste';
-import { collectDiffEntries } from '../platform/keymap/diff-viewer';
+import { useContext, createEffect, type JSX } from 'solid-js';
+import { clampPasteText, evaluatePaste, makeMarker } from '../platform/keymap/bracketed-paste';
 import { halfPageScrollDelta } from '../platform/keymap/messages-scroll';
-import { useTuiPromptHistory, useTuiPromptRef } from '../platform/providers/index';
+import { useTuiPromptRef } from '../platform/providers/index';
 import { useSolidStoreSelector } from '../platform/use-solid-store-selector';
 import type { ChatAppActions } from '../state/chat-app-actions';
 import type { ChatStore, ChatStoreState } from '../state/chat-store';
@@ -16,13 +15,11 @@ import {
     isSlashCommandMenuOpen,
     isWorkflowCommandMenuOpen,
     resolveSkillCommandMenuInsertText,
-    resolveSkillCommandMenuSubmission,
     resolveSlashCommandMenuInsertText,
-    resolveSlashCommandMenuSubmission,
     resolveWorkflowCommandMenuInsertText,
-    resolveWorkflowCommandMenuSubmission,
 } from '../state/interactive-chat-command-menu';
 import { buildFileAutocompleteCompletion } from '../state/interactive-chat-file-autocomplete';
+import { PaletteOpenContext } from '../platform/keymap/palette-open-context';
 import { ChatInputTextarea, type ChatTextareaHandle } from './ChatInputTextarea';
 import type { ChatScrollboxHandle } from './ChatTranscript';
 import { applyHistoryRecallText } from './prompt-history-recall';
@@ -67,16 +64,30 @@ export type ChatInputAreaProps = {
 };
 
 export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
+    const paletteOpenState = useContext(PaletteOpenContext);
     const snapshot = useSolidStoreSelector(props.store, selectInputAreaSlice);
-    const promptHistory = useTuiPromptHistory();
     const promptRef = useTuiPromptRef();
     const promptMenuInteractionsEnabled = (): boolean => props.promptMenuInteractionsEnabled ?? true;
-    let submitting = false;
     let lastEsc: number | undefined;
 
     const plainText = (): string => props.textareaRef.get()?.plainText ?? snapshot().inputMirror;
 
+    // Keep native textarea aligned with store inputMirror after draft restore,
+    // soft remount, session-switch draft load, or stash pop when the native
+    // buffer lagged behind the store (store is source of truth for drafts).
+    createEffect(() => {
+        // Track native attach/detach (soft remount) via optional generation signal.
+        props.textareaRef.generation?.();
+        const mirror = snapshot().inputMirror;
+        const textarea = props.textareaRef.get();
+        if (textarea === undefined) return;
+        if (textarea.plainText === mirror) return;
+        textarea.setText(mirror);
+        textarea.gotoBufferEnd();
+    });
+
     const applyFileCompletion = (): boolean => {
+        props.store.ensureFileAutocompleteCurrent();
         const snap = props.store.getSnapshot();
         const completed = buildFileAutocompleteCompletion(snap.fileAutocomplete);
         const textarea = props.textareaRef.get();
@@ -89,7 +100,7 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
         textarea.setText(next);
         textarea.gotoBufferEnd();
         props.store.setInputMirror(next);
-        void promptRef.recordFileReference(fileCompletionFrecencyKey(completed));
+        void promptRef.recordFileReference(fileCompletionFrecencyKey(completed)).catch(() => undefined);
         return true;
     };
 
@@ -100,92 +111,6 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
         props.store.setInputMirror(insertText);
     };
 
-    const handleSubmit = (): void => {
-        const captured = props.textareaRef.get()?.plainText ?? '';
-        if (submitting) return;
-        submitting = true;
-        setTimeout(() => {
-            setTimeout(() => {
-                try {
-                    if (captured.trim() === '') return;
-
-                    const snap = props.store.getSnapshot();
-
-                    if (promptMenuInteractionsEnabled() && snap.fileAutocomplete.open && applyFileCompletion()) {
-                        return;
-                    }
-
-                    if (promptMenuInteractionsEnabled() && captured.startsWith('#')) {
-                        const insertText = resolveWorkflowCommandMenuInsertText(
-                            captured,
-                            snap.menuState,
-                            snap.workflowNames,
-                        );
-                        if (insertText !== undefined) {
-                            props.textareaRef.get()?.setText(insertText);
-                            props.textareaRef.get()?.gotoBufferEnd();
-                            props.store.setInputMirror(insertText);
-                            return;
-                        }
-                    }
-
-                    if (promptMenuInteractionsEnabled() && captured.startsWith('$')) {
-                        const insertText = resolveSkillCommandMenuInsertText(
-                            captured,
-                            snap.menuState,
-                            snap.skillEntries,
-                        );
-                        if (insertText !== undefined) {
-                            props.textareaRef.get()?.setText(insertText);
-                            props.textareaRef.get()?.gotoBufferEnd();
-                            props.store.setInputMirror(insertText);
-                            return;
-                        }
-                    }
-
-                    if (promptMenuInteractionsEnabled() && captured.startsWith('/')) {
-                        const insertText = resolveSlashCommandMenuInsertText(captured, snap.menuState);
-                        if (insertText !== undefined && insertText.trimEnd() !== captured.trimEnd()) {
-                            props.textareaRef.get()?.setText(insertText);
-                            props.textareaRef.get()?.gotoBufferEnd();
-                            props.store.setInputMirror(insertText);
-                            return;
-                        }
-                    }
-
-                    let value = snap.pasteStore.expand(captured);
-
-                    if (promptMenuInteractionsEnabled() && captured.startsWith('/')) {
-                        const resolved = resolveSlashCommandMenuSubmission(captured, snap.menuState);
-                        if (resolved !== captured) value = resolved;
-                    } else if (promptMenuInteractionsEnabled() && captured.startsWith('#')) {
-                        const resolved = resolveWorkflowCommandMenuSubmission(
-                            captured,
-                            snap.menuState,
-                            snap.workflowNames,
-                        );
-                        if (resolved !== captured) value = resolved;
-                    } else if (promptMenuInteractionsEnabled() && captured.startsWith('$')) {
-                        const resolved = resolveSkillCommandMenuSubmission(captured, snap.menuState, snap.skillEntries);
-                        if (resolved !== captured) value = resolved;
-                    }
-
-                    if (value === '/diff') {
-                        props.store.openDiffViewer(collectDiffEntries(props.store.getOutput()));
-                        props.textareaRef.get()?.clear();
-                        return;
-                    }
-
-                    props.store.submitLine(value);
-                    void promptHistory.appendPrompt(value).catch(() => undefined);
-                    props.textareaRef.get()?.clear();
-                } finally {
-                    submitting = false;
-                }
-            }, 0);
-        }, 0);
-    };
-
     const handleContentChange = (text: string): void => {
         props.store.setInputMirror(text);
     };
@@ -193,30 +118,31 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
     const handleKeyDown = (key: KeyEvent): void => {
         const snap = props.store.getSnapshot();
 
-        const hostedOverlayActive =
-            snap.overlayMode === 'rename' ||
-            snap.overlayMode === 'approval' ||
-            snap.overlayMode === 'level-picker' ||
-            snap.overlayMode === 'model-picker' ||
-            snap.overlayMode === 'session-picker';
-
-        if (hostedOverlayActive) {
+        // Any non-none overlay owns the keyboard; do not let the prompt
+        // textarea also consume Enter/Ctrl chords underneath.
+        if (snap.overlayMode !== 'none') {
+            key.preventDefault();
+            return;
+        }
+        // Command palette filter owns printables while open (T8 double-handle).
+        if (paletteOpenState?.open() === true) {
+            key.preventDefault();
+            return;
+        }
+        // History owns the prompt dock; block Ctrl chords (model cycle/editor/etc.)
+        // and transcript scroll chords while still allowing Esc/Tab/Enter and Up/Down.
+        if (
+            snap.historyPicker.open &&
+            (key.ctrl || key.name === 'home' || key.name === 'end' || key.name === 'pageup' || key.name === 'pagedown')
+        ) {
             key.preventDefault();
             return;
         }
 
         if (key.name === 'return' && !key.ctrl && !key.meta && !key.shift) {
+            // Production Enter (including history confirm) is owned by keymap
+            // `chat.submit` → useSubmit. Prevent the native textarea submit path only.
             key.preventDefault();
-            if (snap.historyPicker.open) {
-                const selected = props.store.confirmHistoryPicker();
-                if (selected !== undefined) {
-                    applyHistoryRecallText(props.textareaRef.get(), selected, (text) =>
-                        props.store.setInputMirror(text),
-                    );
-                }
-                return;
-            }
-            handleSubmit();
             return;
         }
 
@@ -371,23 +297,51 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
                     props.store.emitOutput(NO_EDITOR_ACTION_MESSAGE);
                     return;
                 }
-                void props.actions.openExternalEditor(plainText()).then((result) => {
-                    switch (result.kind) {
-                        case 'updated':
-                            props.textareaRef.get()?.setText(result.text);
-                            props.textareaRef.get()?.gotoBufferEnd();
-                            props.store.setInputMirror(result.text);
+                const sessionAtOpen = props.store.getSnapshot().sessionId;
+                void props.actions
+                    .openExternalEditor(plainText())
+                    .then((result) => {
+                        const snap = props.store.getSnapshot();
+                        // Drop stale editor results after teardown, session switch, overlay, or palette.
+                        if (
+                            props.store.isEventQueueClosed() ||
+                            snap.overlayMode !== 'none' ||
+                            snap.sessionId !== sessionAtOpen ||
+                            paletteOpenState?.open() === true ||
+                            snap.historyPicker.open
+                        ) {
                             return;
-                        case 'unavailable':
-                        case 'failed':
-                            props.store.emitOutput(result.message);
-                            return;
-                        default: {
-                            const exhaustive: never = result;
-                            return exhaustive;
                         }
-                    }
-                });
+                        // setInputMirror/emitOutput already no-op after close.
+                        switch (result.kind) {
+                            case 'updated':
+                                props.textareaRef.get()?.setText(result.text);
+                                props.textareaRef.get()?.gotoBufferEnd();
+                                props.store.setInputMirror(result.text);
+                                return;
+                            case 'unavailable':
+                            case 'failed':
+                                props.store.emitOutput(result.message);
+                                return;
+                            default: {
+                                const exhaustive: never = result;
+                                return exhaustive;
+                            }
+                        }
+                    })
+                    .catch((error: unknown) => {
+                        const snap = props.store.getSnapshot();
+                        if (
+                            props.store.isEventQueueClosed() ||
+                            snap.overlayMode !== 'none' ||
+                            snap.sessionId !== sessionAtOpen ||
+                            paletteOpenState?.open() === true ||
+                            snap.historyPicker.open
+                        ) {
+                            return;
+                        }
+                        props.store.emitOutput(`Error: external editor failed: ${errorToString(error)}\n`);
+                    });
                 return;
             }
             if (key.name === 'r') {
@@ -426,63 +380,23 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
             return;
         }
 
-        if (key.name === 'up' || key.name === 'down') {
-            const direction: 'up' | 'down' = key.name;
-            const buffer = plainText();
-            const slashMenuOpen = promptMenuInteractionsEnabled() && isSlashCommandMenuOpen(buffer);
-            const workflowMenuOpen = promptMenuInteractionsEnabled() && isWorkflowCommandMenuOpen(buffer);
-            const skillMenuOpen = promptMenuInteractionsEnabled() && isSkillCommandMenuOpen(buffer);
-            const fileAutoOpen = promptMenuInteractionsEnabled() && snap.fileAutocomplete.open;
-
-            if (promptMenuInteractionsEnabled() && snap.historyPicker.open) {
-                key.preventDefault();
-                props.store.navigateHistoryPicker(direction);
-                return;
-            }
-
-            if (slashMenuOpen) {
-                key.preventDefault();
-                props.store.navigateSlashMenu(direction);
-                return;
-            }
-            if (workflowMenuOpen) {
-                key.preventDefault();
-                props.store.navigateWorkflowMenu(direction);
-                return;
-            }
-            if (skillMenuOpen) {
-                key.preventDefault();
-                props.store.navigateSkillMenu(direction);
-                return;
-            }
-            if (fileAutoOpen) {
-                key.preventDefault();
-                props.store.navigateFileAutocomplete(direction);
-                return;
-            }
-
-            if (
-                promptMenuInteractionsEnabled() &&
-                direction === 'up' &&
-                (props.textareaRef.get()?.cursorOffset ?? 0) === 0 &&
-                !slashMenuOpen &&
-                !workflowMenuOpen &&
-                !skillMenuOpen &&
-                !fileAutoOpen
-            ) {
-                key.preventDefault();
-                props.store.openHistoryPicker(buffer);
-                return;
-            }
-        }
+        // Up/Down menu + history navigation is owned by keymap layers
+        // (menu-navigation + prompt-history-recall), not the textarea sink.
     };
 
     const handlePaste = (event: PasteEvent): void => {
-        const text = decodePasteBytes(event.bytes);
+        const snap = props.store.getSnapshot();
+        // Decision/view overlays and command palette own the keyboard.
+        if (snap.overlayMode !== 'none' || paletteOpenState?.open() === true || snap.historyPicker.open) {
+            event.preventDefault();
+            return;
+        }
+        const text = clampPasteText(decodePasteBytes(event.bytes));
         const decision = evaluatePaste(text);
         if (decision.kind === 'literal') return;
         event.preventDefault();
         const id = props.store.registerPaste(text);
+        if (id < 0) return;
         props.textareaRef.get()?.insertText(makeMarker(id, decision.lineCount, decision.charCount));
     };
 
@@ -491,7 +405,9 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
             <ChatInputTextarea
                 textareaRef={props.textareaRef}
                 focused={props.focused}
-                onSubmit={handleSubmit}
+                onSubmit={() => {
+                    /* chat.submit keymap owns Enter */
+                }}
                 onContentChange={handleContentChange}
                 onCursorChange={noopCursorChange}
                 onKeyDown={handleKeyDown}

@@ -91,6 +91,7 @@ export const Definitions = {
     thinking_toggle: keybind('ctrl+t', 'Toggle thinking/reasoning display'),
     tool_expand: keybind('ctrl+o', 'Toggle tool output expansion'),
     tips_toggle: keybind('<leader>h', 'Toggle tips'),
+    diagnostics_toggle: keybind('<leader>d', 'Toggle diagnostics panel'),
 
     // model
     model_cycle: keybind('ctrl+p', 'Cycle to next model'),
@@ -213,6 +214,7 @@ export const CommandMap = {
     thinking_toggle: 'display.thinking.toggle',
     tool_expand: 'tool.expand.toggle',
     tips_toggle: 'tips.toggle',
+    diagnostics_toggle: 'diagnostics.toggle',
     model_cycle: 'model.cycle',
     model_cycle_reverse: 'model.cycle.reverse',
     model_variant_cycle: 'model.variant_cycle',
