@@ -12,6 +12,7 @@ import { runAgentsCommand } from './commands/run-agents-cli';
 import { runSessionCommand } from './commands/session';
 import { installCrashGuard } from './crash-guard';
 import { SessionCliUsageError } from './session-args';
+import { basename } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 export { getVersion } from './cli-version';
@@ -203,7 +204,28 @@ export function writeCliCommandResult(result: CliCommandResult): void {
 
 function isCliEntrypoint(): boolean {
     const entryPath = process.argv[1];
-    return entryPath !== undefined && import.meta.url === pathToFileURL(entryPath).href;
+    if (entryPath === undefined) {
+        return false;
+    }
+    // Unbundled / single-file: this module IS the process entry.
+    try {
+        if (import.meta.url === pathToFileURL(entryPath).href) {
+            return true;
+        }
+    } catch {
+        // Invalid argv path — fall through to basename checks.
+    }
+    // Vite multi-entry lib builds move this module into chunks/, so
+    // import.meta.url no longer matches argv[1] (dist/index.js). Still run when
+    // the process entry is the package bin or source entry. Library importers
+    // keep argv[1] as their own script (e.g. package-script-launcher, vitest).
+    const entryName = basename(entryPath);
+    return (
+        entryName === 'index.js' ||
+        entryName === 'index.tsx' ||
+        entryName === 'mc' ||
+        entryName === 'mctrl'
+    );
 }
 
 if (isCliEntrypoint()) {

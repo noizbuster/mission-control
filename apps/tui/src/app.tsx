@@ -182,7 +182,11 @@ function AppMain(props: { readonly store: ChatStore; readonly remountGeneration:
             paletteOpenState.setOpen(false);
         }
     });
-    const showWelcome = () => welcomeData !== undefined && snapshot().outputText === '' && !overlayActive();
+    const showWelcome = () =>
+        welcomeData !== undefined &&
+        snapshot().outputText === '' &&
+        snapshot().transcriptParts.length === 0 &&
+        !overlayActive();
     const promptRepaintKey = () =>
         promptPanelRepaintKey({
             inputMirror: snapshot().inputMirror,

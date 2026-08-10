@@ -218,6 +218,34 @@ describe('chat command parser', () => {
         });
     });
 
+    it('dispatches /auth to the auth action with parsed subcommand', () => {
+        expect(parseChatLine('/auth')).toEqual({
+            kind: 'auth',
+            auth: {
+                kind: 'invalid',
+                message: '/auth requires a subcommand: login, list, logout',
+            },
+        });
+        expect(parseChatLine('/auth list')).toMatchObject({
+            kind: 'auth',
+            auth: { kind: 'list', args: { command: 'auth-list' } },
+        });
+        expect(parseChatLine('/auth login --provider local')).toMatchObject({
+            kind: 'auth',
+            auth: {
+                kind: 'login',
+                args: { command: 'auth-login', authProviderID: 'local' },
+            },
+        });
+        expect(parseChatLine('/auth logout --provider openai')).toMatchObject({
+            kind: 'auth',
+            auth: {
+                kind: 'logout',
+                args: { command: 'auth-logout', authProviderID: 'openai' },
+            },
+        });
+    });
+
     it('parses /models as the role-assignment overlay action with no arguments', () => {
         expect(parseChatLine('/models')).toEqual({ kind: 'models' });
     });
@@ -401,6 +429,7 @@ describe('chatActionShowsWorkingStatus', () => {
         expect(chatActionShowsWorkingStatus('session-picker')).toBe(false);
         expect(chatActionShowsWorkingStatus('sessions')).toBe(false);
         expect(chatActionShowsWorkingStatus('agents')).toBe(false);
+        expect(chatActionShowsWorkingStatus('auth')).toBe(false);
         expect(chatActionShowsWorkingStatus('approval')).toBe(false);
     });
 

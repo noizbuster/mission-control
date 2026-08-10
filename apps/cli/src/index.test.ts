@@ -16,6 +16,8 @@ describe('CLI entrypoint', () => {
 
         expect(distEntry.startsWith('#!/usr/bin/env -S node --experimental-ffi')).toBe(true);
         expect(source).toContain('export async function runCli');
+        expect(source).toContain("entryName === 'index.js'");
+        expect(source).toContain("entryName === 'mc'");
         expect(getVersion()).toBe('0.1.0');
         expect(help).toContain('mc');
         expect(help).toContain('mctrl remains available as an alias');

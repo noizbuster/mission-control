@@ -1,10 +1,13 @@
 import {
     type CodingReplayStep,
+    type LocalLibsqlDb,
     type LocalSessionEventStore,
     type ObservabilityRedactor,
+    openCanonicalRuntimeDb,
     projectSessionReplay,
     readLocalSessionReplay,
     redactAgentEventForObservability,
+    resolveMissionControlDataDir,
 } from '@mission-control/core';
 import type { AgentEvent, AgentEventEnvelope } from '@mission-control/protocol';
 import type { TranscriptPart } from '@mission-control/tui/state';
@@ -26,6 +29,209 @@ export type ReconstructedTranscript = {
 export type ReconstructedSessionAttach = ReconstructedTranscript & {
     readonly events: readonly AgentEvent[];
 };
+
+/** Display cap for salvaged child yields. Full text remains in `async_jobs`; resume only needs a readable preview. */
+const MAX_SALVAGED_CHILD_OUTPUT_CHARS = 8 * 1024;
+
+/** Child job rows durable in `async_jobs` even when the parent event stream never settled a task tool. */
+export type ResumableChildJob = {
+    readonly jobId: string;
+    readonly childSessionId: string;
+    readonly status: 'completed' | 'failed' | 'cancelled' | 'queued' | 'running';
+    readonly output?: string;
+    readonly title?: string;
+    readonly agentId?: string;
+    readonly completedAt?: string;
+};
+
+const CHILD_JOB_ROW_SCHEMA = {
+    parse(row: Readonly<Record<string, unknown>>): ResumableChildJob | undefined {
+        const jobId = typeof row['job_id'] === 'string' ? row['job_id'] : undefined;
+        const childSessionId =
+            typeof row['child_session_id'] === 'string' ? row['child_session_id'] : undefined;
+        const status = row['status'];
+        if (
+            jobId === undefined ||
+            childSessionId === undefined ||
+            (status !== 'completed' &&
+                status !== 'failed' &&
+                status !== 'cancelled' &&
+                status !== 'queued' &&
+                status !== 'running')
+        ) {
+            return undefined;
+        }
+        const resultJson = typeof row['result_json'] === 'string' ? row['result_json'] : undefined;
+        let output: string | undefined;
+        if (resultJson !== undefined) {
+            try {
+                const parsed: unknown = JSON.parse(resultJson);
+                if (
+                    typeof parsed === 'object' &&
+                    parsed !== null &&
+                    'output' in parsed &&
+                    typeof parsed.output === 'string' &&
+                    parsed.output.length > 0
+                ) {
+                    output = parsed.output;
+                }
+            } catch {
+                // Malformed job result JSON is skipped; resume still shows the job title.
+            }
+        }
+        const title = typeof row['title'] === 'string' && row['title'].length > 0 ? row['title'] : undefined;
+        const agentId =
+            typeof row['agent_id'] === 'string' && row['agent_id'].length > 0 ? row['agent_id'] : undefined;
+        const completedAt =
+            typeof row['completed_at'] === 'string'
+                ? row['completed_at']
+                : typeof row['failed_at'] === 'string'
+                  ? row['failed_at']
+                  : typeof row['cancelled_at'] === 'string'
+                    ? row['cancelled_at']
+                    : undefined;
+        return {
+            jobId,
+            childSessionId,
+            status,
+            ...(output !== undefined ? { output } : {}),
+            ...(title !== undefined ? { title } : {}),
+            ...(agentId !== undefined ? { agentId } : {}),
+            ...(completedAt !== undefined ? { completedAt } : {}),
+        };
+    },
+};
+
+/**
+ * Project durable child `async_jobs` rows into transcript parts. Parent event streams can lose
+ * task settlements when the process dies mid-delegate (e.g. native TextBuffer exhaustion), while
+ * child yields are still written to `async_jobs`. Resume must surface those results.
+ */
+export function projectChildJobsOntoTranscript(
+    base: ReconstructedTranscript,
+    jobs: readonly ResumableChildJob[],
+): ReconstructedTranscript {
+    if (jobs.length === 0) {
+        return base;
+    }
+    const existingChildIds = new Set(
+        base.parts.flatMap((part) =>
+            part.type === 'subagent' && part.sessionId !== undefined ? [part.sessionId] : [],
+        ),
+    );
+    const salvageParts: TranscriptPart[] = [];
+    const salvageLines: string[] = [];
+    for (const job of jobs) {
+        if (existingChildIds.has(job.childSessionId)) {
+            continue;
+        }
+        if (job.status !== 'completed' && job.status !== 'failed' && job.status !== 'cancelled') {
+            continue;
+        }
+        const label = job.title ?? job.agentId ?? 'Subagent';
+        const rawBody = job.output ?? (job.status === 'failed' ? 'child job failed' : '');
+        const body = truncateSalvagedChildOutput(rawBody);
+        if (body.length === 0 && job.status === 'completed') {
+            // Empty completed yield still deserves a marker so the user sees the child ran.
+            salvageParts.push({
+                id: `resume:job:${job.jobId}`,
+                type: 'subagent',
+                text: label,
+                title: label,
+                status: 'completed',
+                sessionId: job.childSessionId,
+                toolCallId: job.jobId,
+                ...(job.agentId !== undefined ? { agentName: job.agentId } : {}),
+            });
+            salvageLines.push(`Subagent ${label}: (no output)\n`);
+            continue;
+        }
+        const status = job.status === 'completed' ? 'completed' : 'failed';
+        salvageParts.push({
+            id: `resume:job:${job.jobId}`,
+            type: 'subagent',
+            text: body.length > 0 ? body : label,
+            title: label,
+            status,
+            sessionId: job.childSessionId,
+            toolCallId: job.jobId,
+            ...(job.agentId !== undefined ? { agentName: job.agentId } : {}),
+            ...(status === 'failed' && body.length > 0 ? { error: body } : {}),
+        });
+        salvageLines.push(
+            status === 'failed' ? `Subagent ${label} failed: ${body}\n` : `Subagent ${label}: ${body}\n`,
+        );
+    }
+    if (salvageParts.length === 0) {
+        return base;
+    }
+    // Insert salvaged child results before any trailing session.finalize line so the user sees
+    // work product above the abort/complete marker.
+    return {
+        parts: [...base.parts, ...salvageParts],
+        outputText: appendBeforeTrailingFinalize(base.outputText, salvageLines.join('')),
+    };
+}
+
+function truncateSalvagedChildOutput(text: string): string {
+    if (text.length <= MAX_SALVAGED_CHILD_OUTPUT_CHARS) {
+        return text;
+    }
+    return `${text.slice(0, MAX_SALVAGED_CHILD_OUTPUT_CHARS)}\n…[truncated ${text.length - MAX_SALVAGED_CHILD_OUTPUT_CHARS} chars; full yield in session store]`;
+}
+
+function appendBeforeTrailingFinalize(outputText: string, addition: string): string {
+    if (addition.length === 0) {
+        return outputText;
+    }
+    if (outputText.length === 0) {
+        return addition;
+    }
+    const finalizePattern = /(?:Session (?:complete|aborted|failed)(?::[^\n]*)?\n)+$/u;
+    const match = finalizePattern.exec(outputText);
+    if (match === null || match.index === undefined) {
+        return `${outputText}${addition}`;
+    }
+    return `${outputText.slice(0, match.index)}${addition}${outputText.slice(match.index)}`;
+}
+
+export async function loadResumableChildJobsForSession(
+    sessionId: string,
+    dataDir: string = resolveMissionControlDataDir(),
+): Promise<readonly ResumableChildJob[]> {
+    let runtime: LocalLibsqlDb | undefined;
+    try {
+        const opened = await openCanonicalRuntimeDb({ dataDir, sessionControlMaintenance: false });
+        runtime = opened.runtime;
+        const result = await runtime.client.execute({
+            sql:
+                'SELECT j.job_id AS job_id, j.child_session_id AS child_session_id, j.agent_id AS agent_id, ' +
+                'j.status AS status, j.result_json AS result_json, j.completed_at AS completed_at, ' +
+                'j.failed_at AS failed_at, j.cancelled_at AS cancelled_at, s.title AS title ' +
+                'FROM async_jobs j ' +
+                'LEFT JOIN sessions s ON s.session_id = j.child_session_id ' +
+                'WHERE j.parent_session_id = ? ' +
+                'ORDER BY COALESCE(j.completed_at, j.failed_at, j.cancelled_at, j.queued_at) ASC, j.job_id ASC',
+            args: [sessionId],
+        });
+        const jobs: ResumableChildJob[] = [];
+        for (const row of result.rows) {
+            if (typeof row !== 'object' || row === null) {
+                continue;
+            }
+            const parsed = CHILD_JOB_ROW_SCHEMA.parse(row as Readonly<Record<string, unknown>>);
+            if (parsed !== undefined) {
+                jobs.push(parsed);
+            }
+        }
+        return jobs;
+    } catch {
+        // Best-effort: missing DB / schema still allows event-only resume.
+        return [];
+    } finally {
+        runtime?.close();
+    }
+}
 
 /**
  * Reconstruct the chat transcript text (the `outputText` the TUI renders) from a
@@ -273,13 +479,21 @@ export async function loadSessionTranscriptPartsAndEventsFromStore(
     store: LocalSessionEventStore,
     sessionId: string,
     observabilityRedactor?: ObservabilityRedactor,
+    options: { readonly dataDir?: string } = {},
 ): Promise<ReconstructedSessionAttach> {
     const empty: ReconstructedSessionAttach = { events: [], parts: [], outputText: '' };
     try {
         const events = await store.getEvents(sessionId);
+        const base = reconstructSessionTranscriptPartsFromEvents(sessionId, events, observabilityRedactor);
+        const jobs = await loadResumableChildJobsForSession(
+            sessionId,
+            options.dataDir ?? resolveMissionControlDataDir(),
+        );
+        const merged = projectChildJobsOntoTranscript(base, jobs);
         return {
             events,
-            ...reconstructSessionTranscriptPartsFromEvents(sessionId, events, observabilityRedactor),
+            parts: merged.parts,
+            outputText: merged.outputText,
         };
     } catch (error: unknown) {
         if (error instanceof Error) {
@@ -324,14 +538,24 @@ export async function loadSessionTranscript(
 export async function loadSessionTranscriptParts(
     sessionId: string,
     observabilityRedactor?: ObservabilityRedactor,
+    options: { readonly dataDir?: string } = {},
 ): Promise<ReconstructedTranscript> {
     const empty: ReconstructedTranscript = { parts: [], outputText: '' };
     try {
         const replay = await readLocalSessionReplay({
             sessionId,
             ...(observabilityRedactor !== undefined ? { observabilityRedactor } : {}),
+            ...(options.dataDir !== undefined ? { dataDir: options.dataDir } : {}),
         });
-        return replay.kind === 'found' ? reconstructSessionTranscriptParts(replay.replay.projection) : empty;
+        if (replay.kind !== 'found') {
+            return empty;
+        }
+        const base = reconstructSessionTranscriptParts(replay.replay.projection);
+        const jobs = await loadResumableChildJobsForSession(
+            sessionId,
+            options.dataDir ?? resolveMissionControlDataDir(),
+        );
+        return projectChildJobsOntoTranscript(base, jobs);
     } catch (error: unknown) {
         if (error instanceof Error) {
             return empty;

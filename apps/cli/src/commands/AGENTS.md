@@ -40,7 +40,8 @@ CLI command and interactive-session orchestration: `run-agent` modes, interactiv
 | `noninteractive-tool-registry.ts` | Headless tool registry |
 | `provider-factory.ts` | Capability → provider adapter |
 | `model-discovery.ts` / `models.ts` | Live model discovery + `mc models` |
-| `auth.ts` / `auth-oauth*.ts` / `auth-login-*.ts` / `auth-prompts.ts` | Auth login/logout/OAuth |
+| `auth.ts` / `auth-oauth*.ts` / `auth-login-*.ts` / `auth-prompts.ts` | Auth login/logout/OAuth (`mc auth`) |
+| `auth-command.ts` / `interactive-chat-auth-action.ts` | `/auth login|list|logout` slash parse + action (reuses `runAuthCommand`; not palette) |
 | `session.ts` / `session-catalog.ts` / `session-archive.ts` / `session-delete-command.ts` / `session-stop-command.ts` | Session CLI surface |
 | `session-attach-projection.ts` / `session-transcript-reconstruction.ts` | Attach/replay projections |
 | `mcp.ts` / `mcp-display.ts` | MCP list/test/add/remove |

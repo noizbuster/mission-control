@@ -9,6 +9,7 @@ import {
 } from '@mission-control/tui/state';
 import { assertUnreachable } from '../assert-unreachable';
 import { type AgentsCommand, parseAgentsCommand } from './agents-command';
+import { type AuthCommand, parseAuthCommand } from './auth-command';
 import { splitCommandParts } from './chat-command-parts';
 import { parseSessionSlashCommand } from './chat-session-commands';
 
@@ -152,6 +153,10 @@ export type ChatLineAction =
           readonly agents: AgentsCommand;
       }
     | {
+          readonly kind: 'auth';
+          readonly auth: AuthCommand;
+      }
+    | {
           readonly kind: 'skills';
           readonly skills: SkillsCommand;
       }
@@ -290,6 +295,8 @@ function parseSlashCommand(line: string, options: ChatLineOptions): ChatLineActi
             return parseNoArgumentCommand('hotkeys', parts.tail);
         case 'agents':
             return { kind: 'agents', agents: parseAgentsCommand(parts.tail) };
+        case 'auth':
+            return { kind: 'auth', auth: parseAuthCommand(parts.tail) };
         case 'skills':
             return { kind: 'skills', skills: parseSkillsCommand(parts.tail) };
         case 'mission': {
@@ -522,6 +529,7 @@ export function chatActionShowsWorkingStatus(kind: ChatLineAction['kind']): bool
         case 'trust':
         case 'approval':
         case 'agents':
+        case 'auth':
         case 'skills':
         case 'models':
         case 'mission':

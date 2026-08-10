@@ -6,6 +6,7 @@ import { writeLocalSessionEvents } from './session-test-support';
 import {
     loadSessionTranscript,
     loadSessionTranscriptPartsFromStore,
+    projectChildJobsOntoTranscript,
     reconstructSessionTranscript,
     reconstructSessionTranscriptParts,
 } from './session-transcript-reconstruction';
@@ -416,5 +417,92 @@ describe('reconstructSessionTranscriptParts', () => {
         for (const tool of toolParts) {
             expect(shouldHideToolPart(tool, activeId)).toBe(true);
         }
+    });
+});
+
+describe('projectChildJobsOntoTranscript', () => {
+    it('appends durable child job yields missing from the parent event stream', () => {
+        const base = reconstructSessionTranscriptParts({
+            envelopes: [envelope(1, userPromptEvent('implement auth slash'))],
+            codingSteps: [],
+        });
+        const merged = projectChildJobsOntoTranscript(base, [
+            {
+                jobId: 'session_child_a',
+                childSessionId: 'session_child_a',
+                status: 'completed',
+                title: 'Map /auth slash command paths',
+                output: '## Implementation map\n/auth is missing today.',
+            },
+            {
+                jobId: 'session_child_b',
+                childSessionId: 'session_child_b',
+                status: 'failed',
+                title: 'Broken child',
+                output: 'provider aborted',
+            },
+        ]);
+
+        expect(merged.parts.filter((part) => part.type === 'subagent')).toEqual([
+            expect.objectContaining({
+                type: 'subagent',
+                title: 'Map /auth slash command paths',
+                sessionId: 'session_child_a',
+                status: 'completed',
+                text: '## Implementation map\n/auth is missing today.',
+            }),
+            expect.objectContaining({
+                type: 'subagent',
+                title: 'Broken child',
+                sessionId: 'session_child_b',
+                status: 'failed',
+                error: 'provider aborted',
+            }),
+        ]);
+        expect(merged.outputText).toContain('You: implement auth slash');
+        expect(merged.outputText).toContain('Subagent Map /auth slash command paths: ## Implementation map');
+        expect(merged.outputText).toContain('Subagent Broken child failed: provider aborted');
+    });
+
+    it('does not duplicate child sessions already present as subagent parts', () => {
+        const base = {
+            parts: [
+                {
+                    id: 'existing',
+                    type: 'subagent' as const,
+                    text: 'already restored',
+                    sessionId: 'session_child_a',
+                    status: 'completed' as const,
+                },
+            ],
+            outputText: 'Subagent already restored\n',
+        };
+        const merged = projectChildJobsOntoTranscript(base, [
+            {
+                jobId: 'session_child_a',
+                childSessionId: 'session_child_a',
+                status: 'completed',
+                output: 'duplicate yield',
+            },
+        ]);
+        expect(merged.parts).toHaveLength(1);
+        expect(merged.outputText).toBe('Subagent already restored\n');
+    });
+
+    it('inserts salvaged child text before a trailing session finalize marker', () => {
+        const base = {
+            parts: [{ id: 'u1', type: 'user' as const, text: 'go' }],
+            outputText: 'You: go\nSession aborted: interrupted by user\n',
+        };
+        const merged = projectChildJobsOntoTranscript(base, [
+            {
+                jobId: 'job_1',
+                childSessionId: 'child_1',
+                status: 'completed',
+                title: 'Worker',
+                output: 'done',
+            },
+        ]);
+        expect(merged.outputText).toBe('You: go\nSubagent Worker: done\nSession aborted: interrupted by user\n');
     });
 });

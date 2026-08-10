@@ -122,6 +122,21 @@ export const slashCommandChoices = [
         description: 'Re-apply the last reverted exchange (display only)',
     },
     {
+        id: '/auth login',
+        insertText: '/auth login',
+        description: 'Log in a provider credential (flags: --provider, --api-key, ...)',
+    },
+    {
+        id: '/auth list',
+        insertText: '/auth list',
+        description: 'List configured provider credentials',
+    },
+    {
+        id: '/auth logout',
+        insertText: '/auth logout',
+        description: 'Log out a provider credential',
+    },
+    {
         id: '/trust',
         insertText: '/trust',
         description: 'Trust this workspace',

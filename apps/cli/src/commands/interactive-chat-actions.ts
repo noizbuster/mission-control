@@ -7,6 +7,7 @@ import { runApprovalAction } from './interactive-approval-action';
 import type { ModelSelector } from './interactive-chat';
 import type { CodingActionContext } from './interactive-chat-action-context';
 import { actionResult, type ChatActionResult } from './interactive-chat-action-result';
+import { runAuthChatAction } from './interactive-chat-auth-action';
 import { runBashAction, runBashDisplayOnlyAction } from './interactive-chat-bash-action';
 import { runClearAction } from './interactive-chat-clear-action';
 import { runCompactAction } from './interactive-chat-compaction-action';
@@ -228,6 +229,8 @@ export async function runChatAction(
             return runWorkflowAction(runtime, chatOutput, action, currentModelProviderSelection, coding);
         case 'agents':
             return runAgentsAction(chatOutput, currentModelProviderSelection, coding, action.agents);
+        case 'auth':
+            return runAuthChatAction(chatOutput, currentModelProviderSelection, coding, action.auth);
         case 'skills':
             return runSkillsAction(chatOutput, currentModelProviderSelection, coding, action.skills);
         case 'mission':
