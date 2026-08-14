@@ -26,7 +26,7 @@ CLI command and interactive-session orchestration: `run-agent` modes, interactiv
 | `interactive-chat-io.ts` | `ChatOutput` extensions; re-exports `ChatInputEvent` from TUI state |
 | `interactive-chat-prompt-turn.ts` | Prompt-turn execution; provider failure → `Error: ` output |
 | `interactive-chat-command.ts` / `chat-commands.ts` | Slash/`#workflow`/`$skill`/`!bash` line parse → actions |
-| `chat-agent-runner.ts` | Async state machine over store event queue (G1–G10 sequential guarantees) |
+| `store-chat-output.ts` | `ChatStore` → `ChatOutput` adapter (16ms coalescing stays store-side) |
 | `interactive-coding-agent.ts` | Coding-agent turn runner + settlement |
 | `interactive-coding-tools.ts` | Interactive tool surface construction |
 | `interactive-coding-run-settlement.ts` | Run settlement + sanitization |
