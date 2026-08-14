@@ -47,9 +47,7 @@ async function settleTurnOrTimeout(activeTurn: InterruptibleTurn, timeoutMs: num
         ]);
         return winner === 'done';
     } finally {
-        if (timer !== undefined) {
-            clearTimeout(timer);
-        }
+        clearTimeout(timer);
     }
 }
 
@@ -65,9 +63,13 @@ export type ProcessCleanupInput = {
 };
 
 /**
- * Register SIGINT/SIGTERM cleanup. First signal closes input and schedules hard exit; second
- * signal exits immediately. Soft keyboard Ctrl+C in raw TUI mode is handled separately as an
- * interrupt event — this path covers out-of-band kill and non-raw terminals.
+ * Register SIGINT/SIGTERM/SIGHUP cleanup (omp postmortem signal parity:
+ * 130/143/129). First signal closes input and schedules hard exit; second
+ * signal exits immediately. Soft keyboard Ctrl+C in raw TUI mode is handled
+ * separately as an interrupt event — this path covers out-of-band kill,
+ * terminal/window close (SIGHUP), and non-raw terminals. Without the SIGHUP
+ * listener the OS default kills the process before any JS cleanup runs, so
+ * the debounced prompt draft and terminal restore are lost.
  */
 export function registerProcessTerminalCleanup(input: ProcessCleanupInput, onCleanupExtra?: () => void): () => void {
     let cleaned = false;
@@ -81,6 +83,8 @@ export function registerProcessTerminalCleanup(input: ProcessCleanupInput, onCle
         input.close();
         onCleanupExtra?.();
     };
+    const exitCodeFor = (signal: NodeJS.Signals): number =>
+        signal === 'SIGTERM' ? 143 : signal === 'SIGHUP' ? 129 : 130;
     const forceExit = (code: number) => {
         cleanup();
         try {
@@ -94,12 +98,12 @@ export function registerProcessTerminalCleanup(input: ProcessCleanupInput, onCle
         signalCount += 1;
         cleanup();
         if (signalCount >= 2) {
-            forceExit(signal === 'SIGTERM' ? 143 : 130);
+            forceExit(exitCodeFor(signal));
             return;
         }
         if (forceExitTimer === undefined) {
             forceExitTimer = setTimeout(() => {
-                forceExit(signal === 'SIGTERM' ? 143 : 130);
+                forceExit(exitCodeFor(signal));
             }, PROCESS_SIGNAL_FORCE_EXIT_MS);
             forceExitTimer.unref?.();
         }
@@ -110,14 +114,14 @@ export function registerProcessTerminalCleanup(input: ProcessCleanupInput, onCle
 
     process.on('SIGINT', onSignal);
     process.on('SIGTERM', onSignal);
+    process.on('SIGHUP', onSignal);
     process.once('exit', onExit);
 
     return () => {
-        if (forceExitTimer !== undefined) {
-            clearTimeout(forceExitTimer);
-        }
+        clearTimeout(forceExitTimer);
         process.off('SIGINT', onSignal);
         process.off('SIGTERM', onSignal);
+        process.off('SIGHUP', onSignal);
         process.off('exit', onExit);
     };
 }

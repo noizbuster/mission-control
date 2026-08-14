@@ -69,6 +69,27 @@ describe('registerProcessTerminalCleanup', () => {
         }
     });
 
+    it.each([
+        ['SIGHUP', 129],
+        ['SIGTERM', 143],
+    ])('hard-exits with %s code %i on the second signal', (signal, code) => {
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+        const close = vi.fn();
+        const unregister = registerProcessTerminalCleanup({ close });
+
+        try {
+            // When: emit like Node's real signal dispatch (listener receives the name)
+            process.emit(signal, signal);
+            process.emit(signal, signal);
+
+            // Then: the first signal already closed the input, the second exits.
+            expect(close).toHaveBeenCalled();
+            expect(exitSpy).toHaveBeenCalledWith(code);
+        } finally {
+            unregister();
+        }
+    });
+
     it('invokes onForceExit synchronously before process.exit on the second signal', () => {
         const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
         const close = vi.fn();
