@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 248 -> current 268 pure LOC; sql task runtime services persistence and forwarding coverage.
 import { createClient } from '@libsql/client';
 import { afterEach, describe, expect, it } from 'vitest';
 import { missionControlDataDirEnvKey } from '../memory/data-dir';
@@ -205,6 +206,27 @@ describe('createSqlTaskRuntimeServices', () => {
             expect(jobs.some((job) => job.sessionId === 'child-session')).toBe(true);
         } finally {
             await reopened.close();
+        }
+    });
+
+    it('forwards onTerminalJob to the job manager terminal listener', async () => {
+        const dataDir = await makeWorkspaceRoot();
+        const statuses: string[] = [];
+        const services = await createSqlTaskRuntimeServices(dataDir, {
+            maxConcurrency: 1,
+            onTerminalJob: (handle) => {
+                statuses.push(handle.status);
+            },
+        });
+        try {
+            const handle = services.jobManager.startJob({
+                sessionId: 'session_on_terminal_forward',
+                execute: async () => ({ status: 'completed' as const, output: 'ok' }),
+            });
+            await services.jobManager.awaitJob(handle.jobId);
+            expect(statuses).toEqual(['completed']);
+        } finally {
+            await services.close();
         }
     });
 

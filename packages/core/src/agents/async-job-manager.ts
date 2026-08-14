@@ -1,4 +1,4 @@
-// allow: SIZE_OK -- HEAD 407 -> current 576 pure LOC; one bounded async-job lifecycle and persistence state machine.
+// allow: SIZE_OK -- HEAD 630 -> current 643 pure LOC; one bounded async-job lifecycle and persistence state machine.
 /**
  * AsyncJobManager - bounds concurrent background child-agent execution via a
  * maxConcurrency semaphore. Jobs beyond the limit are queued and start when a
@@ -69,6 +69,13 @@ export interface AsyncJobManagerOptions {
     readonly sessionControlHost?: SessionControlHost;
     /** Maximum number of terminal job entries retained in memory for `listJobs` / `awaitJob` queries. Older terminal entries are evicted; full history lives in the SQL mirror. Defaults to 32. */
     readonly maxTerminalEntries?: number;
+    /**
+     * Best-effort listener invoked exactly once per job after it settles
+     * terminally (completed/failed/cancelled) and live coordination is finished
+     * (omp task-toast pattern). Listener errors are swallowed — notification
+     * must never break the job path.
+     */
+    readonly onTerminal?: (handle: BackgroundJobHandle) => void;
 }
 
 export class QuarantinedJobSettlementError extends Error {
@@ -127,6 +134,7 @@ export class AsyncJobManager {
     /** FIFO of terminal job ids still retained in {@link jobs} for queryability. Evicted at {@link maxTerminalEntries}. */
     private readonly terminalOrder: string[] = [];
     private readonly maxTerminalEntries: number;
+    private readonly onTerminal: ((handle: BackgroundJobHandle) => void) | undefined;
 
     constructor(
         private readonly maxConcurrency: number = 4,
@@ -135,6 +143,7 @@ export class AsyncJobManager {
         this.mirror = options.mirror;
         this.sessionControlHost = options.sessionControlHost;
         this.maxTerminalEntries = options.maxTerminalEntries ?? 32;
+        this.onTerminal = options.onTerminal;
     }
 
     startJob(input: StartJobInput): BackgroundJobHandle {
@@ -546,6 +555,11 @@ export class AsyncJobManager {
         const jobId = entry.handle.jobId;
         if (this.terminalOrder.includes(jobId)) return;
         this.terminalOrder.push(jobId);
+        try {
+            this.onTerminal?.(entry.handle);
+        } catch {
+            // Best-effort notification; never break settlement.
+        }
         while (this.terminalOrder.length > this.maxTerminalEntries) {
             const oldestId = this.terminalOrder.shift();
             if (oldestId !== undefined) this.jobs.delete(oldestId);

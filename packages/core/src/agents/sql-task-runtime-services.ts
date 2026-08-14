@@ -4,7 +4,7 @@ import type { ObservabilityRedactor } from '../providers/observability-redactor'
 import { openCanonicalRuntimeDb } from '../runtime/local-runtime-db';
 import { SessionControlHost } from '../runtime/session-control-host';
 import { type AgentJobRecoveryReport, SqlAgentJobMirror } from './agent-job-sql-mirror';
-import { AsyncJobManager } from './async-job-manager';
+import { AsyncJobManager, type BackgroundJobHandle } from './async-job-manager';
 import { AgentLifecycleManager } from './lifecycle-manager';
 import { RuntimeAgentRegistry } from './runtime-registry';
 import type { TaskToolRuntimeServices } from './task-tool-runtime';
@@ -13,6 +13,8 @@ export type SqlTaskRuntimeServicesOptions = {
     readonly maxConcurrency?: number;
     readonly recoverActiveJobs?: boolean;
     readonly observabilityRedactor?: ObservabilityRedactor | Promise<ObservabilityRedactor>;
+    /** Forwarded to the AsyncJobManager's best-effort terminal listener. */
+    readonly onTerminalJob?: (handle: BackgroundJobHandle) => void;
 };
 
 export type SqlTaskRuntimeServices = TaskToolRuntimeServices & {
@@ -50,6 +52,7 @@ export async function createSqlTaskRuntimeServices(
         const jobManager = new AsyncJobManager(options.maxConcurrency ?? DEFAULT_MAX_CONCURRENCY, {
             mirror,
             sessionControlHost,
+            ...(options.onTerminalJob !== undefined ? { onTerminal: options.onTerminalJob } : {}),
         });
         const lifecycleManager = new AgentLifecycleManager(runtimeRegistry);
         return createServicesHandle({

@@ -41,6 +41,8 @@ export interface MissionControlServicesOptions {
      */
     readonly defaultIdleTtlMs?: number;
     readonly observabilityRedactor?: ObservabilityRedactor;
+    /** Best-effort notification when a background job settles terminally. */
+    readonly onTerminalJob?: (handle: BackgroundJobHandle) => void;
 }
 
 export interface JobStatsSnapshot {
@@ -95,6 +97,9 @@ export class MissionControlServices {
             maxConcurrency: resolvedOptions.maxConcurrency ?? DEFAULT_MAX_CONCURRENCY,
             ...(resolvedOptions.observabilityRedactor !== undefined
                 ? { observabilityRedactor: resolvedOptions.observabilityRedactor }
+                : {}),
+            ...(resolvedOptions.onTerminalJob !== undefined
+                ? { onTerminalJob: resolvedOptions.onTerminalJob }
                 : {}),
         });
         return new MissionControlServices(mcRoot, resolvedOptions, sqlServices);

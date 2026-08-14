@@ -1,4 +1,4 @@
-// allow: SIZE_OK -- HEAD 930 -> current 951 pure LOC; one interactive chat event-loop state machine after action extraction.
+// allow: SIZE_OK -- HEAD 1339 -> current 1351 pure LOC; one interactive chat event-loop state machine after action extraction.
 import {
     type AgentRuntime,
     type AskUserQuestionRequest,
@@ -7,6 +7,7 @@ import {
     type ContextCacheUsage,
     discoverSkills,
     discoverWorkflows,
+    type BackgroundJobHandle,
     type LocalSessionEventStore,
     type ObservabilityRedactor,
     PermissionRuleStore,
@@ -238,6 +239,18 @@ export async function runInteractiveChatSession(
     const missionControlServices = await resolveMissionControlServices(
         options.workspaceRoot,
         options.observabilityRedactor,
+        // omp task-toast pattern: surface background job settlement while the
+        // operator is in chat. TUI-only — plain/JSON paths pin exact output and
+        // job results remain retrievable through session-resume salvage.
+        (handle) => {
+            if (tuiHandle === undefined || tuiHandle.isEventQueueClosed()) return;
+            const label = handle.agentId ?? handle.jobId;
+            const detail =
+                handle.status === 'failed' && handle.error !== undefined
+                    ? ` — ${options.observabilityRedactor?.redactText(handle.error) ?? handle.error}`
+                    : '';
+            tuiHandle.showTransientNotice(`Background job ${label} ${handle.status}${detail}`);
+        },
     );
     let tuiHandleRef: ChatTuiHandle | undefined;
     const abgOverlayController = useTui
@@ -1402,11 +1415,13 @@ export async function runInteractiveChatSession(
 async function resolveMissionControlServices(
     workspaceRoot: string | undefined,
     observabilityRedactor: ObservabilityRedactor | undefined,
+    onTerminalJob?: (handle: BackgroundJobHandle) => void,
 ): Promise<MissionControlServices | undefined> {
     if (workspaceRoot === undefined) return undefined;
     try {
         return await getOrCreateMissionControlServices(workspaceRoot, {
             ...(observabilityRedactor !== undefined ? { observabilityRedactor } : {}),
+            ...(onTerminalJob !== undefined ? { onTerminalJob } : {}),
         });
     } catch (error: unknown) {
         if (isMcRootNotFoundError(error)) {

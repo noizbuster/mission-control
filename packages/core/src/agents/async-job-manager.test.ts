@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 358 -> current 396 pure LOC; async job manager semaphore, cancellation, settlement, and listener coverage.
 import { describe, expect, it } from 'vitest';
 import type { BackgroundJobHandle, DurableBackgroundJobHandle, JobExecuteFn } from './async-job-manager';
 import { AsyncJobManager } from './async-job-manager';
@@ -456,5 +457,48 @@ describe('AsyncJobManager', () => {
             expect(snapshot[0]?.status).toBe('completed');
             expect(handle.status).toBe('completed');
         });
+    });
+});
+
+describe('(f) onTerminal listener', () => {
+    it('notifies once per settled job with the terminal handle', async () => {
+        const terminal: BackgroundJobHandle[] = [];
+        const manager = new AsyncJobManager(2, {
+            onTerminal: (handle) => {
+                terminal.push(handle);
+            },
+        });
+        manager.startJob({ sessionId: 's1', execute: makeImmediateExecute('done') });
+        manager.startJob({ sessionId: 's2', execute: makeFailingExecute('bad') });
+        await flush();
+
+        expect(terminal.map((handle) => handle.status).sort()).toEqual(['completed', 'failed']);
+        expect(terminal.every((handle) => handle.completedAt !== undefined)).toBe(true);
+    });
+
+    it('swallows listener errors and still settles the job', async () => {
+        const manager = new AsyncJobManager(1, {
+            onTerminal: () => {
+                throw new Error('listener bug');
+            },
+        });
+        const handle = manager.startJob({ sessionId: 's1', execute: makeImmediateExecute('done') });
+        const settled = await manager.awaitJob(handle.jobId);
+        expect(settled.status).toBe('completed');
+    });
+
+    it('notifies for cancelled jobs', async () => {
+        const statuses: string[] = [];
+        const manager = new AsyncJobManager(1, {
+            onTerminal: (handle) => {
+                statuses.push(handle.status);
+            },
+        });
+        const job = makeControllableExecute();
+        const handle = manager.startJob({ sessionId: 's1', execute: job.execute });
+        manager.cancelJob(handle.jobId);
+        await flush();
+
+        expect(statuses).toEqual(['cancelled']);
     });
 });
