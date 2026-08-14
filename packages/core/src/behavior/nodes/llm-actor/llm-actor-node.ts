@@ -1,4 +1,4 @@
-// allow: SIZE_OK -- HEAD 503 -> current 509 pure LOC; the single-turn LLM actor owns provider streaming, retry, and post-stream tool settlement.
+// allow: SIZE_OK -- HEAD 503 -> current 536 pure LOC; the single-turn LLM actor owns provider streaming, retry, and post-stream tool settlement.
 /**
  * LLMActor node (ABG §10.1) — wraps a Vercel AI SDK `streamText` call and exposes it as
  * an `AsyncIterable<AbgSignal>`, the universal ABG node contract.
@@ -57,6 +57,12 @@ import {
 export type { LlmActorModel, LlmActorRunInput, LlmActorTurnResult } from './llm-actor-node-types';
 
 const MAX_NO_OUTPUT_TIMEOUT_RETRIES = 3;
+/**
+ * omp unexpected-stop pattern, deterministic variant: a stream that completes with
+ * literally zero visible output (no text/reasoning delta, no tool call) is a provider
+ * glitch, not a model choice — retry instead of settling an empty assistant turn.
+ */
+const MAX_EMPTY_COMPLETION_RETRIES = 3;
 
 export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSignal> {
     const { nodeId, now } = input;
@@ -87,6 +93,7 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
     let providerChunkTimeoutMs = input.timeoutMs ?? DEFAULT_PROVIDER_CHUNK_TIMEOUT_MS;
     let providerWaitAttempt = 0;
     let noOutputTimeoutRetries = 0;
+    let emptyCompletionRetries = 0;
     const usesAnthropicPromptCache = input.providerID === 'anthropic';
     const cachedSystemMessage: ModelMessage = {
         role: 'system',
@@ -198,6 +205,29 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
             turnText = text;
             turnUsage = usage;
             providerResponseMessages = response.messages;
+            // `!sawProviderOutput` proves zero visible parts arrived (no text/reasoning
+            // delta, no tool call), so the turn carries nothing worth settling. Retry the
+            // attempt; `MAX_EMPTY_COMPLETION_RETRIES` bounds the wasted provider calls.
+            if (
+                !sawProviderOutput &&
+                emptyCompletionRetries < MAX_EMPTY_COMPLETION_RETRIES &&
+                !isAbortRequested(input.signal)
+            ) {
+                emptyCompletionRetries += 1;
+                yield createAbgEmitSignal({
+                    graphId: input.graphId,
+                    nodeId,
+                    source: 'llm-actor',
+                    eventType: 'llm.provider_wait',
+                    payload: observabilityRedactor.redactValue({
+                        attempt: emptyCompletionRetries,
+                        delayMs: 0,
+                        reason: 'provider_empty_response',
+                    }),
+                    timestamp: now(),
+                });
+                continue;
+            }
             break;
         } catch (error) {
             const streamProviderError = streamError ?? error;
