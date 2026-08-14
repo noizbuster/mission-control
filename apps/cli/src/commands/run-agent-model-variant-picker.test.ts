@@ -63,7 +63,7 @@ describe('runAgent /model provider variant picker', () => {
         expect(pickerLabels[0]).toContain('openai/gpt-5 [executable]');
         expect(pickerLabels[0]).not.toContain('openai/gpt-5#reasoning-high [executable]');
         expect(pickerLabels[1]).toContain('openai/gpt-5#reasoning-high [executable]');
-        expect(output).toContain('selection: openai/gpt-5#reasoning-high');
+        expect(output).not.toContain('selection: openai/gpt-5#reasoning-high');
         expect(output).toContain('openai adapter handled openai/gpt-5#reasoning-high');
         expect(resolvedProviders).toContain('local/local-echo');
         expect(resolvedProviders).toContain('openai/gpt-5#reasoning-high');
@@ -134,7 +134,7 @@ describe('runAgent /model provider variant picker', () => {
             chatOutput: chatOutput.output,
         });
 
-        expect(output).toContain('selection: local/local-echo#fast');
+        expect(output).not.toContain('selection: local/local-echo#fast');
     });
 });
 

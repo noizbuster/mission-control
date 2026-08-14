@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { appendInputHistoryEntry, loadInputHistoryEntries } from './input-history-store';
+import {
+    appendInputHistoryEntry,
+    loadInputHistoryEntries,
+    resetInputHistoryStoreForTests,
+} from './input-history-store';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -9,6 +13,7 @@ describe('input history store bridge', () => {
 
     afterEach(async () => {
         vi.unstubAllEnvs();
+        resetInputHistoryStoreForTests();
         if (dataDir !== undefined) {
             await rm(dataDir, { recursive: true, force: true });
             dataDir = undefined;

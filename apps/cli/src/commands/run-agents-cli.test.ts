@@ -40,13 +40,13 @@ describe('runAgentsCommand', () => {
 
     it('routes an empty argv tail to list and reports the discovered bundled agents', async () => {
         const output = await runAgentsCommand(parseArgs(['agents']));
-        expect(output).toContain('Discovered agents (9)');
+        expect(output).toContain('Discovered agents (12)');
         expect(output).toContain('oracle');
     });
 
     it('routes `agents list` to the list output', async () => {
         const output = await runAgentsCommand(parseArgs(['agents', 'list']));
-        expect(output).toContain('Discovered agents (9)');
+        expect(output).toContain('Discovered agents (12)');
     });
 
     it('routes `agents show <name>` to the agent detail block', async () => {

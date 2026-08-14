@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 303 -> current 304 pure LOC; session keymap layer: chords, prompt stash, and queued-prompts view wiring.
 /**
  * Session-tree nav + prompt stash + queued-prompts view keymap layer (T12).
  *
@@ -23,13 +24,14 @@
  *      `prompt/stash.tsx` shape but in-memory (no file persistence) and LIFO.
  *      The textarea is the source of truth; the bridge owns capture/restore.
  *
- *  (c) Queued-prompts view. VERIFIED: `SessionInputDelivery` (the drain-lane
- *      queue in `run-coordinator-v2.ts`) is NOT reachable from the interactive
- *      TUI path (it backs the workflow drain-lane only; interactive `/queue`
- *      `/steer` emit `prompt.admitted` events and track no in-memory queue).
- *      So the view scopes to a documented empty-state, per the task's explicit
- *      guidance ("do NOT invent a runtime introspection API"). An optional
- *      `readQueuedPrompts` dep lets a future wiring surface real counts.
+ *  (c) Queued-prompts view. VERIFIED: interactive `/queue` `/steer` emit
+ *      `prompt.admitted` events with no TUI-visible queue object; the turn's
+ *      `SessionRunCoordinator` drain lane (`run-coordinator-drain.ts`) promotes
+ *      them and runs each as the run's next turn — but that projection is not
+ *      exposed to the TUI. So the view scopes to a documented empty-state, per
+ *      the task's explicit guidance ("do NOT invent a runtime introspection
+ *      API"). An optional `readQueuedPrompts` dep lets a future wiring surface
+ *      real counts.
  *
  * Chord sourcing: `session_queued_prompts` ('<leader>q') IS in keybind.ts; the
  * session-tree and prompt-stash chords are NOT yet registered there (T2/T4

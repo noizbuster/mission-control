@@ -39,6 +39,18 @@ Dependency direction is strictly CLI → TUI. Noninteractive `mc --no-tui`/`--js
 - Solid components run once: never freeze reactive dimension reads into consts/destructured props.
 - Pass scroll-owning components as inline JSX props — never IIFE wrappers (remount/scrollbar flash).
 
+### Provider architecture
+
+The interactive mount dynamically imports `@mission-control/tui/providers`, then wraps `App` in `MissionControlTuiProviders`. The package exposes that provider composition root through the dedicated `./providers` package subpath and Vite library entry. Do not add provider exports to `src/index.ts`; the main barrel stays provider-free so pure utilities and the state cluster remain safe for eager CLI imports.
+
+Provider-owned persistence lives in the TUI store classes from `packages/core/src/tui-stores/`, selected by `TuiPathsProviderValue` (`dataDir`, `configDir`, and workspace root). Components consume provider hooks and injected structural services; they do not instantiate `AgentRuntime`, provider adapters, tool registries, CLI action classes, or raw OpenCode SDK objects.
+
+The plugin runtime provider is descriptor-first. Trusted manifests can register allowed slots, routes, commands, KV, dialog, and theme capabilities through `TuiPluginHostRegistry`; denied capabilities emit redacted diagnostics, project-local descriptors stay inert until workspace trust is granted, and provider cleanup disposes registrations. This is the plugin trust contract.
+
+OpenCode references are reference material only. Mission Control ports selected patterns into strict protocol/core/TUI seams: OSC52 selection copy instead of shell clipboard binaries, prompt stash/frecency stores instead of ad-hoc component state, structural focused-editor access for kill-ring behavior, and descriptor-gated plugins instead of arbitrary project plugin execution.
+
+Epilogue-style context surfaces are deferred; current context display remains the ABG/session replay projection providers. Editor parity is intentionally minimal: `Ctrl+E` launches `$VISUAL`/`$EDITOR`, and keymap layers operate on the focused OpenTUI textarea surface. There is no full embedded OpenCode editor subsystem.
+
 ### Testing Requirements
 - Colocated `*.test.ts`/`*.test.tsx` under `src/`.
 - `NX_DAEMON=false NX_ISOLATE_PLUGINS=false pnpm exec nx run tui:test` or `pnpm exec vitest run apps/tui/src/<file>.test.ts`.

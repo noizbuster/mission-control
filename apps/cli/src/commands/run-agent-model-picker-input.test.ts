@@ -50,8 +50,10 @@ describe('runAgent /model picker input ownership', () => {
         ]);
         expect(output).toContain('provider: local');
         expect(output).toContain('model: local-echo');
-        expect(output).toContain('variant: fast');
-        expect(output).toContain('selection: local/local-echo#fast');
+        // Model changes must not re-print the status banner (only the boot
+        // banner prints the initial selection) — see 789892df.
+        expect(output).not.toContain('variant: fast');
+        expect(output).not.toContain('selection: local/local-echo#fast');
         expect(output).toContain('Assistant: received prompt: after bare picker');
     });
 

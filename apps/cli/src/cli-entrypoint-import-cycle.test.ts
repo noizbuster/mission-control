@@ -14,6 +14,8 @@ import { join, relative } from 'node:path';
 const repositoryRoot = process.cwd();
 const cliSrcRoot = join(repositoryRoot, 'apps/cli/src');
 const entrypointRelative = 'apps/cli/src/index.tsx';
+/** Alternate bin wrapper: an entrypoint itself, never imported during runCli. */
+const launcherRelative = 'apps/cli/src/package-script-launcher.ts';
 // Match relative entrypoint forms with or without a trailing `.js` extension.
 const entrypointImportPattern =
     /(?:from|import)\s+['"](?:\.\.\/)+index(?:\.js)?['"]|(?:from|import)\s+['"]\.\/index(?:\.js)?['"]/u;
@@ -41,7 +43,7 @@ describe('CLI entrypoint import cycle guard', () => {
         const offenders: string[] = [];
         for (const filePath of listSourceFiles(cliSrcRoot)) {
             const relativePath = relative(repositoryRoot, filePath);
-            if (relativePath === entrypointRelative) continue;
+            if (relativePath === entrypointRelative || relativePath === launcherRelative) continue;
             const source = readFileSync(filePath, 'utf8');
             if (entrypointImportPattern.test(source)) {
                 offenders.push(relativePath);

@@ -32,7 +32,9 @@ export async function useIsolatedMissionControlTestScope(
             cleaned = true;
             restoreDataDir(previousDataDir);
             await Promise.all([...childProcesses].map(terminateChildProcess));
-            await rm(dataDir, { recursive: true, force: true });
+            // Late session-close writes (title queue, libSQL flush) can land
+            // after the test body resolves; ENOTEMPTY retries absorb the race.
+            await rm(dataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
         },
     };
 }

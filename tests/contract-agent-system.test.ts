@@ -28,15 +28,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const BUNDLED_AGENT_NAMES: readonly string[] = [
+    'architect',
     'deep',
+    'designer',
+    'executor',
     'explore',
     'librarian',
-    'planner',
-    'reviewer',
     'oracle',
+    'planner',
     'quick',
     'reasoner',
-    'designer',
+    'reviewer',
+    'writer',
 ];
 
 const EXPECTED_PROVIDER_IDS: readonly string[] = [
@@ -83,7 +86,7 @@ function minimalParent(overrides: Partial<AgentDefinition> = {}): AgentDefinitio
 }
 
 describe('agent system contract', () => {
-    it('1. discoverAgents surfaces all 9 bundled agents in AgentIndex', async () => {
+    it('1. discoverAgents surfaces all 12 bundled agents in AgentIndex', async () => {
         const area = await makeTempArea();
         try {
             const result = await discoverAgents({

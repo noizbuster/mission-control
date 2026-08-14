@@ -73,6 +73,73 @@ describe('runAgent interactive coding agent UX', () => {
         expect(replayTypes).not.toContain('run.completed');
     });
 
+    it('delivers a queued follow-up as the next drain-lane turn', async () => {
+        // Given: read #2 waits for the first turn's real `task.started` runtime
+        // event (turn provably active) before admitting '/queue …'; read #3
+        // waits for the durable `run.completed` event. No wall-clock races with
+        // turn setup, and the interrupt only lands after the queued input ran.
+        const dataDir = await tempRoot('mctrl-chat-data-');
+        vi.stubEnv('MCTRL_DATA_DIR', dataDir);
+        const chatOutput = createBufferedChatOutput();
+        const events: AgentEvent[] = [];
+        const firstTurnStarted = Promise.withResolvers<void>();
+        const runCompleted = Promise.withResolvers<void>();
+        const observe = (event: AgentEvent): void => {
+            events.push(event);
+            if (event.type === 'task.started') {
+                firstTurnStarted.resolve();
+            }
+            if (event.type === 'run.completed') {
+                runCompleted.resolve();
+            }
+        };
+        let reads = 0;
+        const chatInput = {
+            read: (): Promise<{ readonly type: 'line'; readonly value: string } | { readonly type: 'interrupt' }> => {
+                reads += 1;
+                if (reads === 1) {
+                    return Promise.resolve({ type: 'line', value: 'start a provider turn' });
+                }
+                if (reads === 2) {
+                    return firstTurnStarted.promise.then(
+                        () => ({ type: 'line', value: '/queue follow up after the run' }) as const,
+                    );
+                }
+                return runCompleted.promise.then(() => ({ type: 'interrupt' }) as const);
+            },
+            close: () => {},
+        };
+
+        // When: turn 1 spans a 250ms provider wait (real wait — the established
+        // deterministic-provider pattern in this integration suite) so the
+        // queued admission lands mid-run; the drain lane then promotes the
+        // queued input and runs it as the run's second turn.
+        const output = await runAgent(parseArgs(['--session', 'session_queue_delivery']), {
+            authStore: createEmptyAuthStore(),
+            chatInput,
+            chatOutput: chatOutput.output,
+            provider: createDeterministicProvider([
+                { kind: 'wait', ms: 250 },
+                { kind: 'response_completed', content: 'turn answer' },
+            ]),
+            onRuntimeEvent: observe,
+        });
+
+        // Then: the queued prompt was promoted and ran — two graph executions
+        // inside one run, both settled by the single run.completed.
+        expect(output).toContain('Queued follow-up: follow up after the run');
+        expect(output.match(/final-respond/g)).toHaveLength(2);
+        expect(events).toContainEqual(
+            expect.objectContaining({
+                type: 'prompt.promoted',
+                message: 'follow up after the run',
+            }),
+        );
+        const replayTypes = await replayedTypes('session_queue_delivery');
+        expect(replayTypes).toContain('run.completed');
+        expect(replayTypes).not.toContain('run.interrupted');
+    });
+
     it('requires two idle Ctrl+C interrupts after stopping an active provider turn', async () => {
         // Given
         const dataDir = await tempRoot('mctrl-chat-data-');

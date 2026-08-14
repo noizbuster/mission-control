@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 511 -> current 511 pure LOC; agents CLI list/unpack contract coverage including bundled count.
 import { type AgentDefinition, AgentIndex, discoverAgents } from '@mission-control/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { formatAgentsCliList, parseAgentsSubcommand, runAgentsCliCommand } from './agents-cli';
@@ -180,10 +181,10 @@ describe('runAgentsCliCommand list', () => {
         await rm(area.root, { recursive: true, force: true });
     });
 
-    it('(a) lists 9 bundled agents as 9 rows', async () => {
+    it('(a) lists 12 bundled agents as 12 rows', async () => {
         // Given: a fresh workspace with only bundled agents
         // When: running the list command
-        // Then: output contains exactly 9 agent rows (one per bundled agent)
+        // Then: output contains exactly 12 agent rows (one per bundled agent)
         const output = await runAgentsCliCommand(
             { kind: 'list' },
             {
@@ -193,11 +194,11 @@ describe('runAgentsCliCommand list', () => {
         );
 
         const agents = await discoverAll(area);
-        expect(agents.length).toBe(9);
+        expect(agents.length).toBe(12);
         for (const agent of agents) {
             expect(output).toContain(agent.name);
         }
-        expect(output).toContain('Discovered agents (9)');
+        expect(output).toContain('Discovered agents (12)');
     });
 
     it('includes disabled marker for agents in the disabled config', async () => {
@@ -311,10 +312,10 @@ describe('runAgentsCliCommand unpack', () => {
         ).rejects.toThrow(/not found/);
     });
 
-    it('(bulk) unpack --all writes all 9 bundled agents to project dir', async () => {
+    it('(bulk) unpack --all writes all 12 bundled agents to project dir', async () => {
         // Given: a fresh workspace
         // When: running unpack --all
-        // Then: exactly 9 .md files land under <workspace>/.mctrl/agents/
+        // Then: exactly 12 .md files land under <workspace>/.mctrl/agents/
         const targetDir = join(area.workspace, '.mctrl', 'agents');
         const output = await runAgentsCliCommand(
             { kind: 'unpack', flags: { all: true } },
@@ -323,8 +324,8 @@ describe('runAgentsCliCommand unpack', () => {
 
         const entries = await readdir(targetDir);
         const mdFiles = entries.filter((name) => name.endsWith('.md'));
-        expect(mdFiles.length).toBe(9);
-        expect(output).toContain('9 of 9');
+        expect(mdFiles.length).toBe(12);
+        expect(output).toContain('12 of 12');
     });
 
     it('(bulk) unpack --all skips existing files without --force', async () => {
@@ -344,7 +345,7 @@ describe('runAgentsCliCommand unpack', () => {
         expect(stale).toBe('stale content\n');
         expect(output).toContain('Skipped 1 existing');
         const mdFiles = (await readdir(targetDir)).filter((name) => name.endsWith('.md'));
-        expect(mdFiles.length).toBe(9);
+        expect(mdFiles.length).toBe(12);
     });
 
     it('(bulk) unpack --all --force overwrites existing files', async () => {
@@ -376,7 +377,7 @@ describe('runAgentsCliCommand unpack', () => {
         );
 
         const mdFiles = (await readdir(userTargetDir)).filter((name) => name.endsWith('.md'));
-        expect(mdFiles.length).toBe(9);
+        expect(mdFiles.length).toBe(12);
         expect(output).toContain(userTargetDir);
         // Project dir must NOT be created
         const projectDir = join(area.workspace, '.mctrl', 'agents');
@@ -394,21 +395,21 @@ describe('runAgentsCliCommand unpack', () => {
         );
 
         const mdFiles = (await readdir(targetDir)).filter((name) => name.endsWith('.md'));
-        expect(mdFiles.length).toBe(9);
+        expect(mdFiles.length).toBe(12);
     });
 
-    it('(bulk) unpack --all --json returns UnpackResult JSON with total 9', async () => {
+    it('(bulk) unpack --all --json returns UnpackResult JSON with total 12', async () => {
         // Given: a fresh workspace
         // When: running unpack --all --json
-        // Then: stdout is JSON with total=9, written.length=9, skipped empty
+        // Then: stdout is JSON with total=12, written.length=12, skipped empty
         const raw = await runAgentsCliCommand(
             { kind: 'unpack', flags: { all: true, json: true } },
             { workspaceRoot: area.workspace, userConfigDir: area.userConfig },
         );
 
         const parsed = JSON.parse(raw) as { targetDir: string; total: number; written: string[]; skipped: string[] };
-        expect(parsed.total).toBe(9);
-        expect(parsed.written.length).toBe(9);
+        expect(parsed.total).toBe(12);
+        expect(parsed.written.length).toBe(12);
         expect(parsed.skipped.length).toBe(0);
         expect(parsed.targetDir).toContain('.mctrl');
     });
@@ -427,8 +428,8 @@ describe('runAgentsCliCommand unpack', () => {
 
         // Then: JSON reports 1 skipped so an all-skipped run is never a silent success
         const parsed = JSON.parse(raw) as { total: number; written: string[]; skipped: string[] };
-        expect(parsed.total).toBe(9);
-        expect(parsed.written.length).toBe(8);
+        expect(parsed.total).toBe(12);
+        expect(parsed.written.length).toBe(11);
         expect(parsed.skipped.length).toBe(1);
     });
 });
@@ -648,12 +649,12 @@ describe('bundled agent count', () => {
         await rm(area.root, { recursive: true, force: true });
     });
 
-    it('discovers exactly 9 bundled agents through the registry', async () => {
+    it('discovers exactly 12 bundled agents through the registry', async () => {
         const result = await discoverAgents({
             workspaceRoot: area.workspace,
             userConfigDir: area.userConfig,
         });
         const index = new AgentIndex(result);
-        expect(index.list().length).toBe(9);
+        expect(index.list().length).toBe(12);
     });
 });
