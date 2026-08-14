@@ -170,9 +170,16 @@ if ! assert_pane_contains "/help renders commands menu" "Type / followed by text
     exit 1
 fi
 
-# 5. /exit — chat UI disappears (clean exit)
-tmux send-keys -t "$SESSION" "/exit" Enter
-if ! assert_pane_absent "/exit dismisses the chat TUI" "Type a message"; then
+# 5. Ctrl+C twice (G9) — live chord delivery: the first press surfaces the
+# exit-hint toast, the second exits the TUI (verified deliverable via tmux
+# send-keys on 2026-08-15; the /exit command path is covered by the
+# lifecycle integration tests).
+tmux send-keys -t "$SESSION" C-c
+if ! assert_pane_contains "first Ctrl+C shows exit hint" "Press Ctrl+C again to exit"; then
+    exit 1
+fi
+tmux send-keys -t "$SESSION" C-c
+if ! assert_pane_absent "second Ctrl+C dismisses the chat TUI" "Type a message"; then
     exit 1
 fi
 
@@ -181,13 +188,15 @@ fi
 # ----------------------------------------------------------------------------
 log "================================================================"
 log "ENCODING-LIMITED PATHS (documented SKIPPED, not asserted):"
-log "  - Alt+X     (command.palette.show)   — Alt-chord not delivered via tmux send-keys"
-log "  - Ctrl+Alt+K (which-key.toggle)       — Ctrl+Alt chord not delivered"
+log "  - Alt+X     (command.palette.show)   — Alt-chord NOT delivered via tmux send-keys (re-confirmed 2026-08-15)"
+log "  - Ctrl+Alt+K (which-key.toggle)       — Alt-modified chord, same gap"
 log "  - Ctrl+Alt+Shift+K (which-key layout) — same encoding gap"
-log "  - Ctrl+P    (model.cycle)             — Ctrl chord delivery unreliable in tmux"
 log "  - <leader>m / <leader>1..9            — two-key sequence needs pending-seq delivery"
-log "  - Ctrl+W/K/U + Ctrl+Y (kill-ring)     — Ctrl chords + ring state"
-log "  - Ctrl+G (abg overlay)                — Ctrl chord"
+log "NOTE: plain Ctrl chords DO deliver via tmux send-keys (Ctrl+C exit and"
+log "Ctrl+P model cycling verified live 2026-08-15); Ctrl+P is not asserted"
+log "here only because the cycle list depends on the host's configured"
+log "providers, which is not hermetic. Ctrl+W/K/U/Y kill-ring and Ctrl+G"
+log "overlay remain unit-seam coverage (interactive state)."
 log "These are covered by the unit-test seam (createRecordingTextarea +"
 log "createTestKeymap host.press) in apps/tui/src/platform/keymap/*.test.ts."
 log "Race/timing invariants (double-Esc, IME-defer, double-Enter, Ctrl+C"
