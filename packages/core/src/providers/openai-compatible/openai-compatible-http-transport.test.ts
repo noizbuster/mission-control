@@ -88,4 +88,25 @@ describe('OpenAI-compatible HTTP transport cancellation classification', () => {
         expect(error).toBeInstanceOf(OpenAICompatibleTransportError);
         expect(error).toMatchObject({ kind: 'abort', message: 'caller cancelled' });
     });
+
+    it('stamps a numeric Retry-After onto the transport error for non-2xx responses', async () => {
+        // Given
+        originalFetch = globalThis.fetch;
+        globalThis.fetch = (() =>
+            Promise.resolve(
+                new Response('{"error":{"message":"rate limited"}}', {
+                    status: 429,
+                    headers: { 'Retry-After': '12' },
+                }),
+            )) as typeof fetch;
+
+        // When
+        const error = await captureStreamError(
+            streamOpenAICompatibleChatCompletions({ ...REQUEST, signal: new AbortController().signal }),
+        );
+
+        // Then
+        expect(error).toBeInstanceOf(OpenAICompatibleTransportError);
+        expect(error).toMatchObject({ status: 429, retryAfterMs: 12_000 });
+    });
 });

@@ -67,6 +67,7 @@ export type GeminiGenerateContentTransportErrorInput = {
     readonly kind?: 'timeout' | 'abort' | 'network';
     readonly code?: string;
     readonly message: string;
+    readonly retryAfterMs?: number;
 };
 
 export class GeminiGenerateContentTransportError extends Error {
@@ -74,6 +75,7 @@ export class GeminiGenerateContentTransportError extends Error {
     readonly status?: number;
     readonly kind?: 'timeout' | 'abort' | 'network';
     readonly code?: string;
+    readonly retryAfterMs?: number;
 
     constructor(input: GeminiGenerateContentTransportErrorInput) {
         super(input.message);
@@ -85,6 +87,9 @@ export class GeminiGenerateContentTransportError extends Error {
         }
         if (input.code !== undefined) {
             this.code = input.code;
+        }
+        if (input.retryAfterMs !== undefined) {
+            this.retryAfterMs = input.retryAfterMs;
         }
     }
 }

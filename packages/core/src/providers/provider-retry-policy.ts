@@ -53,6 +53,25 @@ export function computeProviderRetryDelayMs(retryNumber: number, baseMs: number,
 }
 
 /**
+ * Retry delay combining exponential backoff with a server-advised
+ * `Retry-After` (omp `ai` retry pattern): the advisory is a FLOOR, never a
+ * shortcut past the backoff, and it cannot extend the wait past `maxMs`.
+ * Without an advisory this is plain {@link computeProviderRetryDelayMs}.
+ */
+export function providerRetryDelayMs(input: {
+    readonly attempt: number;
+    readonly baseMs: number;
+    readonly maxMs: number;
+    readonly retryAfterMs?: number | undefined;
+}): number {
+    const backoff = computeProviderRetryDelayMs(input.attempt, input.baseMs, input.maxMs);
+    if (input.retryAfterMs === undefined || !Number.isFinite(input.retryAfterMs) || input.retryAfterMs <= 0) {
+        return backoff;
+    }
+    return Math.min(input.maxMs, Math.max(backoff, Math.round(input.retryAfterMs)));
+}
+
+/**
  * True when the failure should wait indefinitely (rate limit / overload / usage quota)
  * instead of burning a finite node or provider attempt budget.
  */

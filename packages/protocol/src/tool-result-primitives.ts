@@ -40,6 +40,14 @@ export const ProtocolErrorSchema = z
         message: z.string().min(1),
         retryable: z.boolean(),
         redactions: z.array(RedactionMetadataSchema).optional(),
+        /**
+         * Server-advised retry delay in milliseconds (HTTP `Retry-After`), when the
+         * provider sent one on a retryable failure. Retry loops use it as a floor for
+         * the next wait so a rate-limited client neither storms the API nor idles
+         * longer than the server asked. Optional: absent on old events and providers
+         * that do not send the header.
+         */
+        retryAfterMs: z.number().finite().positive().optional(),
     })
     .strict();
 export type ProtocolError = z.infer<typeof ProtocolErrorSchema>;

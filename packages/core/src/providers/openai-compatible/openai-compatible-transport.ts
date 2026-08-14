@@ -58,6 +58,7 @@ export type OpenAICompatibleTransportErrorInput = {
     readonly kind?: 'timeout' | 'abort' | 'network';
     readonly code?: string;
     readonly message: string;
+    readonly retryAfterMs?: number;
 };
 
 export class OpenAICompatibleTransportError extends Error {
@@ -65,6 +66,7 @@ export class OpenAICompatibleTransportError extends Error {
     readonly status?: number;
     readonly kind?: 'timeout' | 'abort' | 'network';
     readonly code?: string;
+    readonly retryAfterMs?: number;
 
     constructor(input: OpenAICompatibleTransportErrorInput) {
         super(input.message);
@@ -76,6 +78,9 @@ export class OpenAICompatibleTransportError extends Error {
         }
         if (input.code !== undefined) {
             this.code = input.code;
+        }
+        if (input.retryAfterMs !== undefined) {
+            this.retryAfterMs = input.retryAfterMs;
         }
     }
 }

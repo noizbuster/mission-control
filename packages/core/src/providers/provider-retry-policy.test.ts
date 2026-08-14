@@ -3,6 +3,7 @@ import {
     computeProviderRetryDelayMs,
     DEFAULT_PROVIDER_MAX_RETRY_DELAY_MS,
     isIndefiniteProviderWaitError,
+    providerRetryDelayMs,
     shouldContinueProviderRetry,
 } from './provider-retry-policy';
 
@@ -14,6 +15,30 @@ describe('provider-retry-policy', () => {
         expect(computeProviderRetryDelayMs(20, 1_000, DEFAULT_PROVIDER_MAX_RETRY_DELAY_MS)).toBe(
             DEFAULT_PROVIDER_MAX_RETRY_DELAY_MS,
         );
+    });
+
+    it('uses Retry-After as a floor over the backoff, capped at maxMs', () => {
+        // Advisory above the first backoff step wins.
+        expect(
+            providerRetryDelayMs({ attempt: 1, baseMs: 1_000, maxMs: 30_000, retryAfterMs: 20_000 }),
+        ).toBe(20_000);
+        // Advisory below the backoff step does not shorten the wait.
+        expect(providerRetryDelayMs({ attempt: 5, baseMs: 1_000, maxMs: 30_000, retryAfterMs: 2_000 })).toBe(
+            16_000,
+        );
+        // Advisory cannot extend past the cap.
+        expect(
+            providerRetryDelayMs({
+                attempt: 1,
+                baseMs: 1_000,
+                maxMs: 30_000,
+                retryAfterMs: DEFAULT_PROVIDER_MAX_RETRY_DELAY_MS,
+            }),
+        ).toBe(30_000);
+        // No advisory → plain backoff.
+        expect(providerRetryDelayMs({ attempt: 2, baseMs: 1_000, maxMs: 30_000 })).toBe(2_000);
+        // Non-positive advisory is ignored.
+        expect(providerRetryDelayMs({ attempt: 1, baseMs: 1_000, maxMs: 30_000, retryAfterMs: 0 })).toBe(1_000);
     });
 
     it('treats overload and quota messages as indefinite waits', () => {

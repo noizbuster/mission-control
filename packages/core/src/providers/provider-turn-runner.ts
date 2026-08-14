@@ -1,27 +1,28 @@
-// allow: SIZE_OK -- HEAD 328 -> current 342 pure LOC; one provider-turn retry, timeout, and tool-loop state machine.
+// allow: SIZE_OK -- HEAD 327 -> current 347 pure LOC; one provider-turn retry, timeout, and tool-loop state machine.
 import type { AgentEventEnvelope, ProtocolError, ProviderStreamChunk } from '@mission-control/protocol';
 import {
     guardProviderChunkForObservability,
     redactProviderChunkForObservability,
 } from './observability-provider-chunk';
 import { createObservabilityRedactor, redactAgentEventEnvelopeForObservability } from './observability-redactor';
-import { createProviderStreamObservability } from './provider-stream-observability';
-import { eventForProviderChunk, responseFailedChunk, responseStartedChunk } from './provider-turn-events';
-import { closeProviderChunkIterator, nextProviderChunk } from './provider-turn-timeout';
 import {
     abortableRetrySleep,
-    computeProviderRetryDelayMs,
     DEFAULT_PROVIDER_MAX_RETRY_DELAY_MS,
     DEFAULT_PROVIDER_RETRY_BASE_DELAY_MS,
     DEFAULT_PROVIDER_RETRY_LIMIT,
+    providerRetryDelayMs,
     shouldContinueProviderRetry,
 } from './provider-retry-policy';
+import { createProviderStreamObservability } from './provider-stream-observability';
+import { eventForProviderChunk, responseFailedChunk, responseStartedChunk } from './provider-turn-events';
+import { closeProviderChunkIterator, nextProviderChunk } from './provider-turn-timeout';
 import {
     ProviderTurnError,
     type ProviderTurnRunInput,
     type ProviderTurnRunnerOptions,
     type ProviderTurnRunResult,
 } from './provider-turn-types';
+import { retryAfterMsFromError } from './shared/retry-after';
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 const DEFAULT_TOOL_CALL_LOOP_LIMIT = 8;
@@ -112,7 +113,13 @@ export class ProviderTurnRunner {
                     envelopes: state.durableEnvelopes,
                 };
             }
-            await sleepBeforeRetry(signal, attempt, this.options.retryBaseDelayMs, this.options.maxRetryDelayMs);
+            await sleepBeforeRetry(
+                signal,
+                attempt,
+                this.options.retryBaseDelayMs,
+                this.options.maxRetryDelayMs,
+                result.error.retryAfterMs,
+            );
             if (signal.aborted) {
                 const failedChunk = redactProviderChunkForObservability(
                     responseFailedChunk(input, state.nextProviderSequence, abortedProviderError()),
@@ -307,7 +314,14 @@ function normalizeProviderError(error: unknown, signal: AbortSignal): ProtocolEr
     if (signal.aborted) {
         return abortedProviderError();
     }
-    return unknownProviderError(error instanceof Error ? error.message : String(error));
+    const message = error instanceof Error ? error.message : String(error);
+    const retryAfterMs = retryAfterMsFromError(error);
+    return {
+        code: 'unknown',
+        message,
+        retryable: true,
+        ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
+    };
 }
 
 function forwardAbort(source: AbortSignal, target: AbortController): () => void {
@@ -351,7 +365,13 @@ function unknownProviderError(message: string): ProtocolError {
     };
 }
 
-async function sleepBeforeRetry(signal: AbortSignal, attempt: number, baseMs: number, capMs: number): Promise<void> {
-    const delay = computeProviderRetryDelayMs(attempt, baseMs, capMs);
+async function sleepBeforeRetry(
+    signal: AbortSignal,
+    attempt: number,
+    baseMs: number,
+    capMs: number,
+    retryAfterMs: number | undefined,
+): Promise<void> {
+    const delay = providerRetryDelayMs({ attempt, baseMs, maxMs: capMs, retryAfterMs });
     await abortableRetrySleep(delay, signal);
 }

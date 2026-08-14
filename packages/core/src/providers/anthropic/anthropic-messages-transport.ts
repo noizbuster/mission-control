@@ -68,6 +68,7 @@ export type AnthropicMessagesTransportErrorInput = {
     readonly kind?: 'timeout' | 'abort' | 'network';
     readonly code?: string;
     readonly message: string;
+    readonly retryAfterMs?: number;
 };
 
 export class AnthropicMessagesTransportError extends Error {
@@ -75,6 +76,7 @@ export class AnthropicMessagesTransportError extends Error {
     readonly status?: number;
     readonly kind?: 'timeout' | 'abort' | 'network';
     readonly code?: string;
+    readonly retryAfterMs?: number;
 
     constructor(input: AnthropicMessagesTransportErrorInput) {
         super(input.message);
@@ -86,6 +88,9 @@ export class AnthropicMessagesTransportError extends Error {
         }
         if (input.code !== undefined) {
             this.code = input.code;
+        }
+        if (input.retryAfterMs !== undefined) {
+            this.retryAfterMs = input.retryAfterMs;
         }
     }
 }

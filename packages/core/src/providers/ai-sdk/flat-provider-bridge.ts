@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 619 -> current 627 pure LOC; AI-SDK provider bridge: stream wrapping, bounded retries, and error normalization.
 /**
  * Flat-provider → AI-SDK bridge (Phase 5 / flip-default enabler).
  *
@@ -47,14 +48,15 @@ import type {
 } from '@mission-control/protocol';
 import {
     abortableRetrySleep,
-    computeProviderRetryDelayMs,
     DEFAULT_PROVIDER_MAX_RETRY_DELAY_MS,
     DEFAULT_PROVIDER_RETRY_BASE_DELAY_MS,
     DEFAULT_PROVIDER_RETRY_LIMIT,
+    providerRetryDelayMs,
     shouldContinueProviderRetry,
 } from '../provider-retry-policy';
 import { closeProviderChunkIterator, nextProviderChunk } from '../provider-turn-timeout';
 import { type ProviderAdapter, ProviderTurnError, type ProviderTurnRequest } from '../provider-turn-types';
+import { retryAfterMsFromError } from '../shared/retry-after';
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 const MAX_RETRY_LIMIT = 100;
@@ -244,7 +246,12 @@ async function* retryProviderStream(input: RetryingProviderStreamInput): AsyncIt
         if (!mayContinue) {
             throw new FlatProviderBridgeError(error, true);
         }
-        const delayMs = computeProviderRetryDelayMs(attempt, input.retryBaseDelayMs, input.maxRetryDelayMs);
+        const delayMs = providerRetryDelayMs({
+            attempt,
+            baseMs: input.retryBaseDelayMs,
+            maxMs: input.maxRetryDelayMs,
+            retryAfterMs: error.retryAfterMs,
+        });
         if (delayMs > 0) {
             await input.retrySleep(delayMs, input.signal);
         }
@@ -279,10 +286,12 @@ function normalizeRetryError(error: unknown, signal: AbortSignal): ProtocolError
     if (signal.aborted) {
         return abortedError();
     }
+    const retryAfterMs = retryAfterMsFromError(error);
     return {
         code: 'unknown',
         message: error instanceof Error ? error.message : String(error),
         retryable: true,
+        ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
     };
 }
 

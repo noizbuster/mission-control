@@ -10,6 +10,8 @@ export interface ProviderTransportErrorInfo {
     readonly kind?: string;
     readonly status?: number;
     readonly code?: string;
+    /** Server-advised retry delay (HTTP `Retry-After`) in ms, when sent. */
+    readonly retryAfterMs?: number;
 }
 
 /**
@@ -59,12 +61,15 @@ export function mapProviderTransportError(
     const timeoutKinds = options.timeoutKinds ?? DEFAULT_TIMEOUT_KINDS;
     const status = error.status;
     const code = error.code;
+    const retryAfterMs = error.retryAfterMs;
+    const withRetryAfter = (base: ProtocolError): ProtocolError =>
+        retryAfterMs !== undefined ? { ...base, retryAfterMs } : base;
 
     if (error.kind === 'abort') {
         return { code: 'provider_aborted', message: redactedMessage, retryable: false };
     }
     if (error.kind !== undefined && timeoutKinds.includes(error.kind)) {
-        return { code: 'provider_timeout', message: redactedMessage, retryable: true };
+        return withRetryAfter({ code: 'provider_timeout', message: redactedMessage, retryable: true });
     }
     if (status !== undefined && options.authStatusCodes.includes(status)) {
         return { code: 'provider_auth_failed', message: redactedMessage, retryable: false };
@@ -73,16 +78,16 @@ export function mapProviderTransportError(
         return { code: 'provider_auth_failed', message: redactedMessage, retryable: false };
     }
     if (isRateLimited(status, code, redactedMessage, options)) {
-        return { code: 'provider_rate_limited', message: redactedMessage, retryable: true };
+        return withRetryAfter({ code: 'provider_rate_limited', message: redactedMessage, retryable: true });
     }
     if (code !== undefined && options.timeoutCodes?.includes(code) === true) {
-        return { code: 'provider_timeout', message: redactedMessage, retryable: true };
+        return withRetryAfter({ code: 'provider_timeout', message: redactedMessage, retryable: true });
     }
     if (options.contextOverflow?.(error, redactedMessage) === true) {
         return { code: 'provider_context_overflow', message: redactedMessage, retryable: false };
     }
     if (options.networkMessagePredicate?.(redactedMessage) === true) {
-        return { code: 'provider_timeout', message: redactedMessage, retryable: true };
+        return withRetryAfter({ code: 'provider_timeout', message: redactedMessage, retryable: true });
     }
     return { code: 'unknown', message: redactedMessage, retryable: false };
 }

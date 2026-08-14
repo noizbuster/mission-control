@@ -1,3 +1,4 @@
+import { retryAfterMsFromResponse } from '../shared/retry-after';
 import { parseSseFrames, readSseStream } from '../shared/sse-stream-transport';
 import {
     type OpenAIResponsesTransport,
@@ -13,11 +14,14 @@ export function createNodeOpenAIResponsesTransport(): OpenAIResponsesTransport {
 
 export async function* streamOpenAIResponses(input: OpenAIResponsesTransportRequest): AsyncIterable<unknown> {
     yield* readSseStream(input, {
-        onError: async (response) =>
-            new OpenAIResponsesTransportError({
+        onError: async (response) => {
+            const retryAfterMs = retryAfterMsFromResponse(response);
+            return new OpenAIResponsesTransportError({
                 status: response.status,
                 message: await response.text().catch(() => ''),
-            }),
+                ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
+            });
+        },
         onInvalidJson: () =>
             new OpenAIResponsesTransportError({
                 kind: 'network',

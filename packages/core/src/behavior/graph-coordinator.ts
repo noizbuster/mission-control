@@ -1,4 +1,4 @@
-// allow: SIZE_OK -- HEAD 604 -> current 702 pure LOC; one bounded graph execution state machine (checkpoint + progress-contract wire).
+// allow: SIZE_OK -- HEAD 734 -> current 736 pure LOC; one bounded graph execution state machine (checkpoint + progress-contract wire).
 import {
     type AbgNodeSpec,
     type AbgPolicyDecision,
@@ -8,12 +8,13 @@ import {
 } from '@mission-control/protocol';
 import {
     abortableRetrySleep,
-    computeProviderRetryDelayMs,
     DEFAULT_PROVIDER_MAX_RETRY_DELAY_MS,
     DEFAULT_PROVIDER_RETRY_BASE_DELAY_MS,
     isAbortRequested,
     isIndefiniteProviderWaitError,
+    providerRetryDelayMs,
 } from '../providers/provider-retry-policy';
+import { retryAfterMsFromError } from '../providers/shared/retry-after';
 import { type AuthorableAbgGraph, createAuthorableAbgGraph } from './authorable-graph';
 import {
     applyNodeRunBudgetGrant,
@@ -258,11 +259,12 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                     if (isIndefiniteProviderWaitError(providerWaitError)) {
                         const waitAttempt = (state.indefiniteProviderWaitByNodeId.get(result.node.id) ?? 0) + 1;
                         state.indefiniteProviderWaitByNodeId.set(result.node.id, waitAttempt);
-                        const delayMs = computeProviderRetryDelayMs(
-                            waitAttempt,
-                            DEFAULT_PROVIDER_RETRY_BASE_DELAY_MS,
-                            DEFAULT_PROVIDER_MAX_RETRY_DELAY_MS,
-                        );
+                        const delayMs = providerRetryDelayMs({
+                            attempt: waitAttempt,
+                            baseMs: DEFAULT_PROVIDER_RETRY_BASE_DELAY_MS,
+                            maxMs: DEFAULT_PROVIDER_MAX_RETRY_DELAY_MS,
+                            retryAfterMs: retryAfterMsFromError(providerWaitError),
+                        });
                         const sleep = input.providerRetrySleep ?? abortableRetrySleep;
                         await sleep(delayMs, input.abortSignal);
                         if (isAbortRequested(input.abortSignal)) {

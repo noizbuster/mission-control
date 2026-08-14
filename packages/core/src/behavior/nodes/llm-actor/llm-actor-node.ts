@@ -1,4 +1,4 @@
-// allow: SIZE_OK -- the single-turn LLM actor owns provider streaming, retry, and post-stream tool settlement.
+// allow: SIZE_OK -- HEAD 503 -> current 509 pure LOC; the single-turn LLM actor owns provider streaming, retry, and post-stream tool settlement.
 /**
  * LLMActor node (ABG §10.1) — wraps a Vercel AI SDK `streamText` call and exposes it as
  * an `AsyncIterable<AbgSignal>`, the universal ABG node contract.
@@ -26,17 +26,18 @@ import { FlatProviderBridgeError } from '../../../providers/ai-sdk/flat-provider
 import { createObservabilityRedactor } from '../../../providers/observability-redactor';
 import {
     abortableRetrySleep,
-    computeProviderRetryDelayMs,
     DEFAULT_PROVIDER_MAX_RETRY_DELAY_MS,
     DEFAULT_PROVIDER_RETRY_BASE_DELAY_MS,
     isAbortRequested,
     isIndefiniteProviderWaitError,
+    providerRetryDelayMs,
 } from '../../../providers/provider-retry-policy';
 import {
     DEFAULT_PROVIDER_CHUNK_TIMEOUT_MS,
     nextProviderChunkTimeoutMs,
 } from '../../../providers/provider-turn-timeout';
 import { ProviderTurnError } from '../../../providers/provider-turn-types';
+import { retryAfterMsFromError } from '../../../providers/shared/retry-after';
 import { errorToString } from '../../../util/error-to-string';
 import { createAbgEmitSignal } from '../../abg-emit';
 import type { CapturedToolProposal, ExecutedToolProposal } from './abg-tool-proposal-execution';
@@ -242,7 +243,12 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
                 (isIndefiniteProviderWaitError(providerError) || canRetryNoOutputTimeout)
             ) {
                 providerWaitAttempt += 1;
-                const delayMs = computeProviderRetryDelayMs(providerWaitAttempt, retryBaseDelayMs, maxRetryDelayMs);
+                const delayMs = providerRetryDelayMs({
+                    attempt: providerWaitAttempt,
+                    baseMs: retryBaseDelayMs,
+                    maxMs: maxRetryDelayMs,
+                    retryAfterMs: retryAfterMsFromError(streamProviderError),
+                });
                 if (canRetryNoOutputTimeout) {
                     noOutputTimeoutRetries += 1;
                     providerChunkTimeoutMs = nextProviderChunkTimeoutMs(providerChunkTimeoutMs);

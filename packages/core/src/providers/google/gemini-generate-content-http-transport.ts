@@ -1,3 +1,4 @@
+import { retryAfterMsFromResponse } from '../shared/retry-after';
 import { isRecord } from '../shared/provider-helpers';
 import { parseSseFrames, readSseStream } from '../shared/sse-stream-transport';
 import {
@@ -23,10 +24,12 @@ export async function* streamGeminiGenerateContent(
         onError: async (response) => {
             const text = await response.text().catch(() => '');
             const parsed = parseGoogleError(text);
+            const retryAfterMs = retryAfterMsFromResponse(response);
             return new GeminiGenerateContentTransportError({
                 status: response.status,
                 ...(parsed.code !== undefined ? { code: parsed.code } : {}),
                 message: parsed.message ?? text,
+                ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
             });
         },
         onInvalidJson: () =>
