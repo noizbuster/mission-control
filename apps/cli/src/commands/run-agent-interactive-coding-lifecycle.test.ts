@@ -71,7 +71,9 @@ describe('runAgent interactive coding agent UX', () => {
         const replayTypes = await replayedTypes('session_task20_control');
         expect(replayTypes).toEqual(expect.arrayContaining(['run.interrupted']));
         expect(replayTypes).not.toContain('run.completed');
-    });
+        // Six 300ms scripted reads plus bounded interrupt settlement
+        // (soft 2.5s + force 1s) exceed the 5s default under parallel load.
+    }, 15_000);
 
     it('delivers a queued follow-up as the next drain-lane turn', async () => {
         // Given: read #2 waits for the first turn's real `task.started` runtime
@@ -112,15 +114,17 @@ describe('runAgent interactive coding agent UX', () => {
 
         // When: turn 1 spans a 250ms provider wait (real wait — the established
         // deterministic-provider pattern in this integration suite) so the
-        // queued admission lands mid-run; the drain lane then promotes the
-        // queued input and runs it as the run's second turn.
+        // queued admission lands mid-run. The provider answers with the valid
+        // intent `trivial`, so each lane settles in two provider calls
+        // (intent-gate → direct-respond) instead of the invalid-intent retry
+        // loop — the drain lane then runs the queued input as turn 2.
         const output = await runAgent(parseArgs(['--session', 'session_queue_delivery']), {
             authStore: createEmptyAuthStore(),
             chatInput,
             chatOutput: chatOutput.output,
             provider: createDeterministicProvider([
                 { kind: 'wait', ms: 250 },
-                { kind: 'response_completed', content: 'turn answer' },
+                { kind: 'response_completed', content: 'trivial' },
             ]),
             onRuntimeEvent: observe,
         });
@@ -128,7 +132,7 @@ describe('runAgent interactive coding agent UX', () => {
         // Then: the queued prompt was promoted and ran — two graph executions
         // inside one run, both settled by the single run.completed.
         expect(output).toContain('Queued follow-up: follow up after the run');
-        expect(output.match(/final-respond/g)).toHaveLength(2);
+        expect(output.match(/direct-respond/g)).toHaveLength(2);
         expect(events).toContainEqual(
             expect.objectContaining({
                 type: 'prompt.promoted',

@@ -38,15 +38,34 @@ describe('runAgent interactive chat', () => {
 
     it('opens a prompt for default mctrl execution and exits after two consecutive Ctrl+C interrupts', async () => {
         const chatOutput = createBufferedChatOutput();
+        // Gate the first interrupt on the real answer event: a fixed 300ms step
+        // races turn setup under parallel suite load and can kill the turn
+        // before the answer renders.
+        const assistantAnswered = Promise.withResolvers<void>();
+        let reads = 0;
+        const chatInput = {
+            read: (): Promise<{ readonly type: 'line'; readonly value: string } | { readonly type: 'interrupt' }> => {
+                reads += 1;
+                if (reads === 1) {
+                    return Promise.resolve({ type: 'line', value: 'summarize the current mission' });
+                }
+                if (reads === 2) {
+                    return assistantAnswered.promise.then(() => ({ type: 'interrupt' }) as const);
+                }
+                return Promise.resolve({ type: 'interrupt' });
+            },
+            close: () => {},
+        };
 
         const output = await runAgent(parseArgs([]), {
             authStore: createEmptyAuthStore(),
-            chatInput: createScriptedChatInput([
-                { type: 'line', value: 'summarize the current mission' },
-                { type: 'interrupt' },
-                { type: 'interrupt' },
-            ]),
+            chatInput,
             chatOutput: chatOutput.output,
+            onRuntimeEvent: (event) => {
+                if (event.type === 'model.call.completed' && event.message?.includes('summarize')) {
+                    assistantAnswered.resolve();
+                }
+            },
         });
 
         expect(output).toBe(chatOutput.getOutput());
@@ -59,7 +78,7 @@ describe('runAgent interactive chat', () => {
         expect(output).toContain('Press Ctrl+C again to exit');
         expect(output).not.toContain('demo task started');
         expect(output).not.toContain('completed by mock sidecar');
-    });
+    }, 15_000);
 
     it('keeps the exact-redacted prompt title when the active model is local/local-echo', async () => {
         const chatOutput = createBufferedChatOutput();
@@ -96,7 +115,7 @@ describe('runAgent interactive chat', () => {
         });
         expect(durableNames.some((name) => name.includes('[REDACTED_CREDENTIAL]'))).toBe(true);
         expect(durableNames.every((name) => !name.includes(secret))).toBe(true);
-    });
+    }, 15_000);
 
     it('persists the normalized first plain prompt title before starting the main turn', async () => {
         // Given: a chat without an eager session and a first plain prompt containing repeated whitespace.
