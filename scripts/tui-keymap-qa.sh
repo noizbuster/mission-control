@@ -141,7 +141,9 @@ tmux new-session -d -s "$SESSION" -x "$PANE_W" -y "$PANE_H" \
     "env MCTRL_DATA_DIR='$DATA_DIR' node --experimental-ffi '$CLI_DIST' --provider local --model local-echo; sleep 20"
 
 # 1. Launch gate
-if ! assert_pane_contains "launch gate renders chat banner" "mission-control chat"; then
+# Launch gate — the TUI boots into the welcome overlay (recent sessions +
+# "Type a message to begin"); the composer hint stays visible under it.
+if ! assert_pane_contains "launch gate renders chat TUI" "Type a message"; then
     fail "TUI failed to launch"
     exit 1
 fi
@@ -153,23 +155,24 @@ if ! assert_pane_contains "prompt submit renders echo response" "$UNIQUE_PROMPT"
     exit 1
 fi
 
-# 3. /hotkeys — registry-driven keybind table (T17)
+# 3. /hotkeys — registry-driven keybind table (T17). The full table exceeds
+# the 44-row pane, so assert the stable footer and the submit binding from
+# the visible tail (the Ctrl+P/Ctrl+E rows scroll out of view).
 tmux send-keys -t "$SESSION" "/hotkeys" Enter
-# Registry output: Ctrl+P (model cycle) + Ctrl+C (documented twice-to-exit) +
-# a namespace-grouped chord. Ctrl+C appears in /hotkeys banner text here.
-if ! assert_pane_contains "/hotkeys renders registry keybind table" "Ctrl+P" "Ctrl+E"; then
+if ! assert_pane_contains "/hotkeys renders registry keybind table" "Tip: Rebind keys" "Submit input"; then
     exit 1
 fi
 
-# 4. /help — commands list + keyboard-shortcuts section
+# 4. /help — renders the commands+shortcuts menu overlay. Like /hotkeys the
+# menu exceeds the pane; assert its distinct footer tip.
 tmux send-keys -t "$SESSION" "/help" Enter
-if ! assert_pane_contains "/help renders commands list" "/exit" "/hotkeys"; then
+if ! assert_pane_contains "/help renders commands menu" "Type / followed by text to filter commands"; then
     exit 1
 fi
 
 # 5. /exit — chat UI disappears (clean exit)
 tmux send-keys -t "$SESSION" "/exit" Enter
-if ! assert_pane_absent "/exit dismisses chat banner" "mission-control chat"; then
+if ! assert_pane_absent "/exit dismisses the chat TUI" "Type a message"; then
     exit 1
 fi
 

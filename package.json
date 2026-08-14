@@ -23,6 +23,7 @@
     "smoke:coding-agent-built-dist": "node --experimental-strip-types scripts/coding-agent-built-dist-smoke.ts",
     "smoke:coding-agent-mcp-tools": "node --experimental-strip-types scripts/coding-agent-built-dist-mcp-smoke.ts",
     "test": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false nx run-many -t test --parallel=1",
+    "tui:qa": "scripts/tui-keymap-qa.sh",
     "typecheck": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false nx run-many -t typecheck"
   },
   "devDependencies": {
