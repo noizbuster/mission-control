@@ -31,7 +31,7 @@ Repo-root automation: CLI tarball packaging, install script, models.dev catalog 
 | `coding-agent-built-dist-smoke-support.ts` | Temp roots, buffered IO, git workspace helpers |
 | `coding-agent-smoke-*.ts` | Shared smoke provider/approval/MCP fakes |
 | `changed-typescript-size.ts` | PR size guard for changed TS (`pnpm check:changed-ts-size`) |
-| `verify-no-tui-keymap-graph.mjs` | Forbids illicit TUI keymap graph coupling |
+| `verify-no-tui-keymap-graph.mjs` | Non-TUI keymap module-graph gate (`pnpm check:tui-graph`; runs in CI against built dist) |
 | `tui-keymap-qa.sh` | Live TUI keymap QA in tmux against built dist (`pnpm tui:qa`; needs tmux + Node 26 FFI) |
 | `tui-keymap-trace-hooks.mjs` | Keymap trace hook injection |
 | `tui-keymap-trace-register.mjs` | Keymap trace registration |

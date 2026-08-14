@@ -35,6 +35,8 @@ jobs:
       - run: pnpm build
       - name: Live TUI keymap QA (tmux against built dist)
         run: pnpm tui:qa
+      - name: Non-TUI keymap module-graph gate (against built dist)
+        run: pnpm check:tui-graph
       - run: pnpm lint
       - run: cargo test --manifest-path native/sidecar/Cargo.toml
       - run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml

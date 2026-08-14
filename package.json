@@ -10,6 +10,7 @@
   "scripts": {
     "build": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false nx run-many -t build",
     "check:changed-ts-size": "node --experimental-strip-types scripts/changed-typescript-size.ts",
+    "check:tui-graph": "node scripts/verify-no-tui-keymap-graph.mjs",
     "dev:cli": "pnpm --filter @mission-control/cli dev",
     "dev:desktop": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false nx run desktop:dev",
     "dev:package-cli": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false nx run workspace:package-cli",

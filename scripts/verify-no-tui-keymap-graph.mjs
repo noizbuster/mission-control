@@ -70,8 +70,11 @@ const FORBIDDEN = [
 // gate failure) as a defensive check and document the root cause rather than silently ignoring it.
 const FFI_FREE_TRANSITIVE = ['@opentui/keymap/src/react', '@opentui/keymap/chunks'];
 
-// A module that MUST be present (sanity: the trace captured the non-TUI graph).
-const EXPECTED_PRESENT = ['commands/run-agent', 'interactive-chat'];
+// Modules that MUST be present (sanity: the trace captured the non-TUI graph).
+// Matched as chunk-name substrings — the Vite multi-entry build flattens command
+// modules into dist/chunks/<name>-<hash>.js, so directory prefixes are unstable
+// but the exported chunk names are not.
+const EXPECTED_PRESENT = ['run-agent', 'interactive-chat'];
 
 function runTraced(args) {
     return new Promise((resolvePromise, reject) => {
