@@ -1,5 +1,5 @@
 use crate::desktop_command_test_support::{
-    seed_imported_jsonl_pending_file_patch_approval, temp_data_dir,
+    seed_imported_pending_file_patch_approval, temp_data_dir,
 };
 use crate::desktop_commands::{
     DesktopApprovalDecisionInput, DesktopPromptCommandInput, DesktopRunCommandInput,
@@ -36,15 +36,7 @@ fn prompt_commands_call_core_service_and_append_parseable_session_events()
     Ok(())
 }
 
-// FIXME(2026-08-15): stale fixture premise — the SQLite-native session
-// transition removed legacy-JSONL reads (readLocalSessionReplay consults only
-// `hasSqliteSession`), so the seeded `sessions/*.jsonl` approval session now
-// reads back as Missing and this fails at the approval_log assertion. The
-// test verifies imported-approval inertness (import-safe authority, 7b4a7109);
-// reviving it needs a seed through the canonical DB that still counts as
-// *imported* authority — a desktop-owner design call, not a mechanical port.
 #[test]
-#[ignore = "legacy-JSONL approval seed no longer readable after SQLite-native sessions; needs a DB-side imported-authority seed"]
 fn run_commands_append_events_and_imported_approval_stays_inert() -> Result<(), Box<dyn Error>> {
     let data_dir = temp_data_dir("run-approval-bridge")?;
     let run_session_id = "session_bridge_run";
@@ -63,7 +55,7 @@ fn run_commands_append_events_and_imported_approval_stays_inert() -> Result<(), 
     let queued = queue_follow_up_in_data_dir(prompt_input(run_session_id), &data_dir)?;
     let resumed = resume_run_in_data_dir(run.clone(), &data_dir)?;
     let interrupted = interrupt_run_in_data_dir(run, &data_dir)?;
-    seed_imported_jsonl_pending_file_patch_approval(
+    seed_imported_pending_file_patch_approval(
         &data_dir,
         approval_session_id,
         "approval_permission_call_patch",

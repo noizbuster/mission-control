@@ -4,13 +4,16 @@
  * Modes:
  * - pending-approval: openLocalSessionEventStore + store.append of tool call,
  *   permission, approval, and blocked run so desktop_tool_proposals is minted.
+ * - imported-approval: the same events seeded through
+ *   importSessionEnvelopesToLocalStore — envelopes only, NO proposals minted —
+ *   reproducing an imported session whose approvals must stay inert.
  * - unknown-effect: reserve + claim + process restart so the effect becomes
  *   durable unknown for operator resolution without tool replay.
  *
- * NEVER uses appendEnvelopeWithStoreSequence (non-authoritative import path).
+ * Only the imported-approval mode may use appendEnvelopeWithStoreSequence (the
+ * non-authoritative import path); every other mode stays authoritative.
  */
-import { openLocalSessionEventStore } from '@mission-control/core';
-
+import { importSessionEnvelopesToLocalStore, openLocalSessionEventStore } from '@mission-control/core';
 const TIMESTAMP = '2026-06-09T00:00:00.000Z';
 const MODEL = { providerID: 'mock', modelID: 'mission-control-demo' };
 
@@ -18,6 +21,8 @@ try {
     const args = parseArgs(process.argv.slice(2));
     if (args.mode === 'pending-approval') {
         await seedPendingApproval(args);
+    } else if (args.mode === 'imported-approval') {
+        await seedImportedApproval(args);
     } else if (args.mode === 'unknown-effect') {
         await seedUnknownEffect(args);
     } else {
@@ -48,6 +53,31 @@ async function seedPendingApproval(args) {
         }
     } finally {
         await store.close();
+    }
+}
+
+async function seedImportedApproval(args) {
+    const toolCall = buildToolCall(args);
+    const events = [
+        providerToolCallEvent(args.sessionId, toolCall),
+        permissionRequestedEvent(args.sessionId, toolCall),
+        approvalRequestedEvent(args.sessionId, toolCall, args.approvalId),
+        runBlockedEvent(args.sessionId, toolCall.toolCallId),
+    ];
+    const result = await importSessionEnvelopesToLocalStore({
+        dataDir: args.dataDir,
+        sessionId: args.sessionId,
+        envelopes: events.map((event, index) => ({
+            eventId: `imported_seed_${index}`,
+            sequence: index,
+            createdAt: TIMESTAMP,
+            sessionId: args.sessionId,
+            durability: 'durable',
+            event,
+        })),
+    });
+    if (result !== 'imported') {
+        throw new Error(`expected fresh import, got: ${result}`);
     }
 }
 
