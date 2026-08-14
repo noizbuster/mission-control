@@ -2,7 +2,7 @@ import type { ToolInvocationSettlement } from '@mission-control/core';
 import { AgentEventSchema, ToolCallSchema, ToolResultSchema } from '@mission-control/protocol';
 import { createChatStore } from '@mission-control/tui/state';
 import { describe, expect, it } from 'vitest';
-import { createStoreChatOutput } from './chat-agent-runner';
+import { createStoreChatOutput } from './store-chat-output';
 import { renderInteractiveToolSettlement, renderProviderEnvelope } from './interactive-coding-provider-rendering';
 import { renderToolPreview } from './interactive-coding-tool-preview';
 import { createProviderRenderState } from './interactive-coding-transcript-render-state';

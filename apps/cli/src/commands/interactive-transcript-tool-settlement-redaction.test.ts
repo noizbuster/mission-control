@@ -1,7 +1,7 @@
 import { ToolCallSchema } from '@mission-control/protocol';
 import { createChatStore } from '@mission-control/tui/state';
 import { describe, expect, it, vi } from 'vitest';
-import { createStoreChatOutput } from './chat-agent-runner';
+import { createStoreChatOutput } from './store-chat-output';
 import { interactiveGraphStreamSignal, renderInteractiveGraphDurableEvent } from './interactive-coding-graph-rendering';
 import { renderInteractiveToolSettlement } from './interactive-coding-provider-rendering';
 import { renderToolPreview } from './interactive-coding-tool-preview';

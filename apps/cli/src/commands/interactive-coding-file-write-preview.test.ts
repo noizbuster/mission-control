@@ -1,7 +1,7 @@
 import type { ToolCall } from '@mission-control/protocol';
 import { createChatStore, type TranscriptPart } from '@mission-control/tui/state';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createStoreChatOutput } from './chat-agent-runner';
+import { createStoreChatOutput } from './store-chat-output';
 import type { ChatOutput } from './interactive-chat-io';
 import {
     buildFileWritePreview,

@@ -1,7 +1,7 @@
 import { AgentEventSchema } from '@mission-control/protocol';
 import { createChatStore } from '@mission-control/tui/state';
 import { describe, expect, it } from 'vitest';
-import { createStoreChatOutput } from './chat-agent-runner';
+import { createStoreChatOutput } from './store-chat-output';
 import { interactiveGraphStreamSignal, renderInteractiveGraphDurableEvent } from './interactive-coding-graph-rendering';
 import {
     graphDelta,

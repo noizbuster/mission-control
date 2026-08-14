@@ -1,6 +1,6 @@
 import { createChatStore } from '@mission-control/tui/state';
 import { describe, expect, it } from 'vitest';
-import { createStoreChatOutput } from './chat-agent-runner';
+import { createStoreChatOutput } from './store-chat-output';
 import { renderProviderEnvelope } from './interactive-coding-provider-rendering';
 import { createProviderRenderState } from './interactive-coding-transcript-render-state';
 import { providerEnvelope } from './interactive-transcript-emission-test-support';
