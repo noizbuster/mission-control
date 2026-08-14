@@ -42,7 +42,7 @@ DATA_DIR="$(mktemp -d -t mctrl-qa-XXXXXXXX)"
 LOG_FILE="${MCTRL_QA_LOG:-$REPO_ROOT/.mc/evidence/task-18-tui-keymap-port.log}"
 PANE_W=110
 PANE_H=44
-SETTLE_TRIES=15           # capture-pane retry attempts for an assertion
+SETTLE_TRIES=${MCTRL_QA_SETTLE_TRIES:-25}  # capture-pane retries per assertion (CI runners are slower than local)
 SETTLE_SLEEP=0.4          # seconds between retries
 KEEP_SESSION="${KEEP_SESSION:-0}"
 

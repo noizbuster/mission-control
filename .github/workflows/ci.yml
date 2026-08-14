@@ -33,6 +33,8 @@ jobs:
       - run: pnpm test
       - run: pnpm typecheck
       - run: pnpm build
+      - name: Live TUI keymap QA (tmux against built dist)
+        run: pnpm tui:qa
       - run: pnpm lint
       - run: cargo test --manifest-path native/sidecar/Cargo.toml
       - run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
