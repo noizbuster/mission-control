@@ -130,8 +130,14 @@ export async function runInteractiveAgent(input: RunInteractiveAgentInput): Prom
             sessionFinalizeSink,
         });
     } finally {
-        if (didStart) {
-            await input.runtime.stop();
+        // Per-step isolation (omo plugin-dispose pattern): one failing teardown
+        // step must neither skip the others nor mask the session result.
+        try {
+            if (didStart) {
+                await input.runtime.stop();
+            }
+        } catch (error: unknown) {
+            process.stderr.write(`runtime stop failed: ${error instanceof Error ? error.message : String(error)}\n`);
         }
         if (sessionFinalizeSink.info !== undefined && recorder.shouldFinalizeCurrentSession()) {
             try {
@@ -148,8 +154,26 @@ export async function runInteractiveAgent(input: RunInteractiveAgentInput): Prom
             }
         }
         unsubscribeRuntimeEvents?.();
-        await recorder.close();
-        closePersistentStore(input.persistentStore);
-        await closeTreeSitterClient();
+        try {
+            await recorder.close();
+        } catch (error: unknown) {
+            process.stderr.write(
+                `session recorder close failed: ${error instanceof Error ? error.message : String(error)}\n`,
+            );
+        }
+        try {
+            closePersistentStore(input.persistentStore);
+        } catch (error: unknown) {
+            process.stderr.write(
+                `persistent store close failed: ${error instanceof Error ? error.message : String(error)}\n`,
+            );
+        }
+        try {
+            await closeTreeSitterClient();
+        } catch (error: unknown) {
+            process.stderr.write(
+                `tree-sitter client close failed: ${error instanceof Error ? error.message : String(error)}\n`,
+            );
+        }
     }
 }

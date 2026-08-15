@@ -91,7 +91,18 @@ export function createTerminalChatInputFromStreams(streams: TerminalChatInputStr
     streams.input.setRawMode(true);
     streams.input.resume();
     streams.output.write(terminalModifiedKeyEnableSequence);
-
+    // Stream-EOF parity (omo/omp): piped or detached stdin that ends or errors
+    // must wake pending reads instead of hanging the loop forever. Closing the
+    // input cancels active reads with an interrupt, so the chat loop exits.
+    const onInputStreamEnded = (): void => {
+        if (closed) {
+            return;
+        }
+        closeInput();
+    };
+    streams.input.on('end', onInputStreamEnded);
+    streams.input.on('close', onInputStreamEnded);
+    streams.input.on('error', onInputStreamEnded);
     const input: TerminalInputStream = {
         get isRaw() {
             return streams.input.isRaw === true;
@@ -106,14 +117,19 @@ export function createTerminalChatInputFromStreams(streams: TerminalChatInputStr
             streams.input.pause();
         },
         on: (event, listener) => {
-            activeDataListeners.add(listener);
+            if (event === 'data') {
+                // Only data reads participate in suspend/resume bookkeeping.
+                activeDataListeners.add(listener);
+            }
             if (!suspended) {
                 streams.input.on(event, listener);
             }
             return input;
         },
         off: (event, listener) => {
-            activeDataListeners.delete(listener);
+            if (event === 'data') {
+                activeDataListeners.delete(listener);
+            }
             streams.input.off(event, listener);
             return input;
         },
@@ -158,6 +174,27 @@ export function createTerminalChatInputFromStreams(streams: TerminalChatInputStr
             promptRendered = true;
         }
         renderedBlock = renderTerminalInputBlock(streams.output, buffer, menuState, renderedBlock, renderContext);
+    }
+
+    function closeInput(): void {
+        if (closed) {
+            return;
+        }
+        closed = true;
+        for (const cancel of [...activeReadCancellations]) {
+            cancel();
+        }
+        activeReadCancellations.clear();
+        for (const listener of activeDataListeners) {
+            streams.input.off('data', listener);
+        }
+        activeDataListeners.clear();
+        streams.input.off('end', onInputStreamEnded);
+        streams.input.off('close', onInputStreamEnded);
+        streams.input.off('error', onInputStreamEnded);
+        streams.output.write(terminalModifiedKeyDisableSequence);
+        streams.input.setRawMode(wasRaw);
+        streams.input.pause();
     }
 
     return {
@@ -210,22 +247,6 @@ export function createTerminalChatInputFromStreams(streams: TerminalChatInputStr
         },
         suspend,
         resume,
-        close: () => {
-            if (closed) {
-                return;
-            }
-            closed = true;
-            for (const cancel of [...activeReadCancellations]) {
-                cancel();
-            }
-            activeReadCancellations.clear();
-            for (const listener of activeDataListeners) {
-                streams.input.off('data', listener);
-            }
-            activeDataListeners.clear();
-            streams.output.write(terminalModifiedKeyDisableSequence);
-            streams.input.setRawMode(wasRaw);
-            streams.input.pause();
-        },
+        close: closeInput,
     };
 }

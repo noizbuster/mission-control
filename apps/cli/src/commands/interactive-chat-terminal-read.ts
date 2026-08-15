@@ -28,8 +28,14 @@ export type TerminalInputStream = {
     readonly setRawMode: (isRaw: boolean) => void;
     readonly resume: () => void;
     readonly pause: () => void;
-    readonly on: (event: 'data', listener: (chunk: Buffer | string) => void) => TerminalInputStream;
-    readonly off: (event: 'data', listener: (chunk: Buffer | string) => void) => TerminalInputStream;
+    readonly on: (
+        event: 'data' | 'end' | 'close' | 'error',
+        listener: (chunk: Buffer | string) => void,
+    ) => TerminalInputStream;
+    readonly off: (
+        event: 'data' | 'end' | 'close' | 'error',
+        listener: (chunk: Buffer | string) => void,
+    ) => TerminalInputStream;
 };
 
 export type TerminalOutputStream = {

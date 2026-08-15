@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 290 -> current 310 pure LOC; one terminal raw-mode input contract matrix covering encoding, menus, interrupts, and stream end.
 import { describe, expect, it } from 'vitest';
 import { createTerminalChatInputFromStreams } from './interactive-chat-io';
 import { EventEmitter } from 'node:events';
@@ -354,6 +355,33 @@ describe('terminal chat input stream handling', () => {
         input.send('\u001b[27;5;99~');
 
         await expect(read).resolves.toEqual({ type: 'interrupt' });
+        chatInput.close();
+    });
+
+    it('ends pending reads with an interrupt when the input stream ends', async () => {
+        const input = new FakeTerminalInput();
+        const output = new FakeTerminalOutput();
+        const chatInput = createTerminalChatInputFromStreams({ input, output });
+        const read = chatInput.read();
+
+        input.emit('end');
+
+        await expect(readWithTimeout(read)).resolves.toEqual({ type: 'interrupt' });
+        // Closed: later reads resolve immediately and raw mode is restored.
+        await expect(chatInput.read()).resolves.toEqual({ type: 'interrupt' });
+        expect(input.isRaw).toBe(false);
+        expect(input.isPaused).toBe(true);
+    });
+
+    it('ends pending reads with an interrupt when the input stream errors', async () => {
+        const input = new FakeTerminalInput();
+        const output = new FakeTerminalOutput();
+        const chatInput = createTerminalChatInputFromStreams({ input, output });
+        const read = chatInput.read();
+
+        input.emit('error', new Error('EIO'));
+
+        await expect(readWithTimeout(read)).resolves.toEqual({ type: 'interrupt' });
         chatInput.close();
     });
 });

@@ -42,7 +42,7 @@ export function suspendChatInputWhileSelectingModel(selectModel: ModelSelector, 
 }
 
 export function registerProcessTerminalCleanup(
-    input: ChatInput,
+    input: Pick<ChatInput, 'close'>,
     options: { readonly onForceExit?: () => void } = {},
 ): () => void {
     return registerProcessTerminalCleanupImpl(

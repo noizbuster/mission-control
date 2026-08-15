@@ -1,13 +1,13 @@
-// allow: SIZE_OK -- HEAD 1339 -> current 1351 pure LOC; one interactive chat event-loop state machine after action extraction.
+// allow: SIZE_OK -- HEAD 1339 -> current 1429 pure LOC; one interactive chat event-loop state machine after action extraction.
 import {
     type AgentRuntime,
     type AskUserQuestionRequest,
+    type BackgroundJobHandle,
     type CommandExecutionRequest,
     type CommandExecutionResult,
     type ContextCacheUsage,
     discoverSkills,
     discoverWorkflows,
-    type BackgroundJobHandle,
     type LocalSessionEventStore,
     type ObservabilityRedactor,
     PermissionRuleStore,
@@ -50,11 +50,13 @@ import {
 } from '@mission-control/tui/state';
 import type { ProviderAuthStore } from '../auth-store';
 import { getVersion } from '../cli-version';
+import { registerCrashGuardActiveSession, rescueTerminalBeforeExit } from '../crash-guard';
 import { formatSessionFinalizeLineFromInfo, type SessionFinalizeInfo } from '../ui/session-finalize';
 import { toggleDisabled } from './agents-disabled-config';
 import { parseModelPatternString, setOverride } from './agents-model-overrides-config';
 import { chatActionShowsWorkingStatus, parseChatLine } from './chat-commands';
 import { appendInputHistoryEntry, getSharedHistoryStore, loadInputHistoryEntries } from './input-history-store';
+import { isApprovalDecisionLine } from './interactive-approval-helpers';
 import type { ChatActionResult } from './interactive-chat-action-result';
 import {
     type CodingActionContext,
@@ -90,7 +92,6 @@ import {
 import { formatModelProviderStatus } from './interactive-chat-status';
 import { createUndoRedoStack, type UndoRedoStack } from './interactive-chat-undo-redo-stack';
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent';
-import { isApprovalDecisionLine } from './interactive-approval-helpers';
 import { interactiveSessionCliStdout } from './interactive-session-cli-stdout';
 import { emitTranscriptFallback } from './interactive-transcript-emission';
 import {
@@ -233,7 +234,17 @@ export async function runInteractiveChatSession(
         variantID?: string;
         sessionDisplayName?: string;
     };
-    const initialHistoryEntries = useTui ? await loadInputHistoryEntries() : [];
+    // Boot degradations that must not kill the session (omo per-step isolation):
+    // history is an enhancement, so a failed load starts fresh with a notice.
+    const bootDegradations: string[] = [];
+    const initialHistoryEntries = useTui
+        ? await loadInputHistoryEntries().catch((error: unknown) => {
+              bootDegradations.push(
+                  `Input history unavailable: ${error instanceof Error ? error.message : String(error)}`,
+              );
+              return [];
+          })
+        : [];
     const initialAbgOverlayPrefs = useTui ? await loadAbgOverlayPrefs() : undefined;
     const pricingTableForSession = await loadPricingTable();
     const missionControlServices = await resolveMissionControlServices(
@@ -322,6 +333,10 @@ export async function runInteractiveChatSession(
     if (useTui && tuiRuntimeOptions !== undefined) {
         const { createChatTui } = await import('@mission-control/tui/create-chat-tui');
         tuiHandle = await createChatTui(tuiRuntimeOptions);
+        // Surface boot degradations once the notice channel exists.
+        for (const notice of bootDegradations) {
+            tuiHandle.showTransientNotice(notice);
+        }
     }
     // Keep the non-TUI conversationText mirror aligned when App recovery
     // replaceTranscript (or any store output rewrite) changes live output.
@@ -474,6 +489,9 @@ export async function runInteractiveChatSession(
     let turnCounter = 0;
     const inputPump = new ChatInputPump(chatInput);
     let currentSessionId = options.sessionId;
+    // Crash records must name the session that was orphaned (crash-guard design
+    // intent; previously never registered by the chat loop).
+    registerCrashGuardActiveSession(currentSessionId);
     tuiHandle?.setSessionId(currentSessionId ?? '');
     {
         const sessionAtBootLimit = currentSessionId;
@@ -588,6 +606,7 @@ export async function runInteractiveChatSession(
         if (cliChanged) {
             invalidateTitleGeneration();
             currentSessionId = sessionId;
+            registerCrashGuardActiveSession(sessionId);
             lastContextTokensUsed = undefined;
             setSessionCacheUsage(undefined);
             // Clear CLI controller immediately — do not wait for catalog sync.
@@ -656,17 +675,35 @@ export async function runInteractiveChatSession(
         }
     };
 
-    const unregisterProcessCleanup =
+    // Out-of-band signals (kill, IDE stop, terminal close) must run cleanup in
+    // BOTH modes. Raw-mode Ctrl+C never reaches here in TUI mode (it is a key
+    // event), so this registration only covers genuine out-of-band kills —
+    // previously the TUI path had none, leaving alt-screen/raw-mode/mouse
+    // enabled, the debounced prompt draft unflushed, and no finalize record
+    // when the OS default killed the process (omp postmortem / omo
+    // process-cleanup parity).
+    const unregisterProcessCleanup = registerProcessTerminalCleanup(
         tuiHandle === undefined
-            ? registerProcessTerminalCleanup(chatInput, {
-                  onForceExit: () => {
-                      if (!sessionFinalizeWritten) {
-                          sessionFinalizeInfo = { status: 'aborted', reason: 'interrupted by signal' };
-                      }
-                      writeSessionFinalize();
+            ? chatInput
+            : {
+                  // Synchronous rescue first (draft flush before teardown clears
+                  // the mirror), then wake the loop with an interrupt via a
+                  // closed event queue so the regular finally teardown —
+                  // finalize line, recorder flush, unmount — still runs.
+                  close: () => {
+                      rescueTerminalBeforeExit();
+                      tuiHandle?.closeEventQueue();
                   },
-              })
-            : undefined;
+              },
+        {
+            onForceExit: () => {
+                if (!sessionFinalizeWritten) {
+                    sessionFinalizeInfo = { status: 'aborted', reason: 'interrupted by signal' };
+                }
+                writeSessionFinalize();
+            },
+        },
+    );
 
     const syncSessionDisplayName = async (sessionId: string | undefined): Promise<void> => {
         const sid = sessionId ?? '';
@@ -940,35 +977,57 @@ export async function runInteractiveChatSession(
                     const pending = pendingWorkflowTurns.shift();
                     if (pending !== undefined) {
                         workflowChainDepth += 1;
-                        const workflowResult = await startWorkflowTurn(
-                            runtime,
-                            chatOutput,
-                            pending.spec,
-                            pending.prompt,
-                            currentModelProviderSelection,
-                            lastCodingContext,
-                        );
-                        activeTurn = workflowResult.activeTurn;
-                        continue;
+                        try {
+                            const workflowResult = await startWorkflowTurn(
+                                runtime,
+                                chatOutput,
+                                pending.spec,
+                                pending.prompt,
+                                currentModelProviderSelection,
+                                lastCodingContext,
+                            );
+                            activeTurn = workflowResult.activeTurn;
+                            continue;
+                        } catch (error: unknown) {
+                            // Auxiliary turn start must not exit the session
+                            // (omo per-step isolation): surface and fall through
+                            // to the normal completion cleanup below.
+                            emitTranscriptFallback(
+                                chatOutput,
+                                `Error: ${error instanceof Error ? error.message : String(error)}\n`,
+                            );
+                            activeTurn = undefined;
+                        }
                     }
                 }
                 if (next.outcome === 'completed') {
                     const sessionAtAutoCompact = currentSessionId;
                     const storeAtAutoCompact = currentSessionStore;
                     const selectionAtAutoCompact = currentModelProviderSelection;
-                    const autoCompactTurn = await maybeStartAutoCompaction({
-                        usedTokens: lastContextTokensUsed,
-                        selection: selectionAtAutoCompact,
-                        sessionId: sessionAtAutoCompact,
-                        sessionStore: storeAtAutoCompact,
-                        provider: currentProvider,
-                        output: chatOutput,
-                        ...(options.workspaceRoot !== undefined ? { workspaceRoot: options.workspaceRoot } : {}),
-                        ...(options.authStore !== undefined ? { authStore: options.authStore } : {}),
-                        ...(options.observeStoredEvent !== undefined
-                            ? { observeStoredEvent: options.observeStoredEvent }
-                            : {}),
-                    });
+                    let autoCompactTurn: ActiveCodingAgentTurn | undefined;
+                    try {
+                        autoCompactTurn = await maybeStartAutoCompaction({
+                            usedTokens: lastContextTokensUsed,
+                            selection: selectionAtAutoCompact,
+                            sessionId: sessionAtAutoCompact,
+                            sessionStore: storeAtAutoCompact,
+                            provider: currentProvider,
+                            output: chatOutput,
+                            ...(options.workspaceRoot !== undefined ? { workspaceRoot: options.workspaceRoot } : {}),
+                            ...(options.authStore !== undefined ? { authStore: options.authStore } : {}),
+                            ...(options.observeStoredEvent !== undefined
+                                ? { observeStoredEvent: options.observeStoredEvent }
+                                : {}),
+                        });
+                    } catch (error: unknown) {
+                        // Compaction scheduling is auxiliary to the completed
+                        // turn; degrade with a notice instead of killing the loop.
+                        emitTranscriptFallback(
+                            chatOutput,
+                            `Auto-compaction skipped: ${error instanceof Error ? error.message : String(error)}\n`,
+                        );
+                        autoCompactTurn = undefined;
+                    }
                     if (autoCompactTurn !== undefined) {
                         const staleAutoCompact =
                             currentSessionId !== sessionAtAutoCompact ||
@@ -1045,7 +1104,15 @@ export async function runInteractiveChatSession(
                 chatOutput.write(`Prompt is too long (max ${maxChatPromptLength} characters).\n`);
                 continue;
             }
-            await appendInputHistoryEntry(prompt);
+            try {
+                await appendInputHistoryEntry(prompt);
+            } catch (error: unknown) {
+                // History is an enhancement (omo degradation pattern): a full
+                // disk or EIO must not kill the session on Enter.
+                chatOutput.write(
+                    `Could not save input history: ${error instanceof Error ? error.message : String(error)}\n`,
+                );
+            }
 
             const action = parseChatLine(event.value, {
                 modelChoices,
@@ -1067,7 +1134,22 @@ export async function runInteractiveChatSession(
                     action.kind === 'workflow' ||
                     action.kind === 'bash')
             ) {
-                const ensured = await options.ensureSession();
+                let ensured: EnsuredSession;
+                try {
+                    ensured = await options.ensureSession();
+                } catch (error: unknown) {
+                    // Without a session the action cannot run; surface and keep
+                    // the loop alive instead of exiting the whole session.
+                    emitTranscriptFallback(
+                        chatOutput,
+                        `Error: could not start a session: ${error instanceof Error ? error.message : String(error)}\n`,
+                    );
+                    if (tuiHandle !== undefined) {
+                        tuiHandle.setGenerating(false);
+                        tuiHandle.clearAgentStatus();
+                    }
+                    continue;
+                }
                 commitSessionIdentity(ensured.sessionId, ensured.store);
                 const titleNavigation = sessionNavigation;
                 if (action.kind === 'prompt' && titleNavigation !== undefined) {
@@ -1333,8 +1415,15 @@ export async function runInteractiveChatSession(
             if (!areModelProviderSelectionsEqual(currentModelProviderSelection, result.modelProviderSelection)) {
                 currentProvider =
                     options.resolveProviderForSelection?.(result.modelProviderSelection) ?? currentProvider;
-                if (result.persistModelProviderSelection === true) {
-                    await options.persistModelProviderSelection?.(result.modelProviderSelection);
+                if (result.persistModelProviderSelection === true && options.persistModelProviderSelection) {
+                    try {
+                        await options.persistModelProviderSelection(result.modelProviderSelection);
+                    } catch (error: unknown) {
+                        // Preference persistence is auxiliary to the model switch.
+                        chatOutput.write(
+                            `Could not save model selection: ${error instanceof Error ? error.message : String(error)}\n`,
+                        );
+                    }
                 }
                 // Sync store so Ctrl+V variant cycling targets the new base.
                 tuiHandle?.setModelSelection(result.modelProviderSelection);
@@ -1360,7 +1449,14 @@ export async function runInteractiveChatSession(
             activeTurn = result.activeTurn;
             if (result.sessionId !== undefined && result.sessionId !== currentSessionId) {
                 invalidateTitleGeneration();
-                await drainSessionTitleWriteQueue(enqueueSessionTitleWrite);
+                try {
+                    await drainSessionTitleWriteQueue(enqueueSessionTitleWrite);
+                } catch (error: unknown) {
+                    // Pending title writes fail independently of session switching.
+                    chatOutput.write(
+                        `Could not persist session title: ${error instanceof Error ? error.message : String(error)}\n`,
+                    );
+                }
             }
             // Shared wipe/reseed when the action advanced the session id.
             // Same-id (including after commitAttachedSession) is a no-op.
@@ -1372,13 +1468,25 @@ export async function runInteractiveChatSession(
             }
             currentSessionStore = result.sessionStore ?? currentSessionStore;
             if (result.sessionStore !== undefined && result.sessionId !== undefined) {
-                await seedTurnCounterFromStore(result.sessionStore, result.sessionId);
+                try {
+                    await seedTurnCounterFromStore(result.sessionStore, result.sessionId);
+                } catch {
+                    // Counter seeding is an id-collision guard; a failed re-read
+                    // keeps the running counter. Worst case a colliding prompt id
+                    // is rejected per-action by the admission fence.
+                }
             }
             if (result.approvalLevel !== undefined) {
                 currentApprovalLevel = result.approvalLevel;
                 sharedPermissionSession.replaceBuiltInRules(approvalLevelRules(currentApprovalLevel));
                 tuiHandle?.setApprovalLevel(currentApprovalLevel);
-                await options.persistApprovalLevel?.(currentApprovalLevel);
+                try {
+                    await options.persistApprovalLevel?.(currentApprovalLevel);
+                } catch (error: unknown) {
+                    chatOutput.write(
+                        `Could not save approval level: ${error instanceof Error ? error.message : String(error)}\n`,
+                    );
+                }
             }
         }
     } catch (error: unknown) {

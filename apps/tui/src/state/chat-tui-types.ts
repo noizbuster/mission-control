@@ -23,6 +23,9 @@ export type ChatTuiHandle = {
     readonly waitForEvent: () => Promise<ChatInputEvent>;
     /** Inject a UI input event into the imperative loop (compact auto-heal, etc.). */
     readonly enqueueEvent: (event: ChatInputEvent) => boolean;
+    /** Close the event queue without unmounting: wakes the imperative loop with
+     *  an interrupt (signal rescue path) while leaving full teardown to the loop. */
+    readonly closeEventQueue: () => void;
     readonly emitOutput: (text: string) => void;
     readonly emitTranscriptPart: (part: TranscriptPart, fallbackText: string) => void;
     readonly emitTranscriptFallback: (text: string) => void;

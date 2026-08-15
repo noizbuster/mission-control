@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 297 -> current 298 pure LOC; one TUI mount lifetime owning draft restore, store wiring, and handle teardown.
 import { getModelContextLimit } from '@mission-control/config';
 import { resolveMissionControlDataDir } from '@mission-control/core';
 import type { ModelProviderSelection } from '@mission-control/protocol';
@@ -26,6 +27,7 @@ export type ChatTuiOptions = ChatTuiRuntimeOptions;
 export function createChatTuiHandle(store: ChatStore, unmountFn: () => void): ChatTuiHandle {
     let unmounted = false;
     return {
+        closeEventQueue: () => store.closeEventQueue(),
         waitForEvent: () => store.waitForEvent(),
         enqueueEvent: (event) => store.enqueueEvent(event),
         emitOutput: (text) => store.emitOutput(text),

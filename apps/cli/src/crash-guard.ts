@@ -101,6 +101,16 @@ function invokePromptDraftFlush(): void {
         // Crash path must never throw.
     }
 }
+/**
+ * Synchronous best-effort terminal rescue for abrupt-exit paths (fatal errors,
+ * out-of-band signals): flush the in-flight prompt draft, then restore terminal
+ * modes. Never throws. Order matters — a TUI teardown clears the draft mirror,
+ * so the flush must run first.
+ */
+export function rescueTerminalBeforeExit(): void {
+    invokePromptDraftFlush();
+    invokeEmergencyTerminalRestore();
+}
 
 export function installCrashGuard(options: CrashGuardOptions): void {
     if (installed) return;
@@ -118,11 +128,10 @@ function installRealListeners(handler: (kind: CrashKind, reason: unknown) => voi
 function handleFatal(kind: CrashKind, reason: unknown): void {
     if (handling) return;
     handling = true;
-    // Flush any in-flight prompt draft, then restore terminal modes before
-    // diagnostics so a crashed interactive TUI does not leave the parent shell
-    // unusable and the operator does not lose the half-typed prompt.
-    invokePromptDraftFlush();
-    invokeEmergencyTerminalRestore();
+    // omp postmortem order: draft flush, then terminal modes, then diagnostics,
+    // so a crashed interactive TUI does not leave the parent shell unusable and
+    // the operator does not lose the half-typed prompt.
+    rescueTerminalBeforeExit();
     const record = buildCrashRecord(kind, reason);
     writeCrashRecord(record);
     // Best-effort stderr mirror; the TUI may swallow this but non-TUI runs benefit.
