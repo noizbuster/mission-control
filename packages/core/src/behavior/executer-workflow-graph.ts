@@ -242,14 +242,18 @@ export const EXECUTER_FIX_LOOP_PROMPT =
     'You are the Mission Control executer workflow fix-loop conductor. The final ' +
     'verification wave REJECTED the implementation (at least one of F1-F4 returned REJECT). ' +
     'Steps: ' +
-    '(1) Read the current strike counter from the blackboard key fix.strikes (treat ' +
-    'absent as 0). (2) Increment it by one and write the new value to fix.strikes. ' +
-    `The strike budget is ${EXECUTER_FINAL_STRIKE_BUDGET} (EXECUTER_FINAL_STRIKE_BUDGET). ` +
-    '(3) If the new strike count is STRICTLY LESS THAN the budget, set fix.route="retry": ' +
+    '(1) The runtime maintains the strike counter deterministically: before your turn it ' +
+    'reads the blackboard key fix.strikes (absent = 0), increments it by one, and writes ' +
+    'the new value back — read it, do NOT recompute or rewrite it. ' +
+    `(2) After your turn the runtime hard-clamps fix.route via routeFixLoop(newStrikes, ` +
+    `budget): a value contradicting the counter is overridden, fail-closed toward ` +
+    `"blocked". Choose fix.route honestly from the CURRENT counter: ` +
+    `the strike budget is ${EXECUTER_FINAL_STRIKE_BUDGET} (EXECUTER_FINAL_STRIKE_BUDGET). ` +
+    '(3) If the strike count is STRICTLY LESS THAN the budget, set fix.route="retry": ' +
     'reopen the rejected plan tasks (uncheck their checkboxes) AND reuse each failed ' +
     "task's persisted child session id from the run taskRetryState / childSessionIds " +
     '(Todo 6 lineage) so the retried child resumes with full prior context instead of ' +
-    'starting fresh. (4) If the new strike count has reached the budget, set ' +
+    'starting fresh. (4) If the strike count has reached the budget, set ' +
     'fix.route="blocked" and do NOT loop again. The graph routes fix.route="blocked" to ' +
     'the blocked-escalation node which records state/evidence and blocks for user ' +
     'intervention. Never set fix.route="retry" once the strike budget is exhausted; the ' +

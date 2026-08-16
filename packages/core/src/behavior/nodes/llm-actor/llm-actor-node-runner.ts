@@ -10,8 +10,9 @@ import { packContext } from '../../../context/context-packer';
 import { assembleSystemPrompt, type SystemPromptSkill } from '../../../context/system-prompt';
 import { YIELD_TOOL_NAME } from '../../../tools/yield-tool/yield-tool';
 import { createAbgEmitSignal } from '../../abg-emit';
+import { routeFixLoop } from '../../executer-workflow-graph';
 import type { AbgNodeRunContext, AbgNodeRunner } from '../../node-registry';
-import { readBooleanConfig, readStringConfig } from '../composite-node-utils';
+import { readBooleanConfig, readPositiveIntConfig, readStringConfig } from '../composite-node-utils';
 import { createAbgToolSettlementLedger, createProposalOnlyToolBridge } from './abg-tool-bridge';
 import { type LlmActorTurnResult, runLlmActor } from './llm-actor-node';
 import { applyEnumConstraint, filterByCapabilities, readPriorSummary } from './llm-actor-node-helpers';
@@ -183,6 +184,30 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
 
     const modelMessages: ModelMessage[] =
         zaiCachePrefix === undefined ? [...packed.messages] : [{ role: 'system', content: system }, ...packed.messages];
+    // Hybrid deterministic strike counter (executer/fixer fix-loop contract): when the
+    // node declares `strikeKey` plus a positive-integer `strikeBudget`/`maxStrikes`, the
+    // RUNTIME owns the counter — read (absent = 0), increment, write back BEFORE the
+    // turn, through the same blackboard.set event path structured output uses. The fix-
+    // loop prompt stays as guidance, but the post-turn clamp below is authoritative.
+    const strikeKey = readStringConfig(node, 'strikeKey');
+    const strikeBudget = readPositiveIntConfig(node, 'strikeBudget') ?? readPositiveIntConfig(node, 'maxStrikes');
+    let strikeCount: number | undefined;
+    if (strikeKey !== undefined && strikeBudget !== undefined) {
+        const priorStrikes = blackboard.get(strikeKey);
+        strikeCount =
+            (typeof priorStrikes === 'number' && Number.isFinite(priorStrikes) && priorStrikes >= 0
+                ? Math.trunc(priorStrikes)
+                : 0) + 1;
+        blackboard.set(strikeKey, strikeCount);
+        yield createAbgEmitSignal({
+            graphId: context.graphId,
+            nodeId,
+            source: 'llm-actor',
+            eventType: 'blackboard.set',
+            timestamp: context.now(),
+            payload: { key: strikeKey, value: strikeCount },
+        });
+    }
 
     let turnResult: LlmActorTurnResult | undefined;
     let proposedWorkspaceToolCalls = 0;
@@ -266,6 +291,40 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
                     timestamp: context.now(),
                     payload: { key: outputKey, value: outputResult.value },
                 });
+                if (strikeCount !== undefined && strikeKey !== undefined && strikeBudget !== undefined) {
+                    // Deterministic clamp: routeFixLoop(newStrikes, budget) is authoritative.
+                    // A model value that contradicts the runtime-maintained counter is
+                    // overridden (fail-closed toward 'blocked' once the budget is reached)
+                    // and the override is observable via an explanatory event.
+                    const deterministicRoute = routeFixLoop(strikeCount, strikeBudget);
+                    if (outputResult.value !== deterministicRoute) {
+                        blackboard.set(outputKey, deterministicRoute);
+                        yield createAbgEmitSignal({
+                            graphId: context.graphId,
+                            nodeId,
+                            source: 'llm-actor',
+                            eventType: 'blackboard.set',
+                            timestamp: context.now(),
+                            payload: { key: outputKey, value: deterministicRoute },
+                        });
+                        yield createAbgEmitSignal({
+                            graphId: context.graphId,
+                            nodeId,
+                            source: 'llm-actor',
+                            eventType: 'llm.strike_route_overridden',
+                            timestamp: context.now(),
+                            payload: {
+                                key: outputKey,
+                                modelValue: outputResult.value,
+                                deterministicRoute,
+                                strikes: strikeCount,
+                                budget: strikeBudget,
+                                strikeKey,
+                                reason: 'deterministic strike clamp (fail-closed)',
+                            },
+                        });
+                    }
+                }
                 // If the model produced valid structured output ALONGSIDE tool calls, clear
                 // loopActive so the graph advances past this node instead of spinning on the
                 // self-edge. Previously the outputKey was only persisted when loopActive was

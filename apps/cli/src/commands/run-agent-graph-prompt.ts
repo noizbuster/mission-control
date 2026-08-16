@@ -21,6 +21,7 @@ import {
     type CommandExecutionResult,
     createCodingAgentGraph,
     createCodingAgentNodeRegistry,
+    createModeToolInvocationPolicy,
     createSdkModelResolver,
     type LspClient,
     MAX_PROVIDER_CHUNK_TIMEOUT_MS,
@@ -36,11 +37,12 @@ import type {
     AbgNodeModelOptions,
     MissionControlConfig,
     ModelProviderSelection,
+    PolicyEffectRule,
 } from '@mission-control/protocol';
 import type { ProviderAuthStore } from '../auth-store';
 import { createCliProviderCredentialResolver } from '../provider-credential-resolver';
-import { buildCodingAgentSystemPromptEnv, loadTrustedProjectInstructionResources } from './coding-agent-context';
 import { isWorkspaceTrusted } from './cli-trust';
+import { buildCodingAgentSystemPromptEnv, loadTrustedProjectInstructionResources } from './coding-agent-context';
 import { createGraphObservabilityRedactor } from './graph-observability-redactor';
 import { createNonInteractiveToolRegistry } from './noninteractive-tool-registry';
 import {
@@ -60,6 +62,13 @@ export type RunCodingPromptOnGraphInput = {
      * `buildCodingAgentGraphForSelection` builds the standard coding-agent graph.
      */
     readonly graph?: AbgGraphSpec;
+    /**
+     * Active workflow modes' policy rules paired with `graph` (from
+     * `resolveNoninteractiveWorkflowSelection`): universal ('**') rules gate nodes;
+     * scoped rules are enforced at write-family tool invocation. Omitted for
+     * modeless graphs.
+     */
+    readonly modePolicies?: readonly PolicyEffectRule[];
     /**
      * Injected SDK model resolver (tests / scripted models). When omitted, the resolver is
      * built from `authStore` for the selection's provider via `createSdkModelResolver`.
@@ -142,11 +151,18 @@ export async function runCodingPromptOnGraph(input: RunCodingPromptOnGraphInput)
                 registry: createCodingAgentNodeRegistry(),
                 resolveSdkModel,
                 ...(input.agentModelLookup !== undefined ? { agentModelLookup: input.agentModelLookup } : {}),
-                toolRegistry: toolRegistryResult.registry,
+                toolRegistry:
+                    input.modePolicies === undefined
+                        ? toolRegistryResult.registry
+                        : toolRegistryResult.registry.cloneWithFilter(
+                              () => true,
+                              createModeToolInvocationPolicy(input.modePolicies, input.workspaceRoot),
+                          ),
                 initialMessages: [{ role: 'user', content: input.prompt }],
                 haltOnFailedToolSettlement: true,
                 systemPromptEnv,
                 observabilityRedactor,
+                ...(input.modePolicies !== undefined ? { modePolicies: input.modePolicies } : {}),
                 ...(projectInstructionResources.length > 0 ? { projectInstructionResources } : {}),
                 ...(input.pricingTable !== undefined ? { pricingTable: input.pricingTable } : {}),
             },
@@ -155,7 +171,6 @@ export async function runCodingPromptOnGraph(input: RunCodingPromptOnGraphInput)
         await closeProductionToolRegistry(toolRegistryResult);
     }
 }
-
 
 /**
  * Minimal input for resolving the AI-SDK model used by the graph engine. Shared by the one-shot

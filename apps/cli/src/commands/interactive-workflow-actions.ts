@@ -7,7 +7,7 @@ import type { ChatOutput } from './interactive-chat-io';
 import { runPromptAction } from './interactive-prompt-actions';
 import { createWorkflowRunOutcomeObserver, redactWorkflowError } from './interactive-workflow-run-outcome';
 import { seedOverlayForWorkflow, settleWorkflowRun, tryCreateWorkflowRun } from './interactive-workflow-state';
-import { graphForWorkflowSpec } from './workflow-materialization';
+import { graphForWorkflowSpec, modePoliciesForWorkflowSpec } from './workflow-materialization';
 
 export async function runWorkflowAction(
     runtime: AgentRuntime,
@@ -54,6 +54,7 @@ async function runResolvedWorkflowTurn(
     chatOutput.write(`Running workflow "${spec.name}"...\n`);
     chatOutput.showNotice?.(`Workflow: ${spec.name}`);
     const workflowGraph = graphForWorkflowSpec(spec);
+    const workflowModePolicies = modePoliciesForWorkflowSpec(spec);
     seedOverlayForWorkflow(coding, workflowGraph);
     let runHandle: Awaited<ReturnType<typeof tryCreateWorkflowRun>>;
     try {
@@ -73,7 +74,11 @@ async function runResolvedWorkflowTurn(
         throw redactWorkflowError(error instanceof Error ? error : new Error(String(error)));
     }
     if (runHandle === undefined)
-        return runPromptAction(runtime, chatOutput, prompt, selection, { ...coding, graph: workflowGraph });
+        return runPromptAction(runtime, chatOutput, prompt, selection, {
+            ...coding,
+            graph: workflowGraph,
+            ...(workflowModePolicies !== undefined ? { modePolicies: workflowModePolicies } : {}),
+        });
     const turnId = coding.nextTurnId();
     const observer = createWorkflowRunOutcomeObserver({
         ...(coding.sessionId !== undefined ? { expectedSessionId: coding.sessionId } : {}),
@@ -86,6 +91,7 @@ async function runResolvedWorkflowTurn(
         result = await runPromptAction(runtime, chatOutput, prompt, selection, {
             ...coding,
             graph: workflowGraph,
+            ...(workflowModePolicies !== undefined ? { modePolicies: workflowModePolicies } : {}),
             nextTurnId: () => turnId,
             emitEvent: (event: AgentEvent) => {
                 observer.observe(event);

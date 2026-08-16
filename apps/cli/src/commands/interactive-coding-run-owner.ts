@@ -5,6 +5,7 @@ import {
     createChildAskUserParentAnswerer,
     createCodingAgentNodeRegistry,
     createGraphTurnRunner,
+    createModeToolInvocationPolicy,
     extractContextCacheUsageFromAbgEmit,
     extractContextTokensUsed,
     extractContextTokensUsedFromAbgEmit,
@@ -14,6 +15,7 @@ import {
     type ToolInvocationSettlement,
 } from '@mission-control/core';
 import type { AbgSignal, AgentEvent, AgentEventEnvelope, ToolCall } from '@mission-control/protocol';
+import { isWorkspaceTrusted } from './cli-trust';
 import { buildCodingAgentSystemPromptEnv, loadTrustedProjectInstructionResources } from './coding-agent-context';
 import { createGraphObservabilityRedactor } from './graph-observability-redactor';
 import type { createInteractiveApprovalBroker } from './interactive-approval-broker';
@@ -30,7 +32,6 @@ import {
     withProductionToolSetup,
 } from './production-tool-registry';
 import { buildCodingAgentGraphForSelection, resolveGraphSdkModel } from './run-agent-graph-prompt';
-import { isWorkspaceTrusted } from './cli-trust';
 
 type OwnedTurnOptions = Omit<CodingAgentTurnOptions, 'prompt'> & { readonly prompt?: string };
 
@@ -101,7 +102,17 @@ export async function createInteractiveRunOwner(
         ...(options.taskRuntimeServices !== undefined ? { services: options.taskRuntimeServices } : {}),
     };
     const tools = await createInteractiveToolRegistry(toolOptions, approvals);
-    const { registry: toolRegistry, mcpConnectionManager } = tools;
+    // Mode policies wrap the registry so scoped rules are enforced at write-family tool
+    // invocation; the wrapped registry flows to the turn runner, the SessionRunOwner, and
+    // (via cloneWithFilter's default policy carry-over) child task surfaces.
+    const toolRegistry =
+        options.modePolicies === undefined
+            ? tools.registry
+            : tools.registry.cloneWithFilter(
+                  () => true,
+                  createModeToolInvocationPolicy(options.modePolicies, options.workspaceRoot),
+              );
+    const { mcpConnectionManager } = tools;
     let overlayWiring: AbgOverlayWiring | undefined;
     const { observabilityRedactor, graphSpec, runProviderTurn } = await withProductionToolSetup(tools, async () => {
         const redactor = await createGraphObservabilityRedactor({
@@ -157,6 +168,7 @@ export async function createInteractiveRunOwner(
             registry: createCodingAgentNodeRegistry(),
             resolveSdkModel,
             toolRegistry,
+            ...(options.modePolicies !== undefined ? { modePolicies: options.modePolicies } : {}),
             haltOnFailedToolSettlement: true,
             serializeToolExecution: true,
             onSignal,
@@ -220,7 +232,6 @@ export async function createInteractiveRunOwner(
 
     return { owner, tools, observabilityRedactor, overlayWiring };
 }
-
 
 async function resolveInteractiveSdkModel(options: OwnedTurnOptions): Promise<SdkModelResolver> {
     return resolveGraphSdkModel({

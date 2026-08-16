@@ -1,4 +1,10 @@
-import type { AbgNodeModelOptions, AbgNodeSpec, AbgPolicySpec, AgentEvent } from '@mission-control/protocol';
+import type {
+    AbgNodeModelOptions,
+    AbgNodeSpec,
+    AbgPolicySpec,
+    AgentEvent,
+    PolicyEffectRule,
+} from '@mission-control/protocol';
 import type { ProjectInstructionResource } from '../context/project-context-messages';
 import type { SystemPromptEnvironment } from '../context/system-prompt';
 import type { Blackboard } from '../memory/blackboard';
@@ -35,6 +41,7 @@ export function runContext(
         ...(options.toolCallId !== undefined ? { toolCallId: options.toolCallId } : {}),
         registry,
         nodes,
+        ...(input.modePolicies !== undefined ? { modePolicies: input.modePolicies } : {}),
         policies: graph.policies,
         model,
         ...(graph.defaults?.timeoutMs !== undefined ? { graphTimeoutMs: graph.defaults.timeoutMs } : {}),
@@ -74,6 +81,7 @@ export function runContext(
         readonly registry: AbgNodeRegistry;
         readonly nodes: Readonly<Record<string, AbgNodeSpec | undefined>>;
         readonly policies: readonly AbgPolicySpec[];
+        readonly modePolicies?: readonly PolicyEffectRule[];
         readonly model: AbgNodeModelOptions;
         readonly graphTimeoutMs?: number;
         readonly sdkModel?: LlmActorModel;

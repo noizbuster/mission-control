@@ -11,8 +11,13 @@
  * Explicit `--graph <path>` is NOT routed through here: an authorable graph is
  * not a workflow, so `runAgent` runs it raw via `runtime.runGraph`.
  */
-import { materializeWorkflow, resolveDefaultWorkflowSpec, type WorkflowRegistry } from '@mission-control/core';
-import type { AbgGraphSpec, WorkflowSpec } from '@mission-control/protocol';
+import {
+    materializeWorkflow,
+    resolveDefaultWorkflowSpec,
+    type WorkflowRegistry,
+    workflowModePolicies,
+} from '@mission-control/core';
+import type { AbgGraphSpec, PolicyEffectRule, WorkflowSpec } from '@mission-control/protocol';
 
 /**
  * Materialize a resolved workflow spec into an executable graph with its
@@ -22,6 +27,28 @@ export function graphForWorkflowSpec(spec: WorkflowSpec): AbgGraphSpec {
     return materializeWorkflow(spec);
 }
 
+/**
+ * The active modes' policy-gate rules for a resolved workflow spec — the runtime-side
+ * companion of {@linkcode graphForWorkflowSpec}. Both CLI paths pair the materialized
+ * graph with these rules so mode policies enforce at BOTH layers: universal ('**')
+ * rules gate nodes before they run; scoped rules deny write-family tool invocations.
+ */
+export function modePoliciesForWorkflowSpec(spec: WorkflowSpec): readonly PolicyEffectRule[] | undefined {
+    return workflowModePolicies(spec);
+}
+
+/**
+ * Mode policy rules for the plain-prompt `default` fallback workflow (almost always
+ * `undefined`: the shipped `default` workflow declares no modes).
+ */
+export function modePoliciesForDefaultFallback(
+    registry: WorkflowRegistry | undefined,
+): readonly PolicyEffectRule[] | undefined {
+    if (registry === undefined) {
+        return undefined;
+    }
+    return workflowModePolicies(resolveDefaultWorkflowSpec(registry));
+}
 /**
  * Resolve and materialize the `default` workflow fallback for a plain prompt.
  * Returns `undefined` when no registry is configured (the caller then falls

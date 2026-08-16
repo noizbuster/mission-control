@@ -8,6 +8,7 @@ import type {
     ModelProviderSelection,
     PermissionDecision,
     PermissionRequest,
+    PolicyEffectRule,
 } from '@mission-control/protocol';
 import type { ModelMessage } from 'ai';
 import { runRuntimeDemoTask } from './agent-runtime-demo';
@@ -78,6 +79,12 @@ export type RunGraphOptions = {
      * absent by default (the ledger stays `undefined` and no budget events fire).
      */
     readonly pricingTable?: PricingTable;
+    /**
+     * Active workflow modes' policy-gate rules (`workflowModePolicies`). Forwarded to
+     * `AbgGraphRunnerInput.modePolicies`: universal ('**') rules gate nodes before they
+     * run; scoped rules are enforced at tool invocation. Omitted for modeless graphs.
+     */
+    readonly modePolicies?: readonly PolicyEffectRule[];
     readonly observabilityRedactor?: ObservabilityRedactor;
 };
 
@@ -195,7 +202,8 @@ export class AgentRuntime {
             ...(options?.agentModelLookup !== undefined ? { agentModelLookup: options.agentModelLookup } : {}),
             ...(options?.toolRegistry !== undefined ? { toolRegistry: options.toolRegistry } : {}),
             ...(options?.initialMessages !== undefined ? { initialMessages: options.initialMessages } : {}),
-            ...(options?.abortSignal !== undefined ? { abortSignal: options.abortSignal } : {}),
+            ...(options?.modePolicies !== undefined ? { modePolicies: options.modePolicies } : {}),
+            ...(options?.pricingTable !== undefined ? { pricingTable: options.pricingTable } : {}),
             ...(options?.haltOnFailedToolSettlement === true ? { haltOnFailedToolSettlement: true } : {}),
             ...(options?.systemPromptEnv !== undefined ? { systemPromptEnv: options.systemPromptEnv } : {}),
             ...(options?.projectInstructionResources !== undefined

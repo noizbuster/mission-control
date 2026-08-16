@@ -76,7 +76,12 @@ export async function runNoninteractiveAgent(input: RunNoninteractiveAgentInput)
     let finalizeInfo: SessionFinalizeInfo = DEFAULT_FINALIZE;
     let finalizeCalled = false;
     const pricingTable = await loadPricingTable();
-    const { effectivePrompt, workflowGraph, workflowSpec } = await resolveNoninteractiveWorkflowSelection({
+    const {
+        effectivePrompt,
+        workflowGraph,
+        workflowSpec,
+        workflowModePolicies: modePolicies,
+    } = await resolveNoninteractiveWorkflowSelection({
         args,
         workspaceRoot,
         graph,
@@ -179,6 +184,7 @@ export async function runNoninteractiveAgent(input: RunNoninteractiveAgentInput)
                             haltOnFailedToolSettlement: true,
                             systemPromptEnv,
                             observabilityRedactor,
+                            ...(modePolicies !== undefined ? { modePolicies } : {}),
                             ...(projectInstructionResources.length > 0 ? { projectInstructionResources } : {}),
                             ...(pricingTable.length > 0 ? { pricingTable } : {}),
                             requestNodeRunBudgetExtension: createAgentNodeRunBudgetGrantor({
@@ -195,6 +201,7 @@ export async function runNoninteractiveAgent(input: RunNoninteractiveAgentInput)
                     ...(options.nonInteractiveAutomationPolicy !== undefined
                         ? { nonInteractiveAutomationPolicy: options.nonInteractiveAutomationPolicy }
                         : {}),
+                    ...(modePolicies !== undefined ? { modePolicies } : {}),
                     ...(missionControlServices !== undefined
                         ? { taskRuntimeServices: missionControlServices.getTaskRuntimeServices() }
                         : {}),
@@ -222,7 +229,7 @@ export async function runNoninteractiveAgent(input: RunNoninteractiveAgentInput)
                     selection: selectedModelProvider,
                     prompt: effectivePrompt,
                     workspaceRoot,
-                    config: input.config,
+                    ...(modePolicies !== undefined ? { modePolicies } : {}),
                     ...(promptGraph !== undefined ? { graph: promptGraph } : {}),
                     ...(options.resolveSdkModel !== undefined ? { resolveSdkModel: options.resolveSdkModel } : {}),
                     authStore,

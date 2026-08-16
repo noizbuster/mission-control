@@ -13,7 +13,7 @@ import type { ChatOutput } from './interactive-chat-io';
 import { emitPromptAdmission, runSessionNavigationAction } from './interactive-chat-navigation-actions';
 import { startPromptTurn } from './interactive-chat-prompt-turn';
 import { clearStickyAttachBanner } from './session-attach-projection';
-import { graphForDefaultFallback } from './workflow-materialization';
+import { graphForDefaultFallback, modePoliciesForDefaultFallback } from './workflow-materialization';
 
 export async function runPromptAction(
     runtime: AgentRuntime,
@@ -31,7 +31,18 @@ export async function runPromptAction(
         coding.graph === undefined && coding.plainPromptGraph !== 'coding-agent'
             ? graphForDefaultFallback(coding.workflowRegistry)
             : undefined;
-    const effectiveCoding = fallbackGraph === undefined ? coding : { ...coding, graph: fallbackGraph };
+    // Pair the default-fallback graph with the same workflow's mode rules (almost always
+    // undefined: the shipped `default` workflow declares no modes).
+    const fallbackModePolicies =
+        fallbackGraph === undefined ? undefined : modePoliciesForDefaultFallback(coding.workflowRegistry);
+    const effectiveCoding =
+        fallbackGraph === undefined
+            ? coding
+            : {
+                  ...coding,
+                  graph: fallbackGraph,
+                  ...(fallbackModePolicies !== undefined ? { modePolicies: fallbackModePolicies } : {}),
+              };
     return actionResult(selection, await startPromptTurn(runtime, chatOutput, prompt, selection, effectiveCoding));
 }
 

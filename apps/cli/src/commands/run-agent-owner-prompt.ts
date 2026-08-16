@@ -1,6 +1,7 @@
 import {
     type CommandExecutionRequest,
     type CommandExecutionResult,
+    createModeToolInvocationPolicy,
     createObservabilityRedactor,
     createProviderAuthStoreObservabilityRedactor,
     type LocalSessionEventStore,
@@ -17,14 +18,19 @@ import {
     type TaskToolRuntimeServices,
     type ToolRegistry,
 } from '@mission-control/core';
-import type { AgentEvent, MissionControlConfig, ModelProviderSelection } from '@mission-control/protocol';
+import type {
+    AgentEvent,
+    MissionControlConfig,
+    ModelProviderSelection,
+    PolicyEffectRule,
+} from '@mission-control/protocol';
 import { createCliPermissionDecision, type NonInteractiveAutomationPolicy } from './cli-permission-policy';
+import { isWorkspaceTrusted } from './cli-trust';
 import { createGraphObservabilityRedactor } from './graph-observability-redactor';
 import { resolveMissionControlServices } from './mission-control-services-resolver';
 import { createNonInteractiveToolRegistry } from './noninteractive-tool-registry';
 import { closeProductionToolRegistry, type ProductionToolRegistry } from './production-tool-registry';
 import { emitOwnerPromptTaskEvent, nextOwnerPromptTaskId } from './run-agent-owner-prompt-events';
-import { isWorkspaceTrusted } from './cli-trust';
 
 export type RunOwnerPromptInput = {
     readonly sessionId: string;
@@ -59,6 +65,8 @@ export type RunOwnerPromptInput = {
     readonly lspClient?: LspClient;
     readonly taskRuntimeServices?: TaskToolRuntimeServices;
     readonly authStore?: ProviderAuthStore;
+    /** Active workflow modes' policy rules: enforced at write-family tool invocation. */
+    readonly modePolicies?: readonly PolicyEffectRule[];
     readonly profileName?: string;
 };
 
@@ -123,8 +131,17 @@ export async function runOwnerPrompt(input: RunOwnerPromptInput): Promise<RunOwn
             ...(input.authStore !== undefined ? { authStore: input.authStore } : {}),
         });
         activeObservabilityRedactor = observabilityRedactor;
+        // Mode policies wrap the registry ONCE so both the turn runner and the owner's
+        // own tool surface enforce scoped rules at invocation time.
+        const toolRegistry =
+            input.modePolicies === undefined
+                ? tools.registry
+                : tools.registry.cloneWithFilter(
+                      () => true,
+                      createModeToolInvocationPolicy(input.modePolicies, input.workspaceRoot),
+                  );
         const runProviderTurn = input.createTurnRunner?.({
-            toolRegistry: tools.registry,
+            toolRegistry,
             observabilityRedactor,
         });
         owner = new SessionRunOwner({
@@ -134,7 +151,7 @@ export async function runOwnerPrompt(input: RunOwnerPromptInput): Promise<RunOwn
             modelProviderSelection: input.modelProviderSelection,
             haltOnFailedToolSettlement: true,
             projectContext: { workspaceRoot: input.workspaceRoot },
-            toolRegistry: tools.registry,
+            toolRegistry,
             observabilityRedactor,
             ...(runProviderTurn !== undefined ? { runProviderTurn } : {}),
             onDurableEvent: (event: AgentEvent) => {
@@ -206,7 +223,6 @@ export async function runOwnerPrompt(input: RunOwnerPromptInput): Promise<RunOwn
     }
     return resultFromReceipt('failed', receipt);
 }
-
 
 function resultFromReceipt(
     status: RunOwnerPromptResult['status'],

@@ -22,6 +22,7 @@ import type {
     AgentEvent,
     MissionControlConfig,
     ModelProviderSelection,
+    PolicyEffectRule,
     WorkflowSpec,
 } from '@mission-control/protocol';
 import type { AbgOverlayController, ApprovalLevel } from '@mission-control/tui/state';
@@ -48,6 +49,8 @@ export type PromptTurnContext = {
     readonly pricingTable?: PricingTable;
     readonly approvalLevel?: ApprovalLevel;
     readonly graph?: AbgGraphSpec;
+    /** Active workflow modes' policy rules paired with `graph` (two-layer enforcement). */
+    readonly modePolicies?: readonly PolicyEffectRule[];
     readonly permissionSession?: PermissionSession;
     readonly onUsage?: (inputTokens: number | undefined) => void;
     readonly onContextCacheUsage?: (usage: ContextCacheUsage) => void;
@@ -163,7 +166,7 @@ export async function startPromptTurn(
         ...(coding.pricingTable !== undefined ? { pricingTable: coding.pricingTable } : {}),
         ...(coding.approvalLevel !== undefined ? { approvalLevel: coding.approvalLevel } : {}),
         ...(coding.graph !== undefined ? { graph: coding.graph } : {}),
-        ...(coding.permissionSession !== undefined ? { permissionSession: coding.permissionSession } : {}),
+        ...(coding.modePolicies !== undefined ? { modePolicies: coding.modePolicies } : {}),
         ...(coding.onUsage !== undefined ? { onUsage: coding.onUsage } : {}),
         ...(coding.onContextCacheUsage !== undefined ? { onContextCacheUsage: coding.onContextCacheUsage } : {}),
         ...(coding.authStore !== undefined ? { authStore: coding.authStore } : {}),

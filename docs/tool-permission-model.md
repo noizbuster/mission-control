@@ -118,6 +118,7 @@ Independent of capability advertising:
 
 - `PolicyEffectRule` (action / resource / effect) on modes and graphs
 - Converted to `AbgPolicySpec` by `applyMode`
+- ALSO enforced on the raw rules at two runtime layers: UNIVERSAL (`'**'`) rules gate a node before it runs (`modeGatePolicy` — deny blocks, ask routes through the approval flow); SCOPED rules are enforced at write-family tool invocation (`createModeToolInvocationPolicy` — deny fails the tool with `mode policy denied <action>`). Scoped rules never block at the node gate (no resource is known there), so a mode like `planner-readonly` (deny-all + scoped allows) only judges resolved paths.
 - Coexists with workspace `PermissionRule`; pick the layer you are editing
 
 ## Layer 3 — Skills (not tools)

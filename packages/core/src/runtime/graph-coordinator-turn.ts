@@ -19,6 +19,7 @@ import type {
     AgentEvent,
     GraphCheckpoint,
     ModelProviderSelection,
+    PolicyEffectRule,
     ProtocolErrorCode,
 } from '@mission-control/protocol';
 import { ProtocolErrorCodeSchema } from '@mission-control/protocol';
@@ -99,6 +100,13 @@ export type GraphTurnRunnerWiring = {
      * trust-aware discovery (see `loadProjectResources`).
      */
     readonly projectInstructionResources?: readonly ProjectInstructionResource[];
+    /**
+     * Active workflow modes' policy-gate rules (`workflowModePolicies`), forwarded into
+     * `AbgGraphRunnerInput.modePolicies`: universal ('**') rules gate nodes before they
+     * run; scoped rules are enforced at tool invocation via a mode invocation policy on
+     * the registry. Omitted for modeless workflows.
+     */
+    readonly modePolicies?: readonly PolicyEffectRule[];
     readonly observabilityRedactor?: ObservabilityRedactor;
     readonly requestNodeRunBudgetExtension?: NodeRunBudgetExtensionRequester;
     readonly nodeRunBudgetGrantSize?: number;

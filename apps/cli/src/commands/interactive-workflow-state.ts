@@ -13,8 +13,16 @@ import {
     startRun,
     TERMINAL_RUN_STATUSES,
     type WorkflowRegistry,
+    workflowModePolicies,
 } from '@mission-control/core';
-import type { AbgGraphSpec, GraphCheckpoint, Mission, Run, WorkflowSpec } from '@mission-control/protocol';
+import type {
+    AbgGraphSpec,
+    GraphCheckpoint,
+    Mission,
+    PolicyEffectRule,
+    Run,
+    WorkflowSpec,
+} from '@mission-control/protocol';
 import type { CodingActionContext } from './interactive-chat-action-context';
 import type { PromptTurnContext } from './interactive-chat-prompt-turn';
 import { settleNoninteractiveWorkflowRun, type WorkflowRunOutcome } from './run-agent-workflow-run';
@@ -28,12 +36,16 @@ export type WorkflowRunHandle = {
 export type ResumableWorkflowRun = {
     readonly handle: WorkflowRunHandle;
     readonly graph: AbgGraphSpec;
+    /** Active-mode policy rules paired with `graph` (two-layer enforcement). */
+    readonly modePolicies?: readonly PolicyEffectRule[];
 };
 
 export type WorkflowSessionContinueBookkeeping = 'reuse_blocked' | 'started_new_run' | 'graph_only';
 
 export type WorkflowSessionContinue = {
     readonly graph: AbgGraphSpec;
+    /** Active-mode policy rules of the workflow the graph came from (two-layer enforcement). */
+    readonly modePolicies?: readonly PolicyEffectRule[];
     readonly handle?: WorkflowRunHandle;
     readonly bookkeeping: WorkflowSessionContinueBookkeeping;
 };
@@ -98,7 +110,11 @@ export async function findResumableWorkflowRun(input: {
 }): Promise<ResumableWorkflowRun | undefined> {
     const continued = await findWorkflowGraphForSessionContinue(input);
     if (continued?.bookkeeping !== 'reuse_blocked' || continued.handle === undefined) return undefined;
-    return { handle: continued.handle, graph: continued.graph };
+    return {
+        handle: continued.handle,
+        graph: continued.graph,
+        ...(continued.modePolicies !== undefined ? { modePolicies: continued.modePolicies } : {}),
+    };
 }
 
 /**
@@ -125,18 +141,20 @@ export async function findWorkflowGraphForSessionContinue(
     const linked = await findLinkedMissionRun(location, input);
     const graph = resolveContinueGraph(linked?.mission, input);
     if (graph === undefined) return undefined;
+    const modePolicies = resolveContinueModePolicies(linked?.mission, input);
     if (linked === undefined) {
-        return { graph, bookkeeping: 'graph_only' };
+        return { graph, ...(modePolicies !== undefined ? { modePolicies } : {}), bookkeeping: 'graph_only' };
     }
     if (linked.run.status === 'blocked') {
         return {
             graph,
+            ...(modePolicies !== undefined ? { modePolicies } : {}),
             handle: { location, missionId: linked.mission.id, runId: linked.run.id },
             bookkeeping: 'reuse_blocked',
         };
     }
     if (!TERMINAL_RUN_STATUSES.has(linked.run.status)) {
-        return { graph, bookkeeping: 'graph_only' };
+        return { graph, ...(modePolicies !== undefined ? { modePolicies } : {}), bookkeeping: 'graph_only' };
     }
     const prompt = input.prompt ?? linked.run.prompt ?? '';
     const nextRun = await startRun(location, linked.mission.id, prompt, {
@@ -145,6 +163,7 @@ export async function findWorkflowGraphForSessionContinue(
     });
     return {
         graph,
+        ...(modePolicies !== undefined ? { modePolicies } : {}),
         handle: { location, missionId: linked.mission.id, runId: nextRun.id },
         bookkeeping: 'started_new_run',
     };
@@ -209,6 +228,31 @@ function resolveContinueGraph(
     if (graphId !== undefined && input.workflowRegistry !== undefined) {
         for (const spec of input.workflowRegistry.list()) {
             if (spec.graph.id === graphId) return materializeWorkflow(spec);
+        }
+    }
+    return undefined;
+}
+
+/**
+ * Mode policy rules for the workflow a continue-graph came from. Mirrors
+ * `resolveContinueGraph`'s spec lookup: mode rules are workflow-level, so they follow
+ * the spec (by name, then by graph id) even when the graph itself came from the
+ * persisted mission record.
+ */
+function resolveContinueModePolicies(
+    mission: Mission | undefined,
+    input: FindWorkflowGraphForSessionContinueInput,
+): readonly PolicyEffectRule[] | undefined {
+    if (input.workflowRegistry === undefined) return undefined;
+    const workflowName = input.checkpoint?.workflowName ?? mission?.workflowName;
+    if (workflowName !== undefined) {
+        const spec = input.workflowRegistry.lookup(workflowName);
+        if (spec !== undefined) return workflowModePolicies(spec);
+    }
+    const graphId = input.checkpoint?.graphId ?? mission?.graphId;
+    if (graphId !== undefined) {
+        for (const spec of input.workflowRegistry.list()) {
+            if (spec.graph.id === graphId) return workflowModePolicies(spec);
         }
     }
     return undefined;

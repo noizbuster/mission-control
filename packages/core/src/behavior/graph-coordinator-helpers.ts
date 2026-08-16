@@ -6,9 +6,12 @@ import type {
     AbgSignal,
     AgentEvent,
     ModelProviderSelection,
+    PolicyEffect,
+    PolicyEffectRule,
 } from '@mission-control/protocol';
 import type { Blackboard } from '../memory/blackboard';
 import { createBlackboard } from '../memory/blackboard';
+import { wildcardMatch } from '../permissions/wildcard-match';
 import { createObservabilityRedactor, type ObservabilityRedactor } from '../providers/observability-redactor';
 import { createAbgEmitSignal, resetEmitSequence } from './abg-emit';
 import type { AuthorableAbgGraph } from './authorable-graph';
@@ -171,6 +174,61 @@ export function findBlockingPolicy(node: AbgNodeSpec, policies: readonly AbgPoli
         }
     }
     return undefined;
+}
+
+/** Universal mode-rule resource: `wildcardMatch('**', value)` accepts every resource string. */
+const UNIVERSAL_MODE_RESOURCE = '**';
+
+/**
+ * Gate-level policy synthesized from the ACTIVE workflow modes' policy rules
+ * (the `AbgGraphRunnerInput.modePolicies` channel fed by `workflowModePolicies`).
+ *
+ * Only UNIVERSAL-resource rules (`'**'`) decide at the gate, because the gate has no
+ * concrete resource to match a scoped pattern against. Scoped rules (e.g.
+ * `.mc/plans/**`) defer entirely to tool-invocation-time enforcement
+ * (`createModeToolInvocationPolicy`) — and their presence also defers the gate for
+ * that capability, so a mode like `planner-readonly` (deny-all + scoped allows) does
+ * NOT block write-capability nodes before they run; only the resolved paths are
+ * judged. Among a capability's universal rules the LAST match wins, mirroring
+ * `evaluateRules`. `deny` outranks `ask` when several capabilities gate.
+ *
+ * Returns a synthesized blocking policy (`deny` / `requires_approval`) or `undefined`
+ * when the modes do not gate this node (no rules, only scoped rules, or a universal
+ * `allow` — which never blocks and whose allow-neutralization already lives in the
+ * converted `graph.policies`).
+ */
+export function modeGatePolicy(
+    node: AbgNodeSpec,
+    modePolicies: readonly PolicyEffectRule[] | undefined,
+): AbgPolicySpec | undefined {
+    const capabilities = node.capabilities ?? [];
+    if (modePolicies === undefined || modePolicies.length === 0 || capabilities.length === 0) {
+        return undefined;
+    }
+    let blocking: { readonly capability: string; readonly effect: Exclude<PolicyEffect, 'allow'> } | undefined;
+    for (const capability of capabilities) {
+        let scopedRuleExists = false;
+        let universal: PolicyEffectRule | undefined;
+        for (const rule of modePolicies) {
+            if (!wildcardMatch(rule.action, capability)) continue;
+            if (rule.resource === UNIVERSAL_MODE_RESOURCE) {
+                universal = rule;
+            } else {
+                scopedRuleExists = true;
+            }
+        }
+        if (scopedRuleExists || universal === undefined || universal.effect === 'allow') continue;
+        if (blocking === undefined || (blocking.effect !== 'deny' && universal.effect === 'deny')) {
+            blocking = { capability, effect: universal.effect };
+        }
+    }
+    if (blocking === undefined) return undefined;
+    return {
+        id: `mode-gate:${blocking.capability}`,
+        capability: blocking.capability,
+        decision: blocking.effect === 'deny' ? 'deny' : 'requires_approval',
+        reason: `mode policy '${blocking.effect}' on '${UNIVERSAL_MODE_RESOURCE}' (universal; scoped rules defer to tool-invocation enforcement)`,
+    };
 }
 
 export function nodeModel(

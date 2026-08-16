@@ -1,7 +1,13 @@
 import type { AbgNodeSpec, AbgPolicyDecision, AbgSignal, AgentEvent } from '@mission-control/protocol';
 import type { AuthorableAbgGraph } from './authorable-graph';
 import { evaluateApprovalGate } from './graph-approval-gates';
-import { type CoordinatorState, findBlockingPolicy, nextAttempt, nodeModel } from './graph-coordinator-helpers';
+import {
+    type CoordinatorState,
+    findBlockingPolicy,
+    modeGatePolicy,
+    nextAttempt,
+    nodeModel,
+} from './graph-coordinator-helpers';
 import { runApprovedHumanApprovalNode, runNodeAttempt } from './graph-coordinator-node-execution';
 import { attemptFailureError } from './graph-coordinator-node-signals';
 import type { AbgGraphRunnerInput } from './graph-runner';
@@ -42,7 +48,10 @@ export async function runQueuedNode(
     input: AbgGraphRunnerInput,
     state: CoordinatorState,
 ): Promise<QueuedNodeResult> {
-    const policy = findBlockingPolicy(node, graph.policies);
+    // Mode gate first: an ACTIVE workflow mode's UNIVERSAL ('**') deny/ask rule blocks
+    // (or approval-gates) the node before it runs. When the modes do not gate (scoped
+    // rules only, or universal allow), fall back to the graph-level capability policies.
+    const policy = modeGatePolicy(node, input.modePolicies) ?? findBlockingPolicy(node, graph.policies);
     const gate = evaluateApprovalGate({ graphId: graph.id, node, ...(policy !== undefined ? { policy } : {}), input });
     if (gate.kind === 'blocked') {
         state.nodeStatuses[node.id] = 'blocked';

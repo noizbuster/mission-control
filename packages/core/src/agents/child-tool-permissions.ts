@@ -78,7 +78,10 @@ function isNetworkFamilyToolName(toolName: string): boolean {
     return toolName === 'webfetch' || toolName === 'web_search' || toolName.startsWith(MCP_TOOL_NAME_PREFIX);
 }
 
-function policyActionsFor(advertisement: ToolAdvertisement): readonly string[] {
+/** Action labels a tool's capability classes map to for policy-rule matching. Exported
+ * for the mode tool policy (behavior/modes/mode-tool-policy.ts), which shares the
+ * capability→action vocabulary with the child pathPolicies gate. */
+export function policyActionsFor(advertisement: ToolAdvertisement): readonly string[] {
     const actions: string[] = [];
     for (const capability of [...advertisement.capabilityClasses, advertisement.name]) {
         const permission = permissionKindForCapability(capability);

@@ -36,10 +36,7 @@
           "systemPrompt": "Read the plan file from .mc/plans/{slug}.md and parse it with section-scoped counting: only column-0 checkboxes (`- [ ]` / `- [x]`) that fall under a `## Todos` / `## TODOs` or `## Final Verification Wave` heading are counted as actionable tasks. Ignore nested or indented checkboxes and ignore checkboxes under any other heading (Notes, Acceptance Criteria, Evidence, Definition of Done, etc.). Store the ordered task list under plan.todos and surface nextTaskLabel = the label of the first unchecked todo so the delegate-wave can name it. Set plan.parsed when complete.",
           "outputKey": "plan.parsed",
           "parser": "parsePlanSections",
-          "countedSections": [
-            "Todos",
-            "Final Verification Wave"
-          ]
+          "countedSections": ["Todos", "Final Verification Wave"]
         }
       },
       {
@@ -67,32 +64,21 @@
         "id": "delegate-wave",
         "kind": "parallel",
         "label": "Fan out task() delegation per wave task (6-section prompts, parallel-by-default)",
-        "children": [
-          "delegate-worker"
-        ],
+        "children": ["delegate-worker"],
         "config": {
           "fanOutKey": "wave.tasks",
           "completionKey": "delegate.complete",
           "continueOnFailure": true,
           "parallelByDefault": true,
           "dependencyKey": "plan.dependencies",
-          "delegationSections": [
-            "TASK",
-            "EXPECTED OUTCOME",
-            "REQUIRED TOOLS",
-            "MUST DO",
-            "MUST NOT DO",
-            "CONTEXT"
-          ]
+          "delegationSections": ["TASK", "EXPECTED OUTCOME", "REQUIRED TOOLS", "MUST DO", "MUST NOT DO", "CONTEXT"]
         }
       },
       {
         "id": "delegate-worker",
         "kind": "llm",
         "label": "Single task() delegation — 6-section prompt contract",
-        "capabilities": [
-          "subagent"
-        ],
+        "capabilities": ["subagent"],
         "config": {
           "systemPrompt": "You are a Mission Control executer workflow delegate worker. Execute the delegated sub-task via the task tool. The orchestration prompt you receive MUST contain six sections: ## 1. TASK (exact checkbox item), ## 2. EXPECTED OUTCOME (files, functionality, verification command), ## 3. REQUIRED TOOLS, ## 4. MUST DO, ## 5. MUST NOT DO, ## 6. CONTEXT (notepad paths, inherited wisdom, dependencies). Follow every section. Choose category by work type: investigation/mapping → explore; external/docs-style lookup → librarian (network-enabled); hard reasoning → reasoner or oracle when appropriate; implementation → deep or quick; UI → designer. Prefer category routing with prompt/assignment. This node has no write capability — do not append the notepad yourself. Put notepad paths in CONTEXT and require write-capable children to append findings (never overwrite), or return findings in the yield result for the conductor. Judge each task result by its content. A child may complete without calling `yield`; its final text is then its result. If that output looks partial or unfinished (e.g. it trails off mid-sentence or describes a next step it never took), re-delegate once with a smaller atomic assignment (one file or one verification step) and ask the child to call `yield` with the finished result. Do not retry a result that is clearly complete."
         }
@@ -124,22 +110,12 @@
         "id": "final-verification-wave",
         "kind": "parallel",
         "label": "Final verification wave — F1-F4 parallel critics aggregated into final.verdict",
-        "children": [
-          "f1",
-          "f2",
-          "f3",
-          "f4"
-        ],
+        "children": ["f1", "f2", "f3", "f4"],
         "config": {
           "completionKey": "final.complete",
           "verdictKey": "final.verdict",
           "verdictStrategy": "all-approve",
-          "verdictSources": [
-            "final.f1",
-            "final.f2",
-            "final.f3",
-            "final.f4"
-          ],
+          "verdictSources": ["final.f1", "final.f2", "final.f3", "final.f4"],
           "aggregateKey": "final.critics"
         }
       },
@@ -147,64 +123,44 @@
         "id": "f1",
         "kind": "llm",
         "label": "F1 — Goal verification critic (dual-review hybrid via task reviewer)",
-        "capabilities": [
-          "subagent"
-        ],
+        "capabilities": ["subagent"],
         "config": {
           "systemPrompt": "You are the F1 (goal) final critic for the Mission Control executer workflow. Build a reviewer assignment that checks whether the implementation achieves the plan stated goal (mission outcome, acceptance intent, and delivered scope). Call task() exactly once with category=\"reviewer\" or agent=\"reviewer\" and that assignment. Treat the child text as claims, not proof. After the child returns, output ONLY one whole-output verdict — APPROVE or REJECT — with no prose or formatting. Prefer REJECT when the goal is unmet or evidence is missing.",
           "outputKey": "final.f1",
-          "outputEnum": [
-            "APPROVE",
-            "REJECT"
-          ]
+          "outputEnum": ["APPROVE", "REJECT"]
         }
       },
       {
         "id": "f2",
         "kind": "llm",
         "label": "F2 — Constraint verification critic (dual-review hybrid via task reviewer)",
-        "capabilities": [
-          "subagent"
-        ],
+        "capabilities": ["subagent"],
         "config": {
           "systemPrompt": "You are the F2 (constraints) final critic for the Mission Control executer workflow. Build a reviewer assignment that checks whether every explicit plan constraint was honored (MUST NOT / MUST DO, scope bounds, policy limits, forbidden paths). Call task() exactly once with category=\"reviewer\" or agent=\"reviewer\" and that assignment. Treat the child text as claims, not proof. After the child returns, output ONLY one whole-output verdict — APPROVE or REJECT — with no prose or formatting. Prefer REJECT when any explicit constraint was violated or is unproven.",
           "outputKey": "final.f2",
-          "outputEnum": [
-            "APPROVE",
-            "REJECT"
-          ]
+          "outputEnum": ["APPROVE", "REJECT"]
         }
       },
       {
         "id": "f3",
         "kind": "llm",
         "label": "F3 — Test-evidence verification critic (dual-review hybrid via task reviewer)",
-        "capabilities": [
-          "subagent"
-        ],
+        "capabilities": ["subagent"],
         "config": {
           "systemPrompt": "You are the F3 (tests-as-claims) final critic for the Mission Control executer workflow. Build a reviewer assignment that verifies test *evidence* already present in the plan, context, and reviewer-child report only: cited commands, logs, assertion names, and pass/fail receipts. Do NOT run the test suite yourself, do NOT invoke bash/command.run, and do NOT claim you executed tests. Call task() exactly once with category=\"reviewer\" or agent=\"reviewer\" and that assignment. Treat the child text as claims, not proof. After the child returns, output ONLY one whole-output verdict — APPROVE or REJECT — with no prose or formatting. Prefer REJECT when cited test evidence is missing, vague, or contradictory.",
           "outputKey": "final.f3",
-          "outputEnum": [
-            "APPROVE",
-            "REJECT"
-          ]
+          "outputEnum": ["APPROVE", "REJECT"]
         }
       },
       {
         "id": "f4",
         "kind": "llm",
         "label": "F4 — Code quality verification critic (dual-review hybrid via task reviewer)",
-        "capabilities": [
-          "subagent"
-        ],
+        "capabilities": ["subagent"],
         "config": {
           "systemPrompt": "You are the F4 (code quality) final critic for the Mission Control executer workflow. Build a reviewer assignment that checks whether the delivered code is clean and well-structured (clarity, cohesion, unnecessary complexity, type-safety, and maintainability relative to the plan). Call task() exactly once with category=\"reviewer\" or agent=\"reviewer\" and that assignment. Treat the child text as claims, not proof. After the child returns, output ONLY one whole-output verdict — APPROVE or REJECT — with no prose or formatting. Prefer REJECT when quality blockers remain.",
           "outputKey": "final.f4",
-          "outputEnum": [
-            "APPROVE",
-            "REJECT"
-          ]
+          "outputEnum": ["APPROVE", "REJECT"]
         }
       },
       {
@@ -218,12 +174,9 @@
         "kind": "llm",
         "label": "Final verification rejected — bounded 3-strike fix loop",
         "config": {
-          "systemPrompt": "You are the Mission Control executer workflow fix-loop conductor. The final verification wave REJECTED the implementation (at least one of F1-F4 returned REJECT). Steps: (1) Read the current strike counter from the blackboard key fix.strikes (treat absent as 0). (2) Increment it by one and write the new value to fix.strikes. The strike budget is 3 (EXECUTER_FINAL_STRIKE_BUDGET). (3) If the new strike count is STRICTLY LESS THAN the budget, set fix.route=\"retry\": reopen the rejected plan tasks (uncheck their checkboxes) AND reuse each failed task's persisted child session id from the run taskRetryState / childSessionIds (Todo 6 lineage) so the retried child resumes with full prior context instead of starting fresh. (4) If the new strike count has reached the budget, set fix.route=\"blocked\" and do NOT loop again. The graph routes fix.route=\"blocked\" to the blocked-escalation node which records state/evidence and blocks for user intervention. Never set fix.route=\"retry\" once the strike budget is exhausted; the graph loop limit (maxNodeRuns) is a backstop but the strike counter is the intended bound.",
+          "systemPrompt": "You are the Mission Control executer workflow fix-loop conductor. The final verification wave REJECTED the implementation (at least one of F1-F4 returned REJECT). Steps: (1) The runtime maintains the strike counter deterministically: before your turn it reads the blackboard key fix.strikes (absent = 0), increments it by one, and writes the new value back — read it, do NOT recompute or rewrite it. (2) After your turn the runtime hard-clamps fix.route via routeFixLoop(newStrikes, budget): a value contradicting the counter is overridden, fail-closed toward \"blocked\". Choose fix.route honestly from the CURRENT counter: the strike budget is 3 (EXECUTER_FINAL_STRIKE_BUDGET). (3) If the strike count is STRICTLY LESS THAN the budget, set fix.route=\"retry\": reopen the rejected plan tasks (uncheck their checkboxes) AND reuse each failed task's persisted child session id from the run taskRetryState / childSessionIds (Todo 6 lineage) so the retried child resumes with full prior context instead of starting fresh. (4) If the strike count has reached the budget, set fix.route=\"blocked\" and do NOT loop again. The graph routes fix.route=\"blocked\" to the blocked-escalation node which records state/evidence and blocks for user intervention. Never set fix.route=\"retry\" once the strike budget is exhausted; the graph loop limit (maxNodeRuns) is a backstop but the strike counter is the intended bound.",
           "outputKey": "fix.route",
-          "outputEnum": [
-            "retry",
-            "blocked"
-          ],
+          "outputEnum": ["retry", "blocked"],
           "strikeKey": "fix.strikes",
           "strikeBudget": 3,
           "maxStrikes": 3,

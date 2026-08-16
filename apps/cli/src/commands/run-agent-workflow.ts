@@ -1,7 +1,12 @@
 import { discoverWorkflows, PluginManager, registerBuiltinWorkflows, WorkflowRegistry } from '@mission-control/core';
-import type { AbgGraphSpec, WorkflowSpec } from '@mission-control/protocol';
+import type { AbgGraphSpec, PolicyEffectRule, WorkflowSpec } from '@mission-control/protocol';
 import { splitCommandParts } from './chat-command-parts';
-import { graphForDefaultFallback, graphForWorkflowSpec } from './workflow-materialization';
+import {
+    graphForDefaultFallback,
+    graphForWorkflowSpec,
+    modePoliciesForDefaultFallback,
+    modePoliciesForWorkflowSpec,
+} from './workflow-materialization';
 
 const WORKFLOW_NAME_PATTERN = /^[A-Za-z0-9_.:/-]+$/;
 
@@ -19,8 +24,9 @@ export type NoninteractiveWorkflowSelection = {
     readonly effectivePrompt?: string;
     readonly workflowGraph?: AbgGraphSpec;
     readonly workflowSpec?: WorkflowSpec;
+    /** Active-mode policy rules paired with `workflowGraph` for two-layer mode enforcement. */
+    readonly workflowModePolicies?: readonly PolicyEffectRule[];
 };
-
 export function resolveWorkflowInvocation(args: WorkflowInvocationInput): WorkflowInvocation | undefined {
     if (args.workflowName !== undefined) {
         return { name: args.workflowName, prompt: args.prompt ?? '' };
@@ -90,18 +96,26 @@ export async function resolveNoninteractiveWorkflowSelection(input: {
             const available = names.length === 0 ? '(none discovered)' : names.slice(0, 20).join(', ');
             throw new Error(`Unknown workflow "${workflowInvocation.name}". Available workflows: ${available}.`);
         }
+        const selectionModePolicies = modePoliciesForWorkflowSpec(spec);
         return {
             effectivePrompt: workflowInvocation.prompt,
             workflowGraph: graphForWorkflowSpec(spec),
             workflowSpec: spec,
+            ...(selectionModePolicies !== undefined ? { workflowModePolicies: selectionModePolicies } : {}),
         };
     }
     if (input.graph === undefined && input.args.prompt !== undefined) {
         const registry = await discoverWorkflowRegistry(input.workspaceRoot);
         const fallbackGraph = graphForDefaultFallback(registry);
-        return fallbackGraph === undefined
-            ? { effectivePrompt: input.args.prompt }
-            : { effectivePrompt: input.args.prompt, workflowGraph: fallbackGraph };
+        if (fallbackGraph === undefined) {
+            return { effectivePrompt: input.args.prompt };
+        }
+        const fallbackModePolicies = modePoliciesForDefaultFallback(registry);
+        return {
+            effectivePrompt: input.args.prompt,
+            workflowGraph: fallbackGraph,
+            ...(fallbackModePolicies !== undefined ? { workflowModePolicies: fallbackModePolicies } : {}),
+        };
     }
     return input.args.prompt === undefined ? {} : { effectivePrompt: input.args.prompt };
 }

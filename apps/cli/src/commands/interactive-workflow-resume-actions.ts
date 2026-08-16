@@ -128,6 +128,7 @@ export async function runWorkResumeAction(
         ...(coding.profileName !== undefined ? { profileName: coding.profileName } : {}),
         ...(coding.config !== undefined ? { config: coding.config } : {}),
         ...(coding.taskRuntimeServices !== undefined ? { taskRuntimeServices: coding.taskRuntimeServices } : {}),
+        ...(workflowContinue?.modePolicies !== undefined ? { modePolicies: workflowContinue.modePolicies } : {}),
         ...(workflowContinue !== undefined ? { graph: workflowContinue.graph } : {}),
     };
     let activeTurn: ActiveCodingAgentTurn;

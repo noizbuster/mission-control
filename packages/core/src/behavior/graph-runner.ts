@@ -6,6 +6,7 @@ import type {
     AgentEvent,
     GraphCheckpoint,
     ModelProviderSelection,
+    PolicyEffectRule,
     RedactionMetadata,
 } from '@mission-control/protocol';
 import type { ModelMessage } from 'ai';
@@ -132,6 +133,15 @@ export type AbgGraphRunnerInput = {
      * discovery (see `loadProjectResources`).
      */
     readonly projectInstructionResources?: readonly ProjectInstructionResource[];
+    /**
+     * Policy-gate rules (action/resource/effect) of the workflow's ACTIVE modes, fed by
+     * `workflowModePolicies` at the invocation seam. Enforced at two layers: UNIVERSAL
+     * ('**') rules gate the node before it runs (`modeGatePolicy`); scoped rules are
+     * enforced at write-family tool invocation (`createModeToolInvocationPolicy`).
+     * Also threaded into `AbgNodeRunContext.modePolicies` for the `mode-policy-gate`
+     * node. Absent for modeless workflows — no behavior change.
+     */
+    readonly modePolicies?: readonly PolicyEffectRule[];
     readonly observabilityRedactor?: ObservabilityRedactor;
 };
 

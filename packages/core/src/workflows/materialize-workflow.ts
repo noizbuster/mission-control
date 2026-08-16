@@ -13,7 +13,7 @@
  * `spec.modes` in declaration order so last-match-wins policy semantics
  * (broad deny first, specific allow after) are preserved.
  */
-import type { AbgGraphSpec, Mode, WorkflowSpec } from '@mission-control/protocol';
+import type { AbgGraphSpec, Mode, PolicyEffectRule, WorkflowSpec } from '@mission-control/protocol';
 import { createDefaultWorkflowGraph } from '../behavior/default-workflow-graph';
 import { applyMode } from '../behavior/modes/mode-application';
 import { assertRoutingKeyBiCoverage } from '../behavior/routing-key-bi-coverage';
@@ -58,6 +58,37 @@ export function materializeWorkflow(spec: WorkflowSpec, options: MaterializeWork
     }
     assertRoutingKeyBiCoverage(graph);
     return graph;
+}
+
+/**
+ * The active modes' policy-gate rules (`PolicyEffectRule[]`, action/resource/effect),
+ * flattened in declaration order. This is the RUNTIME-side companion of
+ * {@linkcode materializeWorkflow}: the graph fold converts the same rules into
+ * capability-only `AbgPolicySpec` entries, while these raw rules feed the two
+ * mode-enforcement layers that need the resource dimension — the node gate
+ * (`modeGatePolicy`, universal rules only) and the tool-invocation policy
+ * (`createModeToolInvocationPolicy`, scoped rules at resolved paths).
+ *
+ * Returns `undefined` when the spec declares no modes (or no active mode carries
+ * rules) so a modeless workflow — e.g. the plain-prompt `default` fallback — stays
+ * completely untouched by mode enforcement.
+ */
+export function workflowModePolicies(
+    spec: WorkflowSpec,
+    options: MaterializeWorkflowOptions = {},
+): readonly PolicyEffectRule[] | undefined {
+    const declaredModes = spec.modes;
+    if (declaredModes === undefined || declaredModes.length === 0) {
+        return undefined;
+    }
+    const activeFilter = options.activeModeIds !== undefined ? new Set(options.activeModeIds) : undefined;
+    const rules: PolicyEffectRule[] = [];
+    for (const mode of declaredModes) {
+        if (activeFilter === undefined || activeFilter.has(mode.id)) {
+            rules.push(...mode.policies);
+        }
+    }
+    return rules.length > 0 ? rules : undefined;
 }
 
 /**

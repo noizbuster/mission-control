@@ -57,6 +57,7 @@ export { createCodingAgentNodeRegistry } from './behavior/coding-agent-registry'
 export type { AbgGraphRunnerInput, AbgGraphRunResult } from './behavior/graph-runner';
 export { runAbgGraph } from './behavior/graph-runner';
 export { deriveAbgGraphSnapshot } from './behavior/graph-state';
+export { createModeToolInvocationPolicy } from './behavior/modes/mode-tool-policy';
 export type { AbgNodeRegistry, AbgNodeRunContext, AbgNodeRunner } from './behavior/node-registry';
 export {
     AbgNodeRegistryError,

@@ -19,6 +19,7 @@ import type {
     AgentEvent,
     MissionControlConfig,
     ModelProviderSelection,
+    PolicyEffectRule,
     WorkflowSpec,
 } from '@mission-control/protocol';
 import type { AbgOverlayController, ApprovalLevel } from '@mission-control/tui/state';
@@ -60,6 +61,11 @@ export type CodingAgentTurnOptions = {
     readonly approvalLevel?: ApprovalLevel;
     readonly authStore?: ProviderAuthStore;
     readonly graph?: AbgGraphSpec;
+    /**
+     * Active workflow modes' policy rules paired with `graph`: universal ('**') rules
+     * gate nodes; scoped rules are enforced at write-family tool invocation.
+     */
+    readonly modePolicies?: readonly PolicyEffectRule[];
     readonly permissionSession?: PermissionSession;
     readonly onUsage?: (inputTokens: number | undefined) => void;
     readonly onContextCacheUsage?: (usage: ContextCacheUsage) => void;

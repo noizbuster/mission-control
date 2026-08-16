@@ -10,6 +10,7 @@ export {
     materializeWorkflow,
     resolveDefaultWorkflowSpec,
     type WorkflowLookup,
+    workflowModePolicies,
 } from './materialize-workflow';
 export {
     DEFAULT_MAX_WORKFLOW_FILE_BYTES,
