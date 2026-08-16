@@ -6,6 +6,24 @@ import { join } from 'node:path';
 const root = process.cwd();
 const sourceRoots = ['packages', 'apps', 'scripts', 'tests'] as const;
 const directivePattern = /@ts-ignore|@ts-expect-error/;
+const productionRoots = ['packages', 'apps', 'scripts'] as const;
+
+/** Test doubles (`as unknown as T`) are the sanctioned idiom in tests and test support. */
+function isTestSource(file: string): boolean {
+    if (file.endsWith('.test.ts') || file.endsWith('.test.tsx')) return true;
+    return /(^|[\\/])test-support([\\/]|-)|(^|[\\/])test-fixtures([\\/])/.test(file);
+}
+
+/** Bare `as unknown` casts are only banned in production source files. */
+function isProductionSource(file: string): boolean {
+    const normalized = file.replaceAll('\\', '/');
+    const prefix = `${root.replaceAll('\\', '/')}/`;
+    const relative = normalized.startsWith(prefix) ? normalized.slice(prefix.length) : normalized;
+    if (!productionRoots.some((candidate) => relative === candidate || relative.startsWith(`${candidate}/`))) {
+        return false;
+    }
+    return !isTestSource(relative);
+}
 
 function collectFiles(dir: string): string[] {
     const absoluteDir = join(root, dir);
@@ -92,6 +110,8 @@ function findEscapeHatches(file: string, sourceText: string): string[] {
     const scanner = createScanner(true, languageVariantFor(file), maskedText);
     let previousToken: SyntaxKind | undefined;
     let previousEnd = -1;
+    let pendingAsUnknown: number | undefined;
+    const trackAsUnknown = isProductionSource(file);
 
     while (true) {
         const token = scanner.scan();
@@ -103,14 +123,29 @@ function findEscapeHatches(file: string, sourceText: string): string[] {
             scanner.resetTokenState(Math.min(maskedText.length, tokenStart + 1));
             previousToken = undefined;
             previousEnd = tokenStart;
+            pendingAsUnknown = undefined;
             continue;
         }
         previousEnd = tokenEnd;
 
+        if (pendingAsUnknown !== undefined) {
+            if (token !== SyntaxKind.AsKeyword) {
+                addHatch(pendingAsUnknown, 'as unknown');
+            }
+            pendingAsUnknown = undefined;
+        }
+
         if (token === SyntaxKind.AnyKeyword && previousToken !== SyntaxKind.DotToken) {
             addHatch(tokenStart, previousToken === SyntaxKind.AsKeyword ? 'as any' : 'explicit any');
         }
+        if (trackAsUnknown && token === SyntaxKind.UnknownKeyword && previousToken === SyntaxKind.AsKeyword) {
+            pendingAsUnknown = tokenStart;
+        }
         previousToken = token;
+    }
+
+    if (pendingAsUnknown !== undefined) {
+        addHatch(pendingAsUnknown, 'as unknown');
     }
 
     return hatches;
@@ -140,6 +175,32 @@ describe('TypeScript explicit any guard', () => {
                 expect.stringContaining('@ts-ignore'),
             ]),
         );
+    });
+
+    it('reports bare as unknown casts in production fixtures while permitting the as-unknown-as test double', () => {
+        const bare = `
+            const parsed = JSON.parse(text) as unknown;
+        `;
+        const doubleCast = `
+            const registry = { touch } as unknown as RuntimeAgentRegistry;
+        `;
+
+        expect(findEscapeHatches('packages/core/src/probe.ts', bare)).toEqual([expect.stringContaining('as unknown')]);
+        expect(findEscapeHatches('packages/core/src/probe.test.ts', bare)).toEqual([]);
+        expect(findEscapeHatches('packages/core/src/test-support/probe.ts', bare)).toEqual([]);
+        expect(findEscapeHatches('apps/tui/src/platform/probe.ts', doubleCast)).toEqual([]);
+    });
+
+    it('production TypeScript source contains no bare as unknown casts', () => {
+        for (const rootDir of productionRoots) {
+            for (const file of collectFiles(rootDir)) {
+                if (!isProductionSource(file)) continue;
+                const hatches = findEscapeHatches(file, readFileSync(file, 'utf8')).filter((hatch) =>
+                    hatch.endsWith('as unknown'),
+                );
+                expect(hatches, `${file} contains a bare as unknown cast`).toEqual([]);
+            }
+        }
     });
 
     it('changed TypeScript source contains no explicit any or ts-ignore escape hatches', () => {

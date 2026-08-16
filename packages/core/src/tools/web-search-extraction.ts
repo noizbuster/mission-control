@@ -100,7 +100,8 @@ async function handleNpm(url: URL, signal: AbortSignal): Promise<ExtractionResul
     if (url.hostname !== 'www.npmjs.com' && url.hostname !== 'npmjs.com') return null;
     const match = url.pathname.match(/^\/package\/(@[^/]+\/[^/]+|[^/]+)/);
     if (match === null) return null;
-    const pkg = match[1]!;
+    const pkg = match[1];
+    if (pkg === undefined) return null;
     const meta = await fetchJson(
         `https://registry.npmjs.org/${encodeURIComponent(pkg).replace('%40', '@')}/latest`,
         signal,
@@ -147,7 +148,8 @@ async function handlePypi(url: URL, signal: AbortSignal): Promise<ExtractionResu
     if (url.hostname !== 'pypi.org' && url.hostname !== 'pypi.python.org') return null;
     const match = url.pathname.match(/^\/project\/([^/]+)/);
     if (match === null) return null;
-    const pkg = match[1]!;
+    const pkg = match[1];
+    if (pkg === undefined) return null;
     const meta = await fetchJson(`https://pypi.org/pypi/${pkg}/json`, signal);
     if (meta === undefined) return null;
     const info = asRecord(meta['info']);
@@ -191,7 +193,8 @@ async function handleCratesIo(url: URL, signal: AbortSignal): Promise<Extraction
     if (url.hostname !== 'crates.io') return null;
     const match = url.pathname.match(/^\/crates\/([^/]+)/);
     if (match === null) return null;
-    const pkg = match[1]!;
+    const pkg = match[1];
+    if (pkg === undefined) return null;
     const meta = await fetchJson(`https://crates.io/api/v1/crates/${pkg}`, signal);
     if (meta === undefined) return null;
     const crate = asRecord(asRecord(meta['crate']));
@@ -235,8 +238,9 @@ async function handleGitHub(url: URL, signal: AbortSignal): Promise<ExtractionRe
     if (url.hostname !== 'github.com') return null;
     const segments = url.pathname.split('/').filter((s) => s.length > 0);
     if (segments.length < 2) return null;
-    const owner = segments[0]!;
-    const repo = segments[1]!;
+    const owner = segments[0];
+    const repo = segments[1];
+    if (owner === undefined || repo === undefined) return null;
     const token = process.env['GITHUB_TOKEN'] ?? process.env['GH_TOKEN'];
     const headers: Record<string, string> = {
         accept: 'application/vnd.github.v3+json',
@@ -246,15 +250,17 @@ async function handleGitHub(url: URL, signal: AbortSignal): Promise<ExtractionRe
 
     // blob → raw content
     if (segments.length >= 4 && segments[2] === 'blob') {
-        const ref = segments[3]!;
+        const ref = segments[3];
         const path = segments.slice(4).join('/');
-        const raw = await fetchText(
-            `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${path}`,
-            signal,
-            headers,
-        );
-        if (raw !== undefined) {
-            return { url: url.href, markdown: truncate(raw, MAX_EXTRACT_CHARS), method: 'github-raw' };
+        if (ref !== undefined) {
+            const raw = await fetchText(
+                `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${path}`,
+                signal,
+                headers,
+            );
+            if (raw !== undefined) {
+                return { url: url.href, markdown: truncate(raw, MAX_EXTRACT_CHARS), method: 'github-raw' };
+            }
         }
     }
 

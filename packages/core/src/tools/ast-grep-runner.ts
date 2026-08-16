@@ -23,6 +23,7 @@ import type {
     NativesClient,
 } from '../native/natives-client';
 import { errorToString } from '../util/error-to-string';
+import { isRecord as isRecordValue } from '../util/is-record';
 import { execFile } from 'node:child_process';
 import { statSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
@@ -603,10 +604,6 @@ function normalizeFlatMetaVariables(
     return populated ? out : undefined;
 }
 
-function isRecordValue(value: unknown): value is Readonly<Record<string, unknown>> {
-    return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
 function nodeText(node: unknown): string | undefined {
     if (!isRecordValue(node)) return undefined;
     const text = node['text'];
@@ -787,8 +784,6 @@ export const defaultAstGrepExecutor: AstGrepCommandExecutor = (params): Promise<
         );
     });
 };
-
-
 
 function freshAbortController(): AbortController {
     return new AbortController();

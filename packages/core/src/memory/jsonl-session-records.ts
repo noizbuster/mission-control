@@ -1,4 +1,5 @@
 import { type AgentEventEnvelope, AgentEventEnvelopeSchema } from '@mission-control/protocol';
+import { isRecordOrArray } from '../util/is-record';
 import { jsonlStoreError } from './jsonl-errors';
 
 export const JSONL_SESSION_LOG_HEADER_KIND = 'mission-control.session-log';
@@ -111,7 +112,9 @@ function parseHeaderRecord(
     lineNumber: number,
     input: { readonly filePath: string; readonly sessionId: string },
 ): JsonlSessionLogHeader {
-    if (!isRecord(value)) {
+    // Array-inclusive on purpose: a bare JSON array line must keep failing at the
+    // kind/version checks below (preserving those error texts), not at this guard.
+    if (!isRecordOrArray<JsonlRecordCandidate>(value)) {
         throw invalidHeader(input, lineNumber, 'header is not an object');
     }
     if (value.kind !== JSONL_SESSION_LOG_HEADER_KIND) {
@@ -145,7 +148,7 @@ function parseEventRecord(
     lineNumber: number,
     input: { readonly filePath: string; readonly sessionId: string },
 ): AgentEventEnvelope {
-    if (!isRecord(value)) {
+    if (!isRecordOrArray<JsonlRecordCandidate>(value)) {
         throw corruptLine(input, lineNumber, 'event record is not an object');
     }
     if (value.kind !== JSONL_SESSION_EVENT_RECORD_KIND) {
@@ -205,8 +208,4 @@ function corruptLine(
 
 function firstSchemaIssue(issues: readonly { readonly message: string }[]): string {
     return issues.at(0)?.message ?? 'unknown schema issue';
-}
-
-function isRecord(value: unknown): value is JsonlRecordCandidate {
-    return typeof value === 'object' && value !== null;
 }

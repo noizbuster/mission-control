@@ -1,5 +1,6 @@
 import type { AgentEvent } from '@mission-control/protocol';
 import { afterEach } from 'vitest';
+import { isRecordOrArray } from '../util/is-record';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -56,7 +57,9 @@ type JsonlRecordView = Record<string, unknown> & { readonly event?: unknown };
 
 function parseJsonRecord(line: string): Record<string, unknown> {
     const parsed: unknown = JSON.parse(line);
-    if (!isRecord(parsed)) {
+    // Array-inclusive on purpose (original semantics): a JSON array line still throws
+    // the same TypeError below; field reads on arrays yield undefined.
+    if (!isRecordOrArray(parsed)) {
         throw new TypeError('JSONL line did not parse to an object');
     }
     return parsed;
@@ -64,9 +67,5 @@ function parseJsonRecord(line: string): Record<string, unknown> {
 
 function eventEnvelopeFromRecord(record: JsonlRecordView): { readonly sequence?: unknown } | undefined {
     const event = record.event;
-    return isRecord(event) ? event : undefined;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null;
+    return isRecordOrArray(event) ? event : undefined;
 }

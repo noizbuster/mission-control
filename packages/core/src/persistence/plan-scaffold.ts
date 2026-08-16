@@ -1,30 +1,30 @@
+import { isErrorCode } from '../util/node-error';
+import { atomicWriteFile } from './atomic-write';
 import {
-    DUAL_REVIEW_RECEIPTS_HEADING,
-    type DraftScaffoldStatus,
-    type DualReviewReceipt,
     type AppendDualReviewReceiptsResult,
+    appendDualReviewReceipts,
+    type DraftScaffoldStatus,
+    DUAL_REVIEW_RECEIPTS_HEADING,
+    type DualReviewReceipt,
+    formatDraftFrontmatterBlock,
     type WriteDraftFrontmatterFields,
     type WriteDraftFrontmatterResult,
-    appendDualReviewReceipts,
-    formatDraftFrontmatterBlock,
     writeDraftFrontmatter,
 } from './draft-frontmatter-io';
-import { isErrorCode } from '../util/node-error';
-import { McPersistenceError, ensureMcDirs, mcFilePath } from './paths';
+import { ensureMcDirs, McPersistenceError, mcFilePath } from './paths';
 import { assertValidPlanSlug, PlanFormatError } from './plan-format';
-import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
-import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
+import { readFile, stat } from 'node:fs/promises';
+import { isAbsolute, relative, resolve, sep } from 'node:path';
 
 export {
-    DUAL_REVIEW_RECEIPTS_HEADING,
-    appendDualReviewReceipts,
-    writeDraftFrontmatter,
     type AppendDualReviewReceiptsResult,
+    appendDualReviewReceipts,
     type DraftScaffoldStatus,
+    DUAL_REVIEW_RECEIPTS_HEADING,
     type DualReviewReceipt,
     type WriteDraftFrontmatterFields,
     type WriteDraftFrontmatterResult,
+    writeDraftFrontmatter,
 };
 
 /** Title Case scaffold headers for `.mc/plans/<slug>.md` (single source of truth). */
@@ -178,7 +178,12 @@ async function resolveWorkspaceRoot(workspaceRoot: string): Promise<string> {
 
 function assertInsideMc(root: string, targetPath: string): void {
     const relativeToMc = relative(mcFilePath(root), targetPath);
-    if (relativeToMc === '' || relativeToMc === '..' || relativeToMc.startsWith(`..${sep}`) || isAbsolute(relativeToMc)) {
+    if (
+        relativeToMc === '' ||
+        relativeToMc === '..' ||
+        relativeToMc.startsWith(`..${sep}`) ||
+        isAbsolute(relativeToMc)
+    ) {
         throw new PlanScaffoldError(
             `Refusing plan scaffold path outside .mc/: ${targetPath}`,
             'plan_scaffold_path_escape',
@@ -214,13 +219,9 @@ async function readOptionalUtf8(filePath: string): Promise<string | undefined> {
 }
 
 async function atomicWrite(filePath: string, contents: string): Promise<void> {
-    const tempPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
     try {
-        await mkdir(dirname(filePath), { recursive: true });
-        await writeFile(tempPath, contents, { encoding: 'utf8', flag: 'wx' });
-        await rename(tempPath, filePath);
+        await atomicWriteFile(filePath, contents);
     } catch (error: unknown) {
-        await rm(tempPath, { force: true }).catch(() => undefined);
         if (error instanceof PlanScaffoldError) throw error;
         if (isErrorCode(error, 'ENOTDIR') || isErrorCode(error, 'EEXIST') || isErrorCode(error, 'ENOTSUP')) {
             throw new PlanScaffoldError(
@@ -236,8 +237,5 @@ async function atomicWrite(filePath: string, contents: string): Promise<void> {
             filePath,
             error,
         );
-    } finally {
-        await rm(tempPath, { force: true }).catch(() => undefined);
     }
 }
-

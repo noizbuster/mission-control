@@ -54,7 +54,7 @@ export function parseSessionDebugConfigDocument(input: string): SessionDebugConf
     }
     const valueText = sourceMember.source.slice(sourceMember.source.indexOf(':') + 1);
     try {
-        const parsed = JSON.parse(stripJsoncComments(valueText)) as unknown;
+        const parsed: unknown = JSON.parse(stripJsoncComments(valueText));
         const result = SessionDebugConfigSchema.safeParse(parsed);
         if (result.success) {
             return { config: result.data, sourceMembers };
@@ -198,7 +198,7 @@ function readJsonString(input: string, start: number): { readonly value: string;
         if (current === '"') {
             const end = index + 1;
             try {
-                const value = JSON.parse(input.slice(start, end)) as unknown;
+                const value: unknown = JSON.parse(input.slice(start, end));
                 return typeof value === 'string' ? { value, end } : undefined;
             } catch {
                 return undefined;
@@ -258,4 +258,3 @@ function consumeJsonValue(input: string, start: number): number | undefined {
     }
     return undefined;
 }
-

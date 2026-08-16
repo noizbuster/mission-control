@@ -22,6 +22,7 @@
  * hatches. LSP positions are 0-indexed line/character; the flat `LspClient` types stay 0-indexed.
  */
 import type { ProtocolError } from '@mission-control/protocol';
+import { isRecord } from '../util/is-record';
 import type {
     LspClient,
     LspDiagnostic,
@@ -402,10 +403,6 @@ function mapTextEdits(value: unknown): readonly LspTextEdit[] {
         edits.push({ range, newText });
     }
     return edits;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 // ---------------------------------------------------------------------------

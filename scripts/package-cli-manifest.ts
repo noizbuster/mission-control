@@ -8,7 +8,7 @@ export type PackageManifest = {
 };
 
 export function readPackageManifest(path: string): PackageManifest {
-    const parsed = JSON.parse(readFileSync(path, 'utf8')) as unknown;
+    const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'));
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
         return emptyPackageManifest();
     }

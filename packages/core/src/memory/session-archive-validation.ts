@@ -3,6 +3,7 @@ import {
     type SessionArchiveManifest,
     SessionArchiveManifestSchema,
 } from '@mission-control/protocol';
+import { isRecord } from '../util/is-record';
 
 export type SessionArchiveValidationErrorCode =
     | 'unsupported_schema_version'
@@ -65,12 +66,10 @@ export function validateSessionArchiveManifestForImport(input: {
 }
 
 function schemaVersionOf(value: unknown): unknown {
-    if (!isRecord(value)) {
+    // Strict guard is outcome-identical to the old array-inclusive local copy: a JSON
+    // array has no own `schemaVersion`, so both yield undefined.
+    if (!isRecord<{ readonly schemaVersion?: unknown }>(value)) {
         return undefined;
     }
     return value.schemaVersion;
-}
-
-function isRecord(value: unknown): value is { readonly schemaVersion?: unknown } {
-    return typeof value === 'object' && value !== null;
 }

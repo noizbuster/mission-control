@@ -13,10 +13,16 @@
 
 import type { ProtocolError } from '@mission-control/protocol';
 import type { RequestOptions } from '@modelcontextprotocol/sdk/shared/protocol.js';
+// Re-exported from the shared type-guard module (`util/is-record`); strict
+// (non-array) semantics are identical to the previous local copy. Kept exported
+// for `http-client.ts` and other transport modules.
+import { isRecord } from '../../util/is-record';
 import type { McpClient, McpToolInfo } from '../mcp-tool';
 import { ToolExecutionError } from '../tool-registry-types';
 import { McpDeadline, raceWithDeadline } from './deadline';
 import type { SecretRedactor } from './secret-redaction';
+
+export { isRecord };
 
 export const CLIENT_NAME = 'mission-control';
 export const CLIENT_VERSION = '0.1.0';
@@ -185,8 +191,4 @@ function adaptTool(tool: unknown): McpToolInfo | undefined {
         ...(typeof description === 'string' ? { description } : {}),
         ...(isRecord(inputSchema) ? { inputSchema } : {}),
     };
-}
-
-export function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

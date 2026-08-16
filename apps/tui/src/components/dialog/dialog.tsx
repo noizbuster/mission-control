@@ -248,9 +248,7 @@ function useListNavigation(
 ) {
     const seed = initialSelected();
     const len0 = count();
-    const [selected, setSelected] = createSignal(
-        len0 <= 0 ? 0 : Math.min(Math.max(0, seed), len0 - 1),
-    );
+    const [selected, setSelected] = createSignal(len0 <= 0 ? 0 : Math.min(Math.max(0, seed), len0 - 1));
     // Key-repeat / double-fire guard: one select or cancel per mount.
     let settled = false;
 
@@ -284,7 +282,6 @@ function useListNavigation(
 
     return selected;
 }
-
 
 function ListView(props: {
     readonly title: string;
@@ -414,7 +411,12 @@ function LevelPickerDialogBox(props: { store: ChatStore }): JSX.Element {
 
     const selected = useListNavigation(
         () => rows.length,
-        (index) => props.store.hideLevelPicker(APPROVAL_LEVEL_PICKER_ENTRIES[index]!.id),
+        (index) => {
+            const entry = APPROVAL_LEVEL_PICKER_ENTRIES[index];
+            if (entry !== undefined) {
+                props.store.hideLevelPicker(entry.id);
+            }
+        },
         () => props.store.hideLevelPicker(undefined),
         () => props.store.getSnapshot().levelPickerSelectedIndex,
     );

@@ -43,9 +43,13 @@ export type EvalWorkerOutbound =
           readonly args: unknown;
       };
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null;
-}
+// Re-exported from the shared type-guard module. Semantics tightened from the old
+// array-inclusive local copy to the strict guard; the only internal call site
+// (`parseEvalWorkerOutbound`) is outcome-identical either way: an array message
+// returns undefined at the guard instead of at the `message['type']` check.
+import { isRecord } from '../util/is-record';
+
+export { isRecord };
 
 /**
  * Parse a raw `worker_threads` message into a typed outbound message.

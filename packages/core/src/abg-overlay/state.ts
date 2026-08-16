@@ -14,6 +14,7 @@ import type {
     ApprovalRecord,
 } from '@mission-control/protocol';
 import { redactCredentialText } from '../providers/credential-resolver';
+import { isRecordOrArray } from '../util/is-record';
 
 export type RunState = 'idle' | 'running' | 'completed' | 'failed' | 'interrupted' | 'blocked_on_approval';
 
@@ -147,10 +148,6 @@ export function redactForDisplay(text: string | undefined): string {
     return redactCredentialText(text ?? '', []);
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return value !== null && typeof value === 'object';
-}
-
 function updateGraphSummary(
     current: ReadonlyMap<string, GraphSummary>,
     graphId: string,
@@ -205,7 +202,7 @@ function appendRecent(events: readonly RecentEvent[], entry: RecentEvent): Recen
 function extractDeltaText(payload: unknown): string {
     if (typeof payload === 'string') return payload;
     // biome-ignore lint/complexity/useLiteralKeys: Record<string, unknown> requires bracket access per noPropertyAccessFromIndexSignature
-    if (isRecord(payload) && typeof payload['delta'] === 'string') {
+    if (isRecordOrArray(payload) && typeof payload['delta'] === 'string') {
         // biome-ignore lint/complexity/useLiteralKeys: Record<string, unknown> requires bracket access per noPropertyAccessFromIndexSignature
         return payload['delta'];
     }
@@ -225,7 +222,7 @@ function safePayloadText(payload: unknown): string {
 function safeErrorText(error: unknown): string {
     if (typeof error === 'string') return error;
     // biome-ignore lint/complexity/useLiteralKeys: Record<string, unknown> requires bracket access per noPropertyAccessFromIndexSignature
-    if (isRecord(error) && typeof error['message'] === 'string') {
+    if (isRecordOrArray(error) && typeof error['message'] === 'string') {
         // biome-ignore lint/complexity/useLiteralKeys: Record<string, unknown> requires bracket access per noPropertyAccessFromIndexSignature
         return error['message'];
     }
@@ -705,7 +702,7 @@ export function extractContextTokensUsed(event: AgentEvent): number | undefined 
 }
 
 export function extractContextTokensUsedFromAbgEmit(emit: AbgEmitMetadata): number | undefined {
-    if (emit.type !== 'llm.turn.completed' || !isRecord(emit.payload)) {
+    if (emit.type !== 'llm.turn.completed' || !isRecordOrArray(emit.payload)) {
         return undefined;
     }
     return readUsageInputTokens(emit.payload['usage']);
@@ -727,7 +724,7 @@ export function extractContextCacheUsage(event: AgentEvent): ContextCacheUsage |
 }
 
 export function extractContextCacheUsageFromAbgEmit(emit: AbgEmitMetadata): ContextCacheUsage | undefined {
-    if (emit.type !== 'llm.turn.completed' || !isRecord(emit.payload)) {
+    if (emit.type !== 'llm.turn.completed' || !isRecordOrArray(emit.payload)) {
         return undefined;
     }
     const usage = emit.payload['usage'];
@@ -750,14 +747,14 @@ export function extractContextCacheUsageFromAbgEmit(emit: AbgEmitMetadata): Cont
  * (`inputTokens: { total: number }`).
  */
 function readUsageInputTokens(usage: unknown): number | undefined {
-    if (!isRecord(usage)) {
+    if (!isRecordOrArray(usage)) {
         return undefined;
     }
     const direct = usage['inputTokens'];
     if (typeof direct === 'number' && Number.isFinite(direct) && direct >= 0) {
         return Math.trunc(direct);
     }
-    if (isRecord(direct)) {
+    if (isRecordOrArray(direct)) {
         const total = direct['total'];
         if (typeof total === 'number' && Number.isFinite(total) && total >= 0) {
             return Math.trunc(total);
@@ -771,14 +768,14 @@ function readUsageInputTokens(usage: unknown): number | undefined {
 }
 
 function readUsageCacheReadTokens(usage: unknown): number | undefined {
-    if (!isRecord(usage)) {
+    if (!isRecordOrArray(usage)) {
         return undefined;
     }
     const inputTokens = usage['inputTokens'];
     const inputTokenDetails = usage['inputTokenDetails'];
-    const cacheRead = isRecord(inputTokens)
+    const cacheRead = isRecordOrArray(inputTokens)
         ? inputTokens['cacheRead']
-        : isRecord(inputTokenDetails)
+        : isRecordOrArray(inputTokenDetails)
           ? inputTokenDetails['cacheReadTokens']
           : usage['cachedInputTokens'];
     if (typeof cacheRead !== 'number' || !Number.isFinite(cacheRead) || cacheRead < 0) {

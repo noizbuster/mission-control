@@ -6,6 +6,7 @@ import {
     ProtocolErrorSchema,
     type ProviderToolCallTranscript,
 } from '@mission-control/protocol';
+import { isRecord } from './util/is-record';
 export type SequencedAgentMessage = {
     readonly message: AgentMessage;
     readonly sourceSequence: number;
@@ -353,7 +354,7 @@ function isCompleteCompactionBoundary(value: unknown): value is {
     readonly firstKeptSequence: number;
 } {
     return (
-        isRecord(value) &&
+        isRecord<CompactionBoundaryCandidate>(value) &&
         value.kind === 'compaction' &&
         typeof value.summary === 'string' &&
         typeof value.boundarySequence === 'number' &&
@@ -367,7 +368,3 @@ type CompactionBoundaryCandidate = {
     readonly boundarySequence?: unknown;
     readonly firstKeptSequence?: unknown;
 };
-
-function isRecord(value: unknown): value is CompactionBoundaryCandidate {
-    return typeof value === 'object' && value !== null;
-}

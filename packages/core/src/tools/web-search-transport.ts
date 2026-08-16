@@ -51,16 +51,15 @@ export async function executeWebSearch(
     const resolvedInput = resolveInput(input);
     const chain = resolveProviderChain(preference);
 
-    if (chain.length === 0) {
+    const firstProvider = chain[0];
+    if (firstProvider === undefined) {
         throw new Error(noProviderMessage());
     }
 
     const secrets = new Set<string>();
     const failures: Array<{ provider: WebSearchProvider; error: unknown }> = [];
-    let lastProvider = chain[0]!;
 
     for (const provider of chain) {
-        lastProvider = provider;
         for (const secret of provider.collectSecrets()) {
             if (secret.length > 0) secrets.add(secret);
         }

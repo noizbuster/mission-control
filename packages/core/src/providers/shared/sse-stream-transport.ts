@@ -103,7 +103,8 @@ function parseSseFrame(frame: string, onInvalidJson: () => Error): unknown | und
         return undefined;
     }
     try {
-        return JSON.parse(data) as unknown;
+        const parsed: unknown = JSON.parse(data);
+        return parsed;
     } catch (error) {
         if (error instanceof SyntaxError) {
             throw onInvalidJson();

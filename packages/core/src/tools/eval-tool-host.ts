@@ -1,3 +1,4 @@
+import { isRecordOrArray } from '../util/is-record';
 import { globToRegExp } from './glob-tool';
 import {
     createWorkspaceGuard,
@@ -18,7 +19,10 @@ export function createEvalToolHost(workspaceRoot: string): (name: string, args: 
             allowDirectDenylistedPaths: directDependencySourcePaths,
         });
         const guard = await workspaceGuard;
-        const argRecord = isRecord(args) ? args : {};
+        // Array-inclusive on purpose (original semantics): an array `args` flows into
+        // the record reads below, where every field lookup yields undefined — identical
+        // outcomes to substituting {}, without changing the tool-arg contract.
+        const argRecord = isRecordOrArray(args) ? args : {};
         switch (name) {
             case 'read':
             case 'repo.read':
@@ -126,10 +130,6 @@ async function walk(root: string, current: string, regex: RegExp, results: strin
             await walk(root, resolve(current, entry.name), regex, results, depth + 1);
         }
     }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null;
 }
 
 function stringField(record: Record<string, unknown>, key: string): string {

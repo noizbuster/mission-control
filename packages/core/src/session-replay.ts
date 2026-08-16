@@ -22,6 +22,7 @@ import type {
     ReplayDiagnostic,
     SessionReplayProjection,
 } from './session-replay-types';
+import { isRecord } from './util/is-record';
 
 export type {
     ApprovalProjection,
@@ -125,7 +126,7 @@ function nonEmptyLines(contents: string): readonly { readonly text: string; read
 function isValidHeaderLine(line: string, sessionId: string): boolean {
     const value = parseJsonLine(line);
     return (
-        isRecord(value) &&
+        isRecord<ReplayLineCandidate>(value) &&
         value.kind === JSONL_SESSION_LOG_HEADER_KIND &&
         value.version === JSONL_SESSION_LOG_RECORD_VERSION &&
         value.sessionId === sessionId &&
@@ -137,7 +138,7 @@ function isValidHeaderLine(line: string, sessionId: string): boolean {
 function parseReplayEnvelopeLine(line: string, sessionId: string): AgentEventEnvelope | undefined {
     const value = parseJsonLine(line);
     if (
-        !isRecord(value) ||
+        !isRecord<ReplayLineCandidate>(value) ||
         value.kind !== JSONL_SESSION_EVENT_RECORD_KIND ||
         value.version !== JSONL_SESSION_LOG_RECORD_VERSION
     ) {
@@ -181,15 +182,13 @@ function emptyProjectionWithDiagnostic(sessionId: string, lineNumber: number): J
     };
 }
 
-function isRecord(value: unknown): value is {
+type ReplayLineCandidate = {
     readonly kind?: unknown;
     readonly version?: unknown;
     readonly sessionId?: unknown;
     readonly createdAt?: unknown;
     readonly event?: unknown;
-} {
-    return typeof value === 'object' && value !== null;
-}
+};
 
 function corruptTrailingRecord(sessionId: string, lineNumber: number): ReplayDiagnostic {
     return {

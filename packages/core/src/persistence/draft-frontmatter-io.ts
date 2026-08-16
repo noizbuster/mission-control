@@ -1,9 +1,9 @@
-import { ensureMcDirs, mcFilePath, McPersistenceError } from './paths';
 import { isErrorCode } from '../util/node-error';
+import { atomicWriteFile } from './atomic-write';
+import { ensureMcDirs, McPersistenceError, mcFilePath } from './paths';
 import { assertValidPlanSlug, PlanFormatError } from './plan-format';
-import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
-import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
+import { readFile, stat } from 'node:fs/promises';
+import { isAbsolute, relative, resolve, sep } from 'node:path';
 
 const DRAFT_STATUSES = ['drafting', 'awaiting-approval', 'approved-writing'] as const;
 export type DraftScaffoldStatus = (typeof DRAFT_STATUSES)[number];
@@ -82,7 +82,6 @@ export async function writeDraftFrontmatter(
     });
 }
 
-
 /**
  * Append a dual-review receipt line under `## Dual review receipts` on the draft.
  * Creates the section when missing. Creates a drafting stub when the draft is absent.
@@ -114,7 +113,6 @@ export async function appendDualReviewReceipts(
         return { draftPath, appended: true };
     });
 }
-
 
 export function formatDraftFrontmatterBlock(
     slug: string,
@@ -211,20 +209,38 @@ async function resolveWorkspaceRoot(workspaceRoot: string): Promise<string> {
     const absolute = isAbsolute(workspaceRoot) ? workspaceRoot : resolve(workspaceRoot);
     try {
         if (!(await stat(absolute)).isDirectory()) {
-            throw new DraftFrontmatterError(`workspaceRoot must be a directory: ${absolute}`, 'plan_scaffold_path_escape', absolute);
+            throw new DraftFrontmatterError(
+                `workspaceRoot must be a directory: ${absolute}`,
+                'plan_scaffold_path_escape',
+                absolute,
+            );
         }
     } catch (error: unknown) {
         if (error instanceof DraftFrontmatterError) throw error;
         if (isErrorCode(error, 'ENOENT')) return absolute;
-        throw new DraftFrontmatterError(`workspaceRoot is not usable: ${absolute}`, 'plan_scaffold_path_escape', absolute, error);
+        throw new DraftFrontmatterError(
+            `workspaceRoot is not usable: ${absolute}`,
+            'plan_scaffold_path_escape',
+            absolute,
+            error,
+        );
     }
     return absolute;
 }
 
 function assertInsideMc(root: string, targetPath: string): void {
     const relativeToMc = relative(mcFilePath(root), targetPath);
-    if (relativeToMc === '' || relativeToMc === '..' || relativeToMc.startsWith(`..${sep}`) || isAbsolute(relativeToMc)) {
-        throw new DraftFrontmatterError(`Refusing draft path outside .mc/: ${targetPath}`, 'plan_scaffold_path_escape', targetPath);
+    if (
+        relativeToMc === '' ||
+        relativeToMc === '..' ||
+        relativeToMc.startsWith(`..${sep}`) ||
+        isAbsolute(relativeToMc)
+    ) {
+        throw new DraftFrontmatterError(
+            `Refusing draft path outside .mc/: ${targetPath}`,
+            'plan_scaffold_path_escape',
+            targetPath,
+        );
     }
 }
 
@@ -239,26 +255,24 @@ async function readOptionalUtf8(filePath: string): Promise<string | undefined> {
         return await readFile(filePath, 'utf8');
     } catch (error: unknown) {
         if (isErrorCode(error, 'ENOENT')) return undefined;
-        throw new DraftFrontmatterError(`Failed to read draft at ${filePath}`, 'plan_scaffold_read_failed', filePath, error);
+        throw new DraftFrontmatterError(
+            `Failed to read draft at ${filePath}`,
+            'plan_scaffold_read_failed',
+            filePath,
+            error,
+        );
     }
 }
 
 async function atomicWrite(filePath: string, contents: string): Promise<void> {
-    const tempPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
     try {
-        await mkdir(dirname(filePath), { recursive: true });
-        await writeFile(tempPath, contents, { encoding: 'utf8', flag: 'wx' });
-        await rename(tempPath, filePath);
+        await atomicWriteFile(filePath, contents);
     } catch (error: unknown) {
-        await rm(tempPath, { force: true }).catch(() => undefined);
         if (error instanceof DraftFrontmatterError) throw error;
-        const code = isErrorCode(error, 'ENOTDIR') || isErrorCode(error, 'EEXIST') || isErrorCode(error, 'ENOTSUP')
-            ? 'plan_scaffold_path_escape'
-            : 'plan_scaffold_write_failed';
+        const code =
+            isErrorCode(error, 'ENOTDIR') || isErrorCode(error, 'EEXIST') || isErrorCode(error, 'ENOTSUP')
+                ? 'plan_scaffold_path_escape'
+                : 'plan_scaffold_write_failed';
         throw new DraftFrontmatterError(`Failed to write draft at ${filePath}`, code, filePath, error);
-    } finally {
-        await rm(tempPath, { force: true }).catch(() => undefined);
     }
 }
-
-

@@ -1,4 +1,5 @@
 import type { AbgNodeSpec, AbgSignal } from '@mission-control/protocol';
+import { isRecord } from '../../util/is-record';
 import type { AbgNodeRunContext } from '../node-registry';
 
 export function started(node: AbgNodeSpec, context: AbgNodeRunContext): AbgSignal {
@@ -155,8 +156,4 @@ function readTransition(value: unknown): StatechartTransition | undefined {
 function readRecordString(record: Readonly<Record<string, unknown>>, key: string): string | undefined {
     const value = record[key];
     return typeof value === 'string' && value.length > 0 ? value : undefined;
-}
-
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-    return typeof value === 'object' && value !== null;
 }

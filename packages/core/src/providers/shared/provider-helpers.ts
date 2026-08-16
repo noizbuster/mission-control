@@ -1,16 +1,16 @@
 import type { ProviderCredential, ProviderToolCallTranscript } from '@mission-control/protocol';
-import { ProviderCredentialResolutionError, type ProviderCredentialResolver } from '../credential-resolver';
-import { ProviderTurnError } from '../provider-turn-types';
-
 /**
  * Guards that a value is a plain record (non-null object that is not an array).
  *
- * Canonical guarded form: the array guard is load-bearing — without it, JSON
- * arrays would satisfy `typeof === 'object'` and be treated as records.
+ * Canonical guarded form lives in the shared type-guard module
+ * (`util/is-record`): the array guard is load-bearing — without it, JSON arrays
+ * would satisfy `typeof === 'object'` and be treated as records.
  */
-export function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-    return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
+import { isRecord } from '../../util/is-record';
+import { ProviderCredentialResolutionError, type ProviderCredentialResolver } from '../credential-resolver';
+import { ProviderTurnError } from '../provider-turn-types';
+
+export { isRecord };
 
 /**
  * Resolves a required provider credential through {@link resolver}, rethrowing
