@@ -92,6 +92,14 @@ export class RunCoordinatorV2<A = void> {
                 return lane.settled.promise.then(() => this.run(key, fn));
             }
             if (lane.current.tag === 'wake') {
+                // Coalescing contract (opencode drain-lane parity): a `run` demand on a
+                // wake lane converts the NEXT drain generation into an explicit one. When
+                // several `run()` callers coalesce onto the same wake lane they all await
+                // that single generation through the one `explicitWaiter`, and the LATEST
+                // `fn` runs — earlier `fn`s are dropped, exactly like a `run()` that
+                // joins an already-running lane (the `done.promise` return below) ignores
+                // its `fn` and shares the in-flight result. A `run()` call is a demand,
+                // not a queued unit of work.
                 lane.pending = coalesceDemand(lane.pending, { tag: 'run' });
                 lane.pendingRunFn = fn;
                 if (lane.explicitWaiter === undefined) {
@@ -139,6 +147,13 @@ export class RunCoordinatorV2<A = void> {
     }
 
     private makeLane(demand: CoordinatorDemand, runFn: DrainFn<A> | undefined): Lane<A> {
+        const done = makeDeferred<A>();
+        // Wake-created lanes never hand `done.promise` to a caller, yet
+        // `settleDeferreds` rejects it on drain failure. Node >= 15 treats a rejection
+        // with zero observers as fatal, so attach a no-op subscriber here. Marking the
+        // rejection handled does not consume it: later subscribers attached to the same
+        // underlying promise (a `run()` joiner) still observe the rejection.
+        void done.promise.catch(() => undefined);
         return {
             current: demand,
             runFn,
@@ -146,13 +161,18 @@ export class RunCoordinatorV2<A = void> {
             pendingRunFn: undefined,
             stopping: false,
             interruptSeq: undefined,
-            done: makeDeferred<A>(),
+            done,
             settled: makeDeferred<CoordinatorExit<A>>(),
             explicitWaiter: undefined,
             controller: undefined,
         };
     }
 
+    // Deliberately NO `lane.stopping` re-check inside startDrain:
+    // `suppressPendingAtOrBefore` already decided which pending demands survive an
+    // interrupt, and a surviving newer wake (seq > interruptSeq) MUST still drain.
+    // Mid-generation abort is the controller's job (`interrupt` aborts it), not a
+    // scheduling skip.
     private async startDrain(key: string, lane: Lane<A>): Promise<void> {
         const controller = new AbortController();
         lane.controller = controller;

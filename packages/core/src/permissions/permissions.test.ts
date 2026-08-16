@@ -42,6 +42,22 @@ describe('wildcardMatch', () => {
             expect(wildcardMatch('.mc/**', '.mc/plans/work.md')).toBe(true);
             expect(wildcardMatch('.mc/**', '.mc/plans/sub/deep.md')).toBe(true);
         });
+
+        it('bounds adversarial many-** patterns instead of exponential backtracking', () => {
+            // 8 `**` segments against a 30-segment input: without state
+            // memoization this enumerates ~C(37,7) ≈ 10M recursive suffix
+            // combinations; with it, at most 9 × 31 states. Bound the wall
+            // clock generously so slow CI machines cannot flake.
+            const pattern = `${'**/'.repeat(8)}zz`;
+            const missed = Array.from({ length: 30 }, () => 'a').join('/');
+            const hit = `${Array.from({ length: 29 }, () => 'a').join('/')}/zz`;
+            const startedAt = Date.now();
+
+            expect(wildcardMatch(pattern, missed)).toBe(false);
+            expect(wildcardMatch(pattern, hit)).toBe(true);
+
+            expect(Date.now() - startedAt).toBeLessThan(1_000);
+        });
     });
 
     describe('exact and literal matching', () => {

@@ -133,7 +133,14 @@ export class AgentLifecycleManager {
         if (adopted === undefined) return;
         const ref = this.registry.lookup(id);
         if (ref === undefined) return;
-        if (ref.status === 'parked') return;
+        if (ref.status === 'running') {
+            // The TTL timer fired just as the agent went running again (or park was
+            // called on a live agent). Disposing now would pull live resources out
+            // from under the active run, so do not park: re-arm the TTL instead and
+            // let the next idle transition park.
+            this.armTimer(id, adopted);
+            return;
+        }
 
         if (adopted.timer !== undefined) {
             clearTimeout(adopted.timer);

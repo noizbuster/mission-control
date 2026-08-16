@@ -2,7 +2,6 @@ import { isErrorCode } from '../util/node-error';
 import { atomicWriteTextFile } from './atomic-write';
 import { McPersistenceError, mcFilePath } from './paths';
 import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
 
 const NOTEPADS_DIR = 'notepads';
 
@@ -132,7 +131,10 @@ async function readExistingForAppend(filePath: string): Promise<string> {
 }
 
 function assertSafePlanName(planName: string): void {
-    if (!/^[A-Za-z0-9._-]+$/u.test(planName)) {
+    // All-dots names (`..`, `.`, `...`) pass the charset regex but escape the per-plan
+    // notepad directory via path joining (`notepads/../learnings.md`); reject them
+    // alongside the charset violations.
+    if (/^\.+$/u.test(planName) || !/^[A-Za-z0-9._-]+$/u.test(planName)) {
         throw new NotepadStoreError(
             `Refusing notepad write for unsafe plan name ${JSON.stringify(planName)}`,
             'notepad_unsafe_plan_name',

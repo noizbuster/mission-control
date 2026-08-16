@@ -4,11 +4,16 @@ import {
     type BoulderState,
     BoulderStoreError,
     type BoulderWork,
+    boulderFilePath,
     readBoulder,
     updateBoulderWork,
     writeBoulder,
 } from './boulder-store';
-import { mutateBoulderWork } from './boulder-work-mutation';
+import {
+    _testResetBoulderMutationLockTimings,
+    _testSetBoulderMutationLockTimings,
+    mutateBoulderWork,
+} from './boulder-work-mutation';
 import {
     appendNotepad,
     assertAppendOnly,
@@ -525,6 +530,22 @@ describe('notepad-store appendNotepad', () => {
         });
     });
 
+    it('rejects all-dots plan names that would escape the notepad directory', async () => {
+        // Given
+        const root = seedMcRoot(makeTempRoot());
+
+        // When / Then
+        await expect(appendNotepad('..', 'learnings', 'x', { root })).rejects.toBeInstanceOf(NotepadStoreError);
+        await expect(appendNotepad('..', 'learnings', 'x', { root })).rejects.toMatchObject({
+            code: 'notepad_unsafe_plan_name',
+        });
+        await expect(appendNotepad('.', 'learnings', 'x', { root })).rejects.toMatchObject({
+            code: 'notepad_unsafe_plan_name',
+        });
+        // Names that merely contain dots stay allowed.
+        await expect(appendNotepad('..sub', 'learnings', 'x', { root })).resolves.toBeUndefined();
+    });
+
     it('never truncates: file size strictly grows across appends', async () => {
         // Given
         const root = seedMcRoot(makeTempRoot());
@@ -649,5 +670,83 @@ describe('boulder shared-chain concurrency', () => {
         expect(work?.plan_name).toBe('from-update');
         expect(work?.agent).toBe('from-mutate');
         expect(work?.status).toBe('completed');
+    });
+});
+
+describe('boulder mutation lock staleness', () => {
+    function sampleWork(): BoulderWork {
+        return {
+            work_id: 'work-1',
+            active_plan: '/tmp/plan.md',
+            plan_name: 'demo-plan',
+            status: 'active',
+            started_at: '2026-06-21T00:00:00.000Z',
+            updated_at: '2026-06-21T00:00:00.000Z',
+            session_ids: ['ses_1'],
+            session_origins: { ses_1: 'direct' },
+            task_sessions: {},
+        };
+    }
+
+    function sampleState(): BoulderState {
+        const work = sampleWork();
+        return {
+            schema_version: BOULDER_SCHEMA_VERSION,
+            active_work_id: work.work_id,
+            works: { [work.work_id]: work },
+            updated_at: '2026-06-21T00:00:00.000Z',
+        };
+    }
+
+    async function seed(): Promise<string> {
+        const root = seedMcRoot(makeTempRoot());
+        await writeBoulder(root, sampleState());
+        return root;
+    }
+
+    afterEach(() => {
+        _testResetBoulderMutationLockTimings();
+    });
+
+    it('reaps a lock whose stamped holder PID is dead and completes the mutation', async () => {
+        const root = await seed();
+        // 999999999 exceeds the Linux pid ceiling, so kill(pid, 0) reports ESRCH.
+        writeFileSync(`${boulderFilePath(root)}.lock`, `999999999\n${Date.now()}\n`);
+
+        await mutateBoulderWork(root, 'work-1', (work) => ({ ...work, agent: 'after-dead-holder' }));
+
+        expect((await readBoulder(root))?.works['work-1']?.agent).toBe('after-dead-holder');
+    });
+
+    it('reaps a lock older than the staleness threshold and completes the mutation', async () => {
+        const root = await seed();
+        writeFileSync(`${boulderFilePath(root)}.lock`, `${process.pid}\n${Date.now() - 60_000}\n`);
+
+        await mutateBoulderWork(root, 'work-1', (work) => ({ ...work, agent: 'after-stale-lock' }));
+
+        expect((await readBoulder(root))?.works['work-1']?.agent).toBe('after-stale-lock');
+    });
+
+    it('treats a legacy pid-only lock (no timestamp) as stale and reaps it', async () => {
+        const root = await seed();
+        writeFileSync(`${boulderFilePath(root)}.lock`, `${process.pid}\n`);
+
+        await mutateBoulderWork(root, 'work-1', (work) => ({ ...work, agent: 'after-legacy-lock' }));
+
+        expect((await readBoulder(root))?.works['work-1']?.agent).toBe('after-legacy-lock');
+    });
+
+    it('fails closed with boulder_lock_busy while a fresh live-holder lock is held', async () => {
+        _testSetBoulderMutationLockTimings({ timeoutMs: 15, retryDelayMs: 1 });
+        const root = await seed();
+        const lockPath = `${boulderFilePath(root)}.lock`;
+        writeFileSync(lockPath, `${process.pid}\n${Date.now()}\n`);
+
+        await expect(mutateBoulderWork(root, 'work-1', (work) => ({ ...work, agent: 'never' }))).rejects.toMatchObject({
+            code: 'boulder_lock_busy',
+        });
+
+        // A timed-out waiter must not unlink the live holder's lock file.
+        expect(existsSync(lockPath)).toBe(true);
     });
 });

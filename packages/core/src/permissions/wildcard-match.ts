@@ -31,38 +31,43 @@ export function wildcardMatch(pattern: string, value: string): boolean {
 
     const patternSegs = normalizedPattern.split('/');
     const valueSegs = normalizedValue.split('/');
-    return matchSegments(patternSegs, valueSegs);
-}
+    // Memo table over (patternIdx, valueIdx) states. The `**` branch retries its
+    // tail against every remaining suffix, so without memoization k `**`
+    // segments cost ~C(n+k, k) re-evaluations — exponential in the number of
+    // `**` segments, which an adversarial pattern can turn into a hang. With the
+    // table the matcher is bounded by O(patternSegs.length × valueSegs.length)
+    // states (each `**` state additionally scans the remaining value segments).
+    const width = valueSegs.length + 1;
+    const memo = new Map<number, boolean>();
+    const matchFrom = (patternIdx: number, valueIdx: number): boolean => {
+        const key = patternIdx * width + valueIdx;
+        const cached = memo.get(key);
+        if (cached !== undefined) return cached;
 
-function matchSegments(patternSegs: readonly string[], valueSegs: readonly string[]): boolean {
-    if (patternSegs.length === 0) {
-        return valueSegs.length === 0;
-    }
-
-    const head = patternSegs[0];
-    if (head === undefined) {
-        return false;
-    }
-    const rest = patternSegs.slice(1);
-
-    if (head === '**') {
-        for (let consumed = 0; consumed <= valueSegs.length; consumed++) {
-            if (matchSegments(rest, valueSegs.slice(consumed))) {
-                return true;
+        let matched = false;
+        if (patternIdx === patternSegs.length) {
+            matched = valueIdx === valueSegs.length;
+        } else {
+            const head = patternSegs[patternIdx];
+            if (head === '**') {
+                for (let consumed = valueIdx; consumed <= valueSegs.length; consumed++) {
+                    if (matchFrom(patternIdx + 1, consumed)) {
+                        matched = true;
+                        break;
+                    }
+                }
+            } else if (head !== undefined && valueIdx < valueSegs.length) {
+                const valueHead = valueSegs[valueIdx];
+                if (valueHead !== undefined) {
+                    matched = matchSegment(head, valueHead) && matchFrom(patternIdx + 1, valueIdx + 1);
+                }
             }
         }
-        return false;
-    }
 
-    if (valueSegs.length === 0) {
-        return false;
-    }
-
-    const valueHead = valueSegs[0];
-    if (valueHead === undefined) {
-        return false;
-    }
-    return matchSegment(head, valueHead) && matchSegments(rest, valueSegs.slice(1));
+        memo.set(key, matched);
+        return matched;
+    };
+    return matchFrom(0, 0);
 }
 
 /**

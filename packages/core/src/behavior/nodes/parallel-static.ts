@@ -13,21 +13,30 @@ export type StaticParallelChildOutcome = {
     readonly failed: boolean;
 };
 
+export type StaticParallelResult = {
+    readonly outcomes: readonly StaticParallelChildOutcome[];
+    /** True only when children were actually skipped because the abort fired mid-run. */
+    readonly aborted: boolean;
+};
+
 export async function collectStaticParallelOutcomes(
     node: AbgNodeSpec,
     context: AbgNodeRunContext,
     runChild: RunChild,
-): Promise<readonly StaticParallelChildOutcome[]> {
+): Promise<StaticParallelResult> {
     const children = node.children ?? [];
     const concurrency = readPositiveIntConfig(node, 'concurrency') ?? DEFAULT_STATIC_PARALLEL_CONCURRENCY;
     const outcomes: StaticParallelChildOutcome[] = [];
+    let aborted = false;
 
     for (let start = 0; start < children.length; start += concurrency) {
         // Honor the run-owner abort signal before launching a fresh wave so a mid-wave
         // abort does not fan out into a storm of doomed child runs (parity with the
         // fanOutKey branch). Partial outcomes are returned; the caller surfaces any
-        // failed children from the in-flight wave.
+        // failed children from the in-flight wave and — because `aborted` is set —
+        // fails the node instead of reporting a partial success.
         if (context.abortSignal?.aborted === true) {
+            aborted = true;
             break;
         }
         const wave = await Promise.all(
@@ -38,7 +47,9 @@ export async function collectStaticParallelOutcomes(
         outcomes.push(...wave);
     }
 
-    return outcomes;
+    // An abort arriving after the last wave completed exits the loop via the condition,
+    // leaving `aborted` false: a fully-run node is not an aborted node.
+    return { outcomes, aborted };
 }
 
 async function collectChildSignals(

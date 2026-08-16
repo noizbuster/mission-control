@@ -86,7 +86,7 @@ async function* runParallelNode(node: AbgNodeSpec, context: AbgNodeRunContext): 
         yield* runParallelFanOut(node, context, fanOutKey, runChild);
         return;
     }
-    const outcomes = await collectStaticParallelOutcomes(node, context, runChild);
+    const { outcomes, aborted } = await collectStaticParallelOutcomes(node, context, runChild);
     const completedChildren: string[] = [];
     const failedChildren: string[] = [];
     for (const outcome of outcomes) {
@@ -100,6 +100,21 @@ async function* runParallelNode(node: AbgNodeSpec, context: AbgNodeRunContext): 
             failedChildren.push(outcome.childId);
         }
     }
+    const completionKey = readStringConfig(node, 'completionKey');
+    if (aborted) {
+        // Mirror the fanOutKey branch's abort contract (`parallel_fanout_aborted`):
+        // children the abort skipped mean the node did NOT complete. Never report
+        // success — and never set the completion key — for a partially-run static
+        // parallel node, or a checkpoint/resume consumer would treat the skipped
+        // children as done.
+        yield failure(node, context, {
+            code: 'parallel_static_aborted',
+            completedChildren,
+            failedChildren,
+            ...(completionKey !== undefined ? { completionKey } : {}),
+        });
+        return;
+    }
     if (readStringConfig(node, 'completion') === 'any-success') {
         if (completedChildren.length > 0) {
             yield success(node, context, { completedChildren, failedChildren });
@@ -112,7 +127,6 @@ async function* runParallelNode(node: AbgNodeSpec, context: AbgNodeRunContext): 
         yield failure(node, context, { code: 'parallel_child_failed', failedChildren });
         return;
     }
-    const completionKey = readStringConfig(node, 'completionKey');
     if (completionKey !== undefined && context.blackboard !== undefined) {
         context.blackboard.set(completionKey, true);
         yield createAbgEmitSignal({

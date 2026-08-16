@@ -651,9 +651,14 @@ type TerminalBackgroundJobHandle = BackgroundJobHandle & {
     readonly status: 'completed' | 'failed' | 'cancelled';
     readonly completedAt: string;
 };
-
 function terminalJobHandle(entry: JobEntry, outcome: JobExecutionOutcome): TerminalBackgroundJobHandle {
     const completedAt = new Date().toISOString();
+    // Cancellation linearization: once cancel() has been accepted
+    // (`cancellationPending` is set before `controller.abort()`), the job settles
+    // as 'cancelled' even when the execute function races to a successful
+    // result — that result is intentionally discarded so an operator-requested
+    // stop is never reported as a completion. `cancellationReason` was stamped
+    // when the cancellation was accepted.
     if (entry.cancellationPending) {
         return { ...entry.handle, status: 'cancelled', completedAt };
     }

@@ -119,6 +119,37 @@ describe('RunCoordinatorV2', () => {
         gate.resolve(undefined);
         await coord.awaitIdle('s1');
     });
+
+    it('wake-lane drain failure produces no unhandledRejection and real run() subscribers still reject', async () => {
+        const unhandled: unknown[] = [];
+        const onUnhandled = (reason: unknown): void => {
+            unhandled.push(reason);
+        };
+        process.on('unhandledRejection', onUnhandled);
+        try {
+            const coord = new RunCoordinatorV2<void>({
+                drain: async () => {
+                    throw new Error('wake drain exploded');
+                },
+            });
+            coord.wake('s1');
+            await coord.awaitIdle('s1');
+            // Give Node's unhandled-rejection detection a macrotask to fire in.
+            await new Promise<void>((resolve) => {
+                setImmediate(resolve);
+            });
+            expect(unhandled).toEqual([]);
+
+            // A lane whose done.promise IS observed by a run() caller still rejects.
+            await expect(coord.run('s2')).rejects.toThrow('wake drain exploded');
+            await new Promise<void>((resolve) => {
+                setImmediate(resolve);
+            });
+            expect(unhandled).toEqual([]);
+        } finally {
+            process.off('unhandledRejection', onUnhandled);
+        }
+    });
 });
 
 describe('coalesceDemand', () => {

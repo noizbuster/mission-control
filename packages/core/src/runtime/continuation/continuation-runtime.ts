@@ -190,6 +190,17 @@ export class ContinuationRuntime {
         }
     }
 
+    // DESIGN GATE — cross-process safety. The read → runGraphFn → persist
+    // sequence below is NOT atomic across processes: `prior` is read before the
+    // (potentially long) graph run, and persistState's boulder mutation lock only
+    // makes each individual write atomic — it cannot fence a stale prior. Two
+    // processes continuing the same boulder work could lose an iteration or
+    // resurrect stale fields via last-writer-wins. Nothing wires
+    // runWithContinuation into production yet (see continuation-exports.test.ts);
+    // any future wiring MUST first add owner fencing / lease serialization for
+    // the boulder work. Note also that updateBoulderWork's read-modify-write
+    // (boulder-store.ts) joins only the process-local write chain and takes no
+    // cross-process lock at all.
     async runWithContinuation(sessionId: string, runGraphFn: RunGraphFn): Promise<ContinuationOutcome> {
         const loaded = await this.loadState();
         const prior = loaded ?? this.initialState();

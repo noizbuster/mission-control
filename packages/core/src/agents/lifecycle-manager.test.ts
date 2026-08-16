@@ -127,6 +127,26 @@ describe('AgentLifecycleManager', () => {
         expect(stub.disposeCalls()).toBe(1);
     });
 
+    it('park() on a running agent defers: no dispose, stays running, parks after a later idle', async () => {
+        vi.useFakeTimers();
+        const stub = makeDisposeStub();
+        registerIdleSub(registry, '8-Sub');
+        lifecycle.adopt('8-Sub', { idleTtlMs: TTL, dispose: stub.dispose });
+
+        lifecycle.setStatus('8-Sub', 'running');
+        await lifecycle.park('8-Sub');
+
+        expect(registry.lookup('8-Sub')?.status).toBe('running');
+        expect(stub.disposeCalls()).toBe(0);
+
+        // The deferred park re-armed the TTL; returning to idle and expiring parks.
+        lifecycle.setStatus('8-Sub', 'idle');
+        vi.advanceTimersByTime(TTL);
+        await flushAsync();
+        expect(registry.lookup('8-Sub')?.status).toBe('parked');
+        expect(stub.disposeCalls()).toBe(1);
+    });
+
     it('ensureLive revives a parked agent through its reviver and flips it back to idle', async () => {
         registry.adopt(
             makeRefInput('3-Sub', {

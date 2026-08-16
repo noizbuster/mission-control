@@ -361,4 +361,83 @@ describe('ABG parallel node static children abort', () => {
 
         expect(runs).toBe(0);
     });
+
+    it('fails the node with parallel_static_aborted instead of reporting partial success', async () => {
+        const registry = createDefaultAbgNodeRegistry();
+        let runs = 0;
+        const controller = new AbortController();
+        registry.register('tracking', async function* trackingNode(node, runContext) {
+            runs += 1;
+            controller.abort();
+            yield { type: 'started', graphId: runContext.graphId, nodeId: node.id };
+            yield { type: 'success', graphId: runContext.graphId, nodeId: node.id };
+        });
+        const context: AbgNodeRunContext = {
+            graphId: 'graph_composite',
+            now: () => '2026-06-03T10:00:00.000Z',
+            registry,
+            nodes: {
+                a: { id: 'a', kind: 'memory', implementation: 'tracking' },
+                b: { id: 'b', kind: 'memory', implementation: 'tracking' },
+                c: { id: 'c', kind: 'memory', implementation: 'tracking' },
+                d: { id: 'd', kind: 'memory', implementation: 'tracking' },
+            },
+            blackboard: createBlackboard(),
+            abortSignal: controller.signal,
+        };
+        const node: AbgNodeSpec = {
+            id: 'wave',
+            kind: 'parallel',
+            children: ['a', 'b', 'c', 'd'],
+            config: { concurrency: 2, completionKey: 'static.done' },
+        };
+        const signals = await collectSignals(runAbgNode(registry, node, context));
+
+        expect(runs).toBe(2);
+        expect(signals.at(-1)).toMatchObject({
+            type: 'failure',
+            nodeId: 'wave',
+            error: {
+                code: 'parallel_static_aborted',
+                completedChildren: expect.arrayContaining(['a', 'b']),
+                failedChildren: [],
+                completionKey: 'static.done',
+            },
+        });
+        // The completion key must NOT be set for a partially-run node.
+        expect(context.blackboard?.get('static.done')).toBeUndefined();
+    });
+
+    it('an abort arriving after the last wave completed is not treated as aborted', async () => {
+        const registry = createDefaultAbgNodeRegistry();
+        const controller = new AbortController();
+        registry.register('tracking', async function* trackingNode(node, runContext) {
+            yield { type: 'started', graphId: runContext.graphId, nodeId: node.id };
+            yield { type: 'success', graphId: runContext.graphId, nodeId: node.id };
+            controller.abort();
+        });
+        const context: AbgNodeRunContext = {
+            graphId: 'graph_composite',
+            now: () => '2026-06-03T10:00:00.000Z',
+            registry,
+            nodes: {
+                a: { id: 'a', kind: 'memory', implementation: 'tracking' },
+                b: { id: 'b', kind: 'memory', implementation: 'tracking' },
+            },
+            blackboard: createBlackboard(),
+            abortSignal: controller.signal,
+        };
+        const node: AbgNodeSpec = {
+            id: 'wave',
+            kind: 'parallel',
+            children: ['a', 'b'],
+            config: { concurrency: 2, completionKey: 'static.done' },
+        };
+        const signals = await collectSignals(runAbgNode(registry, node, context));
+
+        const failureSignals = signals.filter((signal) => signal.type === 'failure');
+        expect(failureSignals).toEqual([]);
+        expect(signals.at(-1)).toMatchObject({ type: 'success', result: { completedChildren: ['a', 'b'] } });
+        expect(context.blackboard?.get('static.done')).toBe(true);
+    });
 });

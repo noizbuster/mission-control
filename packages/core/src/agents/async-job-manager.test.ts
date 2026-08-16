@@ -130,6 +130,26 @@ describe('AsyncJobManager', () => {
             expect(handle.status).toBe('cancelled');
         });
 
+        it('cancellation wins when a successful result races the accepted cancel', async () => {
+            const manager = new AsyncJobManager(2);
+            // An execute function that ignores the abort signal and still
+            // resolves successfully — the adversarial corner of the tie-break.
+            let release: ((result: JobResult) => void) | undefined;
+            const execute: JobExecuteFn = () =>
+                new Promise<JobResult>((resolve) => {
+                    release = resolve;
+                });
+            const handle = manager.startJob({ sessionId: 's1', execute });
+
+            manager.cancelJob(handle.jobId, 'operator_aborted');
+            release?.({ status: 'completed', output: 'late-success' });
+
+            const settled = await manager.awaitJob(handle.jobId);
+            expect(settled.status).toBe('cancelled');
+            expect(settled.result).toBeUndefined();
+            expect(settled.cancellationReason).toBe('operator_aborted');
+        });
+
         it('propagates the abort signal to the execute function', () => {
             const manager = new AsyncJobManager(2);
             const ctrl = makeControllableExecute();

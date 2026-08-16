@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { type BoulderState, boulderFilePath, readBoulder, writeBoulder } from '../../persistence/boulder-store';
+import {
+    _testResetBoulderMutationLockTimings,
+    _testSetBoulderMutationLockTimings,
+} from '../../persistence/boulder-work-mutation';
 import { ContinuationRuntime, type ContinuationState } from './continuation-runtime';
+import { existsSync } from 'node:fs';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -79,14 +84,25 @@ describe('continuation stop admission and persistence', () => {
     });
 
     it('fails closed when another process holds the boulder mutation lock', async () => {
-        const lockPath = `${boulderFilePath(root)}.lock`;
-        await writeFile(lockPath, 'external-process\n', { flag: 'wx' });
-        const runtime = createRuntime();
+        _testSetBoulderMutationLockTimings({ timeoutMs: 15, retryDelayMs: 1, staleAfterMs: 60_000 });
+        try {
+            const lockPath = `${boulderFilePath(root)}.lock`;
+            // Fresh lock stamped with a live holder (this test process): neither the
+            // age threshold nor the dead-PID check may reap it.
+            await writeFile(lockPath, `${process.pid}\n${Date.now()}\n`, { flag: 'wx' });
+            const runtime = createRuntime();
 
-        await expect(runtime.markStopped('must not overwrite')).rejects.toMatchObject({ code: 'boulder_lock_busy' });
+            await expect(runtime.markStopped('must not overwrite')).rejects.toMatchObject({
+                code: 'boulder_lock_busy',
+            });
 
-        const work = (await readBoulder(root))?.works[workId];
-        expect(work?.runner_stop).toBeUndefined();
+            const work = (await readBoulder(root))?.works[workId];
+            expect(work?.runner_stop).toBeUndefined();
+            // A timed-out waiter must not unlink the live holder's lock file.
+            expect(existsSync(lockPath)).toBe(true);
+        } finally {
+            _testResetBoulderMutationLockTimings();
+        }
     });
 });
 
