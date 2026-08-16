@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 218 -> current 257 pure LOC; system prompt cache breakpoint test covers the flat-adapter prompt-cache contract.
 import { describe, expect, it } from 'vitest';
 import { createStaticProviderCredentialResolver } from '../credential-resolver';
 import {
@@ -90,6 +91,52 @@ describe('Anthropic Messages provider adapter', () => {
         });
         expect(JSON.stringify(requests.map((request) => request.body))).not.toContain('sk-ant-test-secret');
         expect(JSON.stringify(chunks)).not.toContain('sk-ant-test-secret');
+    });
+
+    it('sends the system prompt as an ephemeral prompt-cache breakpoint block', async () => {
+        // Given
+        const requests: AnthropicMessagesTransportRequest[] = [];
+        const provider = createAnthropicMessagesProvider({
+            credentialResolver: createStaticProviderCredentialResolver([
+                anthropicCredential('anthropic', 'sk-ant-test-secret'),
+            ]),
+            transport: transportFromEvents(requests, [
+                {
+                    type: 'message_start',
+                    message: { id: 'msg_cache', type: 'message', role: 'assistant', content: [] },
+                },
+                { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
+                { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'cached' } },
+                { type: 'content_block_stop', index: 0 },
+                { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 1 } },
+                { type: 'message_stop' },
+            ]),
+        });
+
+        // When
+        await collectChunks(
+            provider.streamTurn(
+                anthropicTurnRequest({
+                    messages: [
+                        { role: 'system', content: 'You are the Mission Control agent.' },
+                        { role: 'system', content: 'Second stable directive.' },
+                        { role: 'user', content: 'say hello' },
+                    ],
+                }),
+                { attempt: 1, signal: new AbortController().signal },
+            ),
+        );
+
+        // Then — one cached system block carries the joined system prompt; the breakpoint covers
+        // the tools + system prefix so stable session context is read from cache on later turns.
+        expect(requests[0]?.body.system).toEqual([
+            {
+                type: 'text',
+                text: 'You are the Mission Control agent.\n\nSecond stable directive.',
+                cache_control: { type: 'ephemeral' },
+            },
+        ]);
+        expect(requests[0]?.body.messages).toEqual([{ role: 'user', content: 'say hello' }]);
     });
 
     it('streams reasoning chunks for thinking content blocks and populates message.reasoning', async () => {

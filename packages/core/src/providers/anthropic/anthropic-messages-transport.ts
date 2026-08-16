@@ -2,6 +2,16 @@ export const defaultAnthropicMessagesEndpoint = 'https://api.anthropic.com/v1/me
 export const defaultAnthropicVersion = '2023-06-01';
 export const defaultAnthropicMaxTokens = 4096;
 
+export type AnthropicCacheControl = {
+    readonly type: 'ephemeral';
+};
+
+export type AnthropicSystemTextBlock = {
+    readonly type: 'text';
+    readonly text: string;
+    readonly cache_control?: AnthropicCacheControl;
+};
+
 export type AnthropicTextContentBlock = {
     readonly type: 'text';
     readonly text: string;
@@ -46,7 +56,7 @@ export type AnthropicMessagesRequestBody = {
     readonly model: string;
     readonly max_tokens: number;
     readonly stream: true;
-    readonly system?: string;
+    readonly system?: string | readonly AnthropicSystemTextBlock[];
     readonly messages: readonly AnthropicRequestMessage[];
     readonly tools?: readonly AnthropicToolDefinition[];
     readonly thinking?: AnthropicThinkingConfig;

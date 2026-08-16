@@ -7,6 +7,7 @@ import {
     type AnthropicMessagesRequestBody,
     type AnthropicMessagesTransportRequest,
     type AnthropicRequestMessage,
+    type AnthropicSystemTextBlock,
     type AnthropicThinkingConfig,
     type AnthropicToolDefinition,
     type AnthropicToolResultContentBlock,
@@ -62,11 +63,22 @@ function createRequestBody(request: ProviderTurnRequest): AnthropicMessagesReque
         model: request.modelID,
         max_tokens: mapped?.max_tokens ?? defaultAnthropicMaxTokens,
         stream: true,
-        ...(system !== undefined ? { system } : {}),
+        ...(system !== undefined ? { system: cachedSystemBlocks(system) } : {}),
         messages,
         ...(tools.length > 0 ? { tools } : {}),
         ...(mapped?.thinking !== undefined ? { thinking: mapped.thinking } : {}),
     };
+}
+
+/**
+ * The system prompt is stable for the life of a session, so mark it as an ephemeral prompt-cache
+ * breakpoint (tools + system prefix). Prompts under Anthropic's minimum cacheable prefix are
+ * processed without caching — marking is always safe. Matches the cacheControl intent the
+ * llm-actor sets for the official @ai-sdk/anthropic path; this is the flat-adapter equivalent
+ * (the flat bridge drops message-level providerOptions, so caching must live here).
+ */
+function cachedSystemBlocks(system: string): readonly AnthropicSystemTextBlock[] {
+    return [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }];
 }
 
 function anthropicThinkingForVariant(
